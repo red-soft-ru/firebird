@@ -66,6 +66,7 @@
 #include "../common/os/path_utils.h"
 #include "../common/StatusHolder.h"
 #include "../common/Tokens.h"
+#include "../common/classes/WipeFile.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -2245,7 +2246,7 @@ static processing_state add_row(TEXT* tabname)
 							gds__edit(ftmp.c_str(), 0);
 							Firebird::UtilInterfacePtr()->loadBlob(fbStatus, blobid, DB, M__trans,
 								ftmp.c_str(), FB_TRUE);
-							unlink(ftmp.c_str());
+							do_unlink(ftmp.c_str());
 							res = succeeded();
 						}
 					}
@@ -2533,7 +2534,7 @@ static processing_state blobedit(const TEXT* action, const TEXT* const* cmd)
 		else
 			gds__edit(filename, 0);
 
-		unlink(filename);
+		do_unlink(filename);
 	}
 	else if ((!strcmp(action, "BLOBDUMP")) && (*cmd[2]))
 	{
@@ -3605,7 +3606,7 @@ static processing_state copy_table(TEXT* source,
 		}
 	}
 
-	unlink(ftmp.c_str());
+	do_unlink(ftmp.c_str());
 	isqlGlob.Out = holdout;
 
 	return (SKIP);

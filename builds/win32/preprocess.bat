@@ -18,10 +18,10 @@
 @call setenvvar.bat
 @if not defined FB_BIN_DIR (@call set_build_target.bat %*)
 
-@if "%1"=="BOOT" (set BOOTBUILD=1) else (set BOOTBUILD=0)
+@if "%1"=="BOOT" (set FIREBIRD_BOOT_BUILD=1) else (set FIREBIRD_BOOT_BUILD=0)
 @echo.
-@if "%BOOTBUILD%"=="1" (call :BOOT_PROCESS) else (call :MASTER_PROCESS)
-@set BOOTBUILD=
+@if "%FIREBIRD_BOOT_BUILD%"=="1" (call :BOOT_PROCESS) else (call :MASTER_PROCESS)
+@set FIREBIRD_BOOT_BUILD=
 @set GPRE=
 @goto :END
 

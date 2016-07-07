@@ -107,8 +107,6 @@ static bool dfw_should_know(record_param* org_rpb, record_param* new_rpb,
 	USHORT irrelevant_field, bool void_update_is_relevant = false);
 static void garbage_collect(thread_db*, record_param*, ULONG, RecordStack&);
 static THREAD_ENTRY_DECLARE garbage_collector(THREAD_ENTRY_PARAM);
-
-
 #ifdef VIO_DEBUG
 #include <stdio.h>
 #include <stdarg.h>

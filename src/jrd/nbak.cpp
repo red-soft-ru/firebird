@@ -45,6 +45,7 @@
 #include "../common/os/guid.h"
 #include "../common/os/isc_i_proto.h"
 #include "../jrd/CryptoManager.h"
+#include "../common/classes/WipeFile.h"
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -600,7 +601,7 @@ void BackupManager::endBackup(thread_db* tdbb, bool recover)
 		}
 
 		closeDelta(tdbb);
-		unlink(diff_name.c_str());
+		do_unlink(diff_name.c_str());
 
 		NBAK_TRACE(("backup is over"));
 		endLock.unlockWrite(tdbb);

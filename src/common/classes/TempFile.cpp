@@ -50,6 +50,7 @@
 #include "../common/classes/init.h"
 
 #include "../common/classes/TempFile.h"
+#include "../common/classes/WipeFile.h"
 
 namespace Firebird {
 
@@ -229,7 +230,7 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 
 	if (doUnlink)
 	{
-		::unlink(filename.c_str());
+		::do_unlink(filename.c_str());
 	}
 #endif
 
@@ -251,7 +252,7 @@ TempFile::~TempFile()
 #endif
 	if (doUnlink)
 	{
-		::unlink(filename.c_str());
+		::do_unlink(filename.c_str());
 	}
 }
 
@@ -373,7 +374,7 @@ void TempFile::unlink()
 #if defined(WIN_NT)
 	doUnlink = true;
 #else
-	::unlink(filename.c_str());
+	::do_unlink(filename.c_str());
 #endif
 }
 
