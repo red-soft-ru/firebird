@@ -48,6 +48,7 @@
 #include <sys/mman.h>
 #endif
 
+#include "../common/config/config.h"
 #include "../common/classes/fb_tls.h"
 #include "../common/classes/locks.h"
 #include "../common/classes/init.h"
@@ -1357,6 +1358,7 @@ public:
 	{
 		block->next = *to;
 		*to = block;
+		MemoryPool::wipeMemory(&block->body, block->getSize() - offsetof(MemBlock, body));
 	}
 
 	void decrUsage(MemSmallHunk*, MemPool*)
@@ -1477,6 +1479,7 @@ public:
 
 		unsigned slot = Limits::getSlot(size, SLOT_ALLOC);
 		listBuilder.putElement(&freeObjects[slot], blk);
+
 		return true;
 	}
 
@@ -1645,6 +1648,7 @@ void DoubleLinkedList::putElement(MemBlock** to, MemBlock* block)
 	MemPool* pool = block->pool;
 	MemMediumHunk* hunk = block->getHunk();
 
+	MemoryPool::wipeMemory(&block->body, block->getSize() - offsetof(MemBlock, body) );
 	SemiDoubleLink::push(to, block);
 
 	decrUsage(hunk, pool);
@@ -1722,7 +1726,7 @@ MemoryPool*		MemoryPool::defaultMemoryManager = NULL;
 MemoryStats*	MemoryPool::default_stats_group = NULL;
 Mutex*			cache_mutex = NULL;
 MemPool*		MemPool::defaultMemPool = NULL;
-
+int				MemoryPool::wipePasses = (int)Config::getMemoryWipePasses();
 
 namespace {
 
@@ -2272,6 +2276,7 @@ void MemPool::releaseRaw(bool destroying, void* block, size_t size, bool use_cac
 #ifndef USE_VALGRIND
 	if (use_cache && (size == DEFAULT_ALLOCATION))
 	{
+		MemoryPool::wipeMemory(block, size);
 		MutexLockGuard guard(*cache_mutex, "MemPool::releaseRaw");
 		if (extents_cache.getCount() < extents_cache.getCapacity())
 		{
@@ -2333,6 +2338,7 @@ void MemPool::releaseRaw(bool destroying, void* block, size_t size, bool use_cac
 #endif
 
 	size = FB_ALIGN(size, get_map_page_size());
+	MemoryPool::wipeMemory(block, size);
 #ifdef WIN_NT
 	if (!VirtualFree(block, 0, MEM_RELEASE))
 #else // WIN_NT
@@ -2521,7 +2527,6 @@ void MemoryPool::print_contents(const char* filename, unsigned flags, const char
 	pool->print_contents(filename, flags, filter_path);
 #endif
 }
-
 
 #if defined(DEV_BUILD)
 void AutoStorage::ProbeStack() const
