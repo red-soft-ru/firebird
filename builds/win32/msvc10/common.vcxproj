@@ -203,9 +203,6 @@
     <ClInclude Include="..\..\..\src\common\xdr.h" />
     <ClInclude Include="..\..\..\src\common\xdr_proto.h" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="ClassDiagram1.cd" />
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{15605F44-BFFD-444F-AD4C-55DC9D704465}</ProjectGuid>
     <RootNamespace>common</RootNamespace>
