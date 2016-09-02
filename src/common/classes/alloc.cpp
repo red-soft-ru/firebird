@@ -1358,7 +1358,8 @@ public:
 	{
 		block->next = *to;
 		*to = block;
-		MemoryPool::wipeMemory(&block->body, block->getSize() - offsetof(MemBlock, body));
+		if (MemoryPool::wipePasses > 0)
+			MemoryPool::wipeMemory(&block->body, block->getSize() - offsetof(MemBlock, body));
 	}
 
 	void decrUsage(MemSmallHunk*, MemPool*)
@@ -1648,7 +1649,8 @@ void DoubleLinkedList::putElement(MemBlock** to, MemBlock* block)
 	MemPool* pool = block->pool;
 	MemMediumHunk* hunk = block->getHunk();
 
-	MemoryPool::wipeMemory(&block->body, block->getSize() - offsetof(MemBlock, body) );
+	if (MemoryPool::wipePasses > 0)
+		MemoryPool::wipeMemory(&block->body, block->getSize() - offsetof(MemBlock, body) );
 	SemiDoubleLink::push(to, block);
 
 	decrUsage(hunk, pool);
@@ -2276,7 +2278,8 @@ void MemPool::releaseRaw(bool destroying, void* block, size_t size, bool use_cac
 #ifndef USE_VALGRIND
 	if (use_cache && (size == DEFAULT_ALLOCATION))
 	{
-		MemoryPool::wipeMemory(block, size);
+		if (MemoryPool::wipePasses > 0)
+			MemoryPool::wipeMemory(block, size);
 		MutexLockGuard guard(*cache_mutex, "MemPool::releaseRaw");
 		if (extents_cache.getCount() < extents_cache.getCapacity())
 		{
@@ -2338,7 +2341,8 @@ void MemPool::releaseRaw(bool destroying, void* block, size_t size, bool use_cac
 #endif
 
 	size = FB_ALIGN(size, get_map_page_size());
-	MemoryPool::wipeMemory(block, size);
+	if (MemoryPool::wipePasses > 0)
+		MemoryPool::wipeMemory(block, size);
 #ifdef WIN_NT
 	if (!VirtualFree(block, 0, MEM_RELEASE))
 #else // WIN_NT
