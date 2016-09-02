@@ -688,7 +688,8 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 
 	CCH_precedence(tdbb, window, prior_page);
 	CCH_MARK(tdbb, window);
-	MemoryPool::wipeMemory(rpb->rpb_address, rpb->rpb_length);
+	if (MemoryPool::wipePasses > 0)
+		MemoryPool::wipeMemory(rpb->rpb_address, rpb->rpb_length);
 	index->dpg_offset = 0;
 	index->dpg_length = 0;
 
@@ -928,7 +929,8 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 
 	relPages->rel_slot_space = MIN(relPages->rel_slot_space, pp_sequence);
 
-	MemoryPool::wipeMemory(window->win_buffer, dbb->dbb_page_size);
+	if (MemoryPool::wipePasses > 0)
+		MemoryPool::wipeMemory(window->win_buffer, dbb->dbb_page_size);
 	CCH_RELEASE(tdbb, &pwindow);
 	CCH_RELEASE(tdbb, window);
 
