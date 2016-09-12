@@ -69,6 +69,7 @@ public:
 	const char* getCharSet();
 	const char* getRemoteProtocol();
 	const char* getRemoteAddress();
+	const char* getRemoteHwAddress();
 	int getRemoteProcessID();
 	const char* getRemoteProcessName();
 
@@ -490,6 +491,7 @@ public:
 	int getProcessID();
 	const char* getRemoteProtocol();
 	const char* getRemoteAddress();
+	const char* getRemoteHwAddress();
 	int getRemoteProcessID();
 	const char* getRemoteProcessName();
 

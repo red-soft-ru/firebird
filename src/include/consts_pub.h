@@ -123,6 +123,7 @@
 #define isc_dpb_nolinger				  88
 #define isc_dpb_reset_icu				  89
 #define isc_dpb_map_attach                90
+#define isc_dpb_hw_address				  91
 
 /**************************************************/
 /* clumplet tags used inside isc_dpb_address_path */
@@ -286,6 +287,7 @@
 #define isc_spb_os_user                   122
 #define isc_spb_config					  123
 #define isc_spb_expected_db				  124
+#define isc_spb_hw_address				  125
 
 #define isc_spb_connect_timeout           isc_dpb_connect_timeout
 #define isc_spb_dummy_packet_interval     isc_dpb_dummy_packet_interval

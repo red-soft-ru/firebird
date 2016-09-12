@@ -193,6 +193,7 @@ public:		// external interface with service
 
 	const Firebird::string&	getNetworkProtocol() const	{ return svc_network_protocol; }
 	const Firebird::string&	getRemoteAddress() const	{ return svc_remote_address; }
+	const Firebird::string&	getRemoteHwAddress() const	{ return svc_remote_hw_address; }
 	const Firebird::string&	getRemoteProcess() const	{ return svc_remote_process; }
 	int	getRemotePID() const { return svc_remote_pid; }
 	const Firebird::PathName& getExpectedDb() const		{ return svc_expected_db; }
@@ -312,6 +313,7 @@ private:
 
 	Firebird::string	svc_network_protocol;
 	Firebird::string	svc_remote_address;
+	Firebird::string	svc_remote_hw_address;
 	Firebird::string	svc_remote_process;
 	SLONG				svc_remote_pid;
 

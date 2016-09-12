@@ -306,6 +306,10 @@ void Service::getOptions(ClumpletReader& spb)
 		case isc_spb_utf8_filename:
 			svc_utf8 = true;
 			break;
+
+		case isc_spb_hw_address:
+			spb.getString(svc_remote_hw_address);
+			break;
 		}
 	}
 }
@@ -652,7 +656,8 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	svc_expected_db(getPool()), svc_trusted_role(false), svc_utf8(false),
 	svc_switches(getPool()), svc_perm_sw(getPool()), svc_address_path(getPool()),
 	svc_command_line(getPool()),
-	svc_network_protocol(getPool()), svc_remote_address(getPool()), svc_remote_process(getPool()),
+	svc_network_protocol(getPool()), svc_remote_address(getPool()),
+	svc_remote_hw_address(getPool()), svc_remote_process(getPool()),
 	svc_remote_pid(0), svc_trace_manager(NULL), svc_crypt_callback(crypt_callback),
 	svc_existence(FB_NEW_POOL(*getDefaultMemoryPool()) SvcMutex(this)),
 	svc_stdin_size_requested(0), svc_stdin_buffer(NULL), svc_stdin_size_preload(0),

@@ -88,6 +88,8 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <sys/wait.h>
+#include <sys/ioctl.h>
+#include <net/if.h> 
 
 #if defined(HAVE_POLL_H)
 #include <poll.h>
@@ -126,6 +128,8 @@ using namespace Firebird;
 #include <fcntl.h>
 #include <process.h>
 #include <signal.h>
+#include <Iptypes.h>
+#include <Iphlpapi.h>
 #include "../utilities/install/install_nt.h"
 
 #define INET_RETRY_ERRNO	WSAEINPROGRESS
@@ -892,7 +896,10 @@ rem_port* INET_connect(const TEXT* name,
 				port->port_peer_name = host;
 				get_peer_info(port);
 				if (send_full(port, packet))
+				{
+					port->port_hw_address = os_utils::get_hw_address(port);
 					goto exit_free;
+				}
 			}
 		}
 		else
@@ -3228,6 +3235,122 @@ SOCKET accept(SOCKET sockfd, struct sockaddr* addr, socklen_t* addrlen)
 
 	setCloseOnExec(fd);
 	return fd;
+#endif
+}
+
+string get_hw_address(const rem_port* port)
+{
+/**************************************
+ *
+ *	g e t _ p h y s i c a l _ a d d r e s s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Return hw address of local adapter using by socket.
+ *
+ **************************************/
+	struct sockaddr_in address;
+	socklen_t length = sizeof(address);
+	string hw_addr;
+	if (getsockname(port->port_handle, (struct sockaddr *) &address, &length))
+		return hw_addr;
+	if (address.sin_addr.s_addr == htonl(INADDR_LOOPBACK))
+		// Nothing to do in case of loopback
+		return hw_addr;
+
+#ifdef WIN_NT
+	Firebird::string socketIp;
+	const UCHAR* ip = (UCHAR*) &address.sin_addr;
+	socketIp.printf(
+		"%d.%d.%d.%d",
+		static_cast<int>(ip[0]),
+		static_cast<int>(ip[1]),
+		static_cast<int>(ip[2]),
+		static_cast<int>(ip[3]) );
+
+	HalfStaticArray<IP_ADAPTER_INFO, 8>  AdapterInfo;
+	ULONG dwBufLen = sizeof(IP_ADAPTER_INFO) * AdapterInfo.getCapacity();
+	DWORD status = GetAdaptersInfo(AdapterInfo.begin(), &dwBufLen);
+	if (status == ERROR_BUFFER_OVERFLOW)
+	{
+		AdapterInfo.grow(dwBufLen / sizeof(IP_ADAPTER_INFO));
+		status = GetAdaptersInfo(AdapterInfo.begin(), &dwBufLen);
+	}
+
+	if (status == ERROR_SUCCESS)
+	{
+		PIP_ADAPTER_INFO pAdapter = AdapterInfo.begin();
+		for (PIP_ADAPTER_INFO pAdapter = AdapterInfo.begin(); pAdapter; 
+			pAdapter = pAdapter->Next)
+		{
+			for (PIP_ADDR_STRING pIpAddr = &pAdapter->IpAddressList;
+				pIpAddr; pIpAddr = pIpAddr->Next)
+			{
+				if (!strcmp(socketIp.c_str(), pIpAddr->IpAddress.String))
+				{
+					hw_addr.printf("%02X-%02X-%02X-%02X-%02X-%02X",
+						pAdapter->Address[0],
+						pAdapter->Address[1],
+						pAdapter->Address[2],
+						pAdapter->Address[3],
+						pAdapter->Address[4],
+						pAdapter->Address[5] );
+
+					return hw_addr;
+				}
+			}
+		}
+	}
+#else
+
+	ifreq ifr;
+	ifconf ifc;
+	char buf[1024];
+
+	int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+	if (sock == -1)
+		return hw_addr;
+
+	ifc.ifc_len = sizeof(buf);
+	ifc.ifc_buf = buf;
+	if (ioctl(sock, SIOCGIFCONF, &ifc) < 0)
+	{
+		close(sock);
+		return hw_addr;
+	}
+
+	const ifreq* const end = ifc.ifc_req + (ifc.ifc_len / sizeof(ifreq));
+
+	for (ifreq* it = ifc.ifc_req; it != end; ++it)
+	{
+		strcpy(ifr.ifr_name, it->ifr_name);
+		if (ioctl(sock, SIOCGIFADDR, &ifr) < 0)
+			continue;
+
+		const sockaddr_in* ifaddr = (sockaddr_in*) &ifr.ifr_addr;	
+		if (ifaddr->sin_addr.s_addr == address.sin_addr.s_addr)
+		{
+			if (ioctl(sock, SIOCGIFHWADDR, &ifr) < 0)
+			{
+				close(sock);
+				return hw_addr;
+			}
+
+			hw_addr.printf("%02X-%02X-%02X-%02X-%02X-%02X",
+				(UCHAR) ifr.ifr_hwaddr.sa_data[0],
+				(UCHAR) ifr.ifr_hwaddr.sa_data[1],
+				(UCHAR) ifr.ifr_hwaddr.sa_data[2],
+				(UCHAR) ifr.ifr_hwaddr.sa_data[3],
+				(UCHAR) ifr.ifr_hwaddr.sa_data[4],
+				(UCHAR) ifr.ifr_hwaddr.sa_data[5] );
+
+			close(sock);
+			return hw_addr;
+		}
+	}
+
+	close(sock);
 #endif
 }
 

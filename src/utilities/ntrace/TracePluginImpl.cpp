@@ -980,7 +980,11 @@ void TracePluginImpl::register_connection(ITraceDatabaseConnection* connection)
 	const char* remAddr = connection->getRemoteAddress();
 	if (remProto && *remProto)
 	{
-		tmp.printf(", %s:%s)", remProto, remAddr);
+		const char* remHwAddress = connection->getRemoteHwAddress();
+		if (remHwAddress && *remHwAddress)
+			tmp.printf(", %s:%s:%s)", remProto, remAddr, remHwAddress);
+		else
+			tmp.printf(", %s:%s)", remProto, remAddr);
 		conn_data.description->append(tmp);
 	}
 	else
@@ -1702,7 +1706,14 @@ void TracePluginImpl::register_service(ITraceServiceConnection* service)
 
 	const char* tmp = service->getRemoteAddress();
 	if (tmp && *tmp) {
-		remote_address.printf("%s:%s", service->getRemoteProtocol(), service->getRemoteAddress());
+		const char* remote_hw_address = service->getRemoteHwAddress();
+		if (remote_hw_address && *remote_hw_address)
+		{
+			remote_address.printf("%s:%s:%s", service->getRemoteProtocol(),
+				service->getRemoteAddress(), remote_hw_address);
+		}
+		else
+			remote_address.printf("%s:%s", service->getRemoteProtocol(), service->getRemoteAddress());
 	}
 	else
 	{

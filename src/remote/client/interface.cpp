@@ -5307,6 +5307,12 @@ static void add_other_params(rem_port* port, ClumpletWriter& dpb, const Paramete
 		dpb.deleteWithTag(par.client_version);
 		dpb.insertString(par.client_version, FB_VERSION);
 	}
+
+	if (port->port_protocol >= PROTOCOL_VERSION14 && port->port_hw_address.hasData())
+	{
+		dpb.deleteWithTag(par.hw_address);
+		dpb.insertString(par.hw_address, port->port_hw_address);
+	}
 }
 
 

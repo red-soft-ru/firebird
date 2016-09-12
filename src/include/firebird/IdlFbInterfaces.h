@@ -3918,6 +3918,7 @@ namespace Firebird
 			const char* (CLOOP_CARG *getCharSet)(ITraceConnection* self) throw();
 			const char* (CLOOP_CARG *getRemoteProtocol)(ITraceConnection* self) throw();
 			const char* (CLOOP_CARG *getRemoteAddress)(ITraceConnection* self) throw();
+			const char* (CLOOP_CARG *getRemoteHwAddress)(ITraceConnection* self) throw();
 			int (CLOOP_CARG *getRemoteProcessID)(ITraceConnection* self) throw();
 			const char* (CLOOP_CARG *getRemoteProcessName)(ITraceConnection* self) throw();
 		};
@@ -3977,6 +3978,12 @@ namespace Firebird
 		const char* getRemoteAddress()
 		{
 			const char* ret = static_cast<VTable*>(this->cloopVTable)->getRemoteAddress(this);
+			return ret;
+		}
+
+		const char* getRemoteHwAddress()
+		{
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getRemoteHwAddress(this);
 			return ret;
 		}
 
@@ -13345,6 +13352,7 @@ namespace Firebird
 					this->getCharSet = &Name::cloopgetCharSetDispatcher;
 					this->getRemoteProtocol = &Name::cloopgetRemoteProtocolDispatcher;
 					this->getRemoteAddress = &Name::cloopgetRemoteAddressDispatcher;
+					this->getRemoteHwAddress = &Name::cloopgetRemoteHwAddressDispatcher;
 					this->getRemoteProcessID = &Name::cloopgetRemoteProcessIDDispatcher;
 					this->getRemoteProcessName = &Name::cloopgetRemoteProcessNameDispatcher;
 				}
@@ -13444,6 +13452,19 @@ namespace Firebird
 			}
 		}
 
+		static const char* CLOOP_CARG cloopgetRemoteHwAddressDispatcher(ITraceConnection* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getRemoteHwAddress();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
+
 		static int CLOOP_CARG cloopgetRemoteProcessIDDispatcher(ITraceConnection* self) throw()
 		{
 			try
@@ -13491,6 +13512,7 @@ namespace Firebird
 		virtual const char* getCharSet() = 0;
 		virtual const char* getRemoteProtocol() = 0;
 		virtual const char* getRemoteAddress() = 0;
+		virtual const char* getRemoteHwAddress() = 0;
 		virtual int getRemoteProcessID() = 0;
 		virtual const char* getRemoteProcessName() = 0;
 	};
@@ -13515,6 +13537,7 @@ namespace Firebird
 					this->getCharSet = &Name::cloopgetCharSetDispatcher;
 					this->getRemoteProtocol = &Name::cloopgetRemoteProtocolDispatcher;
 					this->getRemoteAddress = &Name::cloopgetRemoteAddressDispatcher;
+					this->getRemoteHwAddress = &Name::cloopgetRemoteHwAddressDispatcher;
 					this->getRemoteProcessID = &Name::cloopgetRemoteProcessIDDispatcher;
 					this->getRemoteProcessName = &Name::cloopgetRemoteProcessNameDispatcher;
 					this->getConnectionID = &Name::cloopgetConnectionIDDispatcher;
@@ -13634,6 +13657,19 @@ namespace Firebird
 			try
 			{
 				return static_cast<Name*>(self)->Name::getRemoteAddress();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetRemoteHwAddressDispatcher(ITraceConnection* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getRemoteHwAddress();
 			}
 			catch (...)
 			{
@@ -14637,6 +14673,7 @@ namespace Firebird
 					this->getCharSet = &Name::cloopgetCharSetDispatcher;
 					this->getRemoteProtocol = &Name::cloopgetRemoteProtocolDispatcher;
 					this->getRemoteAddress = &Name::cloopgetRemoteAddressDispatcher;
+					this->getRemoteHwAddress = &Name::cloopgetRemoteHwAddressDispatcher;
 					this->getRemoteProcessID = &Name::cloopgetRemoteProcessIDDispatcher;
 					this->getRemoteProcessName = &Name::cloopgetRemoteProcessNameDispatcher;
 					this->getServiceID = &Name::cloopgetServiceIDDispatcher;
@@ -14770,6 +14807,19 @@ namespace Firebird
 			try
 			{
 				return static_cast<Name*>(self)->Name::getRemoteAddress();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetRemoteHwAddressDispatcher(ITraceConnection* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getRemoteHwAddress();
 			}
 			catch (...)
 			{

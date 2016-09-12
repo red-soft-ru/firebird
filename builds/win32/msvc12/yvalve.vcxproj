@@ -180,7 +180,7 @@
     </ResourceCompile>
     <Link>
       <ModuleDefinitionFile>..\defs\firebird.def</ModuleDefinitionFile>
-      <AdditionalDependencies>ws2_32.lib;mpr.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;mpr.lib;Iphlpapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
@@ -198,7 +198,7 @@
     </ResourceCompile>
     <Link>
       <ModuleDefinitionFile>..\defs\firebird.def</ModuleDefinitionFile>
-      <AdditionalDependencies>ws2_32.lib;mpr.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;mpr.lib;Iphlpapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
@@ -219,7 +219,7 @@
     </ResourceCompile>
     <Link>
       <ModuleDefinitionFile>..\defs\firebird.def</ModuleDefinitionFile>
-      <AdditionalDependencies>ws2_32.lib;mpr.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;mpr.lib;Iphlpapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
@@ -239,7 +239,7 @@
     </ResourceCompile>
     <Link>
       <ModuleDefinitionFile>..\defs\firebird.def</ModuleDefinitionFile>
-      <AdditionalDependencies>ws2_32.lib;mpr.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;mpr.lib;Iphlpapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>

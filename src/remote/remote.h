@@ -111,14 +111,15 @@ namespace Firebird {
 typedef int SOCKET;
 #endif
 
+struct rem_port;
+
 namespace os_utils
 {
 	// force descriptor to have O_CLOEXEC set
 	SOCKET socket(int domain, int type, int protocol);
 	SOCKET accept(SOCKET sockfd, sockaddr *addr, socklen_t *addrlen);
+	Firebird::string get_hw_address(const rem_port* port);
 }
-
-struct rem_port;
 
 typedef Firebird::AutoPtr<UCHAR, Firebird::ArrayDelete<UCHAR> > UCharArrayAutoPtr;
 
@@ -142,7 +143,7 @@ struct ParametersSet
 		  address_path, process_id, process_name,
 		  encrypt_key, client_version, remote_protocol,
 		  host_name, os_user, config_text,
-		  utf8_filename, map_attach;
+		  utf8_filename, map_attach, hw_address;
 };
 
 extern const ParametersSet dpbParam, spbParam, connectParam;
@@ -938,6 +939,7 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	Firebird::string port_peer_name;
 	Firebird::string port_protocol_id;		// String containing protocol name for this port
 	Firebird::string port_address;			// Protocol-specific address string for the port
+	Firebird::string port_hw_address;		// Hardware address string for the port
 	Rpr*			port_rpr;				// port stored procedure reference
 	Rsr*			port_statement;			// Statement for execute immediate
 	rmtque*			port_receive_rmtque;	// for client, responses waiting
@@ -996,7 +998,7 @@ public:
 		port_objects(getPool()), port_version(0), port_host(0),
 		port_connection(0), port_login(getPool()),
 		port_user_name(getPool()), port_peer_name(getPool()),
-		port_protocol_id(getPool()), port_address(getPool()),
+		port_protocol_id(getPool()), port_address(getPool()), port_hw_address(getPool()),
 		port_rpr(0), port_statement(0), port_receive_rmtque(0),
 		port_requests_queued(0), port_xcc(0), port_deferred_packets(0), port_last_object_id(0),
 		port_queue(getPool()), port_qoffset(0),

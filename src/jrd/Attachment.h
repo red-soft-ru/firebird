@@ -268,6 +268,7 @@ public:
 	Firebird::Stack<DdlTriggerContext> ddlTriggersContext;	// Context variables for DDL trigger event
 	Firebird::string att_network_protocol;	// Network protocol used by client for connection
 	Firebird::string att_remote_address;	// Protocol-specific address of remote client
+	Firebird::string att_hw_address;		// Hardware address of remote client
 	SLONG att_remote_pid;					// Process id of remote client
 	Firebird::PathName att_remote_process;	// Process name of remote client
 	Firebird::string att_client_version;	// Version of the client library

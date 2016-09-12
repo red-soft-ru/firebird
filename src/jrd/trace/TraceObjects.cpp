@@ -109,6 +109,11 @@ const char* TraceConnectionImpl::getRemoteAddress()
 	return m_att->att_remote_address.c_str();
 }
 
+const char* TraceConnectionImpl::getRemoteHwAddress()
+{
+	return m_att->att_hw_address.c_str();
+}
+
 int TraceConnectionImpl::getRemoteProcessID()
 {
 	return m_att->att_remote_pid;
@@ -554,6 +559,11 @@ const char* TraceServiceImpl::getRemoteProtocol()
 const char* TraceServiceImpl::getRemoteAddress()
 {
 	return m_svc->getRemoteAddress().c_str();
+}
+
+const char* TraceServiceImpl::getRemoteHwAddress()
+{
+	return m_svc->getRemoteHwAddress().c_str();
 }
 
 int TraceServiceImpl::getRemoteProcessID()

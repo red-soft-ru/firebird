@@ -931,6 +931,7 @@ public:
 	string	dpb_set_db_charset;
 	string	dpb_network_protocol;
 	string	dpb_remote_address;
+	string	dpb_hw_address;
 	string	dpb_remote_host;
 	string	dpb_remote_os_user;
 	string	dpb_client_version;
@@ -998,6 +999,7 @@ public:
 	const char* getCharSet()			{ return m_options->dpb_lc_ctype.c_str(); }
 	const char* getRemoteProtocol()		{ return m_options->dpb_network_protocol.c_str(); }
 	const char* getRemoteAddress()		{ return m_options->dpb_remote_address.c_str(); }
+	const char* getRemoteHwAddress()	{ return m_options->dpb_hw_address.c_str(); }
 	int getRemoteProcessID()			{ return m_options->dpb_remote_pid; }
 	const char* getRemoteProcessName()	{ return m_options->dpb_remote_process.c_str(); }
 
@@ -5903,6 +5905,10 @@ void DatabaseOptions::get(const UCHAR* dpb, USHORT dpb_length, bool& invalid_cli
 			getPath(rdr, dpb_remote_process);
 			break;
 
+		case isc_dpb_hw_address:
+			getString(rdr, dpb_hw_address);
+			break;
+
 		case isc_dpb_host_name:
 			getString(rdr, dpb_remote_host);
 			break;
@@ -6164,6 +6170,7 @@ static JAttachment* create_attachment(const PathName& alias_name,
 	attachment->att_filename = alias_name;
 	attachment->att_network_protocol = options.dpb_network_protocol;
 	attachment->att_remote_address = options.dpb_remote_address;
+	attachment->att_hw_address = options.dpb_hw_address;
 	attachment->att_remote_pid = options.dpb_remote_pid;
 	attachment->att_remote_process = options.dpb_remote_process;
 	attachment->att_remote_host = options.dpb_remote_host;
