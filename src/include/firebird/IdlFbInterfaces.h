@@ -4678,6 +4678,7 @@ namespace Firebird
 			const char* (CLOOP_CARG *getFirebirdRootDirectory)(ITraceInitInfo* self) throw();
 			const char* (CLOOP_CARG *getDatabaseName)(ITraceInitInfo* self) throw();
 			ITraceDatabaseConnection* (CLOOP_CARG *getConnection)(ITraceInitInfo* self) throw();
+			ITraceServiceConnection* (CLOOP_CARG *getService)(ITraceInitInfo* self) throw();
 			ITraceLogWriter* (CLOOP_CARG *getLogWriter)(ITraceInitInfo* self) throw();
 		};
 
@@ -4727,6 +4728,12 @@ namespace Firebird
 		ITraceDatabaseConnection* getConnection()
 		{
 			ITraceDatabaseConnection* ret = static_cast<VTable*>(this->cloopVTable)->getConnection(this);
+			return ret;
+		}
+
+		ITraceServiceConnection* getService()
+		{
+			ITraceServiceConnection* ret = static_cast<VTable*>(this->cloopVTable)->getService(this);
 			return ret;
 		}
 
@@ -15117,6 +15124,7 @@ namespace Firebird
 					this->getFirebirdRootDirectory = &Name::cloopgetFirebirdRootDirectoryDispatcher;
 					this->getDatabaseName = &Name::cloopgetDatabaseNameDispatcher;
 					this->getConnection = &Name::cloopgetConnectionDispatcher;
+					this->getService = &Name::cloopgetServiceDispatcher;
 					this->getLogWriter = &Name::cloopgetLogWriterDispatcher;
 				}
 			} vTable;
@@ -15199,6 +15207,19 @@ namespace Firebird
 			{
 				StatusType::catchException(0);
 				return static_cast<ITraceDatabaseConnection*>(0);
+			}
+		}
+
+		static ITraceServiceConnection* CLOOP_CARG cloopgetServiceDispatcher(ITraceInitInfo* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getService();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<ITraceServiceConnection*>(0);
 			}
 		}
 

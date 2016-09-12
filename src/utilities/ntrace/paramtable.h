@@ -34,6 +34,10 @@
 
 STR_PARAMETER(include_filter, "")
 STR_PARAMETER(exclude_filter, "")
+STR_PARAMETER(include_user_filter, "")
+STR_PARAMETER(exclude_user_filter, "")
+STR_PARAMETER(include_process_filter, "")
+STR_PARAMETER(exclude_process_filter, "")
 PATH_PARAMETER(log_filename, "")
 BOOL_PARAMETER(log_errors, false)
 BOOL_PARAMETER(enabled, false)

@@ -522,11 +522,13 @@ class TraceInitInfoImpl :
 {
 public:
 	TraceInitInfoImpl(const Firebird::TraceSession& session, const Attachment* att,
-					const char* filename) :
+					const Service* svc, const char* filename) :
 		m_session(session),
 		m_trace_conn(att),
+		m_trace_svc(svc),
 		m_filename(filename),
-		m_attachment(att)
+		m_attachment(att),
+		m_service(svc)
 	{
 		if (m_attachment && !m_attachment->att_filename.empty()) {
 			m_filename = m_attachment->att_filename.c_str();
@@ -549,14 +551,24 @@ public:
 		return NULL;
 	}
 
+	Firebird::ITraceServiceConnection* getService()
+	{
+		if (m_service)
+			return &m_trace_svc;
+
+		return NULL;
+	}
+
 	Firebird::ITraceLogWriter* getLogWriter();
 
 private:
 	const Firebird::TraceSession& m_session;
 	Firebird::RefPtr<Firebird::ITraceLogWriter> m_logWriter;
 	TraceConnectionImpl m_trace_conn;
+	TraceServiceImpl m_trace_svc;
 	const char* m_filename;
 	const Attachment* const m_attachment;
+	const Service* const m_service;	
 };
 
 

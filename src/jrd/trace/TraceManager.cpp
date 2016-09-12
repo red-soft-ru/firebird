@@ -311,7 +311,7 @@ void TraceManager::update_session(const TraceSession& session)
 
 	for (FactoryInfo* info = factories->begin(); info != factories->end(); ++info)
 	{
-		TraceInitInfoImpl attachInfo(session, attachment, filename);
+		TraceInitInfoImpl attachInfo(session, attachment, service, filename);
 		FbLocalStatus status;
 		ITracePlugin* plugin = info->factory->trace_create(&status, &attachInfo);
 

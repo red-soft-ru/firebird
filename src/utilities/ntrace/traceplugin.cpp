@@ -27,6 +27,7 @@
  */
 
 #include "firebird.h"
+#include "../jrd/SimilarToMatcher.h"
 #include "../common/classes/ImplementHelper.h"
 
 #include "TraceConfiguration.h"
@@ -76,12 +77,92 @@ Firebird::ITracePlugin* TraceFactoryImpl::trace_create(Firebird::CheckStatusWrap
 		TraceCfgReader::readTraceConfiguration(initInfo->getConfigText(), dbname, config);
 
 		Firebird::ITraceDatabaseConnection* connection = initInfo->getConnection();
+		Firebird::ITraceServiceConnection* service = initInfo->getService();
 
 		if (!config.enabled ||
 			(config.connection_id && connection &&
 				(connection->getConnectionID() != config.connection_id)))
 		{
 			return NULL; // Plugin is not needed, no error happened.
+		}
+
+		Firebird::string& inc_user = config.include_user_filter;
+		Firebird::string& exc_user = config.exclude_user_filter;
+		Firebird::string& inc_process = config.include_process_filter;
+		Firebird::string& exc_process = config.exclude_process_filter;
+
+		const char* user = NULL;
+		const char* process = NULL;
+		if (connection) {
+			user = connection->getUserName();
+			process = connection->getRemoteProcessName();
+		} 
+		else if (service) {
+			user = service->getUserName();
+			process = service->getRemoteProcessName();
+		}
+
+		if (!user && inc_user.hasData() || !process && inc_process.hasData())
+		{
+			// Unknown user or remote process but we want specific
+			// Don't start trace session
+			return NULL; 
+		}
+
+		bool enabled = true;
+		if ((inc_user.hasData() || exc_user.hasData()) && user ||
+			(inc_process.hasData() || exc_process.hasData()) && process)
+		{
+			typedef Jrd::UpcaseConverter<Jrd::NullStrConverter>	SimilarConverter;
+
+			UnicodeCollationHolder unicodeCollation(*getDefaultMemoryPool());
+			Jrd::TextType *textType = unicodeCollation.getTextType();
+
+			if (inc_user.hasData())
+			{
+				Firebird::SimilarToMatcher<UCHAR, SimilarConverter> include_matcher (
+					*getDefaultMemoryPool(), textType, (const UCHAR*) inc_user.c_str(),
+					inc_user.length(), '\\', true);
+
+				include_matcher.process((const UCHAR*) user, strlen(user));
+				enabled = include_matcher.result();
+			}
+
+			if (enabled && exc_user.hasData())
+			{
+				Firebird::SimilarToMatcher<UCHAR, SimilarConverter> exclude_matcher (
+					*getDefaultMemoryPool(), textType, (const UCHAR*) exc_user.c_str(),
+					exc_user.length(), '\\', true);
+
+				exclude_matcher.process((const UCHAR*) user, strlen(user));
+				enabled = !exclude_matcher.result();
+			}
+
+			if (enabled && inc_process.hasData())
+			{
+				Firebird::SimilarToMatcher<UCHAR, SimilarConverter> include_matcher (
+					*getDefaultMemoryPool(), textType, (const UCHAR*) inc_process.c_str(),
+					inc_process.length(), '\\', true);
+
+				include_matcher.process((const UCHAR*) process, strlen(process));
+				enabled = include_matcher.result();
+			}
+
+			if (enabled && exc_process.hasData())
+			{
+				Firebird::SimilarToMatcher<UCHAR, SimilarConverter> exclude_matcher (
+					*getDefaultMemoryPool(), textType, (const UCHAR*) exc_process.c_str(),
+					exc_process.length(), '\\', true);
+
+				exclude_matcher.process((const UCHAR*) process, strlen(process));
+				enabled = !exclude_matcher.result();
+			}
+		}
+
+		if (!enabled)
+		{
+			// User filter not matched - does not start trace session
+			return NULL;
 		}
 
 		Firebird::AutoPtr<Firebird::ITraceLogWriter, Firebird::SimpleRelease<Firebird::ITraceLogWriter> >
