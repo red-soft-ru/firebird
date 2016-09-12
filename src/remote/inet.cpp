@@ -3308,7 +3308,7 @@ string get_hw_address(const rem_port* port)
 	ifconf ifc;
 	char buf[1024];
 
-	int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+	int sock = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
 	if (sock == -1)
 		return hw_addr;
 
