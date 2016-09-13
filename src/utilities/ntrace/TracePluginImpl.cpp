@@ -508,7 +508,7 @@ void TracePluginImpl::appendTableCounts(const PerformanceInfo *info)
 	{
 		record.append(trc->trc_relation_name);
 		record.append(MAX_SQL_IDENTIFIER_LEN - fb_strlen(trc->trc_relation_name), ' ');
-		for (int j = 0; j < DBB_max_rel_count; j++)
+		for (int j = 0; j < RuntimeStatistics::REL_TOTAL_ITEMS; j++)
 		{
 			if (trc->trc_counters[j] == 0)
 			{
@@ -1224,6 +1224,10 @@ void TracePluginImpl::log_event_proc_execute(ITraceDatabaseConnection* connectio
 	if (config.time_threshold && info && info->pin_time < config.time_threshold)
 		return;
 
+	// Skip procedures that don't modify data
+	if (!started && config.log_changes_only && !checkDataChanges(info))
+		return;
+
 	ITraceParams* params = procedure->getInputs();
 	if (params && params->getCount())
 	{
@@ -1279,6 +1283,10 @@ void TracePluginImpl::log_event_func_execute(ITraceDatabaseConnection* connectio
 	// Do not log operation if it is below time threshold
 	const PerformanceInfo* info = started ? NULL : function->getPerf();
 	if (config.time_threshold && info && info->pin_time < config.time_threshold)
+		return;
+
+	// Skip functions that don't modify data
+	if (!started && config.log_changes_only && !checkDataChanges(info))
 		return;
 
 	ITraceParams* params = function->getInputs();
@@ -1485,6 +1493,10 @@ void TracePluginImpl::log_event_dsql_execute(ITraceDatabaseConnection* connectio
 	if (config.time_threshold && info && info->pin_time < config.time_threshold)
 		return;
 
+	// Skip statements that don't modify data
+	if (!started && config.log_changes_only && !checkDataChanges(info))
+		return;
+
 	ITraceParams *params = statement->getInputs();
 	if (params && params->getCount())
 	{
@@ -1611,6 +1623,10 @@ void TracePluginImpl::log_event_blr_execute(ITraceDatabaseConnection* connection
 
 	// Do not log operation if it is below time threshold
 	if (config.time_threshold && info->pin_time < config.time_threshold)
+		return;
+
+	// Skip statements that don't modify data
+	if (config.log_changes_only && !checkDataChanges(info))
 		return;
 
 	if (config.log_blr_requests)
@@ -1786,6 +1802,26 @@ bool TracePluginImpl::checkServiceFilter(ITraceServiceConnection* service, bool 
 }
 
 
+bool TracePluginImpl::checkDataChanges(const PerformanceInfo *info)
+{
+	if (!info || info->pin_count == 0)
+		return false;
+
+	const TraceCounts *trc;
+	const TraceCounts *trc_end;
+	for (trc = info->pin_tables, trc_end = trc + info->pin_count; trc < trc_end; trc++) 
+	{
+		if (trc->trc_counters[RuntimeStatistics::RECORD_INSERTS - RuntimeStatistics::REL_BASE_OFFSET] ||
+			trc->trc_counters[RuntimeStatistics::RECORD_UPDATES - RuntimeStatistics::REL_BASE_OFFSET] ||
+			trc->trc_counters[RuntimeStatistics::RECORD_DELETES - RuntimeStatistics::REL_BASE_OFFSET])
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+
 void TracePluginImpl::log_event_service_attach(ITraceServiceConnection* service,
 	ntrace_result_t att_result)
 {
@@ -1949,6 +1985,10 @@ void TracePluginImpl::log_event_trigger_execute(ITraceDatabaseConnection* connec
 	// Do not log operation if it is below time threshold
 	const PerformanceInfo* info = started ? NULL : trigger->getPerf();
 	if (config.time_threshold && info && info->pin_time < config.time_threshold)
+		return;
+
+	// Skip triggers that don't modify data
+	if (!started && config.log_changes_only && !checkDataChanges(info))
 		return;
 
 	string trgname(trigger->getTriggerName());

@@ -67,10 +67,10 @@ public:
 		TOTAL_ITEMS		// last
 	};
 
-private:
 	static const size_t REL_BASE_OFFSET = RECORD_SEQ_READS;
 	static const size_t REL_TOTAL_ITEMS = RECORD_RPT_READS - REL_BASE_OFFSET + 1;
 
+private:
 	// Performance counters for individual table
 
 	class RelationCounts

@@ -32,18 +32,6 @@
 
 #include "firebird/Interface.h"
 
-const int DBB_max_rel_count = 8; // must be the same as DBB_max_count from jrd.h
-
-// Performance counters for entire database
-
-enum {
-	DBB_fetches_count = 0,
-	DBB_reads_count,
-	DBB_marks_count,
-	DBB_writes_count,
-	DBB_max_dbb_count
-};
-
 // Performance counters for individual table
 typedef int ntrace_relation_t;
 struct TraceCounts
