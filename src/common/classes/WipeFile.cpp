@@ -130,16 +130,16 @@ void OverwriteFileName(const char* FileName, char* LastFileName)
 	strcpy(newName, FileName);
 	for (i = 0; i < 26; i++) {
 		for (j = index+1 ; j < strlen(FileName); j++) {
-			if(FileName[j] != '.')
+			if (FileName[j] != '.')
 				newName[j] = (char) i + 'A';
 		}
 
 #ifdef WIN_NT
-		if(!MoveFile(LastFileName, newName)) {
+		if (!MoveFile(LastFileName, newName)) {
 			return;
 		}
 #else
-		if(rename(LastFileName, newName)) {
+		if (rename(LastFileName, newName)) {
 			return;
 		}
 #endif
@@ -173,7 +173,7 @@ void FillBuffer(UCHAR **buffer, size_t bufSize){
 			break;
 		case 2:
 			// fill with a random value
-			for(size_t j = 0; j < bufSize; j++)
+			for (size_t j = 0; j < bufSize; j++)
 				buffer[i][j] = (UCHAR) rand();
 			break;
 		}
@@ -218,7 +218,7 @@ void LocateNativeEntryPoints()
 		return;
 
 	// Load the NTDLL entry point we need
-	if( !(NtFsControlFile = (NtFsControlFileProc) GetProcAddress(GetModuleHandle("ntdll.dll"),
+	if (!(NtFsControlFile = (NtFsControlFileProc) GetProcAddress(GetModuleHandle("ntdll.dll"),
 			"NtFsControlFile"))) {
 		fatal_exception::raiseFmt("Could not find NtFsControlFile entry point in NTDLL.DLL");
 	}
@@ -257,7 +257,7 @@ bool SecureOverwrite(HANDLE FileHandle, ULONGLONG Length)
 					bytesToWrite = 1024*1024;
 				}
 				else {
-					bytesToWrite = (ULONG) (Length - totalWritten );
+					bytesToWrite = (ULONG) (Length - totalWritten);
 				}
 				if (bytesToWrite > CLEANBUFSIZE)
 					bytesToWrite = CLEANBUFSIZE;
@@ -308,11 +308,11 @@ bool ScanFile(HANDLE VolumeHandle,
 						FSCTL_GET_RETRIEVAL_POINTERS, &startVcn, sizeof(startVcn),
 						fileMappings, FILEMAPSIZE * sizeof(ULONGLONG))) ||
 			status == STATUS_BUFFER_OVERFLOW ||
-			status == STATUS_PENDING )
+			status == STATUS_PENDING)
 	{
 		// If the operation is pending, wait for it to finish
 		if (status == STATUS_PENDING) {
-			WaitForSingleObject(FileHandle, INFINITE );
+			WaitForSingleObject(FileHandle, INFINITE);
 
 			// Get the status from the status block
 			if (ioStatus.Status != STATUS_SUCCESS &&
@@ -357,7 +357,7 @@ bool ScanFile(HANDLE VolumeHandle,
 	}
 
 	// If we made through with no errors we've overwritten all the file's clusters.
-	if (status == STATUS_SUCCESS )
+	if (status == STATUS_SUCCESS)
 		ZappedFile = true;
 
 	return status == STATUS_SUCCESS;
@@ -407,7 +407,7 @@ bool SecureDeleteCompressed(const char* FileName) {
 		if (!DeleteFile(lastFileName)) {
 			DWORD error = GetLastError();
 			// Rename back to the original name on error
-			if (!MoveFile( lastFileName, FileName ))
+			if (!MoveFile(lastFileName, FileName))
 				fatal_exception::raiseFmt("IO error (%d) deleting file: %s.\nFile is left as %s",
 					error,	FileName, lastFileName);
 			else
@@ -454,10 +454,9 @@ void SecureDelete(const char* FileName)
 		// Write one zero byte, which causes the file system to fill the entire
 		// file's on-disk contents with 0.
 		if (!SecureOverwrite(hFile, 1)) {
+			CloseHandle(hFile);
 			fatal_exception::raiseFmt("IO error (%d) overwriting file: %s",
 				GetLastError(),	FileName);
-			CloseHandle(hFile);
-			return;
 		}
 
 		// Now go back to the start of the file and overwrite the rest of the
@@ -466,14 +465,13 @@ void SecureDelete(const char* FileName)
 		fileLength.LowPart = dwSizeLow;
 		fileLength.HighPart = dwSizeHigh;
 		bytesWritten = 0;
-		while (bytesWritten < fileLength.QuadPart ) {
+		while (bytesWritten < fileLength.QuadPart) {
 			int differ = fileLength.QuadPart - bytesWritten;
 			bytesToWrite = differ < 65536 ? differ : 65536;
 			if (!SecureOverwrite(hFile, (DWORD) bytesToWrite)) {
+				CloseHandle(hFile);
 				fatal_exception::raiseFmt("IO error (%d) overwriting file: %s",
 					GetLastError(),	FileName);
-				CloseHandle(hFile);
-				return;
 			}
 			bytesWritten += bytesToWrite;
 		}
@@ -488,7 +486,7 @@ void SecureDelete(const char* FileName)
 	if (!DeleteFile(lastFileName)) {
 			DWORD error = GetLastError();
 			// Rename back to the original name on error
-			if (!MoveFile( lastFileName, FileName ))
+			if (!MoveFile(lastFileName, FileName))
 				fatal_exception::raiseFmt("IO error (%d) deleting file: %s.\nFile is left as %s",
 					error,	FileName, lastFileName);
 			else
