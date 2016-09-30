@@ -110,9 +110,9 @@ typedef void (*PIO_APC_ROUTINE) (
 #endif // WIN_NT
 
 
-int do_unlink(const char* filename){
+int do_unlink(const char* filename, HANDLE handle){
 	if (MemoryPool::wipePasses > 0)
-		return WipeFile(filename);
+		return WipeFile(filename, handle);
 	else
 		return unlink(filename);
 }
@@ -422,7 +422,7 @@ bool SecureDeleteCompressed(const char* FileName) {
 }
 
 
-void SecureDelete(const char* FileName)
+void SecureDelete(const char* FileName, HANDLE handler)
 {
 	HANDLE	hFile;
 	ULONGLONG bytesToWrite, bytesWritten;
@@ -431,12 +431,19 @@ void SecureDelete(const char* FileName)
 	DWORD dwSizeLow = 0;
 	char   lastFileName[MAX_PATH];
 
-	// First, open the file in overwrite mode
-	hFile = CreateFile(FileName, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
-					   NULL, OPEN_EXISTING, FILE_FLAG_WRITE_THROUGH, NULL);
-	if (hFile == INVALID_HANDLE_VALUE) {
-		fatal_exception::raiseFmt("IO error (%d) opening file: %s",
-			GetLastError(),	FileName);
+	if (handler == NULL)
+	{
+		// First, open the file in overwrite mode
+		hFile = CreateFile(FileName, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+						   NULL, OPEN_EXISTING, FILE_FLAG_WRITE_THROUGH, NULL);
+		if (hFile == INVALID_HANDLE_VALUE) {
+			fatal_exception::raiseFmt("IO error (%d) opening file: %s",
+				GetLastError(),	FileName);
+		}
+	}
+	else
+	{
+		hFile = handler;
 	}
 
 	dwSizeLow = GetFileSize(hFile, &dwSizeHigh);
@@ -477,27 +484,29 @@ void SecureDelete(const char* FileName)
 		}
 	}
 
-	CloseHandle(hFile);
+	if (handler == NULL)
+	{
+		CloseHandle(hFile);
 
-	// Rename the file a few times
-	OverwriteFileName(FileName, lastFileName);
+		// Rename the file a few times
+		OverwriteFileName(FileName, lastFileName);
 
-	// Delete the file
-	if (!DeleteFile(lastFileName)) {
-			DWORD error = GetLastError();
-			// Rename back to the original name on error
-			if (!MoveFile(lastFileName, FileName))
-				fatal_exception::raiseFmt("IO error (%d) deleting file: %s.\nFile is left as %s",
-					error,	FileName, lastFileName);
-			else
-				fatal_exception::raiseFmt("IO error (%d) deleting file: %s",
-					error,	FileName);
-			return;
+		// Delete the file
+		if (!DeleteFile(lastFileName)) {
+				DWORD error = GetLastError();
+				// Rename back to the original name on error
+				if (!MoveFile(lastFileName, FileName))
+					fatal_exception::raiseFmt("IO error (%d) deleting file: %s.\nFile is left as %s",
+						error,	FileName, lastFileName);
+				else
+					fatal_exception::raiseFmt("IO error (%d) deleting file: %s",
+						error,	FileName);
+		}
 	}
 }
 
 
-int WipeFile(const char* filename) {
+int WipeFile(const char* filename, HANDLE handler) {
 	PathName device;
 	PathName file;
 	USHORT dtype = 0;
@@ -533,7 +542,7 @@ int WipeFile(const char* filename) {
 		if (SecureDeleteCompressed(file.c_str()))
 			return 0;
 	}
-	SecureDelete(file.c_str());
+	SecureDelete(file.c_str(), handler);
 	return 0;
 }
 
@@ -571,7 +580,7 @@ void DoWrite(const char* FileName, const int fd, UCHAR *buf, size_t count) {
 }
 
 
-void SecureDelete(const char* FileName) {
+void SecureDelete(const char* FileName, int hFile) {
 	UCHAR*	buf[3];
 	size_t	bufSize;
 	FB_UINT64	fSize, loop, loopr;
@@ -580,7 +589,9 @@ void SecureDelete(const char* FileName) {
 	struct stat fileStat;
 	size_t	passes;
 
-	if (!stat(FileName, &fileStat))
+    if ( hFile >= 0 && !fstat(hFile, &fileStat))
+        fSize = fileStat.st_size;
+    else if (!stat(FileName, &fileStat))
 		fSize = fileStat.st_size;
 	else
 		fatal_exception::raiseFmt("IO error (%d) file stat: %s", errno, FileName);
@@ -608,7 +619,10 @@ void SecureDelete(const char* FileName) {
 	try	{
 		FillBuffer(buf, bufSize);
 
-		handle = open(FileName,  O_WRONLY | O_EXCL | SYNC);
+        if (hFile < 0)
+            handle = open(FileName,  O_WRONLY | O_EXCL | SYNC);
+        else
+            handle = hFile;
 		if (handle < 0)
 			fatal_exception::raiseFmt("Error (%d) opening file: %s", errno, FileName);
 
@@ -624,7 +638,7 @@ void SecureDelete(const char* FileName) {
 				SyncFile(handle);
 			}
 		}
-		if (handle >= 0)
+        if (handle >= 0 && hFile < 0)
 			close(handle);
 	}
 	catch (const Firebird::Exception&) {
@@ -635,23 +649,26 @@ void SecureDelete(const char* FileName) {
 }
 
 
-int WipeFile(const char* filename) {
+int WipeFile(const char* filename, int handle) {
 	char   lastFileName[PATH_MAX];
 
-	SecureDelete(filename);
+    SecureDelete(filename, handle);
 
-	OverwriteFileName(filename, lastFileName);
-	// Delete the file
-	if (unlink(lastFileName)) {
-		int error = errno;
-		// Rename back to the original name on error
-		if (rename(lastFileName, filename))
-			fatal_exception::raiseFmt("IO error (%d) deleting file: %s.\nFile is left as %s",
-				error,	filename, lastFileName);
-		else
-			fatal_exception::raiseFmt("IO error (%d) deleting file: %s",
-				error,	filename);
-	}
-	return 0;
+    if (handle < 0)
+    {
+        OverwriteFileName(filename, lastFileName);
+        // Delete the file
+        if (unlink(lastFileName)) {
+            int error = errno;
+            // Rename back to the original name on error
+            if (rename(lastFileName, filename))
+                fatal_exception::raiseFmt("IO error (%d) deleting file: %s.\nFile is left as %s",
+                    error,	filename, lastFileName);
+            else
+                fatal_exception::raiseFmt("IO error (%d) deleting file: %s",
+                    error,	filename);
+        }
+    }
+    return 0;
 }
 #endif // WIN_NT

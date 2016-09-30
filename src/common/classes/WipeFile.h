@@ -29,7 +29,15 @@
 
 #include "firebird.h"
 
-int do_unlink(const char* filename);
-int WipeFile(const char* filename);
+#ifdef WIN_NT
+#include <windows.h>
+#define DEFAULT_HANDLE NULL
+#else
+#define HANDLE int 
+#define DEFAULT_HANDLE -1
+#endif
+
+int do_unlink(const char* filename, HANDLE handler = DEFAULT_HANDLE);
+int WipeFile(const char* filename, HANDLE handler = DEFAULT_HANDLE);
 
 #endif // CLASSES_WIPE_FILE_H
