@@ -230,11 +230,11 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 
 	if (doUnlink)
 	{
-		::do_unlink(filename.c_str());
+		::unlink(filename.c_str());
 	}
 #endif
 
-	doUnlink = false;
+//	doUnlink = false;
 }
 
 //
@@ -245,15 +245,15 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 
 TempFile::~TempFile()
 {
+	if (doUnlink && MemoryPool::wipePasses > 0)
+	{
+		::do_unlink(filename.c_str(), handle);
+	}
 #if defined(WIN_NT)
 	CloseHandle(handle);
 #else
 	::close(handle);
 #endif
-	if (doUnlink)
-	{
-		::do_unlink(filename.c_str());
-	}
 }
 
 //
