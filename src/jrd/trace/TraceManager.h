@@ -57,8 +57,8 @@ public:
 	/* Finalize plugins. Called when database is closed by the engine */
 	~TraceManager();
 
-	static ConfigStorage* getStorage()
-	{ return storageInstance->getStorage(); }
+	static ConfigStorage* getStorage(bool update = false)
+	{ return storageInstance->getStorage(update); }
 
 	static size_t pluginsCount()
 	{ return factories->getCount(); }

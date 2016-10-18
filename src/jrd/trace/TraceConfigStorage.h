@@ -49,11 +49,12 @@ struct TraceCSHeader : public Firebird::MemoryHeader
 
 class ConfigStorage FB_FINAL : public Firebird::GlobalStorage, public Firebird::IpcObject, public Firebird::Reasons
 {
+friend class StorageInstance;
 public:
 	ConfigStorage();
 	~ConfigStorage();
 
-	void addSession(Firebird::TraceSession& session);
+	void addSession(Firebird::TraceSession& session, bool save_id = false);
 	bool getNextSession(Firebird::TraceSession& session);
 	void removeSession(ULONG id);
 	void restart();
@@ -72,6 +73,8 @@ private:
 
 	void checkFile();
 	void touchFile();
+	void getSystemConfigPath(Firebird::PathName& configFileName);
+	void updateSystemConfig();
 
 	class TouchFile FB_FINAL :
 		public Firebird::RefCntIface<Firebird::ITimerImpl<TouchFile, Firebird::CheckStatusWrapper> >
@@ -147,7 +150,7 @@ public:
 		delete storage;
 	}
 
-	ConfigStorage* getStorage()
+	ConfigStorage* getStorage(bool update = false)
 	{
 		if (!storage)
 		{
@@ -156,6 +159,11 @@ public:
 			{
 				storage = FB_NEW ConfigStorage;
 			}
+		}
+		else 
+		{
+			if (update)
+				storage->updateSystemConfig();
 		}
 		return storage;
 	}

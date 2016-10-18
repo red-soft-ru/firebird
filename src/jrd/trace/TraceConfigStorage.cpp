@@ -232,28 +232,11 @@ void ConfigStorage::checkFile()
 
 		try
 		{
-			PathName configFileName(Config::getAuditTraceConfigFile());
-
-			// remove quotes around path if present
-			{ // scope
-				const FB_SIZE_T pathLen = configFileName.length();
-				if (pathLen > 1 && configFileName[0] == '"' &&
-					configFileName[pathLen - 1] == '"')
-				{
-					configFileName.erase(0, 1);
-					configFileName.erase(pathLen - 2, 1);
-				}
-			}
+			Firebird::PathName configFileName;
+			getSystemConfigPath(configFileName);
 
 			if (configFileName.empty())
 				return;
-
-			if (PathUtils::isRelative(configFileName))
-			{
-				PathName root(Config::getRootDirectory());
-				PathUtils::ensureSeparator(root);
-				configFileName.insert(0, root);
-			}
 
 			cfgFile = os_utils::fopen(configFileName.c_str(), "rb");
 			if (!cfgFile) {
@@ -328,10 +311,11 @@ void ConfigStorage::release()
 	}
 }
 
-void ConfigStorage::addSession(TraceSession& session)
+void ConfigStorage::addSession(TraceSession& session, bool save_id)
 {
 	setDirty();
-	session.ses_id = (m_sharedMemory->getHeader()->session_number)++;
+	if (!save_id)
+		session.ses_id = (m_sharedMemory->getHeader()->session_number)++;
 	session.ses_flags |= trs_active;
 	time(&session.ses_start);
 
@@ -634,6 +618,98 @@ int ConfigStorage::TouchFile::release()
 	}
 
 	return 1;
+}
+
+void ConfigStorage::getSystemConfigPath(Firebird::PathName& configFileName)
+{
+	configFileName.assign(Config::getAuditTraceConfigFile());
+
+	// remove quotes around path if present
+	{ // scope
+		const size_t pathLen = configFileName.length();
+		if (pathLen > 1 && configFileName[0] == '"' &&
+			configFileName[pathLen - 1] == '"')
+		{
+			configFileName.erase(0, 1);
+			configFileName.erase(pathLen - 2, 1);
+		}
+	}
+
+	if (configFileName.empty())
+		return;
+
+	if (PathUtils::isRelative(configFileName))
+	{
+		PathName root(Config::getRootDirectory());
+		PathUtils::ensureSeparator(root);
+		configFileName.insert(0, root);
+	}
+}
+
+void ConfigStorage::updateSystemConfig()
+{
+	StorageGuard guard(this);
+	restart();
+
+	TraceSession session(*getDefaultMemoryPool());
+	while (getNextSession(session))
+	{
+		if (session.ses_flags & trs_system)
+		{
+			FILE* cfgFile = NULL;
+			char* buffer = NULL;
+
+			Firebird::PathName configFileName;
+			getSystemConfigPath(configFileName);
+
+			if (configFileName.empty())
+				return;
+
+			try
+			{
+				cfgFile = os_utils::fopen(configFileName.c_str(), "rb");
+				if (!cfgFile) {
+					checkFileError(configFileName.c_str(), "fopen", isc_io_open_err);
+				}
+				fseek(cfgFile, 0, SEEK_END);
+
+				const long len = ftell(cfgFile);
+				if (len)
+				{
+					buffer = FB_NEW char[len + 1];
+					fseek(cfgFile, 0, SEEK_SET);
+
+					if (fread(buffer, 1, len, cfgFile) != size_t(len)) {
+						checkFileError(configFileName.c_str(), "fread", isc_io_read_err);
+					}
+					buffer[len] = 0;
+
+					if (len + 1 != session.ses_config.length() || 
+						memcmp(session.ses_config.c_str(), buffer, len))
+					{
+						session.ses_config.assign(const_cast<const char*>(buffer), len + 1);
+
+						removeSession(session.ses_id);
+						addSession(session, true);
+					}
+				}
+				else {
+					gds__log("Audit configuration file \"%s\" is empty", configFileName.c_str());
+				}
+			}
+			catch(const Exception& ex)
+			{
+				iscLogException("ConfigStorage: Cannot open audit configuration file", ex);
+			}
+
+			if (cfgFile) {
+				fclose(cfgFile);
+			}
+
+			if (buffer)
+				delete[] buffer;
+		}
+	}
 }
 
 } // namespace Jrd

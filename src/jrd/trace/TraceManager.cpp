@@ -117,8 +117,14 @@ TraceManager::~TraceManager()
 
 void TraceManager::init()
 {
+	bool updateConfig = false;
+	if (attachment && !(attachment->att_flags & ATT_trace_init))
+	{
+		updateConfig = true;
+		attachment->att_flags |= ATT_trace_init;
+	}
 	// ensure storage is initialized
-	getStorage();
+	getStorage(updateConfig);
 	load_plugins();
 	changeNumber = 0;
 }
