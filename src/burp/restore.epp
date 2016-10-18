@@ -4358,7 +4358,7 @@ bool get_function(BurpGlobals* tdgbl)
 					break;
 
 				case att_function_sql_security:
-					if (tdgbl->RESTORE_format >= 11)
+					if (tdgbl->RESTORE_format >= 10)
 					{
 						X.RDB$SQL_SECURITY = get_boolean(tdgbl);
 						X.RDB$SQL_SECURITY.NULL = FALSE;
@@ -4489,7 +4489,7 @@ bool get_function(BurpGlobals* tdgbl)
 					break;
 
 				case att_function_sql_security:
-					if (tdgbl->RESTORE_format >= 11)
+					if (tdgbl->RESTORE_format >= 10)
 						get_boolean(tdgbl);
 					else
 						bad_attribute(scan_next_attr, attribute, 89);
@@ -6620,7 +6620,7 @@ bool get_package(BurpGlobals* tdgbl)
 				break;
 
 			case att_package_sql_security:
-				if (tdgbl->RESTORE_format >= 11)
+				if (tdgbl->RESTORE_format >= 10)
 				{
 					X.RDB$SQL_SECURITY = get_boolean(tdgbl);
 					X.RDB$SQL_SECURITY.NULL = FALSE;
@@ -6837,7 +6837,7 @@ bool get_procedure(BurpGlobals* tdgbl)
 					break;
 
 				case att_procedure_sql_security:
-					if (tdgbl->RESTORE_format >= 11)
+					if (tdgbl->RESTORE_format >= 10)
 					{
 						X.RDB$SQL_SECURITY = get_boolean(tdgbl);
 						X.RDB$SQL_SECURITY.NULL = FALSE;
@@ -6962,7 +6962,7 @@ bool get_procedure(BurpGlobals* tdgbl)
 					break;
 
 				case att_procedure_sql_security:
-					if (tdgbl->RESTORE_format >= 11)
+					if (tdgbl->RESTORE_format >= 10)
 						get_boolean(tdgbl);
 					else
 						bad_attribute(scan_next_attr, attribute, 290);
@@ -8658,7 +8658,7 @@ bool get_trigger(BurpGlobals* tdgbl)
 					break;
 
 				case att_trig_sql_security:
-					if (tdgbl->RESTORE_format >= 11)
+					if (tdgbl->RESTORE_format >= 10)
 					{
 						X.RDB$SQL_SECURITY = get_boolean(tdgbl);
 						X.RDB$SQL_SECURITY.NULL = FALSE;
@@ -8786,7 +8786,7 @@ bool get_trigger(BurpGlobals* tdgbl)
 					break;
 
 				case att_trig_sql_security:
-					if (tdgbl->RESTORE_format >= 11)
+					if (tdgbl->RESTORE_format >= 10)
 						get_boolean(tdgbl);
 					else
 						bad_attribute(scan_next_attr, attribute, 134);
