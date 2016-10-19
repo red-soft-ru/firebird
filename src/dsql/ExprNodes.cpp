@@ -5618,10 +5618,22 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	sub = NodeCopier::copy(tdbb, csb, sub, map);
 
+	bool computingField = false;
+
 	// If this is a computed field, cast the computed expression to the field type if required.
 	// See CORE-5097.
 	if (field->fld_computation && !relation->rel_view_rse)
 	{
+		FB_SIZE_T pos;
+
+		if (csb->csb_computing_fields.find(field, pos))
+			ERR_post(Arg::Gds(isc_circular_computed));
+		else
+		{
+			csb->csb_computing_fields.insert(pos, field);
+			computingField = true;
+		}
+
 		CastNode* cast = FB_NEW_POOL(*tdbb->getDefaultPool()) CastNode(
 			*tdbb->getDefaultPool());
 		cast->source = sub;
@@ -5690,6 +5702,16 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		sub = derivedNode;
 
 		doPass1(tdbb, csb, &sub);
+	}
+
+	if (computingField)
+	{
+		FB_SIZE_T pos;
+
+		if (csb->csb_computing_fields.find(field, pos))
+			csb->csb_computing_fields.remove(pos);
+		else
+			fb_assert(false);
 	}
 
 	return sub;
