@@ -125,7 +125,7 @@ systemdPresent() {
 }
 
 systemdError() {
-	echo Fatal systemctl error - exiting
+	echo "Fatal error running '${1}' - exiting"
 	exit 1
 }
 
@@ -140,11 +140,13 @@ installSystemdCtrlFiles() {
 			exit 1
 		fi
 
-		cp @FB_MISCDIR@/firebird-superserver.service ${SYSTEMD_DIR}/${fb_startup_name}-superserver.service
-		cp @FB_MISCDIR@/firebird-classic@.service ${SYSTEMD_DIR}/${fb_startup_name}-classic@.service
-		cp @FB_MISCDIR@/firebird-classic.socket ${SYSTEMD_DIR}/${fb_startup_name}-classic.socket
-		editFile ${fb_startup_name}-superserver.service ExecStart ExecStart=${fb_install_prefix}/bin/fbguard -pidfile $PidDir/${fb_startup_name}.pid -daemon -forever
-		editFile ${fb_startup_name}-classic@.service ExecStart ExecStart=${fb_install_prefix}/bin/firebird
+		editFile "@FB_MISCDIR@/firebird-superserver.service" ExecStart "ExecStart=${fb_install_prefix}/bin/fbguard -pidfile $PidDir/${fb_startup_name}.pid -daemon -forever"
+		editFile "@FB_MISCDIR@/firebird-superserver.service" PIDFile "PIDFile=$PidDir/${fb_startup_name}.pid"
+		editFile "@FB_MISCDIR@/firebird-classic@.service" ExecStart "ExecStart=${fb_install_prefix}/bin/firebird"
+
+		cp @FB_MISCDIR@/firebird-superserver.service "${SYSTEMD_DIR}/${fb_startup_name}-superserver.service"
+		cp @FB_MISCDIR@/firebird-classic@.service "${SYSTEMD_DIR}/${fb_startup_name}-classic@.service"
+		cp @FB_MISCDIR@/firebird-classic.socket "${SYSTEMD_DIR}/${fb_startup_name}-classic.socket"
 
 		mkdir -p ${PidDir}
 		chown $RunUser:$RunGroup ${PidDir}
@@ -172,7 +174,7 @@ systemdSrv() {
 			fi
 		fi
 
-		${SYSTEMCTL} --quiet ${op} ${ctrl} || systemdError
+		${SYSTEMCTL} --quiet ${op} ${ctrl} || systemdError "${SYSTEMCTL} --quiet ${op} ${ctrl}"
 		return 0
 	fi
 	return 1

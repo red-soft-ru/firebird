@@ -78,9 +78,6 @@ setNewPrefix
 # Update ownership for files.
 fixFilePermissions
 
-# Install script in /etc/init.d (exact location is distro dependent)
-installInitdScript
-
 # Prepare for uninstall
 buildUninstallFile
 
@@ -89,6 +86,9 @@ createLinksInSystemLib
 
 # Create libgds.so links
 createLinksForBackCompatibility
+
+# Install script in /etc/init.d (exact location is distro dependent)
+installInitdScript
 
 # Add sysdba and set password (use embedded access)
 setDBAPassword
