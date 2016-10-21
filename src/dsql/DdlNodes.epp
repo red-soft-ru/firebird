@@ -7239,8 +7239,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_relation);
 
-	if (!relationType.specified)
-		relationType = rel_global_temp_delete;
+	fb_assert(relationType.specified);
 
 	checkRelationTempScope(tdbb, transaction, name, relationType.value);
 

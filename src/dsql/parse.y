@@ -2082,6 +2082,8 @@ gtt_table_clause
 		'(' table_elements($2) ')' gtt_ops($2)
 			{
 				$$ = $2;
+				if (!$$->relationType.specified)
+					$$->relationType = rel_global_temp_delete;
 			}
 	;
 
