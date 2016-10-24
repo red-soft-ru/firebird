@@ -76,44 +76,6 @@ double MOV_date_to_double(const dsc* desc)
 	return CVT_date_to_double(desc);
 }
 
-
-#ifdef NOT_USED_OR_REPLACED
-// Strange, I don't see this function surfaced as public.
-void MOV_double_to_date2(double real, dsc* desc)
-{
-/**************************************
- *
- *	M O V _ d o u b l e _ t o _ d a t e 2
- *
- **************************************
- *
- * Functional description
- *	Move a double to one of the many forms of a date
- *
- **************************************/
-	SLONG fixed[2];
-
-	MOV_double_to_date(real, fixed);
-	switch (desc->dsc_dtype)
-	{
-	case dtype_timestamp:
-		((SLONG *) desc->dsc_address)[0] = fixed[0];
-		((SLONG *) desc->dsc_address)[1] = fixed[1];
-		break;
-	case dtype_sql_time:
-		((SLONG *) desc->dsc_address)[0] = fixed[1];
-		break;
-	case dtype_sql_date:
-		((SLONG *) desc->dsc_address)[0] = fixed[0];
-		break;
-	default:
-		fb_assert(FALSE);
-		break;
-	}
-}
-#endif
-
-
 void MOV_double_to_date(double real, SLONG fixed[2])
 {
 /**************************************
