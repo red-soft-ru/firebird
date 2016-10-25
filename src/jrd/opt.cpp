@@ -1474,7 +1474,15 @@ static USHORT distribute_equalities(BoolExprNodeStack& org_stack, CompilerScratc
  *		operation '$'.
  *
  **************************************/
-	/*thread_db* tdbb = */JRD_get_thread_data();
+
+	// dimitr:	Dumb protection against too many injected conjuncts (see CORE-5381).
+	//			Ideally, we need two separate limits here:
+	//				1) number of injected conjuncts (affects required impure size)
+	//				2) number of input conjuncts (affects search time inside this routine)
+	const ULONG threshold = base_count * 2;
+
+	if (threshold > MAX_CONJUNCTS)
+		return 0;
 
 	ObjectsArray<ValueExprNodeStack> classes;
 	ObjectsArray<ValueExprNodeStack>::iterator eq_class;
@@ -1565,7 +1573,7 @@ static USHORT distribute_equalities(BoolExprNodeStack& org_stack, CompilerScratc
 					cmpNode->arg1 = outer.object();
 					cmpNode->arg2 = inner.object();
 
-					if ((base_count + count < MAX_CONJUNCTS) && augment_stack(cmpNode, org_stack))
+					if (count < threshold && augment_stack(cmpNode, org_stack))
 						count++;
 					else
 						delete cmpNode;
@@ -1636,8 +1644,10 @@ static USHORT distribute_equalities(BoolExprNodeStack& org_stack, CompilerScratc
 						// From the conjuncts X(A,B) and A=C, infer the conjunct X(C,B)
 						BoolExprNode* newNode = make_inference_node(csb, boolean, arg1, arg2);
 
-						if ((base_count + count < MAX_CONJUNCTS) && augment_stack(newNode, org_stack))
+						if (count < threshold && augment_stack(newNode, org_stack))
 							++count;
+						else
+							delete newNode;
 					}
 				}
 
