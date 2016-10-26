@@ -179,6 +179,7 @@ enum irq_type_t
 	irq_l_curr_format,		// lookup table's current format
 
 	irq_linger,				// get database linger value
+	irq_dbb_ss_definer,		// get database sql security value
 
 	irq_MAX
 };

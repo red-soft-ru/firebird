@@ -39,6 +39,7 @@ RELATION(nam_database, rel_database, ODS_8_0, rel_persistent)
 	FIELD(f_dat_class, nam_class, fld_class, 1, ODS_8_0)
 	FIELD(f_dat_charset, nam_charset_name, fld_charset_name, 1, ODS_8_0)
 	FIELD(f_dat_linger, nam_linger, fld_linger, 1, ODS_12_0)
+	FIELD(f_dat_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
 END_RELATION
 
 // Relation 2 (RDB$FIELDS)

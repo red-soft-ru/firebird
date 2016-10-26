@@ -15,10 +15,13 @@ CREATE [OR ALTER] PROCEDURE <PROCEDURENAME> ... [SQL SECURITY {DEFINER | INVOKER
 CREATE [OR ALTER] TRIGGER <TRIGGERNAME> ... [SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY] [AS ...]
 CREATE [OR ALTER] PACKAGE <PACKAGENAME> [SQL SECURITY {DEFINER | INVOKER}] AS ...
 
+ALTER DATABASE SET DEFAULT SQL SECURITY {DEFINER | INVOKER}
+
 Description:
 
 Makes it possible to execute some objects with permissions of either definer or invoker.
-By default INVOKER is used to keep backward compatibility.
+By default INVOKER is used to keep backward compatibility. You can change this behavior and be more compatible
+with SQL STANDARD by using ALTER DATABASE SET DEFAULT SQL SECURITY statement.
 
 If INVOKER is specified a current set of privileges of the current user will be used.
 If DEFINER - a set of privileges of object owner will be used to check an access to database objects used by this object.

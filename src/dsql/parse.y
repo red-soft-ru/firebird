@@ -4146,6 +4146,8 @@ db_alter_clause($alterDatabaseNode)
 		{ $alterDatabaseNode->linger = $4; }
 	| DROP LINGER
 		{ $alterDatabaseNode->linger = 0; }
+	| SET DEFAULT sql_security_clause
+		{ $alterDatabaseNode->ssDefiner = $3; }
 	;
 
 %type crypt_key_clause(<alterDatabaseNode>)

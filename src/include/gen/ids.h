@@ -40,6 +40,7 @@
 	const USHORT  f_dat_class = 2;
 	const USHORT  f_dat_charset = 3;
 	const USHORT  f_dat_linger = 4;
+	const USHORT  f_dat_sql_security = 5;
 
 
 // Relation 2 (RDB$FIELDS)

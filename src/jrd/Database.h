@@ -470,6 +470,7 @@ public:
 	unsigned dbb_linger_seconds;
 	time_t dbb_linger_end;
 	Firebird::RefPtr<Firebird::IPluginConfig> dbb_plugin_config;
+	Nullable<bool> dbb_ss_definer;	// default sql security value
 
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;

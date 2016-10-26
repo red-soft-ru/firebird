@@ -246,8 +246,13 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 				END_FOR
 			}
 
-			if (!function->ssDefiner.specified && !X.RDB$SQL_SECURITY.NULL)
-				function->ssDefiner = (bool) X.RDB$SQL_SECURITY;
+			if (!function->ssDefiner.specified)
+			{
+				if (!X.RDB$SQL_SECURITY.NULL)
+					function->ssDefiner = (bool) X.RDB$SQL_SECURITY;
+				else
+					function->ssDefiner = MET_get_ss_definer(tdbb);
+			}
 
 			size_t count = 0;
 			ULONG length = 0;

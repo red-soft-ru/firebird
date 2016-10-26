@@ -2076,6 +2076,15 @@ static void list_create_db()
 		return;
 	END_ERROR;
 
+	FOR DBPSS IN RDB$DATABASE
+		WITH DBPSS.RDB$SQL_SECURITY NOT MISSING
+		AND DBPSS.RDB$SQL_SECURITY == FB_TRUE
+		isqlGlob.printf("%sALTER DATABASE SET DEFAULT SQL SECURITY DEFINER%s", NEWLINE, isqlGlob.global_Term);
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR;
 
 	if (nodb)
 		isqlGlob.printf(" */%s", NEWLINE);

@@ -2318,6 +2318,7 @@ public:
 	Firebird::Array<NestConst<DbFileClause> > files;
 	Firebird::MetaName cryptPlugin;
 	Firebird::MetaName keyName;
+	Nullable<bool> ssDefiner;
 };
 
 

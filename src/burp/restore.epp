@@ -9780,7 +9780,7 @@ bool restore(BurpGlobals* tdgbl, const TEXT* file_name, const TEXT* database_nam
 	// msg 129 started transaction
 
 	att_type	attribute;
-	isc_req_handle  req_handle2 = 0, req_handle3 = 0, req_handle4 = 0;
+	isc_req_handle  req_handle2 = 0, req_handle3 = 0, req_handle4 = 0, req_handle5 = 0;
 
 	while (get_attribute(&attribute, tdgbl) != att_end)
 	{
@@ -9857,6 +9857,35 @@ bool restore(BurpGlobals* tdgbl, const TEXT* file_name, const TEXT* database_nam
 			}
 			break;
 
+		case att_database_sql_security:
+			if (tdgbl->RESTORE_format >= 11)
+			{
+				if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
+				{
+					FOR (REQUEST_HANDLE req_handle5)
+						X IN RDB$DATABASE
+						MODIFY X USING
+							X.RDB$SQL_SECURITY = get_boolean(tdgbl);
+						END_MODIFY;
+						ON_ERROR
+							general_on_error();
+						END_ERROR;
+					END_FOR;
+					ON_ERROR
+						general_on_error();
+					END_ERROR;
+				}
+				else
+					get_boolean(tdgbl);
+			}
+			else
+			{
+				// Functions that use scan_next_attr initialize it to NO_SKIP using skip_init().
+				// Here we don't use that logic, hence the first param to bad_attribute is hardcoded.
+				bad_attribute(NO_SKIP, attribute, 352);
+			}
+			break;
+
 		default:
 			{
 			SSHORT l = get(tdgbl);
@@ -9870,6 +9899,7 @@ bool restore(BurpGlobals* tdgbl, const TEXT* file_name, const TEXT* database_nam
 	MISC_release_request_silent(req_handle2);
 	MISC_release_request_silent(req_handle3);
 	MISC_release_request_silent(req_handle4);
+	MISC_release_request_silent(req_handle5);
 
 	if (tdgbl->gbl_sw_fix_fss_data)
 	{

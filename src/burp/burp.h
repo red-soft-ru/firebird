@@ -249,6 +249,7 @@ enum att_type {
 	att_SQL_dialect,		// SQL dialect that it speaks
 	att_db_read_only,		// Is the database ReadOnly?
 	att_database_linger,	// Disconnection timeout
+	att_database_sql_security,// default sql security value
 
 	// Relation attributes
 

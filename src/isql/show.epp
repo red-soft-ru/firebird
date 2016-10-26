@@ -3544,6 +3544,9 @@ static void show_db()
 		if (!DBB2.RDB$LINGER.NULL && DBB2.RDB$LINGER > 0)
 			isqlGlob.printf("Linger: %d seconds%s", DBB2.RDB$LINGER, NEWLINE);
 
+		if (!DBB2.RDB$SQL_SECURITY.NULL && DBB2.RDB$SQL_SECURITY == FB_TRUE)
+			isqlGlob.printf("SQL SECURITY DEFINER%s", NEWLINE);
+
 		if (++pass > 1)
 			isqlGlob.printf("RDB$DATABASE has more than one record%s", NEWLINE);
 

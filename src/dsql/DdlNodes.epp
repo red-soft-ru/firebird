@@ -7585,14 +7585,11 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 				case Clause::TYPE_ALTER_SQL_SECURITY:
 				{
 					AutoRequest request;
-					bool found = false;
 
 					FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 						REL IN RDB$RELATIONS
 						WITH REL.RDB$RELATION_NAME EQ name.c_str()
 					{
-						found = true;
-
 						MODIFY REL
 						{
 							const Nullable<bool> ssDefiner =
@@ -11947,6 +11944,12 @@ void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			{
 				DBB.RDB$LINGER.NULL = FALSE;
 				DBB.RDB$LINGER = linger;
+			}
+
+			if (ssDefiner.specified)
+			{
+				DBB.RDB$SQL_SECURITY.NULL = FALSE;
+				DBB.RDB$SQL_SECURITY = ssDefiner.value ? FB_TRUE : FB_FALSE;
 			}
 
 			if (clauses & CLAUSE_BEGIN_BACKUP)
