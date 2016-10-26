@@ -13,7 +13,7 @@
 @sed "s/%%type .*//" < %FB_ROOT_PATH%\src\dsql\parse.y > y.y
 
 %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\btyacc\btyacc -l -d -S %FB_ROOT_PATH%\src\dsql\btyacc_fb.ske y.y 2>y.txt
-@if errorlevel 1 (type t.txt && exit /B 1)
+@if errorlevel 1 (type y.txt && exit /B 1)
 @type y.txt
 
 @sed -i "s/#define \([A-Z].*\)/#define TOK_\1/" y_tab.h
