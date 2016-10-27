@@ -616,6 +616,7 @@ void ConfigFile::parse(Stream* stream)
 
 		switch (parseLine(streamName, inputLine, current))
 		{
+		case LINE_END_SUB:
 		case LINE_BAD:
 			badLine(streamName, inputLine);
 			return;
@@ -643,16 +644,35 @@ void ConfigFile::parse(Stream* stream)
 
 			{ // subconf scope
 				SubStream subStream(stream->getFileName());
+				int level = 1;
 				while (getLine(stream, inputLine, line))
 				{
 					switch(parseLine(streamName, inputLine, current))
 					{
-					case LINE_END_SUB:
-						if (current.value.hasData())
-							subStream.putLine(current.value, line);
-						break;
+					case LINE_START_SUB:
+						fb_assert(level > 0);
+						level++;
+						subStream.putLine(inputLine, line);
+						continue;
 
-					//case LINE_START_SUB:	will be ignored at next level. Ignore here?
+					case LINE_END_SUB:
+						level--;
+						if (level > 0)
+						{
+							subStream.putLine(inputLine, line);
+							continue;
+						}
+						else if (level == 0)
+						{
+							if (current.value.hasData())
+								subStream.putLine(current.value, line);
+							break;
+						}
+						else // level < 0 impossible
+						{
+							fb_assert(false);
+						}
+
 					case LINE_BAD:
 						badLine(streamName, inputLine);
 						return;
@@ -663,6 +683,9 @@ void ConfigFile::parse(Stream* stream)
 					}
 					break;
 				}
+
+				if (level > 0)
+					badLine(streamName, "< missed closing bracket '}' >");
 
 				previous->sub = FB_NEW_POOL(getPool())
 					ConfigFile(getPool(), &subStream, flags);
