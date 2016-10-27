@@ -95,7 +95,7 @@ namespace
 	};
 	InitInstance<StaticConfHolder> pluginsConf;
 
-	RefPtr<ConfigFile> findConfig(const char* param, const char* pluginName)
+	RefPtr<ConfigFile> findInPluginsConf(const char* param, const char* pluginName)
 	{
 		ConfigFile* f = pluginsConf().get();
 		if (f)
@@ -266,16 +266,23 @@ namespace
 		return NULL;
 	}
 
-	IConfig* findDefConfig(ConfigFile* defaultConfig, const PathName& confName)
+	IConfig* findPluginConfig(ConfigFile* pluginLoaderConfig, const PathName& confName)
 	{
 		LocalStatus ls;
 		CheckStatusWrapper s(&ls);
-		if (defaultConfig)
+		if (pluginLoaderConfig)
 		{
-			const ConfigFile::Parameter* p = defaultConfig->findParameter("Config");
-			IConfig* rc = FB_NEW ConfigAccess(p ? findConfig("Config", p->value.c_str()) : RefPtr<ConfigFile>(NULL));
-			rc->addRef();
-			return rc;
+			const ConfigFile::Parameter* p = pluginLoaderConfig->findParameter("Config");
+			if (p)
+			{
+				RefPtr<ConfigFile> configSection(findInPluginsConf("Config", p->value.c_str()));
+				if (configSection.hasData())
+				{
+					IConfig* rc = FB_NEW ConfigAccess(configSection);
+					rc->addRef();
+					return rc;
+				}
+			}
 		}
 
 		IConfig* rc = PluginManagerInterfacePtr()->getConfig(&s, confName.nullStr());
@@ -442,13 +449,13 @@ namespace
 		ConfiguredPlugin(RefPtr<PluginModule> pmodule, unsigned int preg,
 						 RefPtr<ConfigFile> pconfig, const PathName& pconfName,
 						 const PathName& pplugName)
-			: module(pmodule), regPlugin(preg), defaultConfig(pconfig),
+			: module(pmodule), regPlugin(preg), pluginLoaderConfig(pconfig),
 			  confName(getPool(), pconfName), plugName(getPool(), pplugName),
 			  delay(DEFAULT_DELAY)
 		{
-			if (defaultConfig.hasData())
+			if (pluginLoaderConfig.hasData())
 			{
-				const ConfigFile::Parameter* p = defaultConfig->findParameter("ConfigFile");
+				const ConfigFile::Parameter* p = pluginLoaderConfig->findParameter("ConfigFile");
 				if (p && p->value.hasData())
 				{
 					confName = p->value.ToPathName();
@@ -472,7 +479,7 @@ namespace
 
 		IConfig* getDefaultConfig()
 		{
-			return findDefConfig(defaultConfig, confName);
+			return findPluginConfig(pluginLoaderConfig, confName);
 		}
 
 		const PluginModule* getPluggedModule() const throw()
@@ -511,7 +518,7 @@ namespace
 	private:
 		RefPtr<PluginModule> module;
 		unsigned int regPlugin;
-		RefPtr<ConfigFile> defaultConfig;
+		RefPtr<ConfigFile> pluginLoaderConfig;
 		PathName confName;
 		PathName plugName;
 
@@ -739,7 +746,7 @@ namespace
 			required = false;
 
 			// and try to load them from conf file
-			conf = findConfig("Plugin", pluginName);
+			conf = findInPluginsConf("Plugin", pluginName);
 
 			if (conf.hasData())
 			{
@@ -1019,7 +1026,7 @@ void PluginManager::registerPluginFactory(unsigned int interfaceType, const char
 		changeExtension(plugConfigFile, "conf");
 
 		ConfiguredPlugin* p = FB_NEW ConfiguredPlugin(RefPtr<PluginModule>(builtin), r,
-									findConfig("Plugin", defaultName), plugConfigFile, defaultName);
+									findInPluginsConf("Plugin", defaultName), plugConfigFile, defaultName);
 		p->addRef();  // Will never be unloaded
 		plugins->put(MapKey(interfaceType, defaultName), p);
 	}
@@ -1221,7 +1228,7 @@ public:
 		{
 			// setup loadinfo
 			PluginLoadInfo info(pluginName);
-			return findDefConfig(info.conf, info.plugConfigFile);
+			return findPluginConfig(info.conf, info.plugConfigFile);
 		}
 		catch (const Exception&)
 		{
