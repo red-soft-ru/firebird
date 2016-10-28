@@ -30,7 +30,7 @@
 #ifndef FIREBIRD_NTRACE_H
 #define FIREBIRD_NTRACE_H
 
-#include "firebird/Interface.h"
+#include "types_pub.h"
 
 // Performance counters for individual table
 typedef int ntrace_relation_t;
@@ -53,10 +53,24 @@ struct PerformanceInfo
 	ISC_INT64 pin_records_fetched;	// records fetched from statement/procedure
 };
 
+#define LOG_FORMAT_VERSION 7
+
+#ifdef WORDS_BIGENDIAN
+#define WORDS_BIGENDIAN_VAL 1
+#else
+#define WORDS_BIGENDIAN_VAL 0
+#endif
+
 typedef unsigned int ntrace_result_t;
 typedef unsigned char ntrace_byte_t;
 typedef ISC_UINT64 ntrace_counter_t;
 typedef unsigned int ntrace_process_state_t;
 typedef ISC_UINT64 ntrace_mask_t;
+typedef unsigned int ntrace_size_t;
+typedef AttNumber ntrace_connection_t;
+typedef TraNumber ntrace_transaction_t;
+typedef StmtNumber ntrace_statement_t;
+typedef void* ntrace_service_t;
+typedef int ntrace_boolean_t;
 
 #endif	// FIREBIRD_NTRACE_H

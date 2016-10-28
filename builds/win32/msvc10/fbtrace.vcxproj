@@ -169,6 +169,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\src\utilities\ntrace\LogPacketBuilder.cpp" />
     <ClCompile Include="..\..\..\src\utilities\ntrace\os\win32\platform.cpp" />
     <ClCompile Include="..\..\..\src\utilities\ntrace\PluginLogWriter.cpp" />
     <ClCompile Include="..\..\..\src\utilities\ntrace\TraceConfiguration.cpp" />
@@ -177,6 +178,7 @@
     <ClCompile Include="..\..\..\src\utilities\ntrace\TraceUnicodeUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\src\utilities\ntrace\LogPacketBuilder.h" />
     <ClInclude Include="..\..\..\src\utilities\ntrace\paramtable.h" />
     <ClInclude Include="..\..\..\src\utilities\ntrace\os\platform.h" />
     <ClInclude Include="..\..\..\src\utilities\ntrace\PluginLogWriter.h" />

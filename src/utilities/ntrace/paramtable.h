@@ -42,6 +42,7 @@ PATH_PARAMETER(log_filename, "")
 BOOL_PARAMETER(log_errors, false)
 BOOL_PARAMETER(enabled, false)
 UINT_PARAMETER(max_log_size, 0)
+UINT_PARAMETER(format, 0)
 
 #ifdef DATABASE_PARAMS
 BOOL_PARAMETER(log_connections, false)

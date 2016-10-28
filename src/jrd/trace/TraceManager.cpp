@@ -402,10 +402,10 @@ void TraceManager::event_dsql_execute(Attachment* att, jrd_tra* transaction,
 
 
 void TraceManager::event_attach(ITraceDatabaseConnection* connection,
-		bool create_db, ntrace_result_t att_result)
+		bool create_db, ntrace_size_t dpb_length, const ntrace_byte_t* dpb, ntrace_result_t att_result)
 {
 	EXECUTE_HOOKS(trace_attach,
-		(connection, create_db, att_result));
+		(connection, create_db, dpb_length, dpb, att_result));
 }
 
 void TraceManager::event_detach(ITraceDatabaseConnection* connection, bool drop_db)
@@ -506,10 +506,11 @@ void TraceManager::event_dyn_execute(ITraceDatabaseConnection* connection,
 			req_result));
 }
 
-void TraceManager::event_service_attach(ITraceServiceConnection* service, ntrace_result_t att_result)
+void TraceManager::event_service_attach(ITraceServiceConnection* service, 
+		ntrace_size_t spb_length, const ntrace_byte_t* spb, ntrace_result_t att_result)
 {
 	EXECUTE_HOOKS(trace_service_attach,
-		(service, att_result));
+		(service, spb_length, spb, att_result));
 }
 
 void TraceManager::event_service_start(ITraceServiceConnection* service,

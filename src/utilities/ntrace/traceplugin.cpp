@@ -29,9 +29,11 @@
 #include "firebird.h"
 #include "../jrd/SimilarToMatcher.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../jrd/trace/TraceSession.h"
 
 #include "TraceConfiguration.h"
 #include "TracePluginImpl.h"
+
 
 class TraceFactoryImpl FB_FINAL :
 	public Firebird::StdPlugin<Firebird::ITraceFactoryImpl<TraceFactoryImpl, Firebird::CheckStatusWrapper> >
@@ -164,6 +166,9 @@ Firebird::ITracePlugin* TraceFactoryImpl::trace_create(Firebird::CheckStatusWrap
 			// User filter not matched - does not start trace session
 			return NULL;
 		}
+
+		if (config.format != 0 && !(initInfo->getTraceSessionFlags() & Firebird::trs_system))
+			Firebird::fatal_exception::raiseFmt("User sessions can't use trace format = %d", config.format);
 
 		Firebird::AutoPtr<Firebird::ITraceLogWriter, Firebird::SimpleRelease<Firebird::ITraceLogWriter> >
 			logWriter(initInfo->getLogWriter());

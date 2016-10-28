@@ -819,7 +819,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 				const bool no_priv = (exc == isc_login || exc == isc_no_priv);
 
 				TraceServiceImpl service(this);
-				trace_manager->event_service_attach(&service,
+				trace_manager->event_service_attach(&service, spb_length, spb_data,
 					no_priv ? ITracePlugin::RESULT_UNAUTHORIZED : ITracePlugin::RESULT_FAILED);
 			}
 
@@ -837,7 +837,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_ATTACH))
 	{
 		TraceServiceImpl service(this);
-		svc_trace_manager->event_service_attach(&service, ITracePlugin::RESULT_SUCCESS);
+		svc_trace_manager->event_service_attach(&service, spb_length, spb_data, ITracePlugin::RESULT_SUCCESS);
 	}
 }
 

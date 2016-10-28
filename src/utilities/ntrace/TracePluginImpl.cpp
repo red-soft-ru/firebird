@@ -49,7 +49,11 @@
 using namespace Firebird;
 using namespace Jrd;
 
-static const char* const DEFAULT_LOG_NAME = "default_trace.log";
+static const char* const DEFAULT_TEXT_LOG_NAME = "default_trace.txt";
+static const char* const DEFAULT_BIN_LOG_NAME = "default_trace.bin";
+
+static const char* const TEXT_FILE_EXT = "_text";
+static const char* const BIN_FILE_EXT = "_bin";
 
 #ifdef WIN_NT
 #define NEWLINE "\r\n"
@@ -106,7 +110,7 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 	{
 		PathName logname(configuration.log_filename);
 		if (logname.empty()) {
-			logname = DEFAULT_LOG_NAME;
+			logname = config.format == lfText ? DEFAULT_TEXT_LOG_NAME : DEFAULT_BIN_LOG_NAME;
 		}
 
 		if (PathUtils::isRelative(logname))
@@ -116,7 +120,7 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 			logname.insert(0, root);
 		}
 
-		logWriter = FB_NEW PluginLogWriter(logname.c_str(), config.max_log_size * 1024 * 1024);
+		logWriter = FB_NEW PluginLogWriter(logname.c_str(), config.max_log_size * 1024 * 1024, config.format == lfBinary);
 		logWriter->addRef();
 	}
 
@@ -204,6 +208,10 @@ TracePluginImpl::~TracePluginImpl()
 
 		log_finalize();
 	}
+}
+
+void TracePluginImpl::writePacket(const UCHAR* packet_data, const ULONG packet_size) {
+	logWriter->write(packet_data, packet_size);
 }
 
 void TracePluginImpl::logRecord(const char* action)
@@ -429,10 +437,8 @@ void TracePluginImpl::logRecordServ(const char* action, ITraceServiceConnection*
 }
 
 void TracePluginImpl::logRecordError(const char* action, ITraceConnection* connection,
-	ITraceStatusVector* status)
+	const char* err)
 {
-	const char* err = status->getText();
-
 	record.insert(0, err);
 
 	if (connection)
@@ -453,6 +459,73 @@ void TracePluginImpl::logRecordError(const char* action, ITraceConnection* conne
 	}
 	else
 		logRecord(action);
+}
+
+void TracePluginImpl::appendTriggerName(ITraceTrigger* trigger, string& name)
+{
+	name.assign(trigger->getTriggerName());
+	if (name.empty())
+		name = "<unknown>";
+
+	if ((trigger->getWhich() != ITraceTrigger::TYPE_ALL) && trigger->getRelationName())
+	{
+		string relation;
+		relation.printf(" FOR %s", trigger->getRelationName());
+		name.append(relation);
+	}
+}
+
+void TracePluginImpl::appendTriggerAction(ITraceTrigger* trigger, string& action)
+{
+	switch (trigger->getWhich())
+	{
+	case ITraceTrigger::TYPE_ALL:
+		action = "ON "; //// TODO: Why ALL means ON (DATABASE) triggers?
+		break;
+	case ITraceTrigger::TYPE_BEFORE:
+		action = "BEFORE ";
+		break;
+	case ITraceTrigger::TYPE_AFTER:
+		action = "AFTER ";
+		break;
+	default:
+		action = "<unknown> ";
+		break;
+	}
+
+	switch (trigger->getAction())
+	{
+	case TRIGGER_INSERT:
+		action.append("INSERT");
+		break;
+	case TRIGGER_UPDATE:
+		action.append("UPDATE");
+		break;
+	case TRIGGER_DELETE:
+		action.append("DELETE");
+		break;
+	case TRIGGER_CONNECT:
+		action.append("CONNECT");
+		break;
+	case TRIGGER_DISCONNECT:
+		action.append("DISCONNECT");
+		break;
+	case TRIGGER_TRANS_START:
+		action.append("TRANSACTION_START");
+		break;
+	case TRIGGER_TRANS_COMMIT:
+		action.append("TRANSACTION_COMMIT");
+		break;
+	case TRIGGER_TRANS_ROLLBACK:
+		action.append("TRANSACTION_ROLLBACK");
+		break;
+	case TRIGGER_DDL:
+		action.append("DDL");
+		break;
+	default:
+		action.append("Unknown trigger action");
+		break;
+	}
 }
 
 void TracePluginImpl::appendGlobalCounts(const PerformanceInfo* info)
@@ -524,6 +597,29 @@ void TracePluginImpl::appendTableCounts(const PerformanceInfo *info)
 		}
 		record.append(NEWLINE);
 	}
+}
+
+
+void TracePluginImpl::appendPerfInfo(const PerformanceInfo* info, LogPacketBuilder& packetBuilder)
+{
+	packetBuilder.putOffset();
+	if (!info)
+	{
+		packetBuilder.putBytes(0, NULL);
+		packetBuilder.putCounter(0);
+		packetBuilder.putCounter(0);
+		return;
+	}
+
+	packetBuilder.putBytes(sizeof(ntrace_counter_t) * RuntimeStatistics::REL_BASE_OFFSET, info->pin_counters);
+	packetBuilder.putCounter(info->pin_count);
+	for (ntrace_size_t i = 0; i < info->pin_count; i++)
+	{
+		packetBuilder.putBytes(strlen(info->pin_tables[i].trc_relation_name),
+			info->pin_tables[i].trc_relation_name);
+		packetBuilder.putBytes(sizeof(ntrace_counter_t) * RuntimeStatistics::REL_TOTAL_ITEMS, info->pin_tables[i].trc_counters);
+	}
+	packetBuilder.putCounter(info->pin_time);
 }
 
 
@@ -931,14 +1027,43 @@ void TracePluginImpl::appendServiceQueryParams(size_t send_item_length,
 
 void TracePluginImpl::log_init()
 {
-	record.printf("\tSESSION_%d %s" NEWLINE "\t%s" NEWLINE, session_id, session_name.c_str(), config.db_filename.c_str());
-	logRecord("TRACE_INIT");
+	switch (config.format)
+	{
+	case lfText:
+	{
+		record.printf("\tSESSION_%d %s" NEWLINE "\t%s" NEWLINE, session_id, session_name.c_str(), config.db_filename.c_str());
+		logRecord("TRACE_INIT");
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptInitialize);
+
+		packetBuilder.putBytes(config.db_filename.length(), config.db_filename.c_str());
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
+	}
 }
 
 void TracePluginImpl::log_finalize()
 {
-	record.printf("\tSESSION_%d %s" NEWLINE "\t%s" NEWLINE, session_id, session_name.c_str(), config.db_filename.c_str());
-	logRecord("TRACE_FINI");
+	switch (config.format)
+	{
+	case lfText:
+	{
+		record.printf("\tSESSION_%d %s" NEWLINE "\t%s" NEWLINE, session_id, session_name.c_str(), config.db_filename.c_str());
+		logRecord("TRACE_FINI");
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptFinalize);
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
+	}
 
 	logWriter->release();
 	logWriter = NULL;
@@ -1008,13 +1133,17 @@ void TracePluginImpl::register_connection(ITraceDatabaseConnection* connection)
 }
 
 void TracePluginImpl::log_event_attach(ITraceDatabaseConnection* connection,
-	FB_BOOLEAN create_db, ntrace_result_t att_result)
+	FB_BOOLEAN create_db, ntrace_size_t dpb_length, const ntrace_byte_t* dpb, ntrace_result_t att_result)
 {
-	if (config.log_connections)
+	switch (config.format)
 	{
-		const char* event_type;
-		switch (att_result)
+	case lfText:
+	{
+		if (config.log_connections)
 		{
+			const char* event_type;
+			switch (att_result)
+			{
 			case ITracePlugin::RESULT_SUCCESS:
 				event_type = create_db ? "CREATE_DATABASE" : "ATTACH_DATABASE";
 				break;
@@ -1026,27 +1155,59 @@ void TracePluginImpl::log_event_attach(ITraceDatabaseConnection* connection,
 				break;
 			default:
 				event_type = create_db ?
-					"Unknown event in CREATE DATABASE ": "Unknown event in ATTACH_DATABASE";
+					"Unknown event in CREATE DATABASE " : "Unknown event in ATTACH_DATABASE";
 				break;
-		}
+			}
 
-		logRecordConn(event_type, connection);
+			logRecordConn(event_type, connection);
+		}
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventAttach);
+
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putBoolean(create_db);
+		packetBuilder.putBytes(dpb_length, dpb);
+		packetBuilder.putUSHORT(att_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
 void TracePluginImpl::log_event_detach(ITraceDatabaseConnection* connection, FB_BOOLEAN drop_db)
 {
-	if (config.log_connections)
+	switch (config.format)
 	{
-		logRecordConn(drop_db ? "DROP_DATABASE" : "DETACH_DATABASE", connection);
-	}
+	case lfText:
+	{
+		if (config.log_connections)
+		{
+			logRecordConn(drop_db ? "DROP_DATABASE" : "DETACH_DATABASE", connection);
+		}
 
-	// Get rid of connection descriptor
-	WriteLockGuard lock(connectionsLock, FB_FUNCTION);
-	if (connections.locate(connection->getConnectionID()))
+		// Get rid of connection descriptor
+		WriteLockGuard lock(connectionsLock, FB_FUNCTION);
+		if (connections.locate(connection->getConnectionID()))
+		{
+			connections.current().deallocate_references();
+			connections.fastRemove();
+		}
+		break;
+	}
+	case lfBinary:
 	{
-		connections.current().deallocate_references();
-		connections.fastRemove();
+		LogPacketBuilder packetBuilder(ptEventDetach);
+
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putBoolean(drop_db);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
@@ -1111,14 +1272,18 @@ void TracePluginImpl::register_transaction(ITraceTransaction* transaction)
 
 
 void TracePluginImpl::log_event_transaction_start(ITraceDatabaseConnection* connection,
-		ITraceTransaction* transaction, size_t /*tpb_length*/,
-		const ntrace_byte_t* /*tpb*/, ntrace_result_t tra_result)
+		ITraceTransaction* transaction, size_t tpb_length,
+		const ntrace_byte_t* tpb, ntrace_result_t tra_result)
 {
-	if (config.log_transactions)
+	switch (config.format)
 	{
-		const char* event_type;
-		switch (tra_result)
+	case lfText:
+	{
+		if (config.log_transactions)
 		{
+			const char* event_type;
+			switch (tra_result)
+			{
 			case ITracePlugin::RESULT_SUCCESS:
 				event_type = "START_TRANSACTION";
 				break;
@@ -1131,8 +1296,23 @@ void TracePluginImpl::log_event_transaction_start(ITraceDatabaseConnection* conn
 			default:
 				event_type = "Unknown event in START_TRANSACTION";
 				break;
+			}
+			logRecordTrans(event_type, connection, transaction);
 		}
-		logRecordTrans(event_type, connection, transaction);
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventTransactionStart);
+
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putTransactionId(transaction ? transaction->getTransactionID() : 0);
+		packetBuilder.putBytes(tpb_length, tpb);
+		packetBuilder.putUSHORT(tra_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
@@ -1140,54 +1320,76 @@ void TracePluginImpl::log_event_transaction_end(ITraceDatabaseConnection* connec
 		ITraceTransaction* transaction, FB_BOOLEAN commit,
 		FB_BOOLEAN retain_context, ntrace_result_t tra_result)
 {
-	if (config.log_transactions)
-	{
-		PerformanceInfo* info = transaction->getPerf();
-		if (info)
-		{
-			appendGlobalCounts(info);
-			appendTableCounts(info);
-		}
+	PerformanceInfo* info = transaction->getPerf();
 
-		const char* event_type;
-		switch (tra_result)
+	switch (config.format)
+	{
+	case lfText:
+	{
+		if (config.log_transactions)
 		{
+			if (info)
+			{
+				appendGlobalCounts(info);
+				appendTableCounts(info);
+			}
+
+			const char* event_type;
+			switch (tra_result)
+			{
 			case ITracePlugin::RESULT_SUCCESS:
 				event_type = commit ?
-					(retain_context ? "COMMIT_RETAINING"   : "COMMIT_TRANSACTION") :
+					(retain_context ? "COMMIT_RETAINING" : "COMMIT_TRANSACTION") :
 					(retain_context ? "ROLLBACK_RETAINING" : "ROLLBACK_TRANSACTION");
 				break;
 			case ITracePlugin::RESULT_FAILED:
 				event_type = commit ?
-					(retain_context ? "FAILED COMMIT_RETAINING"   : "FAILED COMMIT_TRANSACTION") :
+					(retain_context ? "FAILED COMMIT_RETAINING" : "FAILED COMMIT_TRANSACTION") :
 					(retain_context ? "FAILED ROLLBACK_RETAINING" : "FAILED ROLLBACK_TRANSACTION");
 				break;
 			case ITracePlugin::RESULT_UNAUTHORIZED:
 				event_type = commit ?
-					(retain_context ? "UNAUTHORIZED COMMIT_RETAINING"   : "UNAUTHORIZED COMMIT_TRANSACTION") :
+					(retain_context ? "UNAUTHORIZED COMMIT_RETAINING" : "UNAUTHORIZED COMMIT_TRANSACTION") :
 					(retain_context ? "UNAUTHORIZED ROLLBACK_RETAINING" : "UNAUTHORIZED ROLLBACK_TRANSACTION");
 				break;
 			default:
 				event_type = "Unknown event at transaction end";
 				break;
+			}
+			logRecordTrans(event_type, connection, transaction);
 		}
-		logRecordTrans(event_type, connection, transaction);
-	}
 
-	if (!retain_context)
-	{
-		// Forget about the transaction
-		WriteLockGuard lock(transactionsLock, FB_FUNCTION);
-		if (transactions.locate(transaction->getTransactionID()))
+		if (!retain_context)
 		{
-			transactions.current().deallocate_references();
-			transactions.fastRemove();
+			// Forget about the transaction
+			WriteLockGuard lock(transactionsLock, FB_FUNCTION);
+			if (transactions.locate(transaction->getTransactionID()))
+			{
+				transactions.current().deallocate_references();
+				transactions.fastRemove();
+			}
 		}
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventTransactionEnd);
+
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putTransactionId(transaction->getTransactionID());
+		packetBuilder.putBoolean(commit);
+		packetBuilder.putBoolean(retain_context);
+		appendPerfInfo(info, packetBuilder);
+		packetBuilder.putUSHORT(tra_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
 void TracePluginImpl::log_event_set_context(ITraceDatabaseConnection* connection,
-		ITraceTransaction* transaction, ITraceContextVariable* variable)
+	ITraceTransaction* transaction, ITraceContextVariable* variable)
 {
 	const char* ns = variable->getNameSpace();
 	const char* name = variable->getVarName();
@@ -1197,15 +1399,35 @@ void TracePluginImpl::log_event_set_context(ITraceDatabaseConnection* connection
 	const size_t name_len = strlen(name);
 	const size_t value_len = value ? strlen(value) : 0;
 
-	if (config.log_context)
+	switch (config.format)
 	{
-		if (value == NULL) {
-			record.printf("[%.*s] %.*s = NULL" NEWLINE, ns_len, ns, name_len, name);
+	case lfText:
+	{
+		if (config.log_context)
+		{
+			if (value == NULL) {
+				record.printf("[%.*s] %.*s = NULL" NEWLINE, ns_len, ns, name_len, name);
+			}
+			else {
+				record.printf("[%.*s] %.*s = \"%.*s\"" NEWLINE, ns_len, ns, name_len, name, value_len, value);
+			}
+			logRecordTrans("SET_CONTEXT", connection, transaction);
 		}
-		else {
-			record.printf("[%.*s] %.*s = \"%.*s\"" NEWLINE, ns_len, ns, name_len, name, value_len, value);
-		}
-		logRecordTrans("SET_CONTEXT", connection, transaction);
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventSetContext);
+
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putTransactionId(transaction->getTransactionID());
+		packetBuilder.putBytes(ns_len, ns);
+		packetBuilder.putBytes(name_len, name);
+		packetBuilder.putBytes(value_len, value);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
@@ -1213,132 +1435,222 @@ void TracePluginImpl::log_event_proc_execute(ITraceDatabaseConnection* connectio
 	ITraceTransaction* transaction, ITraceProcedure* procedure, bool started,
 	ntrace_result_t proc_result)
 {
-	if (!config.log_procedure_start && started)
-		return;
-
-	if (!config.log_procedure_finish && !started)
-		return;
-
-	// Do not log operation if it is below time threshold
+	const char* proc_name = procedure->getProcName();
 	const PerformanceInfo* info = started ? NULL : procedure->getPerf();
-	if (config.time_threshold && info && info->pin_time < config.time_threshold)
-		return;
-
-	// Skip procedures that don't modify data
-	if (!started && config.log_changes_only && !checkDataChanges(info))
-		return;
-
-	ITraceParams* params = procedure->getInputs();
-	if (params && params->getCount())
+	switch (config.format)
 	{
-		appendParams(params);
-		record.append(NEWLINE);
-	}
-
-	if (info)
+	case lfText:
 	{
-		if (info->pin_records_fetched)
+		if (!config.log_procedure_start && started)
+			return;
+
+		if (!config.log_procedure_finish && !started)
+			return;
+
+		// Do not log operation if it is below time threshold
+		if (config.time_threshold && info && info->pin_time < config.time_threshold)
+			return;
+
+		// Skip procedures that don't modify data
+		if (!started && config.log_changes_only && !checkDataChanges(info))
+			return;
+
+		ITraceParams* params = procedure->getInputs();
+		if (params && params->getCount())
 		{
-			string temp;
-			temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
-			record.append(temp);
+			appendParams(params);
+			record.append(NEWLINE);
 		}
-		appendGlobalCounts(info);
-		appendTableCounts(info);
-	}
 
-	const char* event_type;
-	switch (proc_result)
-	{
+		if (info)
+		{
+			if (info->pin_records_fetched)
+			{
+				string temp;
+				temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
+				record.append(temp);
+			}
+			appendGlobalCounts(info);
+			appendTableCounts(info);
+		}
+
+		const char* event_type;
+		switch (proc_result)
+		{
 		case ITracePlugin::RESULT_SUCCESS:
 			event_type = started ? "EXECUTE_PROCEDURE_START" :
-								   "EXECUTE_PROCEDURE_FINISH";
+				"EXECUTE_PROCEDURE_FINISH";
 			break;
 		case ITracePlugin::RESULT_FAILED:
 			event_type = started ? "FAILED EXECUTE_PROCEDURE_START" :
-								   "FAILED EXECUTE_PROCEDURE_FINISH";
+				"FAILED EXECUTE_PROCEDURE_FINISH";
 			break;
 		case ITracePlugin::RESULT_UNAUTHORIZED:
 			event_type = started ? "UNAUTHORIZED EXECUTE_PROCEDURE_START" :
-								   "UNAUTHORIZED EXECUTE_PROCEDURE_FINISH";
+				"UNAUTHORIZED EXECUTE_PROCEDURE_FINISH";
 			break;
 		default:
 			event_type = "Unknown event at executing procedure";
 			break;
-	}
+		}
 
-	logRecordProcFunc(event_type, connection, transaction, "Procedure", procedure->getProcName());
+		logRecordProcFunc(event_type, connection, transaction, "Procedure", proc_name);
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(started ? ptEventProcStart : ptEventProcFinish);
+
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putTransactionId(transaction->getTransactionID());
+		packetBuilder.putBytes(strlen(proc_name), proc_name);
+
+		ITraceParams* params = procedure->getInputs();
+
+		packetBuilder.putOffset();
+		if (params)
+		{
+			size_t paramcount = params->getCount();
+			packetBuilder.putCounter(paramcount);
+			for (size_t i = 0; i < paramcount; i++)
+			{
+				const dsc* parameter = params->getParam(i);
+				packetBuilder.putDsc(parameter);
+			}
+		}
+		else
+		{
+			packetBuilder.putCounter(0);
+		}
+
+		if (!started)
+		{
+			appendPerfInfo(info, packetBuilder);
+			packetBuilder.putCounter(info->pin_records_fetched);
+		}
+
+		packetBuilder.putUSHORT(proc_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
+	}
 }
 
 void TracePluginImpl::log_event_func_execute(ITraceDatabaseConnection* connection,
 	ITraceTransaction* transaction, ITraceFunction* function, bool started,
 	ntrace_result_t func_result)
 {
-	if (!config.log_function_start && started)
-		return;
-
-	if (!config.log_function_finish && !started)
-		return;
-
-	// Do not log operation if it is below time threshold
+	const char* func_name = function->getFuncName();
 	const PerformanceInfo* info = started ? NULL : function->getPerf();
-	if (config.time_threshold && info && info->pin_time < config.time_threshold)
-		return;
-
-	// Skip functions that don't modify data
-	if (!started && config.log_changes_only && !checkDataChanges(info))
-		return;
-
-	ITraceParams* params = function->getInputs();
-	if (params && params->getCount())
+	switch (config.format)
 	{
-		appendParams(params);
-		record.append(NEWLINE);
-	}
-
-	if (!started && func_result == ITracePlugin::RESULT_SUCCESS)
+	case lfText:
 	{
-		params = function->getResult();
+		if (!config.log_function_start && started)
+			return;
+
+		if (!config.log_function_finish && !started)
+			return;
+
+		// Do not log operation if it is below time threshold
+		if (config.time_threshold && info && info->pin_time < config.time_threshold)
+			return;
+
+		// Skip functions that don't modify data
+		if (!started && config.log_changes_only && !checkDataChanges(info))
+			return;
+
+		ITraceParams* params = function->getInputs();
+		if (params && params->getCount())
 		{
-			record.append("returns:" NEWLINE);
 			appendParams(params);
 			record.append(NEWLINE);
 		}
-	}
 
-	if (info)
-	{
-		if (info->pin_records_fetched)
+		if (!started && func_result == ITracePlugin::RESULT_SUCCESS)
 		{
-			string temp;
-			temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
-			record.append(temp);
+			params = function->getResult();
+			{
+				record.append("returns:" NEWLINE);
+				appendParams(params);
+				record.append(NEWLINE);
+			}
 		}
-		appendGlobalCounts(info);
-		appendTableCounts(info);
-	}
 
-	const char* event_type;
-	switch (func_result)
+		if (info)
+		{
+			if (info->pin_records_fetched)
+			{
+				string temp;
+				temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
+				record.append(temp);
+			}
+			appendGlobalCounts(info);
+			appendTableCounts(info);
+		}
+
+		const char* event_type;
+		switch (func_result)
+		{
+			case ITracePlugin::RESULT_SUCCESS:
+				event_type = started ? "EXECUTE_FUNCTION_START" :
+									   "EXECUTE_FUNCTION_FINISH";
+				break;
+			case ITracePlugin::RESULT_FAILED:
+				event_type = started ? "FAILED EXECUTE_FUNCTION_START" :
+									   "FAILED EXECUTE_FUNCTION_FINISH";
+				break;
+			case ITracePlugin::RESULT_UNAUTHORIZED:
+				event_type = started ? "UNAUTHORIZED EXECUTE_FUNCTION_START" :
+									   "UNAUTHORIZED EXECUTE_FUNCTION_FINISH";
+				break;
+			default:
+				event_type = "Unknown event at executing function";
+				break;
+		}
+
+		logRecordProcFunc(event_type, connection, transaction, "Function", func_name);
+		break;
+	}
+	case lfBinary:
 	{
-		case ITracePlugin::RESULT_SUCCESS:
-			event_type = started ? "EXECUTE_FUNCTION_START" :
-								   "EXECUTE_FUNCTION_FINISH";
-			break;
-		case ITracePlugin::RESULT_FAILED:
-			event_type = started ? "FAILED EXECUTE_FUNCTION_START" :
-								   "FAILED EXECUTE_FUNCTION_FINISH";
-			break;
-		case ITracePlugin::RESULT_UNAUTHORIZED:
-			event_type = started ? "UNAUTHORIZED EXECUTE_FUNCTION_START" :
-								   "UNAUTHORIZED EXECUTE_FUNCTION_FINISH";
-			break;
-		default:
-			event_type = "Unknown event at executing function";
-			break;
-	}
+		LogPacketBuilder packetBuilder(started ? ptEventFuncStart : ptEventFuncFinish);
 
-	logRecordProcFunc(event_type, connection, transaction, "Function", function->getFuncName());
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putTransactionId(transaction->getTransactionID());
+		packetBuilder.putBytes(strlen(func_name), func_name);
+
+		ITraceParams* params = function->getInputs();
+
+		packetBuilder.putOffset();
+		if (params)
+		{
+			size_t paramcount = params->getCount();
+			packetBuilder.putCounter(paramcount);
+			for (size_t i = 0; i < paramcount; i++)
+			{
+				const dsc* parameter = params->getParam(i);
+				packetBuilder.putDsc(parameter);
+			}
+		}
+		else
+		{
+			packetBuilder.putCounter(0);
+		}
+
+		if (!started)
+		{
+			appendPerfInfo(info, packetBuilder);
+			packetBuilder.putCounter(info->pin_records_fetched);
+		}
+
+		packetBuilder.putUSHORT(func_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
+	}
 }
 
 void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
@@ -1435,46 +1747,89 @@ void TracePluginImpl::log_event_dsql_prepare(ITraceDatabaseConnection* connectio
 		ITraceTransaction* transaction, ITraceSQLStatement* statement,
 		ntrace_counter_t time_millis, ntrace_result_t req_result)
 {
-	if (config.log_statement_prepare)
+	switch (config.format)
 	{
-		const char* event_type;
-		switch (req_result)
+	case lfText:
+	{
+		if (config.log_statement_prepare)
 		{
-			case ITracePlugin::RESULT_SUCCESS:
-				event_type = "PREPARE_STATEMENT";
-				break;
-			case ITracePlugin::RESULT_FAILED:
-				event_type = "FAILED PREPARE_STATEMENT";
-				break;
-			case ITracePlugin::RESULT_UNAUTHORIZED:
-				event_type = "UNAUTHORIZED PREPARE_STATEMENT";
-				break;
-			default:
-				event_type = "Unknown event in PREPARE_STATEMENT";
-				break;
+			const char* event_type;
+			switch (req_result)
+			{
+				case ITracePlugin::RESULT_SUCCESS:
+					event_type = "PREPARE_STATEMENT";
+					break;
+				case ITracePlugin::RESULT_FAILED:
+					event_type = "FAILED PREPARE_STATEMENT";
+					break;
+				case ITracePlugin::RESULT_UNAUTHORIZED:
+					event_type = "UNAUTHORIZED PREPARE_STATEMENT";
+					break;
+				default:
+					event_type = "Unknown event in PREPARE_STATEMENT";
+					break;
+			}
+			record.printf("%7d ms" NEWLINE, time_millis);
+			logRecordStmt(event_type, connection, transaction, statement, true);
 		}
-		record.printf("%7d ms" NEWLINE, time_millis);
-		logRecordStmt(event_type, connection, transaction, statement, true);
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventDsqlPrepare);
+
+		const char* sql = statement->getText();
+		const char* plan = statement->getPlan();
+
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putTransactionId(transaction->getTransactionID());
+		packetBuilder.putStatementId(statement->getStmtID());
+		packetBuilder.putBytes(strlen(sql), sql);
+		packetBuilder.putCounter(time_millis);
+		packetBuilder.putBytes(plan ? strlen(plan) : 0, plan);
+		packetBuilder.putUSHORT(req_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
 void TracePluginImpl::log_event_dsql_free(ITraceDatabaseConnection* connection,
 		ITraceSQLStatement* statement, unsigned short option)
 {
-	if (config.log_statement_free)
+	switch (config.format)
 	{
-		logRecordStmt(option == DSQL_drop ? "FREE_STATEMENT" : "CLOSE_CURSOR",
-			connection, 0, statement, true);
-	}
-
-	if (option == DSQL_drop)
+	case lfText:
 	{
-		WriteLockGuard lock(statementsLock, FB_FUNCTION);
-		if (statements.locate(statement->getStmtID()))
+		if (config.log_statement_free)
 		{
-			delete statements.current().description;
-			statements.fastRemove();
+			logRecordStmt(option == DSQL_drop ? "FREE_STATEMENT" : "CLOSE_CURSOR",
+				connection, 0, statement, true);
 		}
+
+		if (option == DSQL_drop)
+		{
+			WriteLockGuard lock(statementsLock, FB_FUNCTION);
+			if (statements.locate(statement->getStmtID()))
+			{
+				delete statements.current().description;
+				statements.fastRemove();
+			}
+		}
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventDsqlFree);
+
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putStatementId(statement->getStmtID());
+		packetBuilder.putUSHORT(option);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
@@ -1482,59 +1837,103 @@ void TracePluginImpl::log_event_dsql_execute(ITraceDatabaseConnection* connectio
 		ITraceTransaction* transaction, ITraceSQLStatement* statement,
 		bool started, ntrace_result_t req_result)
 {
-	if (started && !config.log_statement_start)
-		return;
-
-	if (!started && !config.log_statement_finish)
-		return;
-
-	// Do not log operation if it is below time threshold
 	const PerformanceInfo* info = started ? NULL : statement->getPerf();
-	if (config.time_threshold && info && info->pin_time < config.time_threshold)
-		return;
-
-	// Skip statements that don't modify data
-	if (!started && config.log_changes_only && !checkDataChanges(info))
-		return;
-
-	ITraceParams *params = statement->getInputs();
-	if (params && params->getCount())
+	switch (config.format)
 	{
-		record.append(NEWLINE);
-		appendParams(params);
-		record.append(NEWLINE);
-	}
-
-	if (info)
+	case lfText:
 	{
-		string temp;
-		temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
-		record.append(temp);
+		if (started && !config.log_statement_start)
+			return;
 
-		appendGlobalCounts(info);
-		appendTableCounts(info);
+		if (!started && !config.log_statement_finish)
+			return;
+
+		// Do not log operation if it is below time threshold
+		if (config.time_threshold && info && info->pin_time < config.time_threshold)
+			return;
+
+		// Skip statements that don't modify data
+		if (!started && config.log_changes_only && !checkDataChanges(info))
+			return;
+
+		ITraceParams *params = statement->getInputs();
+		if (params && params->getCount())
+		{
+			record.append(NEWLINE);
+			appendParams(params);
+			record.append(NEWLINE);
+		}
+
+		if (info)
+		{
+			string temp;
+			temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
+			record.append(temp);
+
+			appendGlobalCounts(info);
+			appendTableCounts(info);
+		}
+
+		const char* event_type;
+		switch (req_result)
+		{
+			case ITracePlugin::RESULT_SUCCESS:
+				event_type = started ? "EXECUTE_STATEMENT_START" :
+									   "EXECUTE_STATEMENT_FINISH";
+				break;
+			case ITracePlugin::RESULT_FAILED:
+				event_type = started ? "FAILED EXECUTE_STATEMENT_START" :
+									   "FAILED EXECUTE_STATEMENT_FINISH";
+				break;
+			case ITracePlugin::RESULT_UNAUTHORIZED:
+				event_type = started ? "UNAUTHORIZED EXECUTE_STATEMENT_START" :
+									   "UNAUTHORIZED EXECUTE_STATEMENT_FINISH";
+				break;
+			default:
+				event_type = "Unknown event at executing statement";
+				break;
+		}
+		logRecordStmt(event_type, connection, transaction, statement, true);
+		break;
 	}
-
-	const char* event_type;
-	switch (req_result)
+	case lfBinary:
 	{
-		case ITracePlugin::RESULT_SUCCESS:
-			event_type = started ? "EXECUTE_STATEMENT_START" :
-								   "EXECUTE_STATEMENT_FINISH";
-			break;
-		case ITracePlugin::RESULT_FAILED:
-			event_type = started ? "FAILED EXECUTE_STATEMENT_START" :
-								   "FAILED EXECUTE_STATEMENT_FINISH";
-			break;
-		case ITracePlugin::RESULT_UNAUTHORIZED:
-			event_type = started ? "UNAUTHORIZED EXECUTE_STATEMENT_START" :
-								   "UNAUTHORIZED EXECUTE_STATEMENT_FINISH";
-			break;
-		default:
-			event_type = "Unknown event at executing statement";
-			break;
+		LogPacketBuilder packetBuilder(started ? ptEventDsqlExecuteStart : ptEventDsqlExecuteFinish);
+
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putTransactionId(transaction->getTransactionID());
+		packetBuilder.putStatementId(statement->getStmtID());
+
+		ITraceParams* params = statement->getInputs();
+
+		packetBuilder.putOffset();
+		if (params)
+		{
+			size_t paramcount = params->getCount();
+			packetBuilder.putCounter(paramcount);
+			for (size_t i = 0; i < paramcount; i++)
+			{
+				const dsc* parameter = params->getParam(i);
+				packetBuilder.putDsc(parameter);
+			}
+		}
+		else
+		{
+			packetBuilder.putCounter(0);
+		}
+
+		if (!started)
+		{
+			appendPerfInfo(info, packetBuilder);
+			packetBuilder.putCounter(info->pin_records_fetched);
+		}
+
+		packetBuilder.putUSHORT(req_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
 	}
-	logRecordStmt(event_type, connection, transaction, statement, true);
+	}
 }
 
 
@@ -1583,35 +1982,56 @@ void TracePluginImpl::log_event_blr_compile(ITraceDatabaseConnection* connection
 	ITraceTransaction* transaction, ITraceBLRStatement* statement,
 	ntrace_counter_t time_millis, ntrace_result_t req_result)
 {
-	if (config.log_blr_requests)
+	switch (config.format)
 	{
+	case lfText:
+	{
+		if (config.log_blr_requests)
 		{
-			ReadLockGuard lock(statementsLock, FB_FUNCTION);
-			StatementsTree::Accessor accessor(&statements);
-			if (accessor.locate(statement->getStmtID()))
-				return;
+			{
+				ReadLockGuard lock(statementsLock, FB_FUNCTION);
+				StatementsTree::Accessor accessor(&statements);
+				if (accessor.locate(statement->getStmtID()))
+					return;
+			}
+
+			const char* event_type;
+			switch (req_result)
+			{
+				case ITracePlugin::RESULT_SUCCESS:
+					event_type = "COMPILE_BLR";
+					break;
+				case ITracePlugin::RESULT_FAILED:
+					event_type = "FAILED COMPILE_BLR";
+					break;
+				case ITracePlugin::RESULT_UNAUTHORIZED:
+					event_type = "UNAUTHORIZED COMPILE_BLR";
+					break;
+				default:
+					event_type = "Unknown event in COMPILE_BLR";
+					break;
+			}
+
+			record.printf("%7d ms", time_millis);
+
+			logRecordStmt(event_type, connection, transaction, statement, false);
 		}
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventBlrCompile);
 
-		const char* event_type;
-		switch (req_result)
-		{
-			case ITracePlugin::RESULT_SUCCESS:
-				event_type = "COMPILE_BLR";
-				break;
-			case ITracePlugin::RESULT_FAILED:
-				event_type = "FAILED COMPILE_BLR";
-				break;
-			case ITracePlugin::RESULT_UNAUTHORIZED:
-				event_type = "UNAUTHORIZED COMPILE_BLR";
-				break;
-			default:
-				event_type = "Unknown event in COMPILE_BLR";
-				break;
-		}
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putTransactionId(transaction ? transaction->getTransactionID() : 0);
+		packetBuilder.putStatementId(statement->getStmtID());
+		packetBuilder.putBytes(statement->getDataLength(), statement->getData());
+		packetBuilder.putCounter(time_millis);
+		packetBuilder.putUSHORT(req_result);
 
-		record.printf("%7d ms", time_millis);
-
-		logRecordStmt(event_type, connection, transaction, statement, false);
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
@@ -1621,37 +2041,57 @@ void TracePluginImpl::log_event_blr_execute(ITraceDatabaseConnection* connection
 {
 	PerformanceInfo *info = statement->getPerf();
 
-	// Do not log operation if it is below time threshold
-	if (config.time_threshold && info->pin_time < config.time_threshold)
-		return;
-
-	// Skip statements that don't modify data
-	if (config.log_changes_only && !checkDataChanges(info))
-		return;
-
-	if (config.log_blr_requests)
+	switch (config.format)
 	{
-		appendGlobalCounts(info);
-		appendTableCounts(info);
+	case lfText:
+	{
+		// Do not log operation if it is below time threshold
+		if (config.time_threshold && info->pin_time < config.time_threshold)
+			return;
 
-		const char* event_type;
-		switch (req_result)
+		// Skip statements that don't modify data
+		if (config.log_changes_only && !checkDataChanges(info))
+			return;
+
+		if (config.log_blr_requests)
 		{
-			case ITracePlugin::RESULT_SUCCESS:
-				event_type = "EXECUTE_BLR";
-				break;
-			case ITracePlugin::RESULT_FAILED:
-				event_type = "FAILED EXECUTE_BLR";
-				break;
-			case ITracePlugin::RESULT_UNAUTHORIZED:
-				event_type = "UNAUTHORIZED EXECUTE_BLR";
-				break;
-			default:
-				event_type = "Unknown event in EXECUTE_BLR";
-				break;
-		}
+			appendGlobalCounts(info);
+			appendTableCounts(info);
 
-		logRecordStmt(event_type, connection, transaction, statement, false);
+			const char* event_type;
+			switch (req_result)
+			{
+				case ITracePlugin::RESULT_SUCCESS:
+					event_type = "EXECUTE_BLR";
+					break;
+				case ITracePlugin::RESULT_FAILED:
+					event_type = "FAILED EXECUTE_BLR";
+					break;
+				case ITracePlugin::RESULT_UNAUTHORIZED:
+					event_type = "UNAUTHORIZED EXECUTE_BLR";
+					break;
+				default:
+					event_type = "Unknown event in EXECUTE_BLR";
+					break;
+			}
+
+			logRecordStmt(event_type, connection, transaction, statement, false);
+		}
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventBlrExecute);
+
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putTransactionId(transaction ? transaction->getTransactionID() : 0);
+		packetBuilder.putStatementId(statement->getStmtID());
+		appendPerfInfo(info, packetBuilder);
+		packetBuilder.putUSHORT(req_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
@@ -1659,57 +2099,77 @@ void TracePluginImpl::log_event_dyn_execute(ITraceDatabaseConnection* connection
 	ITraceTransaction* transaction, ITraceDYNRequest* request,
 	ntrace_counter_t time_millis, ntrace_result_t req_result)
 {
-	if (config.log_dyn_requests)
+	switch (config.format)
 	{
-		string description;
-
-		if (config.print_dyn)
+	case lfText:
+	{
+		if (config.log_dyn_requests)
 		{
-			const char *text_dyn = request->getText();
-			size_t text_dyn_length = text_dyn ? strlen(text_dyn) : 0;
-			if (!text_dyn) {
-				text_dyn = "";
-			}
+			string description;
 
-			if (config.max_dyn_length && text_dyn_length > config.max_dyn_length)
+			if (config.print_dyn)
 			{
-				// Truncate too long DDL printing it out with ellipsis
-				text_dyn_length = config.max_dyn_length < 3 ? 0 : config.max_dyn_length - 3;
-				description.printf(
-					"-------------------------------------------------------------------------------" NEWLINE
-					"%.*s...",
-					text_dyn_length, text_dyn);
+				const char *text_dyn = request->getText();
+				size_t text_dyn_length = text_dyn ? strlen(text_dyn) : 0;
+				if (!text_dyn) {
+					text_dyn = "";
+				}
+
+				if (config.max_dyn_length && text_dyn_length > config.max_dyn_length)
+				{
+					// Truncate too long DDL printing it out with ellipsis
+					text_dyn_length = config.max_dyn_length < 3 ? 0 : config.max_dyn_length - 3;
+					description.printf(
+						"-------------------------------------------------------------------------------" NEWLINE
+						"%.*s...",
+						text_dyn_length, text_dyn);
+				}
+				else
+				{
+					description.printf(
+						"-------------------------------------------------------------------------------" NEWLINE
+						"%.*s",
+						text_dyn_length, text_dyn);
+				}
 			}
-			else
+
+			const char* event_type;
+			switch (req_result)
 			{
-				description.printf(
-					"-------------------------------------------------------------------------------" NEWLINE
-					"%.*s",
-					text_dyn_length, text_dyn);
+				case ITracePlugin::RESULT_SUCCESS:
+					event_type = "EXECUTE_DYN";
+					break;
+				case ITracePlugin::RESULT_FAILED:
+					event_type = "FAILED EXECUTE_DYN";
+					break;
+				case ITracePlugin::RESULT_UNAUTHORIZED:
+					event_type = "UNAUTHORIZED EXECUTE_DYN";
+					break;
+				default:
+					event_type = "Unknown event in EXECUTE_DYN";
+					break;
 			}
+
+			record.printf("%7d ms", time_millis);
+			record.insert(0, description);
+
+			logRecordTrans(event_type, connection, transaction);
 		}
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventDynExecute);
 
-		const char* event_type;
-		switch (req_result)
-		{
-			case ITracePlugin::RESULT_SUCCESS:
-				event_type = "EXECUTE_DYN";
-				break;
-			case ITracePlugin::RESULT_FAILED:
-				event_type = "FAILED EXECUTE_DYN";
-				break;
-			case ITracePlugin::RESULT_UNAUTHORIZED:
-				event_type = "UNAUTHORIZED EXECUTE_DYN";
-				break;
-			default:
-				event_type = "Unknown event in EXECUTE_DYN";
-				break;
-		}
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putTransactionId(transaction->getTransactionID());
+		packetBuilder.putBytes(request->getDataLength(), request->getData());
+		packetBuilder.putCounter(time_millis);
+		packetBuilder.putUSHORT(req_result);
 
-		record.printf("%7d ms", time_millis);
-		record.insert(0, description);
-
-		logRecordTrans(event_type, connection, transaction);
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
@@ -1823,80 +2283,117 @@ bool TracePluginImpl::checkDataChanges(const PerformanceInfo *info)
 
 
 void TracePluginImpl::log_event_service_attach(ITraceServiceConnection* service,
-	ntrace_result_t att_result)
+	ntrace_size_t spb_length, const ntrace_byte_t* spb, ntrace_result_t att_result)
 {
-	if (config.log_services)
+	switch (config.format)
 	{
-		const char* event_type;
-		switch (att_result)
+	case lfText:
+	{
+		if (config.log_services)
 		{
-			case ITracePlugin::RESULT_SUCCESS:
-				event_type = "ATTACH_SERVICE";
-				break;
-			case ITracePlugin::RESULT_FAILED:
-				event_type = "FAILED ATTACH_SERVICE";
-				break;
-			case ITracePlugin::RESULT_UNAUTHORIZED:
-				event_type = "UNAUTHORIZED ATTACH_SERVICE";
-				break;
-			default:
-				event_type = "Unknown evnt in ATTACH_SERVICE";
-				break;
-		}
+			const char* event_type;
+			switch (att_result)
+			{
+				case ITracePlugin::RESULT_SUCCESS:
+					event_type = "ATTACH_SERVICE";
+					break;
+				case ITracePlugin::RESULT_FAILED:
+					event_type = "FAILED ATTACH_SERVICE";
+					break;
+				case ITracePlugin::RESULT_UNAUTHORIZED:
+					event_type = "UNAUTHORIZED ATTACH_SERVICE";
+					break;
+				default:
+					event_type = "Unknown evnt in ATTACH_SERVICE";
+					break;
+			}
 
-		logRecordServ(event_type, service);
+			logRecordServ(event_type, service);
+		}
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventServiceAttach);
+
+		packetBuilder.putServiceId(service->getServiceID());
+		packetBuilder.putBytes(spb_length, spb);
+		packetBuilder.putUSHORT(att_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
 void TracePluginImpl::log_event_service_start(ITraceServiceConnection* service,
 	size_t switches_length, const char* switches, ntrace_result_t start_result)
 {
-	if (config.log_services)
+	const char* svc_name = service->getServiceName();
+	switch (config.format)
 	{
-		if (!checkServiceFilter(service, true))
-			return;
-
-		const char* event_type;
-		switch (start_result)
+	case lfText:
+	{
+		if (config.log_services)
 		{
-			case ITracePlugin::RESULT_SUCCESS:
-				event_type = "START_SERVICE";
-				break;
-			case ITracePlugin::RESULT_FAILED:
-				event_type = "FAILED START_SERVICE";
-				break;
-			case ITracePlugin::RESULT_UNAUTHORIZED:
-				event_type = "UNAUTHORIZED START_SERVICE";
-				break;
-			default:
-				event_type = "Unknown event in START_SERVICE";
-				break;
-		}
+			if (!checkServiceFilter(service, true))
+				return;
 
-		const char* tmp = service->getServiceName();
-		if (tmp && *tmp) {
-			record.printf("\t\"%s\"" NEWLINE, tmp);
-		}
-
-		if (switches_length)
-		{
-			string sw;
-			sw.printf("\t%.*s" NEWLINE, switches_length, switches);
-
-			// Delete terminator symbols from service switches
-			for (FB_SIZE_T i = 0; i < sw.length(); ++i)
+			const char* event_type;
+			switch (start_result)
 			{
-				if (sw[i] == Firebird::SVC_TRMNTR)
-				{
-					sw.erase(i, 1);
-					if ((i < sw.length()) && (sw[i] != Firebird::SVC_TRMNTR))
-						--i;
-				}
+				case ITracePlugin::RESULT_SUCCESS:
+					event_type = "START_SERVICE";
+					break;
+				case ITracePlugin::RESULT_FAILED:
+					event_type = "FAILED START_SERVICE";
+					break;
+				case ITracePlugin::RESULT_UNAUTHORIZED:
+					event_type = "UNAUTHORIZED START_SERVICE";
+					break;
+				default:
+					event_type = "Unknown event in START_SERVICE";
+					break;
 			}
-			record.append(sw);
-		}
 
-		logRecordServ(event_type, service);
+			if (svc_name && *svc_name) {
+				record.printf("\t\"%s\"" NEWLINE, svc_name);
+			}
+
+			if (switches_length)
+			{
+				string sw;
+				sw.printf("\t%.*s" NEWLINE, switches_length, switches);
+
+				// Delete terminator symbols from service switches
+				for (FB_SIZE_T i = 0; i < sw.length(); ++i)
+				{
+					if (sw[i] == Firebird::SVC_TRMNTR)
+					{
+						sw.erase(i, 1);
+						if ((i < sw.length()) && (sw[i] != Firebird::SVC_TRMNTR))
+							--i;
+					}
+				}
+				record.append(sw);
+			}
+
+			logRecordServ(event_type, service);
+		}
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventServiceStart);
+
+		packetBuilder.putServiceId(service->getServiceID());
+		packetBuilder.putBytes(strlen(svc_name), svc_name);
+		packetBuilder.putBytes(switches_length, switches);
+		packetBuilder.putUSHORT(start_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
@@ -1905,257 +2402,313 @@ void TracePluginImpl::log_event_service_query(ITraceServiceConnection* service,
 	size_t recv_item_length, const ntrace_byte_t* recv_items,
 	ntrace_result_t query_result)
 {
-	if (config.log_services && config.log_service_query)
+	switch (config.format)
 	{
-		if (!checkServiceFilter(service, false))
-			return;
-
-		const char* tmp = service->getServiceName();
-		if (tmp && *tmp) {
-			record.printf("\t\"%s\"" NEWLINE, tmp);
-		}
-		appendServiceQueryParams(send_item_length, send_items, recv_item_length, recv_items);
-		record.append(NEWLINE);
-
-		const char* event_type;
-		switch (query_result)
+	case lfText:
+	{
+		if (config.log_services && config.log_service_query)
 		{
-			case ITracePlugin::RESULT_SUCCESS:
-				event_type = "QUERY_SERVICE";
-				break;
-			case ITracePlugin::RESULT_FAILED:
-				event_type = "FAILED QUERY_SERVICE";
-				break;
-			case ITracePlugin::RESULT_UNAUTHORIZED:
-				event_type = "UNAUTHORIZED QUERY_SERVICE";
-				break;
-			default:
-				event_type = "Unknown event in QUERY_SERVICE";
-				break;
-		}
+			if (!checkServiceFilter(service, false))
+				return;
 
-		logRecordServ(event_type, service);
+			const char* tmp = service->getServiceName();
+			if (tmp && *tmp) {
+				record.printf("\t\"%s\"" NEWLINE, tmp);
+			}
+			appendServiceQueryParams(send_item_length, send_items, recv_item_length, recv_items);
+			record.append(NEWLINE);
+
+			const char* event_type;
+			switch (query_result)
+			{
+				case ITracePlugin::RESULT_SUCCESS:
+					event_type = "QUERY_SERVICE";
+					break;
+				case ITracePlugin::RESULT_FAILED:
+					event_type = "FAILED QUERY_SERVICE";
+					break;
+				case ITracePlugin::RESULT_UNAUTHORIZED:
+					event_type = "UNAUTHORIZED QUERY_SERVICE";
+					break;
+				default:
+					event_type = "Unknown event in QUERY_SERVICE";
+					break;
+			}
+
+			logRecordServ(event_type, service);
+		}
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventServiceQuery);
+
+		packetBuilder.putServiceId(service->getServiceID());
+		packetBuilder.putOffset();
+		packetBuilder.putBytes(send_item_length, send_items);
+		packetBuilder.putBytes(recv_item_length, recv_items);
+		packetBuilder.putUSHORT(query_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
 void TracePluginImpl::log_event_service_detach(ITraceServiceConnection* service,
 	ntrace_result_t detach_result)
 {
-	if (config.log_services)
+	switch (config.format)
 	{
-		const char* event_type;
-		switch (detach_result)
+	case lfText:
+	{
+		if (config.log_services)
 		{
-			case ITracePlugin::RESULT_SUCCESS:
-				event_type = "DETACH_SERVICE";
-				break;
-			case ITracePlugin::RESULT_FAILED:
-				event_type = "FAILED DETACH_SERVICE";
-				break;
-			case ITracePlugin::RESULT_UNAUTHORIZED:
-				event_type = "UNAUTHORIZED DETACH_SERVICE";
-				break;
-			default:
-				event_type = "Unknown event in DETACH_SERVICE";
-				break;
+			const char* event_type;
+			switch (detach_result)
+			{
+				case ITracePlugin::RESULT_SUCCESS:
+					event_type = "DETACH_SERVICE";
+					break;
+				case ITracePlugin::RESULT_FAILED:
+					event_type = "FAILED DETACH_SERVICE";
+					break;
+				case ITracePlugin::RESULT_UNAUTHORIZED:
+					event_type = "UNAUTHORIZED DETACH_SERVICE";
+					break;
+				default:
+					event_type = "Unknown event in DETACH_SERVICE";
+					break;
+			}
+			logRecordServ(event_type, service);
 		}
-		logRecordServ(event_type, service);
-	}
 
-	// Get rid of connection descriptor
-	{
-		WriteLockGuard lock(servicesLock, FB_FUNCTION);
-		if (services.locate(service->getServiceID()))
+		// Get rid of connection descriptor
 		{
-			services.current().deallocate_references();
-			services.fastRemove();
+			WriteLockGuard lock(servicesLock, FB_FUNCTION);
+			if (services.locate(service->getServiceID()))
+			{
+				services.current().deallocate_references();
+				services.fastRemove();
+			}
 		}
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventServiceDetach);
+
+		packetBuilder.putServiceId(service->getServiceID());
+		packetBuilder.putUSHORT(detach_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
 	}
 }
 
 void TracePluginImpl::log_event_trigger_execute(ITraceDatabaseConnection* connection,
 	ITraceTransaction* transaction, ITraceTrigger* trigger, bool started, ntrace_result_t trig_result)
 {
-	if (!config.log_trigger_start && started)
-		return;
-
-	if (!config.log_trigger_finish && !started)
-		return;
-
-	// Do not log operation if it is below time threshold
 	const PerformanceInfo* info = started ? NULL : trigger->getPerf();
-	if (config.time_threshold && info && info->pin_time < config.time_threshold)
-		return;
 
-	// Skip triggers that don't modify data
-	if (!started && config.log_changes_only && !checkDataChanges(info))
-		return;
-
-	string trgname(trigger->getTriggerName());
-
-	if (trgname.empty())
-		trgname = "<unknown>";
-
-	if ((trigger->getWhich() != ITraceTrigger::TYPE_ALL) && trigger->getRelationName())
+	switch (config.format)
 	{
-		string relation;
-		relation.printf(" FOR %s", trigger->getRelationName());
-		trgname.append(relation);
-	}
-
-	string action;
-	switch (trigger->getWhich())
+	case lfText:
 	{
-		case ITraceTrigger::TYPE_ALL:
-			action = "ON ";	//// TODO: Why ALL means ON (DATABASE) triggers?
-			break;
-		case ITraceTrigger::TYPE_BEFORE:
-			action = "BEFORE ";
-			break;
-		case ITraceTrigger::TYPE_AFTER:
-			action = "AFTER ";
-			break;
-		default:
-			action = "<unknown> ";
-			break;
-	}
+		if (!config.log_trigger_start && started)
+			return;
 
-	switch (trigger->getAction())
+		if (!config.log_trigger_finish && !started)
+			return;
+
+		// Do not log operation if it is below time threshold
+		if (config.time_threshold && info && info->pin_time < config.time_threshold)
+			return;
+
+		// Skip triggers that don't modify data
+		if (!started && config.log_changes_only && !checkDataChanges(info))
+			return;
+
+		string trgname;
+		appendTriggerName(trigger, trgname);
+
+		string action;
+		appendTriggerAction(trigger, action);
+
+		record.printf("\t%s (%s) " NEWLINE, trgname.c_str(), action.c_str());
+
+		if (info)
+		{
+			appendGlobalCounts(info);
+			appendTableCounts(info);
+		}
+
+		const char* event_type;
+		switch (trig_result)
+		{
+			case ITracePlugin::RESULT_SUCCESS:
+				event_type = started ? "EXECUTE_TRIGGER_START" :
+									   "EXECUTE_TRIGGER_FINISH";
+				break;
+			case ITracePlugin::RESULT_FAILED:
+				event_type = started ? "FAILED EXECUTE_TRIGGER_START" :
+									   "FAILED EXECUTE_TRIGGER_FINISH";
+				break;
+			case ITracePlugin::RESULT_UNAUTHORIZED:
+				event_type = started ? "UNAUTHORIZED EXECUTE_TRIGGER_START" :
+									   "UNAUTHORIZED EXECUTE_TRIGGER_FINISH";
+				break;
+			default:
+				event_type = "Unknown event at executing trigger";
+				break;
+		}
+
+		logRecordTrans(event_type, connection, transaction);
+		break;
+	}
+	case lfBinary:
 	{
-		case TRIGGER_INSERT:
-			action.append("INSERT");
-			break;
-		case TRIGGER_UPDATE:
-			action.append("UPDATE");
-			break;
-		case TRIGGER_DELETE:
-			action.append("DELETE");
-			break;
-		case TRIGGER_CONNECT:
-			action.append("CONNECT");
-			break;
-		case TRIGGER_DISCONNECT:
-			action.append("DISCONNECT");
-			break;
-		case TRIGGER_TRANS_START:
-			action.append("TRANSACTION_START");
-			break;
-		case TRIGGER_TRANS_COMMIT:
-			action.append("TRANSACTION_COMMIT");
-			break;
-		case TRIGGER_TRANS_ROLLBACK:
-			action.append("TRANSACTION_ROLLBACK");
-			break;
-		case TRIGGER_DDL:
-			action.append("DDL");
-			break;
-		default:
-			action.append("Unknown trigger action");
-			break;
+		LogPacketBuilder packetBuilder(started ? ptEventTriggerStart : ptEventTriggerFinish);
+
+		string trgname;
+		appendTriggerName(trigger, trgname);
+
+		string action;
+		appendTriggerAction(trigger, action);
+
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putTransactionId(transaction->getTransactionID());
+		packetBuilder.putBytes(trgname.length(), trgname.c_str());
+		packetBuilder.putBytes(action.length(), action.c_str());
+
+		if (!started)
+			appendPerfInfo(info, packetBuilder);
+
+		packetBuilder.putUSHORT(trig_result);
+
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
 	}
-
-	record.printf("\t%s (%s) " NEWLINE, trgname.c_str(), action.c_str());
-
-	if (info)
-	{
-		appendGlobalCounts(info);
-		appendTableCounts(info);
 	}
-
-	const char* event_type;
-	switch (trig_result)
-	{
-		case ITracePlugin::RESULT_SUCCESS:
-			event_type = started ? "EXECUTE_TRIGGER_START" :
-								   "EXECUTE_TRIGGER_FINISH";
-			break;
-		case ITracePlugin::RESULT_FAILED:
-			event_type = started ? "FAILED EXECUTE_TRIGGER_START" :
-								   "FAILED EXECUTE_TRIGGER_FINISH";
-			break;
-		case ITracePlugin::RESULT_UNAUTHORIZED:
-			event_type = started ? "UNAUTHORIZED EXECUTE_TRIGGER_START" :
-								   "UNAUTHORIZED EXECUTE_TRIGGER_FINISH";
-			break;
-		default:
-			event_type = "Unknown event at executing trigger";
-			break;
-	}
-
-	logRecordTrans(event_type, connection, transaction);
 }
 
 void TracePluginImpl::log_event_error(ITraceConnection* connection, ITraceStatusVector* status,
 	const char* function)
 {
-	if (!config.log_errors)
-		return;
+	const char* err = status->getText();
 
-	string event_type;
-	if (status->hasError())
-		event_type.printf("ERROR AT %s", function);
-	else if (status->hasWarning())
-		event_type.printf("WARNING AT %s", function);
-	else
-		return;
+	switch (config.format)
+	{
+	case lfText:
+	{
+		if (!config.log_errors)
+			return;
 
-	logRecordError(event_type.c_str(), connection, status);
+		string event_type;
+		if (status->hasError())
+			event_type.printf("ERROR AT %s", function);
+		else if (status->hasWarning())
+			event_type.printf("WARNING AT %s", function);
+		else
+			return;
+
+		logRecordError(event_type.c_str(), connection, err);
+		break;
+	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventError);
+
+		packetBuilder.putBytes(strlen(function), function);
+		packetBuilder.putBoolean(status->hasWarning() ? 0 : 1);
+		packetBuilder.putBytes(strlen(err), err);
+		
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
+	}
 }
 
 void TracePluginImpl::log_event_sweep(ITraceDatabaseConnection* connection, ITraceSweepInfo* sweep,
 	ntrace_process_state_t sweep_state)
 {
-	if (!config.log_sweep)
-		return;
-
-	if (sweep_state == SWEEP_STATE_STARTED ||
-		sweep_state == SWEEP_STATE_FINISHED)
-	{
-		record.printf("\nTransaction counters:\n"
-			"\tOldest interesting %10" SQUADFORMAT"\n"
-			"\tOldest active      %10" SQUADFORMAT"\n"
-			"\tOldest snapshot    %10" SQUADFORMAT"\n"
-			"\tNext transaction   %10" SQUADFORMAT"\n",
-			sweep->getOIT(),
-			sweep->getOAT(),
-			sweep->getOST(),
-			sweep->getNext()
-			);
-	}
-
 	PerformanceInfo* info = sweep->getPerf();
-	if (info)
+
+	switch (config.format)
 	{
-		appendGlobalCounts(info);
-		appendTableCounts(info);
-	}
-
-	const char* event_type = NULL;
-	switch (sweep_state)
+	case lfText:
 	{
-	case SWEEP_STATE_STARTED:
-		event_type = "SWEEP_START";
-		break;
+		if (!config.log_sweep)
+			return;
 
-	case SWEEP_STATE_FINISHED:
-		event_type = "SWEEP_FINISH";
-		break;
+		if (sweep_state == SWEEP_STATE_STARTED ||
+			sweep_state == SWEEP_STATE_FINISHED)
+		{
+			record.printf("\nTransaction counters:\n"
+				"\tOldest interesting %10" SQUADFORMAT"\n"
+				"\tOldest active      %10" SQUADFORMAT"\n"
+				"\tOldest snapshot    %10" SQUADFORMAT"\n"
+				"\tNext transaction   %10" SQUADFORMAT"\n",
+				sweep->getOIT(),
+				sweep->getOAT(),
+				sweep->getOST(),
+				sweep->getNext()
+			);
+		}
+	
+		if (info)
+		{
+			appendGlobalCounts(info);
+			appendTableCounts(info);
+		}
 
-	case SWEEP_STATE_FAILED:
-		event_type = "SWEEP_FAILED";
-		break;
+		const char* event_type = NULL;
+		switch (sweep_state)
+		{
+		case SWEEP_STATE_STARTED:
+			event_type = "SWEEP_START";
+			break;
 
-	case SWEEP_STATE_PROGRESS:
-		event_type = "SWEEP_PROGRESS";
-		break;
+		case SWEEP_STATE_FINISHED:
+			event_type = "SWEEP_FINISH";
+			break;
 
-	default:
-		fb_assert(false);
-		event_type = "Unknown SWEEP process state";
+		case SWEEP_STATE_FAILED:
+			event_type = "SWEEP_FAILED";
+			break;
+
+		case SWEEP_STATE_PROGRESS:
+			event_type = "SWEEP_PROGRESS";
+			break;
+
+		default:
+			fb_assert(false);
+			event_type = "Unknown SWEEP process state";
+			break;
+		}
+
+		logRecordConn(event_type, connection);
 		break;
 	}
+	case lfBinary:
+	{
+		LogPacketBuilder packetBuilder(ptEventSweep);
 
-	logRecordConn(event_type, connection);
+		packetBuilder.putConnectionId(connection->getConnectionID());
+		packetBuilder.putTransactionId(sweep->getOIT());
+		packetBuilder.putTransactionId(sweep->getOAT());
+		packetBuilder.putTransactionId(sweep->getOST());
+		packetBuilder.putTransactionId(sweep->getNext());
+
+		appendPerfInfo(info, packetBuilder);
+
+		packetBuilder.putUSHORT(sweep_state);
+		
+		writePacket(packetBuilder.getPacket(), packetBuilder.getPacketSize());
+		break;
+	}
+	}
 }
 
 //***************************** PLUGIN INTERFACE ********************************
@@ -2177,11 +2730,11 @@ const char* TracePluginImpl::trace_get_error()
 
 // Create/close attachment
 FB_BOOLEAN TracePluginImpl::trace_attach(ITraceDatabaseConnection* connection,
-	FB_BOOLEAN create_db, ntrace_result_t att_result)
+	FB_BOOLEAN create_db, ntrace_size_t dpb_length, const ntrace_byte_t *dpb, ntrace_result_t att_result)
 {
 	try
 	{
-		log_event_attach(connection, create_db, att_result);
+		log_event_attach(connection, create_db, dpb_length, dpb, att_result);
 		return true;
 	}
 	catch (const Firebird::Exception& ex)
@@ -2405,11 +2958,11 @@ FB_BOOLEAN TracePluginImpl::trace_dyn_execute(ITraceDatabaseConnection* connecti
 
 // Using the services
 FB_BOOLEAN TracePluginImpl::trace_service_attach(ITraceServiceConnection* service,
-	ntrace_result_t att_result)
+	ntrace_size_t spb_length, const ntrace_byte_t* spb, ntrace_result_t att_result)
 {
 	try
 	{
-		log_event_service_attach(service, att_result);
+		log_event_service_attach(service, spb_length, spb, att_result);
 		return true;
 	}
 	catch (const Firebird::Exception& ex)

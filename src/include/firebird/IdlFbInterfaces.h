@@ -4682,6 +4682,7 @@ namespace Firebird
 			const char* (CLOOP_CARG *getConfigText)(ITraceInitInfo* self) throw();
 			int (CLOOP_CARG *getTraceSessionID)(ITraceInitInfo* self) throw();
 			const char* (CLOOP_CARG *getTraceSessionName)(ITraceInitInfo* self) throw();
+			int (CLOOP_CARG *getTraceSessionFlags)(ITraceInitInfo* self) throw();
 			const char* (CLOOP_CARG *getFirebirdRootDirectory)(ITraceInitInfo* self) throw();
 			const char* (CLOOP_CARG *getDatabaseName)(ITraceInitInfo* self) throw();
 			ITraceDatabaseConnection* (CLOOP_CARG *getConnection)(ITraceInitInfo* self) throw();
@@ -4717,6 +4718,12 @@ namespace Firebird
 		const char* getTraceSessionName()
 		{
 			const char* ret = static_cast<VTable*>(this->cloopVTable)->getTraceSessionName(this);
+			return ret;
+		}
+
+		int getTraceSessionFlags()
+		{
+			int ret = static_cast<VTable*>(this->cloopVTable)->getTraceSessionFlags(this);
 			return ret;
 		}
 
@@ -4757,7 +4764,7 @@ namespace Firebird
 		struct VTable : public IReferenceCounted::VTable
 		{
 			const char* (CLOOP_CARG *trace_get_error)(ITracePlugin* self) throw();
-			FB_BOOLEAN (CLOOP_CARG *trace_attach)(ITracePlugin* self, ITraceDatabaseConnection* connection, FB_BOOLEAN create_db, unsigned att_result) throw();
+			FB_BOOLEAN (CLOOP_CARG *trace_attach)(ITracePlugin* self, ITraceDatabaseConnection* connection, FB_BOOLEAN create_db, unsigned dpb_length, const unsigned char* dpb, unsigned att_result) throw();
 			FB_BOOLEAN (CLOOP_CARG *trace_detach)(ITracePlugin* self, ITraceDatabaseConnection* connection, FB_BOOLEAN drop_db) throw();
 			FB_BOOLEAN (CLOOP_CARG *trace_transaction_start)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceTransaction* transaction, unsigned tpb_length, const unsigned char* tpb, unsigned tra_result) throw();
 			FB_BOOLEAN (CLOOP_CARG *trace_transaction_end)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceTransaction* transaction, FB_BOOLEAN commit, FB_BOOLEAN retain_context, unsigned tra_result) throw();
@@ -4770,7 +4777,7 @@ namespace Firebird
 			FB_BOOLEAN (CLOOP_CARG *trace_blr_compile)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceBLRStatement* statement, ISC_INT64 time_millis, unsigned req_result) throw();
 			FB_BOOLEAN (CLOOP_CARG *trace_blr_execute)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceBLRStatement* statement, unsigned req_result) throw();
 			FB_BOOLEAN (CLOOP_CARG *trace_dyn_execute)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceDYNRequest* request, ISC_INT64 time_millis, unsigned req_result) throw();
-			FB_BOOLEAN (CLOOP_CARG *trace_service_attach)(ITracePlugin* self, ITraceServiceConnection* service, unsigned att_result) throw();
+			FB_BOOLEAN (CLOOP_CARG *trace_service_attach)(ITracePlugin* self, ITraceServiceConnection* service, unsigned spb_length, const unsigned char* spb, unsigned att_result) throw();
 			FB_BOOLEAN (CLOOP_CARG *trace_service_start)(ITracePlugin* self, ITraceServiceConnection* service, unsigned switches_length, const char* switches, unsigned start_result) throw();
 			FB_BOOLEAN (CLOOP_CARG *trace_service_query)(ITracePlugin* self, ITraceServiceConnection* service, unsigned send_item_length, const unsigned char* send_items, unsigned recv_item_length, const unsigned char* recv_items, unsigned query_result) throw();
 			FB_BOOLEAN (CLOOP_CARG *trace_service_detach)(ITracePlugin* self, ITraceServiceConnection* service, unsigned detach_result) throw();
@@ -4806,9 +4813,9 @@ namespace Firebird
 			return ret;
 		}
 
-		FB_BOOLEAN trace_attach(ITraceDatabaseConnection* connection, FB_BOOLEAN create_db, unsigned att_result)
+		FB_BOOLEAN trace_attach(ITraceDatabaseConnection* connection, FB_BOOLEAN create_db, unsigned dpb_length, const unsigned char* dpb, unsigned att_result)
 		{
-			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_attach(this, connection, create_db, att_result);
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_attach(this, connection, create_db, dpb_length, dpb, att_result);
 			return ret;
 		}
 
@@ -4884,9 +4891,9 @@ namespace Firebird
 			return ret;
 		}
 
-		FB_BOOLEAN trace_service_attach(ITraceServiceConnection* service, unsigned att_result)
+		FB_BOOLEAN trace_service_attach(ITraceServiceConnection* service, unsigned spb_length, const unsigned char* spb, unsigned att_result)
 		{
-			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_service_attach(this, service, att_result);
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_service_attach(this, service, spb_length, spb, att_result);
 			return ret;
 		}
 
@@ -15171,6 +15178,7 @@ namespace Firebird
 					this->getConfigText = &Name::cloopgetConfigTextDispatcher;
 					this->getTraceSessionID = &Name::cloopgetTraceSessionIDDispatcher;
 					this->getTraceSessionName = &Name::cloopgetTraceSessionNameDispatcher;
+					this->getTraceSessionFlags = &Name::cloopgetTraceSessionFlagsDispatcher;
 					this->getFirebirdRootDirectory = &Name::cloopgetFirebirdRootDirectoryDispatcher;
 					this->getDatabaseName = &Name::cloopgetDatabaseNameDispatcher;
 					this->getConnection = &Name::cloopgetConnectionDispatcher;
@@ -15218,6 +15226,19 @@ namespace Firebird
 			{
 				StatusType::catchException(0);
 				return static_cast<const char*>(0);
+			}
+		}
+
+		static int CLOOP_CARG cloopgetTraceSessionFlagsDispatcher(ITraceInitInfo* self) throw()
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getTraceSessionFlags();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<int>(0);
 			}
 		}
 
@@ -15303,6 +15324,7 @@ namespace Firebird
 		virtual const char* getConfigText() = 0;
 		virtual int getTraceSessionID() = 0;
 		virtual const char* getTraceSessionName() = 0;
+		virtual int getTraceSessionFlags() = 0;
 		virtual const char* getFirebirdRootDirectory() = 0;
 		virtual const char* getDatabaseName() = 0;
 		virtual ITraceDatabaseConnection* getConnection() = 0;
@@ -15364,11 +15386,11 @@ namespace Firebird
 			}
 		}
 
-		static FB_BOOLEAN CLOOP_CARG clooptrace_attachDispatcher(ITracePlugin* self, ITraceDatabaseConnection* connection, FB_BOOLEAN create_db, unsigned att_result) throw()
+		static FB_BOOLEAN CLOOP_CARG clooptrace_attachDispatcher(ITracePlugin* self, ITraceDatabaseConnection* connection, FB_BOOLEAN create_db, unsigned dpb_length, const unsigned char* dpb, unsigned att_result) throw()
 		{
 			try
 			{
-				return static_cast<Name*>(self)->Name::trace_attach(connection, create_db, att_result);
+				return static_cast<Name*>(self)->Name::trace_attach(connection, create_db, dpb_length, dpb, att_result);
 			}
 			catch (...)
 			{
@@ -15533,11 +15555,11 @@ namespace Firebird
 			}
 		}
 
-		static FB_BOOLEAN CLOOP_CARG clooptrace_service_attachDispatcher(ITracePlugin* self, ITraceServiceConnection* service, unsigned att_result) throw()
+		static FB_BOOLEAN CLOOP_CARG clooptrace_service_attachDispatcher(ITracePlugin* self, ITraceServiceConnection* service, unsigned spb_length, const unsigned char* spb, unsigned att_result) throw()
 		{
 			try
 			{
-				return static_cast<Name*>(self)->Name::trace_service_attach(service, att_result);
+				return static_cast<Name*>(self)->Name::trace_service_attach(service, spb_length, spb, att_result);
 			}
 			catch (...)
 			{
@@ -15664,7 +15686,7 @@ namespace Firebird
 		}
 
 		virtual const char* trace_get_error() = 0;
-		virtual FB_BOOLEAN trace_attach(ITraceDatabaseConnection* connection, FB_BOOLEAN create_db, unsigned att_result) = 0;
+		virtual FB_BOOLEAN trace_attach(ITraceDatabaseConnection* connection, FB_BOOLEAN create_db, unsigned dpb_length, const unsigned char* dpb, unsigned att_result) = 0;
 		virtual FB_BOOLEAN trace_detach(ITraceDatabaseConnection* connection, FB_BOOLEAN drop_db) = 0;
 		virtual FB_BOOLEAN trace_transaction_start(ITraceDatabaseConnection* connection, ITraceTransaction* transaction, unsigned tpb_length, const unsigned char* tpb, unsigned tra_result) = 0;
 		virtual FB_BOOLEAN trace_transaction_end(ITraceDatabaseConnection* connection, ITraceTransaction* transaction, FB_BOOLEAN commit, FB_BOOLEAN retain_context, unsigned tra_result) = 0;
@@ -15677,7 +15699,7 @@ namespace Firebird
 		virtual FB_BOOLEAN trace_blr_compile(ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceBLRStatement* statement, ISC_INT64 time_millis, unsigned req_result) = 0;
 		virtual FB_BOOLEAN trace_blr_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceBLRStatement* statement, unsigned req_result) = 0;
 		virtual FB_BOOLEAN trace_dyn_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceDYNRequest* request, ISC_INT64 time_millis, unsigned req_result) = 0;
-		virtual FB_BOOLEAN trace_service_attach(ITraceServiceConnection* service, unsigned att_result) = 0;
+		virtual FB_BOOLEAN trace_service_attach(ITraceServiceConnection* service, unsigned spb_length, const unsigned char* spb, unsigned att_result) = 0;
 		virtual FB_BOOLEAN trace_service_start(ITraceServiceConnection* service, unsigned switches_length, const char* switches, unsigned start_result) = 0;
 		virtual FB_BOOLEAN trace_service_query(ITraceServiceConnection* service, unsigned send_item_length, const unsigned char* send_items, unsigned recv_item_length, const unsigned char* recv_items, unsigned query_result) = 0;
 		virtual FB_BOOLEAN trace_service_detach(ITraceServiceConnection* service, unsigned detach_result) = 0;

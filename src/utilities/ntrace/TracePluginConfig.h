@@ -31,7 +31,7 @@
 #include "../common/classes/fb_string.h"
 #include "../common/config/config_file.h"
 
-//enum LogFormat { lfText = 0, lfBinary = 1 };
+enum LogFormat { lfText = 0, lfBinary = 1 };
 
 struct TracePluginConfig
 {

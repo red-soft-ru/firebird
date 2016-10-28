@@ -51,11 +51,16 @@ class PluginLogWriter FB_FINAL :
 	public Firebird::RefCntIface<Firebird::ITraceLogWriterImpl<PluginLogWriter, Firebird::CheckStatusWrapper> >
 {
 public:
-	PluginLogWriter(const char* fileName, size_t maxSize);
+	PluginLogWriter(const char* fileName, size_t maxSize, bool isBinary);
 	~PluginLogWriter();
 
 	// TraceLogWriter implementation
 	virtual FB_SIZE_T write(const void* buf, FB_SIZE_T size);
+	FB_SIZE_T read(void* buf, FB_SIZE_T size);
+	void rotateLog();
+	SINT64 seek(SINT64 offset, int origin);
+	SINT64 size() { return seek(0, SEEK_END); }
+	void checkBinaryFormat();
 
 	virtual int release()
 	{
@@ -68,8 +73,9 @@ public:
 	}
 
 private:
-	SINT64 seekToEnd();
+	SINT64 seekToEnd() { return seek(0, SEEK_END); };
 	void reopen();
+	void writeBinaryHeader();
 	void checkErrno(const char* operation);
 
 	// Windows requires explicit syncronization when few processes appends to the
@@ -104,6 +110,7 @@ private:
 	Firebird::PathName m_fileName;
 	int		 m_fileHandle;
 	size_t	 m_maxSize;
+	bool	 m_isBinary;
 };
 
 #endif // PLUGINLOGWRITER_H

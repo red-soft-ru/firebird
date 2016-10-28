@@ -40,6 +40,7 @@ void TraceCfgReader::readTraceConfiguration(const char* text,
 {
 	TraceCfgReader cfgReader(text, databaseName, config);
 	cfgReader.readConfig();
+	config.db_filename = databaseName;
 }
 
 

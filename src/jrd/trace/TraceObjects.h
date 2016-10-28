@@ -541,6 +541,7 @@ public:
 	const char* getConfigText()			{ return m_session.ses_config.c_str(); }
 	int getTraceSessionID()				{ return m_session.ses_id; }
 	const char* getTraceSessionName()	{ return m_session.ses_name.c_str(); }
+	int getTraceSessionFlags()			{ return m_session.ses_flags; }
 
 	const char* getFirebirdRootDirectory();
 	const char* getDatabaseName()		{ return m_filename; }

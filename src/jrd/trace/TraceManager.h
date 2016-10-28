@@ -64,7 +64,7 @@ public:
 	{ return factories->getCount(); }
 
 	void event_attach(Firebird::ITraceDatabaseConnection* connection, bool create_db,
-		ntrace_result_t att_result);
+		ntrace_size_t dpb_length, const ntrace_byte_t* dpb, ntrace_result_t att_result);
 
 	void event_detach(Firebird::ITraceDatabaseConnection* connection, bool drop_db);
 
@@ -99,7 +99,8 @@ public:
 		Firebird::ITraceTransaction* transaction, Firebird::ITraceDYNRequest* request,
 		ntrace_counter_t time_millis, ntrace_result_t req_result);
 
-	void event_service_attach(Firebird::ITraceServiceConnection* service, ntrace_result_t att_result);
+	void event_service_attach(Firebird::ITraceServiceConnection* service, 
+		ntrace_size_t spb_length, const ntrace_byte_t* spb, ntrace_result_t att_result);
 
 	void event_service_start(Firebird::ITraceServiceConnection* service,
 		unsigned switches_length, const char* switches,

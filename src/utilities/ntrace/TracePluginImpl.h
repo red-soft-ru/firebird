@@ -30,7 +30,7 @@
 #define TRACEPLUGINIMPL_H
 
 #include "firebird.h"
-#include "../../jrd/ntrace.h"
+#include "LogPacketBuilder.h"
 #include "TracePluginConfig.h"
 #include "TraceUnicodeUtils.h"
 #include "../../jrd/intl_classes.h"
@@ -172,9 +172,14 @@ private:
 	Firebird::AutoPtr<Firebird::SimilarToMatcher<UCHAR, Jrd::UpcaseConverter<> > >
 		include_matcher, exclude_matcher;
 
+	void writePacket(const UCHAR* packet_data, const ULONG packet_size);
+
+	void appendTriggerName(Firebird::ITraceTrigger* trigger, Firebird::string& name);
+	void appendTriggerAction(Firebird::ITraceTrigger* trigger, Firebird::string& action);
 	void appendGlobalCounts(const PerformanceInfo* info);
 	void appendTableCounts(const PerformanceInfo* info);
 	void appendParams(Firebird::ITraceParams* params);
+	void appendPerfInfo(const PerformanceInfo* info, LogPacketBuilder& packetBuilder);
 	void appendServiceQueryParams(size_t send_item_length, const ntrace_byte_t* send_items,
 								  size_t recv_item_length, const ntrace_byte_t* recv_items);
 	void formatStringArgument(Firebird::string& result, const UCHAR* str, size_t len);
@@ -200,7 +205,7 @@ private:
 		Firebird::ITraceTransaction* transaction, Firebird::ITraceStatement* statement,
 		bool isSQL);
 	void logRecordServ(const char* action, Firebird::ITraceServiceConnection* service);
-	void logRecordError(const char* action, Firebird::ITraceConnection* connection, Firebird::ITraceStatusVector* status);
+	void logRecordError(const char* action, Firebird::ITraceConnection* connection, const char* err);
 
 	/* Methods which do logging of events to file */
 	void log_init();
@@ -208,7 +213,7 @@ private:
 
 	void log_event_attach(
 		Firebird::ITraceDatabaseConnection* connection, FB_BOOLEAN create_db,
-		unsigned att_result);
+		ntrace_size_t dpb_length, const ntrace_byte_t *dpb, unsigned att_result);
 	void log_event_detach(
 		Firebird::ITraceDatabaseConnection* connection, FB_BOOLEAN drop_db);
 
@@ -256,7 +261,8 @@ private:
 		Firebird::ITraceDYNRequest* request, ntrace_counter_t time_millis,
 		unsigned req_result);
 
-	void log_event_service_attach(Firebird::ITraceServiceConnection* service, unsigned att_result);
+	void log_event_service_attach(Firebird::ITraceServiceConnection* service, ntrace_size_t spb_length,
+		const ntrace_byte_t* spb, unsigned att_result);
 	void log_event_service_start(Firebird::ITraceServiceConnection* service, size_t switches_length, const char* switches,
 								 unsigned start_result);
 	void log_event_service_query(Firebird::ITraceServiceConnection* service, size_t send_item_length,
@@ -275,7 +281,8 @@ public:
 	const char* trace_get_error();
 
 	// Create/close attachment
-	FB_BOOLEAN trace_attach(Firebird::ITraceDatabaseConnection* connection, FB_BOOLEAN create_db, unsigned att_result);
+	FB_BOOLEAN trace_attach(Firebird::ITraceDatabaseConnection* connection, FB_BOOLEAN create_db,
+			ntrace_size_t dpb_length, const ntrace_byte_t *dpb, unsigned att_result);
 	FB_BOOLEAN trace_detach(Firebird::ITraceDatabaseConnection* connection, FB_BOOLEAN drop_db);
 
 	// Start/end transaction
@@ -316,7 +323,8 @@ public:
 			Firebird::ITraceDYNRequest* request, ISC_INT64 time_millis, unsigned req_result);
 
 	// Using the services
-	FB_BOOLEAN trace_service_attach(Firebird::ITraceServiceConnection* service, unsigned att_result);
+	FB_BOOLEAN trace_service_attach(Firebird::ITraceServiceConnection* service, ntrace_size_t spb_length,
+			const ntrace_byte_t* spb, unsigned att_result);
 	FB_BOOLEAN trace_service_start(Firebird::ITraceServiceConnection* service, unsigned switches_length, const char* switches,
 			unsigned start_result);
 	FB_BOOLEAN trace_service_query(Firebird::ITraceServiceConnection* service, unsigned send_item_length,
