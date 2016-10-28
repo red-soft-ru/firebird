@@ -1710,12 +1710,16 @@ DmlNode* MET_get_dependencies(thread_db* tdbb,
 		}
 		END_FOR
 
-		MET_delete_dependencies(tdbb, domainName, type, transaction);
+		if (type != obj_package_body)
+			MET_delete_dependencies(tdbb, domainName, type, transaction);
+
 		store_dependencies(tdbb, csb, relation, domainName, type, transaction);
 	}
 	else
 	{
-		MET_delete_dependencies(tdbb, object_name, type, transaction);
+		if (type != obj_package_body)
+			MET_delete_dependencies(tdbb, object_name, type, transaction);
+
 		store_dependencies(tdbb, csb, relation, object_name, type, transaction);
 	}
 
