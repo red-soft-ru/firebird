@@ -208,6 +208,27 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 	{
 		system_error::raise("CreateFile");
 	}
+
+	// Compressed temp files cannot be wiped. Rewind + write can not be used
+	// since after rewriting the compressed file its size will be changed and
+	// stored to other parts of the hard disk. Wipe of file through direct access
+	// to the disk will not work. Direct access to the disk has been limited 
+	// starting with Windows Vista and Windows Server 2008.
+	if(doUnlink && MemoryPool::wipePasses > 0)
+	{
+		DWORD fileAttrs;
+		BY_HANDLE_FILE_INFORMATION fileInfo;
+
+		if (!GetFileInformationByHandle(handle, &fileInfo))
+			fatal_exception::raiseFmt("IO error (%d) retrieving info for file.", GetLastError());
+
+		fileAttrs = fileInfo.dwFileAttributes;
+		if (fileAttrs == INVALID_FILE_ATTRIBUTES)
+			fatal_exception::raiseFmt("IO error (%d) retrieving attributes for file.", GetLastError());
+
+		if (fileAttrs & (FILE_ATTRIBUTE_COMPRESSED | FILE_ATTRIBUTE_ENCRYPTED | FILE_ATTRIBUTE_SPARSE_FILE))
+			fatal_exception::raise("Compressed temp files can not be wiped.");
+	}
 #else
 	filename += prefix;
 	filename += NAME_PATTERN;
@@ -234,7 +255,8 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 	}
 #endif
 
-//	doUnlink = false;
+	needWipe = doUnlink;
+	doUnlink = false;
 }
 
 //
@@ -245,15 +267,17 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 
 TempFile::~TempFile()
 {
-	if (doUnlink && MemoryPool::wipePasses > 0)
-	{
-		::do_unlink(filename.c_str(), handle);
-	}
+	if (MemoryPool::wipePasses > 0 && needWipe)
+		WipeFile(handle);
 #if defined(WIN_NT)
 	CloseHandle(handle);
 #else
 	::close(handle);
 #endif
+	if (doUnlink)
+	{
+		::unlink(filename.c_str());
+	}
 }
 
 //
@@ -374,7 +398,7 @@ void TempFile::unlink()
 #if defined(WIN_NT)
 	doUnlink = true;
 #else
-	::do_unlink(filename.c_str());
+	::unlink(filename.c_str());
 #endif
 }
 

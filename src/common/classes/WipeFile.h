@@ -31,13 +31,10 @@
 
 #ifdef WIN_NT
 #include <windows.h>
-#define DEFAULT_HANDLE NULL
 #else
-#define HANDLE int 
-#define DEFAULT_HANDLE -1
+#define HANDLE int
 #endif
 
-int do_unlink(const char* filename, HANDLE handler = DEFAULT_HANDLE);
-int WipeFile(const char* filename, HANDLE handler = DEFAULT_HANDLE);
+int WipeFile(HANDLE handle);
 
 #endif // CLASSES_WIPE_FILE_H

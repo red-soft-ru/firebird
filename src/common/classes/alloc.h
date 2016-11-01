@@ -227,7 +227,7 @@ public:
 
 	static inline void wipeMemory(void* ptr, size_t size)
 	{
-		for (size_t currentWipe = 1; currentWipe <= wipePasses; currentWipe++)
+		for (int currentWipe = 1; currentWipe <= wipePasses; currentWipe++)
 		{
 			memset(ptr, ((currentWipe & 1) || (currentWipe == wipePasses)) ? 0 : 0xFF, size);
 		}

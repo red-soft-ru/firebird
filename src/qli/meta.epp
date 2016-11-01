@@ -44,7 +44,6 @@
 #include "../common/utils_proto.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/UserBlob.h"
-#include "../common/classes/WipeFile.h"
 
 using MsgFormat::SafeArg;
 
@@ -562,12 +561,12 @@ void MET_delete_database( qli_dbb* dbb)
 	while (stack)
 	{
 		qli_str* sstring = (qli_str*) ALLQ_pop(&stack);
-		if (do_unlink(sstring->str_data))
+		if (unlink(sstring->str_data))
 			ERRQ_print_error(431, sstring->str_data);
 			// Msg431 Could not drop database file "%s"
 	}
 
-	if (do_unlink(dbb->dbb_filename))
+	if (unlink(dbb->dbb_filename))
 		ERRQ_print_error(431, dbb->dbb_filename);
 		// Msg431 Could not drop database file "%s"
 }

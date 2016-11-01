@@ -125,7 +125,6 @@
 #include "../common/classes/fb_tls.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/RefMutex.h"
-#include "../common/classes/WipeFile.h"
 #include "../common/utils_proto.h"
 #include "../jrd/DebugInterface.h"
 #include "../jrd/CryptoManager.h"
@@ -5468,7 +5467,7 @@ static bool drop_files(const jrd_file* file)
 
 	for (; file; file = file->fil_next)
 	{
-		if (do_unlink(file->fil_string))
+		if (unlink(file->fil_string))
 		{
 			ERR_build_status(&status, Arg::Gds(isc_io_error) << Arg::Str("unlink") <<
 							   								   Arg::Str(file->fil_string) <<
