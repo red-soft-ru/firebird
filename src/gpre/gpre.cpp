@@ -64,7 +64,6 @@
 #include "../common/classes/TempFile.h"
 #include "../common/classes/Switches.h"
 #include "../gpre/gpreswi.h"
-#include "../common/classes/WipeFile.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -860,7 +859,7 @@ int main(int argc, char* argv[])
 	{
 		fclose(gpreGlob.out_file);
 		if (gpreGlob.errors_global)
-			do_unlink(out_file_name);
+			unlink(out_file_name);
 	}
 
 	if (gpreGlob.errors_global || warnings_global)
@@ -966,14 +965,14 @@ void CPR_exit( int stat)
 	 {
 		if (trace_file)
 			fclose(trace_file);
-		do_unlink(trace_file_name);
+		unlink(trace_file_name);
 	}
 
 #else
 	if (trace_file)
 		fclose(trace_file);
 	if (trace_file_name[0])
-		do_unlink(trace_file_name);
+		unlink(trace_file_name);
 #endif
 
 	exit(stat);

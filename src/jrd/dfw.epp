@@ -126,7 +126,6 @@
 #include "../jrd/CryptoManager.h"
 #include "../jrd/Mapping.h"
 #include "../jrd/shut_proto.h"
-#include "../common/classes/WipeFile.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -1557,7 +1556,7 @@ void DFW_perform_post_commit_work(jrd_tra* transaction)
 			break;
 		case dfw_delete_shadow:
 			if (work->dfw_name.hasData())
-				do_unlink(work->dfw_name.c_str());
+				unlink(work->dfw_name.c_str());
 			delete work;
 			break;
 		default:

@@ -41,7 +41,6 @@
 #include "../common/gdsassert.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/TempFile.h"
-#include "../common/classes/WipeFile.h"
 #include "../common/os/os_utils.h"
 
 using Firebird::TempFile;
@@ -193,7 +192,7 @@ void LEX_edit(SLONG start, SLONG stop)
 	if (gds__edit(filename.c_str(), TRUE))
 		LEX_push_file(filename.c_str(), true);
 
-	do_unlink(filename.c_str());
+	unlink(filename.c_str());
 
 	fseek(trace_file, 0, 2);
 }
@@ -375,7 +374,7 @@ void LEX_fini()
 	if (trace_file)
 	{
 		fclose(trace_file);
-		do_unlink(trace_file_name);
+		unlink(trace_file_name);
 	}
 }
 
