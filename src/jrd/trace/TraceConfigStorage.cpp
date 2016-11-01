@@ -225,55 +225,58 @@ void ConfigStorage::checkFile()
 			checkFileError(cfg_file_name, "open", isc_io_open_err);
 	}
 
-	// put default (audit) trace file contents into storage
+	// put prepared (audit) trace files contents into storage
 	if (m_sharedMemory->getHeader()->change_number == 0)
 	{
-		FILE* cfgFile = NULL;
+		SystemSessions sessions;
+		getSystemConfigPaths(sessions);
 
-		try
+		for (SystemSessions::iterator i = sessions.begin(); i != sessions.end(); ++i)
 		{
-			Firebird::PathName configFileName;
-			getSystemConfigPath(configFileName);
+			FILE* cfgFile = NULL;
 
-			if (configFileName.empty())
-				return;
-
-			cfgFile = os_utils::fopen(configFileName.c_str(), "rb");
-			if (!cfgFile) {
-				checkFileError(configFileName.c_str(), "fopen", isc_io_open_err);
-			}
-
-			TraceSession session(*getDefaultMemoryPool());
-
-			fseek(cfgFile, 0, SEEK_END);
-			const long len = ftell(cfgFile);
-			if (len)
+			try
 			{
-				fseek(cfgFile, 0, SEEK_SET);
-				char* p = session.ses_config.getBuffer(len + 1);
+				if (i->second.empty())
+					return;
 
-				if (fread(p, 1, len, cfgFile) != size_t(len)) {
-					checkFileError(configFileName.c_str(), "fread", isc_io_read_err);
+				cfgFile = os_utils::fopen(i->second.c_str(), "rb");
+				if (!cfgFile) {
+					checkFileError(i->second.c_str(), "fopen", isc_io_open_err);
 				}
-				p[len] = 0;
+
+				TraceSession session(*getDefaultMemoryPool());
+
+				fseek(cfgFile, 0, SEEK_END);
+				const long len = ftell(cfgFile);
+				if (len)
+				{
+					fseek(cfgFile, 0, SEEK_SET);
+					char* p = session.ses_config.getBuffer(len + 1);
+
+					if (fread(p, 1, len, cfgFile) != size_t(len)) {
+						checkFileError(i->second.c_str(), "fread", isc_io_read_err);
+					}
+					p[len] = 0;
+				}
+				else {
+					gds__log("Audit configuration file \"%s\" is empty", i->second.c_str());
+				}
+
+				session.ses_user = DBA_USER_NAME;
+				session.ses_name = i->first;
+				session.ses_flags = trs_admin | trs_system;
+
+				addSession(session);
 			}
-			else {
-				gds__log("Audit configuration file \"%s\" is empty", configFileName.c_str());
+			catch (const Exception& ex)
+			{
+				iscLogException("Cannot open audit configuration file", ex);
 			}
 
-			session.ses_user = DBA_USER_NAME;
-			session.ses_name = "Firebird Audit";
-			session.ses_flags = trs_admin | trs_system;
-
-			addSession(session);
-		}
-		catch (const Exception& ex)
-		{
-			iscLogException("Cannot open audit configuration file", ex);
-		}
-
-		if (cfgFile) {
-			fclose(cfgFile);
+			if (cfgFile) {
+				fclose(cfgFile);
+			}
 		}
 	}
 }
@@ -620,29 +623,52 @@ int ConfigStorage::TouchFile::release()
 	return 1;
 }
 
-void ConfigStorage::getSystemConfigPath(Firebird::PathName& configFileName)
+void ConfigStorage::getSystemConfigPaths(SystemSessions& systemSessions)
 {
-	configFileName.assign(Config::getAuditTraceConfigFile());
+	string configString = Config::getAuditTraceConfigFiles();
+	SystemSession session;
+	size_t start = 0;
 
-	// remove quotes around path if present
-	{ // scope
-		const size_t pathLen = configFileName.length();
-		if (pathLen > 1 && configFileName[0] == '"' &&
-			configFileName[pathLen - 1] == '"')
-		{
-			configFileName.erase(0, 1);
-			configFileName.erase(pathLen - 2, 1);
-		}
-	}
-
-	if (configFileName.empty())
+	if (configString.isEmpty())
 		return;
 
-	if (PathUtils::isRelative(configFileName))
-	{
-		PathName root(Config::getRootDirectory());
-		PathUtils::ensureSeparator(root);
-		configFileName.insert(0, root);
+	if (configString[configString.length() - 1] != ';')
+		configString.append(";");
+
+	for (size_t i = 0; i < configString.length(); ++i) {
+		if (configString[i] == ';') {
+			session.second.assign(configString.substr(start, i - start).c_str());
+
+			if (session.second.length() > 1 &&
+				session.second[0] == '"' &&
+				session.second[session.second.length() - 1] == '"')
+			{
+				session.second.erase(0, 1);
+				session.second.erase(session.second.length() - 1, 1);
+			}
+
+			if (PathUtils::isRelative(session.second))
+			{
+				session.first = session.second.c_str();
+				PathName root(Config::getRootDirectory());
+				PathUtils::ensureSeparator(root);
+				session.second.insert(0, root);
+			}
+			else {
+				PathName tmpPath("");
+				PathName tmpFile("");
+				PathUtils::splitLastComponent(tmpPath, tmpFile, session.second);
+				session.first = tmpFile.c_str();
+			}
+			session.first = session.first.substr(0, session.first.find_last_of('.')).c_str();
+
+			if (!session.second.isEmpty() && !session.second.isEmpty())
+				systemSessions.add(session);
+
+			session.first = "";
+			session.second = "";
+			start = i + 1;
+		}
 	}
 }
 
@@ -651,7 +677,10 @@ void ConfigStorage::updateSystemConfig()
 	StorageGuard guard(this);
 	restart();
 
+	SystemSessions sessions;
+	getSystemConfigPaths(sessions);
 	TraceSession session(*getDefaultMemoryPool());
+
 	while (getNextSession(session))
 	{
 		if (session.ses_flags & trs_system)
@@ -659,17 +688,21 @@ void ConfigStorage::updateSystemConfig()
 			FILE* cfgFile = NULL;
 			char* buffer = NULL;
 
-			Firebird::PathName configFileName;
-			getSystemConfigPath(configFileName);
+			SystemSessions::iterator i;
+			for (i = sessions.begin(); i != sessions.end(); ++i)
+			{
+				if (i->first == session.ses_name)
+					break;
+			}
 
-			if (configFileName.empty())
-				return;
+			if (i == sessions.end() || i->second.empty())
+				continue;
 
 			try
 			{
-				cfgFile = os_utils::fopen(configFileName.c_str(), "rb");
+				cfgFile = os_utils::fopen(i->second.c_str(), "rb");
 				if (!cfgFile) {
-					checkFileError(configFileName.c_str(), "fopen", isc_io_open_err);
+					checkFileError(i->second.c_str(), "fopen", isc_io_open_err);
 				}
 				fseek(cfgFile, 0, SEEK_END);
 
@@ -680,7 +713,7 @@ void ConfigStorage::updateSystemConfig()
 					fseek(cfgFile, 0, SEEK_SET);
 
 					if (fread(buffer, 1, len, cfgFile) != size_t(len)) {
-						checkFileError(configFileName.c_str(), "fread", isc_io_read_err);
+						checkFileError(i->second.c_str(), "fread", isc_io_read_err);
 					}
 					buffer[len] = 0;
 
@@ -694,7 +727,7 @@ void ConfigStorage::updateSystemConfig()
 					}
 				}
 				else {
-					gds__log("Audit configuration file \"%s\" is empty", configFileName.c_str());
+					gds__log("Audit configuration file \"%s\" is empty", i->second.c_str());
 				}
 			}
 			catch(const Exception& ex)

@@ -208,13 +208,17 @@
 
 
 # ----------------------------
-# Trace configuration file for system audit
+# Trace configuration files for system audit
 #
 # Empty value means that system audit is turned off.
+# List of configurations should be separated by ';'.
+# 
+# E.g.:
+# AuditTraceConfigFiles = fbtrace.conf;fbtrace_sec.conf
 #
 # Type: string
 #
-#AuditTraceConfigFile =
+#AuditTraceConfigFiles =
 
 # ----------------------------
 # Maximum summary size of each user trace session's log files in MB.

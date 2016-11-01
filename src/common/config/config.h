@@ -330,7 +330,7 @@ public:
 
 	static bool getRelaxedAliasChecking();
 
-	static const char* getAuditTraceConfigFile();
+	static const char* getAuditTraceConfigFiles();
 
 	static FB_UINT64 getMaxUserTraceLogSize();
 

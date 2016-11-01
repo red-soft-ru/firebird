@@ -173,7 +173,7 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,		"DatabaseGrowthIncrement",	(ConfigValue) 128 * 1048576},	// bytes
 	{TYPE_INTEGER,		"FileSystemCacheThreshold",	(ConfigValue) 65536},	// page buffers
 	{TYPE_BOOLEAN,		"RelaxedAliasChecking",		(ConfigValue) false},	// if true relax strict alias checking rules in DSQL a bit
-	{TYPE_STRING,		"AuditTraceConfigFile",		(ConfigValue) ""},		// location of audit trace configuration file
+	{TYPE_STRING,		"AuditTraceConfigFiles",	(ConfigValue) ""},		// location of audit trace configuration files
 	{TYPE_INTEGER,		"MaxUserTraceLogSize",		(ConfigValue) 10},		// maximum size of user session trace log
 	{TYPE_INTEGER,		"FileSystemCacheSize",		(ConfigValue) 0},		// percent
 	{TYPE_STRING,		"Providers",				(ConfigValue) "Remote, " CURRENT_ENGINE ", Loopback"},
@@ -669,7 +669,7 @@ FB_UINT64 Config::getFileSystemCacheSize()
 	return (FB_UINT64)(SINT64) getDefaultConfig()->values[KEY_FILESYSTEM_CACHE_SIZE];
 }
 
-const char *Config::getAuditTraceConfigFile()
+const char *Config::getAuditTraceConfigFiles()
 {
 	return (const char*) getDefaultConfig()->values[KEY_TRACE_CONFIG];
 }

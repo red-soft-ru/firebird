@@ -29,7 +29,9 @@
 #define JRD_TRACECONFIGSTORAGE_H
 
 #include "../../common/classes/array.h"
+#include "../../common/classes/objects_array.h"
 #include "../../common/classes/fb_string.h"
+#include "../../common/classes/fb_pair.h"
 #include "../../common/classes/init.h"
 #include "../../common/isc_s_proto.h"
 #include "../../jrd/trace/TraceSession.h"
@@ -68,12 +70,16 @@ public:
 
 	void shutdown();
 private:
+	typedef Firebird::Pair<Firebird::Full<Firebird::string,
+		Firebird::PathName> > SystemSession;
+	typedef Firebird::ObjectsArray<SystemSession> SystemSessions;
+
 	void mutexBug(int osErrorCode, const char* text);
 	bool initialize(Firebird::SharedMemoryBase*, bool);
 
 	void checkFile();
 	void touchFile();
-	void getSystemConfigPath(Firebird::PathName& configFileName);
+	void getSystemConfigPaths(SystemSessions& systemSessions);
 	void updateSystemConfig();
 
 	class TouchFile FB_FINAL :
