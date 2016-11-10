@@ -184,6 +184,7 @@
     <ClCompile Include="..\..\..\src\utilities\ntrace\traceplugin.cpp" />
     <ClCompile Include="..\..\..\src\utilities\ntrace\TracePluginImpl.cpp" />
     <ClCompile Include="..\..\..\src\utilities\ntrace\TraceUnicodeUtils.cpp" />
+    <ClCompile Include="..\..\..\src\utilities\ntrace\compress.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\utilities\ntrace\LogPacketBuilder.h" />
