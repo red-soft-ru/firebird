@@ -276,7 +276,7 @@ inline bool checkGCActive(thread_db* tdbb, record_param* rpb, int& state)
 	if (!LCK_lock(tdbb, &temp_lock, LCK_SR, LCK_NO_WAIT))
 	{
 		rpb->rpb_transaction_nr = LCK_read_data(tdbb, &temp_lock);
-		state = TRA_pc_active(tdbb, rpb->rpb_transaction_nr) ? tra_precommitted : tra_active;
+		state = tra_active;
 		return true;
 	}
 
@@ -621,6 +621,8 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 		if (rpb->rpb_flags & rpb_delta)
 			rpb->rpb_prior = data;
 	}
+
+	gcLockGuard.release();
 
 	if (samePage)
 	{

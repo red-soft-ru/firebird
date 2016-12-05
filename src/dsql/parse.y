@@ -593,7 +593,7 @@ using namespace Firebird;
 
 %token <metaNamePtr> CUME_DIST
 %token <metaNamePtr> DEFINER
-%token <metaNamePtr> ERROR_MESSAGE
+%token <metaNamePtr> MESSAGE
 %token <metaNamePtr> EXCLUDE
 %token <metaNamePtr> FOLLOWING
 %token <metaNamePtr> INVOKER
@@ -603,6 +603,7 @@ using namespace Firebird;
 %token <metaNamePtr> PRECEDING
 %token <metaNamePtr> PRIVILEGE
 %token <metaNamePtr> RANGE
+%token <metaNamePtr> RDB_ERROR
 %token <metaNamePtr> RDB_ROLE_IN_USE
 %token <metaNamePtr> RDB_SYSTEM_PRIVILEGE
 %token <metaNamePtr> SECURITY
@@ -2096,9 +2097,12 @@ gtt_ops($createRelationNode)
 %type gtt_op(<createRelationNode>)
 gtt_op($createRelationNode)
 	: // nothing by default. Will be set "on commit delete rows" in dsqlPass
-	| sql_security_clause	{ $createRelationNode->ssDefiner = $1; }
-	| ON COMMIT DELETE ROWS		{ setClause($createRelationNode->relationType, "ON COMMIT DELETE ROWS", rel_global_temp_delete); }
-	| ON COMMIT PRESERVE ROWS	{ setClause($createRelationNode->relationType, "ON COMMIT PRESERVE ROWS", rel_global_temp_preserve); }
+	| sql_security_clause
+		{ setClause(static_cast<BaseNullable<bool>&>($createRelationNode->ssDefiner), "SQL SECURITY", $1); }
+	| ON COMMIT DELETE ROWS
+		{ setClause($createRelationNode->relationType, "ON COMMIT DELETE ROWS", rel_global_temp_delete); }
+	| ON COMMIT PRESERVE ROWS
+		{ setClause($createRelationNode->relationType, "ON COMMIT PRESERVE ROWS", rel_global_temp_preserve); }
 	;
 
 %type <stringPtr> external_file
@@ -4016,7 +4020,6 @@ keyword_or_column
 	| REGR_SXY
 	| REGR_SYY
 	| RETURN
-	| RDB_RECORD_VERSION
 	| ROW
 	| SCROLL
 	| SQLSTATE
@@ -4432,7 +4435,7 @@ non_charset_simple_type
 				$$->length = sizeof(GDS_TIMESTAMP);
 			}
 			else if (client_dialect == SQL_DIALECT_V6_TRANSITION)
-				yyabandon(-104, isc_transitional_date);
+				yyabandon(YYPOSNARG(1), -104, isc_transitional_date);
 			else
 			{
 				$$->dtype = dtype_sql_date;
@@ -4644,7 +4647,7 @@ prec_scale
 			$$ = newNode<dsql_fld>();
 
 			if ($2 < 1 || $2 > 18)
-				yyabandon(-842, isc_precision_err);	// Precision must be between 1 and 18.
+				yyabandon(YYPOSNARG(2), -842, isc_precision_err);	// Precision must be between 1 and 18.
 
 			if ($2 > 9)
 			{
@@ -4694,10 +4697,10 @@ prec_scale
 			$$ = newNode<dsql_fld>();
 
 			if ($2 < 1 || $2 > 18)
-				yyabandon (-842, isc_precision_err);	// Precision should be between 1 and 18
+				yyabandon(YYPOSNARG(2), -842, isc_precision_err);	// Precision should be between 1 and 18
 
 			if ($4 > $2 || $4 < 0)
-				yyabandon (-842, isc_scale_nogt);	// Scale must be between 0 and precision
+				yyabandon(YYPOSNARG(4), -842, isc_scale_nogt);	// Scale must be between 0 and precision
 
 			if ($2 > 9)
 			{
@@ -6949,11 +6952,24 @@ internal_info
 		{ $$ = newNode<InternalInfoNode>(MAKE_const_slong(INFO_TYPE_SQLSTATE)); }
 	| ROW_COUNT
 		{ $$ = newNode<InternalInfoNode>(MAKE_const_slong(INFO_TYPE_ROWS_AFFECTED)); }
-	| EXCEPTION
-		{ $$ = newNode<InternalInfoNode>(MAKE_const_slong(INFO_TYPE_EXCEPTION)); }
-	| ERROR_MESSAGE
-		{ $$ = newNode<InternalInfoNode>(MAKE_const_slong(INFO_TYPE_ERROR_MSG)); }
+	| RDB_ERROR '(' error_context ')'
+		{ $$ = newNode<InternalInfoNode>(MAKE_const_slong($3)); }
 	;
+
+%type <int32Val> error_context
+error_context
+	: GDSCODE
+		{ $$ = INFO_TYPE_GDSCODE; }
+	| SQLCODE
+		{ $$ = INFO_TYPE_SQLCODE; }
+	| SQLSTATE
+		{ $$ = INFO_TYPE_SQLSTATE; }
+	| EXCEPTION
+		{ $$ = INFO_TYPE_EXCEPTION; }
+	| MESSAGE
+		{ $$ = INFO_TYPE_ERROR_MSG; }
+	;
+
 
 %type <intlStringPtr> sql_string
 sql_string
@@ -6988,7 +7004,7 @@ nonneg_short_integer
 	: NUMBER
 		{
 			if ($1 > SHRT_POS_MAX)
-				yyabandon(-842, isc_expec_short);	// Short integer expected
+				yyabandon(YYPOSNARG(1), -842, isc_expec_short);	// Short integer expected
 
 			$$ = $1;
 		}
@@ -6999,7 +7015,7 @@ neg_short_integer
 	: NUMBER
 		{
 			if ($1 > SHRT_NEG_MAX)
-				yyabandon(-842, isc_expec_short);	// Short integer expected
+				yyabandon(YYPOSNARG(1), -842, isc_expec_short);	// Short integer expected
 
 			$$ = $1;
 		}
@@ -7010,7 +7026,7 @@ pos_short_integer
 	: nonneg_short_integer
 		{
 			if ($1 == 0)
-				yyabandon(-842, isc_expec_positive);	// Positive number expected
+				yyabandon(YYPOSNARG(1), -842, isc_expec_positive);	// Positive number expected
 
 			$$ = $1;
 		}
@@ -7021,7 +7037,7 @@ unsigned_short_integer
 	: NUMBER
 		{
 			if ($1 > SHRT_UNSIGNED_MAX)
-				yyabandon(-842, isc_expec_ushort);	// Unsigned short integer expected
+				yyabandon(YYPOSNARG(1), -842, isc_expec_ushort);	// Unsigned short integer expected
 
 			$$ = $1;
 		}
@@ -7990,7 +8006,6 @@ non_reserved_word
 	| CONTAINING
 	| CSTRING
 	| DATABASE
-//	| DB_KEY
 	| DESC
 	| DO
 	| DOMAIN
@@ -8065,8 +8080,6 @@ non_reserved_word
 	| PACKAGE
 	| PARTITION
 	| PRIOR
-	| RDB_GET_CONTEXT
-	| RDB_SET_CONTEXT
 	| RELATIVE
 	| DENSE_RANK
 	| FIRST_VALUE
@@ -8085,18 +8098,16 @@ non_reserved_word
 	| TRUSTED
 	| CUME_DIST				// added in FB 4.0
 	| DEFINER
-	| ERROR_MESSAGE
 	| EXCLUDE
 	| FOLLOWING
 	| INVOKER
+	| MESSAGE
 	| NTILE
 	| OTHERS
 	| PERCENT_RANK
 	| PRECEDING
 	| PRIVILEGE
 	| RANGE
-	| RDB_ROLE_IN_USE
-	| RDB_SYSTEM_PRIVILEGE
 	| SECURITY
 	| SQL
 	| SYSTEM

@@ -170,20 +170,30 @@ SQLSTATE (FB 2.5)
     1. SQLSTATE always evaluates to NULL outside the exception handling block.
 
 
-EXCEPTION (FB 4.0)
+RDB$ERROR (FB 4.0)
 ------------------
 
   Function:
-    Returns name of the active user-defined exception.
+    Returns specific context of the active exception.
 
   Author:
     Dmitry Yemanov <dimitr@firebirdsql.org>
 
   Syntax rules:
-    EXCEPTION
+    RDB$ERROR ( context )
+    context ::= { GDSCODE | SQLCODE | SQLSTATE | EXCEPTION | MESSAGE }
+
+	GDSCODE, SQLCODE, SQLSTATE - see above
+
+	EXCEPTION : VARCHAR(63) CHARACTER SET UTF8 
+	  Returns name of the active user-defined exception
+	  or NULL if active exception is a system one
+
+	MESSAGE : VARCHAR(1024) CHARACTER SET UTF8
+	  Returns interpreted text for the active exception
 
   Type:
-    VARCHAR(63) CHARACTER SET UTF8
+    Depends on context
 
   Scope:
     PSQL, context of the exception handling block.
@@ -192,41 +202,8 @@ EXCEPTION (FB 4.0)
     BEGIN
       ...
     WHEN ANY DO
-      IF (EXCEPTION IS NOT NULL)
-        EXECUTE PROCEDURE P_USR_EXCEPTION(EXCEPTION);
-      ELSE
-        EXECUTE PROCEDURE P_SYS_EXCEPTION;
+      EXECUTE PROCEDURE P_LOG_EXCEPTION(RDB$ERROR(MESSAGE));
     END
 
   Note(s):
-    1. EXCEPTION always contains NULL outside the exception handling block.
-    2. If system exception is thrown, EXCEPTION also contains NULL.
-
-
-ERROR_MESSAGE (FB 4.0)
-----------------------
-
-  Function:
-    Returns interpreted text for the active exception.
-
-  Author:
-    Dmitry Yemanov <dimitr@firebirdsql.org>
-
-  Syntax rules:
-    ERROR_MESSAGE
-
-  Type:
-    VARCHAR(1024) CHARACTER SET UTF8
-
-  Scope:
-    PSQL, context of the exception handling block.
-
-  Example(s):
-    BEGIN
-      ...
-    WHEN ANY DO
-      EXECUTE PROCEDURE P_LOG_EXCEPTION(ERROR_MESSAGE);
-    END
-
-  Note(s):
-    1. ERROR_MESSAGE always contains NULL outside the exception handling block.
+    RDB$ERROR always contains NULL outside the exception handling block.

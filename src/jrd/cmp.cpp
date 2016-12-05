@@ -480,67 +480,6 @@ USHORT NodeCopier::getFieldId(const FieldNode* field)
 }
 
 
-// Expand dbkey for view.
-void CMP_expand_view_nodes(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
-	ValueExprNodeStack& stack, UCHAR blrOp, bool allStreams)
-{
-	SET_TDBB(tdbb);
-
-	DEV_BLKCHK(csb, type_csb);
-
-	// if the stream's dbkey should be ignored, do so
-
-	if (!allStreams && (csb->csb_rpt[stream].csb_flags & csb_no_dbkey))
-		return;
-
-	// if the stream references a view, follow map
-	const StreamType* map = csb->csb_rpt[stream].csb_map;
-	if (map)
-	{
-		++map;
-		while (*map)
-			CMP_expand_view_nodes(tdbb, csb, *map++, stack, blrOp, allStreams);
-		return;
-	}
-
-	// relation is primitive - make dbkey node
-
-	if (allStreams || csb->csb_rpt[stream].csb_relation)
-	{
-		RecordKeyNode* node = FB_NEW_POOL(csb->csb_pool) RecordKeyNode(csb->csb_pool, blrOp);
-		node->recStream = stream;
-		stack.push(node);
-	}
-}
-
-
-// Look at all RseNode's which are lower in scope than the RseNode which this field is
-// referencing, and mark them as variant - the rule is that if a field from one RseNode is
-// referenced within the scope of another RseNode, the inner RseNode can't be invariant.
-// This won't optimize all cases, but it is the simplest operating assumption for now.
-void CMP_mark_variant(CompilerScratch* csb, StreamType stream)
-{
-	if (csb->csb_current_nodes.isEmpty())
-		return;
-
-	for (ExprNode** node = csb->csb_current_nodes.end() - 1;
-		 node >= csb->csb_current_nodes.begin(); --node)
-	{
-		RseNode* rseNode = (*node)->as<RseNode>();
-
-		if (rseNode)
-		{
-			if (rseNode->containsStream(stream))
-				break;
-
-			rseNode->flags |= RseNode::FLAG_VARIANT;
-		}
-		else if (*node)
-			(*node)->nodFlags &= ~ExprNode::FLAG_INVARIANT;
-	}
-}
-
-
 // Copy items' information into appropriate node.
 ItemInfo* CMP_pass2_validation(thread_db* tdbb, CompilerScratch* csb, const Item& item)
 {

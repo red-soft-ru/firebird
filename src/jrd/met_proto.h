@@ -141,4 +141,5 @@ Firebird::MetaName MET_get_relation_field(Jrd::thread_db*, MemoryPool& csbPool,
 void		MET_update_partners(Jrd::thread_db*);
 int			MET_get_linger(Jrd::thread_db*);
 Nullable<bool>	MET_get_ss_definer(Jrd::thread_db*);
+
 #endif // JRD_MET_PROTO_H

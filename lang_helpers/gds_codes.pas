@@ -1657,6 +1657,8 @@ const
 	gds_dsql_window_cant_overr_frame     = 335545124;
 	isc_dsql_window_duplicate            = 335545125;
 	gds_dsql_window_duplicate            = 335545125;
+	isc_sql_too_long                     = 335545126;
+	gds_sql_too_long                     = 335545126;
 	isc_gfix_db_name                     = 335740929;
 	gds_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;

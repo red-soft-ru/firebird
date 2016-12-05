@@ -827,6 +827,7 @@ static const struct {
 	{"dsql_window_cant_overr_order", 335545123},
 	{"dsql_window_cant_overr_frame", 335545124},
 	{"dsql_window_duplicate", 335545125},
+	{"sql_too_long", 335545126},
 	{"gfix_db_name", 335740929},
 	{"gfix_invalid_sw", 335740930},
 	{"gfix_incmp_sw", 335740932},

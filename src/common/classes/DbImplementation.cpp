@@ -131,7 +131,7 @@ const UCHAR backwardTable[FB_NELEM(hardware) * FB_NELEM(operatingSystem)] =
 const UCHAR backEndianess[FB_NELEM(hardware)] =
 {
 //	Intel	AMD		Sparc	PPC		PPC64	MIPSEL	MIPS	ARM		IA64	s390	s390x	SH		SHEB	HPPA	Alpha	ARM64	PowerPC64el	M68k
-	0,		0,		1,		1,		1,		0,		1,		0,		0,		1,		1,		0,		1,		1,		0,		0,		0,		1
+	0,		0,		1,		1,		1,		0,		1,		0,		0,		1,		1,		0,		1,		1,		0,		0,		0,			1
 };
 
 } // anonymous namespace

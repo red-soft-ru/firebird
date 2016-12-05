@@ -234,7 +234,7 @@ private:
 	void check_bound(const char* const to, const char* const string);
 	void check_copy_incr(char*& to, const char ch, const char* const string);
 
-	void yyabandon(SLONG, ISC_STATUS);
+	void yyabandon(const Position& position, SLONG, ISC_STATUS);
 
 	Firebird::MetaName optName(Firebird::MetaName* name)
 	{

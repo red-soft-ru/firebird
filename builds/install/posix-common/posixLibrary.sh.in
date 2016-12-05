@@ -546,25 +546,37 @@ buildUninstallFile() {
 	then
 		cp $Manifest $MANIFEST_TXT
 	else
-		rm -f $MANIFEST_TXT
-		oldPath=".${default_prefix}"
-
-		for line in `grep "^${oldPath}" $Manifest | colrm 1 ${#oldPath}`
-		do
-			echo ".${fb_install_prefix}${line}" >>$MANIFEST_TXT
-		done
-
-		newPath=`dirname "${fb_install_prefix}"`
-		while [ ${#newPath} -gt 1 ]
-		do
-			echo ".${newPath}" >>$MANIFEST_TXT
-			newPath=`dirname $newPath`
-		done
+		newManifest $Manifest $MANIFEST_TXT
 	fi
 
 	[ -f @FB_SBINDIR@/$UninstallScript ] && chmod u=rx,go= @FB_SBINDIR@/$UninstallScript
 }
 
+
+#------------------------------------------------------------------------
+#  newManifest
+#  Create new manifest replacing default_prefix with fb_install_prefix
+#	in existing manifest
+
+newManifest() {
+	ExistingManifestFile=${1}
+	CreateManifestFile=${2}
+
+	rm -f $CreateManifestFile
+	oldPath=".${default_prefix}"
+
+	for line in `grep "^${oldPath}" $ExistingManifestFile | colrm 1 ${#oldPath}`
+	do
+		echo ".${fb_install_prefix}${line}" >>$CreateManifestFile
+	done
+
+	newPath=`dirname "${fb_install_prefix}"`
+	while [ ${#newPath} -gt 1 ]
+	do
+		echo ".${newPath}" >>$CreateManifestFile
+		newPath=`dirname $newPath`
+	done
+}
 
 #------------------------------------------------------------------------
 # Remove if only a link
@@ -715,14 +727,25 @@ archivePriorInstallSystemFiles() {
 	fi
 
 	tarArc=${ArchiveMainFile}.$tarExt
-
     oldPWD=`pwd`
+	distManifest=${oldPWD}/manifest.txt
     archiveFileList=""
+    archiveDelTemp=""
+
+	if [ "${fb_install_prefix}" != "${default_prefix}" ]
+	then
+		TmpFile=""
+		MakeTemp
+		newManifest $distManifest $TmpFile
+		distManifest=$TmpFile
+		archiveDelTemp=$TmpFile
+	fi
+
 
     cd /
 
-	if [ -f ${oldPWD}/manifest.txt ]; then
-		manifest=`cat ${oldPWD}/manifest.txt`
+	if [ -f ${distManifest} ]; then
+		manifest=`cat ${distManifest}`
 		for i in $manifest; do
 			if [ -f $i ]; then
 				i=${i#/}	# strip off leading /
@@ -730,6 +753,8 @@ archivePriorInstallSystemFiles() {
 			fi
 		done
 	fi
+
+	rm -f "$archiveDelTemp"
 
     DestFile=@FB_CONFDIR@
     if [ -e "$DestFile" ]
@@ -754,38 +779,40 @@ archivePriorInstallSystemFiles() {
         fi
     fi
 
-
-    for i in ibase.h ib_util.h
-    do
-        DestFile=usr/include/$i
-        if [ -e $DestFile ]; then
-			if [ ! "`echo $archiveFileList | grep $DestFile`" ]; then
-            	archiveFileList="$archiveFileList $DestFile"
-			fi
-        fi
-    done
-
-    for i in libib_util.@SHRLIB_EXT@ libfbclient.@SHRLIB_EXT@*
-	do
-		for DestFile in usr/lib/$i
-	    do
-        	if [ -e $DestFile ]; then
+	if [ "${fb_install_prefix}" = "${default_prefix}" ]
+	then
+	    for i in ibase.h ib_util.h
+    	do
+        	DestFile=usr/include/$i
+	        if [ -e $DestFile ]; then
 				if [ ! "`echo $archiveFileList | grep $DestFile`" ]; then
-    	        	archiveFileList="$archiveFileList $DestFile"
+        	    	archiveFileList="$archiveFileList $DestFile"
 				fi
-        	fi
-		done
-    done
+	        fi
+    	done
 
-    for i in usr/sbin/rcfirebird etc/init.d/firebird etc/rc.d/init.d/firebird
-    do
-        DestFile=./$i
-        if [ -e $DestFile ]; then
-			if [ ! "`echo $archiveFileList | grep $DestFile`" ]; then
-            	archiveFileList="$archiveFileList $DestFile"
-			fi
-        fi
-    done
+	    for i in libib_util.@SHRLIB_EXT@ libfbclient.@SHRLIB_EXT@*
+		do
+			for DestFile in usr/lib/$i
+			    do
+        		if [ -e $DestFile ]; then
+					if [ ! "`echo $archiveFileList | grep $DestFile`" ]; then
+    	        		archiveFileList="$archiveFileList $DestFile"
+					fi
+    	    	fi
+			done
+	    done
+
+	    for i in usr/sbin/rcfirebird etc/init.d/firebird etc/rc.d/init.d/firebird
+    	do
+        	DestFile=./$i
+	        if [ -e $DestFile ]; then
+				if [ ! "`echo $archiveFileList | grep $DestFile`" ]; then
+        	    	archiveFileList="$archiveFileList $DestFile"
+				fi
+	        fi
+    	done
+    fi
 
     if [ ! -z "$archiveFileList" ]
     then

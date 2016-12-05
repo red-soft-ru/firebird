@@ -363,9 +363,11 @@ Notes:
     1) WEEKDAY and YEARDAY cannot be used. It doesn't make sense.
     2) YEAR, MONTH and DAY could not be used with time values.
     3) All timestamp_part values could be used with timestamp values.
-    4) When using hour, minute, second and millisecond for DATEADD and dates, the quantity added or
+    4) When using HOUR, MINUTE, SECOND and MILLISECOND for DATEADD and dates, the quantity added or
         subtracted should account at least for one day to produce effect (IE adding 23 hours to a date
         doesn't increment it).
+    5) When using YEAR or MONTH and the input day is greater than the maximum possible day in the
+       result year/month, the result day is returned in the last day of the result year/month.
 
 Example:
     select dateadd(-1 day to current_date) as yesterday

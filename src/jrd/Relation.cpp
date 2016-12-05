@@ -73,16 +73,8 @@ RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool a
 			return 0;
 
 		RelationPages* newPages = rel_pages_free;
-		if (!newPages)
-		{
-			const size_t BULK_ALLOC = 8;
-
-			RelationPages* allocatedPages = newPages =
-				FB_NEW_POOL(*rel_pool) RelationPages[BULK_ALLOC];
-
-			rel_pages_free = ++allocatedPages;
-			for (size_t i = 1; i < BULK_ALLOC - 1; i++, allocatedPages++)
-				allocatedPages->rel_next_free = allocatedPages + 1;
+		if (!newPages) {
+			newPages = FB_NEW_POOL(*rel_pool) RelationPages(*rel_pool);
 		}
 		else
 		{
@@ -527,5 +519,9 @@ void RelationPages::free(RelationPages*& nextFree)
 
 	rel_index_root = rel_data_pages = 0;
 	rel_slot_space = rel_pri_data_space = rel_sec_data_space = 0;
+	rel_last_free_pri_dp = 0;
 	rel_instance_id = 0;
+
+	dpMap.clear();
+	dpMapMark = 0;
 }

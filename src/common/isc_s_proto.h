@@ -47,7 +47,9 @@
 #ifdef LINUX
 // This hack fixes CORE-2896 - embedded connections fail on linux.
 // Looks like a lot of linux kernels are buggy when working with PRIO_INHERIT mutexes.
-//#undef HAVE_PTHREAD_MUTEXATTR_SETPROTOCOL
+// dimitr (10-11-2016): PRIO_INHERIT also causes undesired short-time sleeps (CPU idle 30-35%)
+// during context switches under concurrent load. Proved on linux kernels up to 4.8.
+#undef HAVE_PTHREAD_MUTEXATTR_SETPROTOCOL
 #endif
 
 

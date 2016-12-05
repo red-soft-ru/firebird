@@ -1423,7 +1423,7 @@ blb* blb::open2(thread_db* tdbb,
 				SecurityClass* s_class = SCL_get_class(tdbb, fld->fld_security_name.c_str());
 				if (s_class && !s_class->scl_blb_access)
 				{
-					SCL_check_access(tdbb, s_class, 0, 0, NULL, SCL_select, SCL_object_column, false, 
+					SCL_check_access(tdbb, s_class, 0, 0, NULL, SCL_select, SCL_object_column, false,
 						fld->fld_name, blob->blb_relation->rel_name);
 					s_class->scl_blb_access = true;
 				}

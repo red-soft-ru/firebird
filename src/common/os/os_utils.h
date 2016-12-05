@@ -173,6 +173,8 @@ namespace os_utils
 	}
 
 #ifndef WIN_NT
+
+#ifndef HAVE_FLOCK
 	inline int lockf(int fd, int cmd, off_t len)
 	{
 		int rc;
@@ -188,6 +190,7 @@ namespace os_utils
 
 		return rc;
 	}
+#endif
 
 	inline int mkstemp(char* templ)
 	{

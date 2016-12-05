@@ -589,35 +589,42 @@ public:
 
 	~MappingIpc()
 	{
+		shutdown();
+	}
+
+	void shutdown()
+	{
 		if (!sharedMemory)
 			return;
 
-		Guard gShared(this);
-
-		MappingHeader* sMem = sharedMemory->getHeader();
-
-		startupSemaphore.tryEnter(5);
-		sMem->process[process].flags &= ~MappingHeader::FLAG_ACTIVE;
-		(void)  // Ignore errors in cleanup
-            sharedMemory->eventPost(&sMem->process[process].notifyEvent);
-		cleanupSemaphore.tryEnter(5);
-
-		// Ignore errors in cleanup
-		sharedMemory->eventFini(&sMem->process[process].notifyEvent);
-		sharedMemory->eventFini(&sMem->process[process].callbackEvent);
-
-		bool found = false;
-		for (unsigned n = 0; n < sMem->processes; ++n)
 		{
-			if (sMem->process[n].flags & MappingHeader::FLAG_ACTIVE)
-			{
-				found = true;
-				break;
-			}
-		}
+			Guard gShared(this);
+			MappingHeader* sMem = sharedMemory->getHeader();
 
-		if (!found)
-			sharedMemory->removeMapFile();
+			startupSemaphore.tryEnter(5);
+			sMem->process[process].flags &= ~MappingHeader::FLAG_ACTIVE;
+			(void)  // Ignore errors in cleanup
+				sharedMemory->eventPost(&sMem->process[process].notifyEvent);
+			cleanupSemaphore.tryEnter(5);
+
+			// Ignore errors in cleanup
+			sharedMemory->eventFini(&sMem->process[process].notifyEvent);
+			sharedMemory->eventFini(&sMem->process[process].callbackEvent);
+
+			bool found = false;
+			for (unsigned n = 0; n < sMem->processes; ++n)
+			{
+				if (sMem->process[n].flags & MappingHeader::FLAG_ACTIVE)
+				{
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+				sharedMemory->removeMapFile();
+		}
+		sharedMemory = NULL;
 	}
 
 	void clearCache(const char* dbName, USHORT index)
@@ -1657,6 +1664,11 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, jrd_rel* relation)
 	}
 
 	return getData(relation);
+}
+
+void shutdownMappingIpc()
+{
+	mappingIpc->shutdown();
 }
 
 } // namespace Jrd

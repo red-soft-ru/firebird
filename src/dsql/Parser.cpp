@@ -437,7 +437,7 @@ int Parser::yylexAux()
 		check_bound(p, string);
 
 		if (p > string + maxByteLength || p > string + maxCharLength)
-			yyabandon(-104, isc_dyn_name_longer);
+			yyabandon(yyposn, -104, isc_dyn_name_longer);
 
 		*p = 0;
 
@@ -519,7 +519,7 @@ int Parser::yylexAux()
 			{
 				if (buffer != string)
 					gds__free (buffer);
-				yyabandon (-104, isc_invalid_string_constant);
+				yyabandon(yyposn, -104, isc_invalid_string_constant);
 			}
 			else if (client_dialect >= SQL_DIALECT_V6)
 			{
@@ -527,19 +527,19 @@ int Parser::yylexAux()
 				{
 					if (buffer != string)
 						gds__free (buffer);
-					yyabandon(-104, isc_token_too_long);
+					yyabandon(yyposn, -104, isc_token_too_long);
 				}
 				else if (p > &buffer[MAX_SQL_IDENTIFIER_LEN])
 				{
 					if (buffer != string)
 						gds__free (buffer);
-					yyabandon(-104, isc_dyn_name_longer);
+					yyabandon(yyposn, -104, isc_dyn_name_longer);
 				}
 				else if (p - buffer == 0)
 				{
 					if (buffer != string)
 						gds__free (buffer);
-					yyabandon(-104, isc_dyn_zero_len_id);
+					yyabandon(yyposn, -104, isc_dyn_zero_len_id);
 				}
 
 				Attachment* const attachment = tdbb->getAttachment();
@@ -548,7 +548,7 @@ int Parser::yylexAux()
 					name.length(), (const UCHAR*) name.c_str(), true);
 
 				if (name.length() > maxByteLength || charLength > maxCharLength)
-					yyabandon(-104, isc_dyn_name_longer);
+					yyabandon(yyposn, -104, isc_dyn_name_longer);
 
 				yylval.metaNamePtr = FB_NEW_POOL(pool) MetaName(pool, name);
 
@@ -1103,7 +1103,7 @@ int Parser::yylexAux()
 		*p = 0;
 
 		if (p > &string[maxByteLength] || p > &string[maxCharLength])
-			yyabandon(-104, isc_dyn_name_longer);
+			yyabandon(yyposn, -104, isc_dyn_name_longer);
 
 		const MetaName str(string, p - string);
 		const Keyword* const keyVer = keywordsMap->get(str);
@@ -1206,7 +1206,7 @@ void Parser::yyerrorIncompleteCmd()
 void Parser::check_bound(const char* const to, const char* const string)
 {
 	if ((to - string) >= Parser::MAX_TOKEN_LEN)
-		yyabandon(-104, isc_token_too_long);
+		yyabandon(yyposn, -104, isc_token_too_long);
 }
 
 void Parser::check_copy_incr(char*& to, const char ch, const char* const string)
@@ -1216,7 +1216,7 @@ void Parser::check_copy_incr(char*& to, const char ch, const char* const string)
 }
 
 
-void Parser::yyabandon(SLONG sql_code, ISC_STATUS error_symbol)
+void Parser::yyabandon(const Position& position, SLONG sql_code, ISC_STATUS error_symbol)
 {
 /**************************************
  *
@@ -1229,6 +1229,8 @@ void Parser::yyabandon(SLONG sql_code, ISC_STATUS error_symbol)
  *
  **************************************/
 
-	ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(sql_code) <<
-			  Arg::Gds(error_symbol));
+	ERRD_post(
+		Arg::Gds(isc_sqlerr) << Arg::Num(sql_code) << Arg::Gds(error_symbol) <<
+		Arg::Gds(isc_dsql_line_col_error) <<
+			Arg::Num(position.firstLine) << Arg::Num(position.firstColumn));
 }

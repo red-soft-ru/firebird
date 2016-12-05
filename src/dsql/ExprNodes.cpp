@@ -65,6 +65,103 @@
 using namespace Firebird;
 using namespace Jrd;
 
+namespace
+{
+	// Expand DBKEY for view
+	void expandViewNodes(thread_db* tdbb, CompilerScratch* csb, StreamType stream,
+						 ValueExprNodeStack& stack, UCHAR blrOp)
+	{
+		const CompilerScratch::csb_repeat* const csb_tail = &csb->csb_rpt[stream];
+
+		// If the stream's dbkey should be ignored, do so
+
+		if (csb_tail->csb_flags & csb_no_dbkey)
+			return;
+
+		// If the stream references a view, follow map
+
+		const StreamType* map = csb_tail->csb_map;
+		if (map)
+		{
+			++map;
+
+			while (*map)
+				expandViewNodes(tdbb, csb, *map++, stack, blrOp);
+
+			return;
+		}
+
+		// Relation is primitive - make DBKEY node
+
+		if (csb_tail->csb_relation)
+		{
+			RecordKeyNode* node = FB_NEW_POOL(csb->csb_pool) RecordKeyNode(csb->csb_pool, blrOp);
+			node->recStream = stream;
+			stack.push(node);
+		}
+	}
+
+	// Try to expand the given stream. If it's a view reference, collect its base streams
+	// (the ones directly residing in the FROM clause) and recurse.
+	void expandViewStreams(CompilerScratch* csb, StreamType stream, SortedStreamList& streams)
+	{
+		const CompilerScratch::csb_repeat* const csb_tail = &csb->csb_rpt[stream];
+
+		const RseNode* const rse =
+			csb_tail->csb_relation ? csb_tail->csb_relation->rel_view_rse : NULL;
+
+		// If we have a view, collect its base streams and remap/expand them.
+
+		if (rse)
+		{
+			const StreamType* const map = csb_tail->csb_map;
+			fb_assert(map);
+
+			StreamList viewStreams;
+			rse->computeRseStreams(viewStreams);
+
+			for (StreamType* iter = viewStreams.begin(); iter != viewStreams.end(); ++iter)
+			{
+				// Remap stream and expand it recursively
+				expandViewStreams(csb, map[*iter], streams);
+			}
+
+			return;
+		}
+
+		// Otherwise, just add the current stream to the list.
+
+		if (!streams.exist(stream))
+			streams.add(stream);
+	}
+
+	// Look at all RSEs which are lower in scope than the RSE which this field is
+	// referencing, and mark them as variant - the rule is that if a field from one RSE is
+	// referenced within the scope of another RSE, the inner RSE can't be invariant.
+	// This won't optimize all cases, but it is the simplest operating assumption for now.
+	void markVariant(CompilerScratch* csb, StreamType stream)
+	{
+		if (csb->csb_current_nodes.isEmpty())
+			return;
+
+		for (ExprNode** node = csb->csb_current_nodes.end() - 1;
+			 node >= csb->csb_current_nodes.begin(); --node)
+		{
+			RseNode* const rseNode = (*node)->as<RseNode>();
+
+			if (rseNode)
+			{
+				if (rseNode->containsStream(stream))
+					break;
+
+				rseNode->flags |= RseNode::FLAG_VARIANT;
+			}
+			else if (*node)
+				(*node)->nodFlags &= ~ExprNode::FLAG_INVARIANT;
+		}
+	}
+}
+
 namespace Jrd {
 
 
@@ -4119,7 +4216,7 @@ ValueExprNode* DerivedExprNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	{
 #ifdef CMP_DEBUG
 		csb->dump("remap nod_derived_expr:\n");
-		for (const auto i : node->streamList)
+		for (const auto i : node->internalStreamList)
 			csb->dump("\t%d: %d -> %d\n", i, i, copier.remap[i]);
 #endif
 
@@ -4134,33 +4231,32 @@ ValueExprNode* DerivedExprNode::copy(thread_db* tdbb, NodeCopier& copier) const
 
 ValueExprNode* DerivedExprNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
-	ValueExprNodeStack stack;
+	ValueExprNode::pass1(tdbb, csb);
 
 #ifdef CMP_DEBUG
 	csb->dump("expand nod_derived_expr:");
-	for (const auto i : streamList)
+	for (const auto i : internalStreamList)
 		csb->dump(" %d", i);
 	csb->dump("\n");
 #endif
 
+	SortedStreamList newStreams;
+
 	for (const auto i : internalStreamList)
 	{
-		CMP_mark_variant(csb, i);
-		CMP_expand_view_nodes(tdbb, csb, i, stack, blr_dbkey, true);
+		markVariant(csb, i);
+		expandViewStreams(csb, i, newStreams);
 	}
 
-	internalStreamList.clear();
-
 #ifdef CMP_DEBUG
-	for (ExprValueNodeStack::iterator i(stack); i.hasData(); ++i)
-		csb->dump(" %d", i.object()->as<RecordKeyNode>()->recStream);
+	for (const auto i : newStreams)
+		csb->dump(" %d", i);
 	csb->dump("\n");
 #endif
 
-	for (ValueExprNodeStack::iterator i(stack); i.hasData(); ++i)
-		internalStreamList.add(i.object()->as<RecordKeyNode>()->recStream);
+	internalStreamList.assign(newStreams.begin(), newStreams.getCount());
 
-	return ValueExprNode::pass1(tdbb, csb);
+	return this;
 }
 
 ValueExprNode* DerivedExprNode::pass2(thread_db* tdbb, CompilerScratch* csb)
@@ -5479,7 +5575,7 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
 	StreamType stream = fieldStream;
 
-	CMP_mark_variant(csb, stream);
+	markVariant(csb, stream);
 
 	CompilerScratch::csb_repeat* tail = &csb->csb_rpt[stream];
 	jrd_rel* relation = tail->csb_relation;
@@ -5673,21 +5769,12 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 		if (!view_refs)
 		{
-			ValueExprNodeStack stack;
-			CMP_expand_view_nodes(tdbb, csb, stream, stack, blr_dbkey, true);
-			const size_t streamCount = stack.getCount();
+			DerivedExprNode* derivedNode =
+				FB_NEW_POOL(*tdbb->getDefaultPool()) DerivedExprNode(*tdbb->getDefaultPool());
+			derivedNode->arg = sub;
+			derivedNode->internalStreamList.add(stream);
 
-			if (streamCount)
-			{
-				DerivedExprNode* derivedNode =
-					FB_NEW_POOL(*tdbb->getDefaultPool()) DerivedExprNode(*tdbb->getDefaultPool());
-				derivedNode->arg = sub;
-
-				for (ValueExprNodeStack::iterator i(stack); i.hasData(); ++i)
-					derivedNode->internalStreamList.add(i.object()->as<RecordKeyNode>()->recStream);
-
-				sub = derivedNode;
-			}
+			sub = derivedNode;
 		}
 
 		doPass1(tdbb, csb, &sub);	// note: scope of AutoSetRestore
@@ -6038,7 +6125,9 @@ const InternalInfoNode::InfoAttr InternalInfoNode::INFO_TYPE_ATTRIBUTES[MAX_INFO
 	{"SQLCODE", DsqlCompilerScratch::FLAG_BLOCK},
 	{"ROW_COUNT", DsqlCompilerScratch::FLAG_BLOCK},
 	{"INSERTING/UPDATING/DELETING", DsqlCompilerScratch::FLAG_TRIGGER},
-	{"SQLSTATE", DsqlCompilerScratch::FLAG_BLOCK}
+	{"SQLSTATE", DsqlCompilerScratch::FLAG_BLOCK},
+	{"EXCEPTION", DsqlCompilerScratch::FLAG_BLOCK},
+	{"MESSAGE", DsqlCompilerScratch::FLAG_BLOCK}
 };
 
 InternalInfoNode::InternalInfoNode(MemoryPool& pool, ValueExprNode* aArg)
@@ -8576,13 +8665,13 @@ ValueExprNode* RecordKeyNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
 	ValueExprNode::pass1(tdbb, csb);
 
-	CMP_mark_variant(csb, recStream);
+	markVariant(csb, recStream);
 
 	if (!csb->csb_rpt[recStream].csb_map)
 		return this;
 
 	ValueExprNodeStack stack;
-	CMP_expand_view_nodes(tdbb, csb, recStream, stack, blrOp, false);
+	expandViewNodes(tdbb, csb, recStream, stack, blrOp);
 
 #ifdef CMP_DEBUG
 	csb->dump("expand RecordKeyNode: %d\n", recStream);

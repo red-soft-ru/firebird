@@ -88,27 +88,17 @@ static void store_big_record(thread_db*, record_param*, PageStack&, const UCHAR*
 
 namespace
 {
-	Lock* lock_gc_active(thread_db* tdbb, const jrd_tra* transaction, record_param* rpb)
+	inline Lock* lockGCActive(thread_db* tdbb, const jrd_tra* transaction, record_param* rpb)
 	{
 		AutoPtr<Lock> lock(FB_NEW_RPT(*tdbb->getDefaultPool(), 0)
 			Lock(tdbb, sizeof(SINT64), LCK_record_gc));
 		lock->setKey(((SINT64) rpb->rpb_page << 16) | rpb->rpb_line);
 		lock->lck_data = transaction->tra_number;
 
-		ThreadStatusGuard temp_status(tdbb);
-
-		if (LCK_lock(tdbb, lock, LCK_EX, LCK_NO_WAIT))
-			return lock.release();
-
-		if (lock->lck_data != LCK_read_data(tdbb, lock))
-		{
-			fb_assert(false);
-			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
-			temp_status.copyToOriginal();
+		if (!LCK_lock(tdbb, lock, LCK_EX, LCK_WAIT))
 			ERR_punt();
-		}
 
-		return NULL;
+		return lock.release();
 	}
 }
 
@@ -1390,9 +1380,37 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 	if (rpb->rpb_number.getValue() < 0)
 		return false;
 
-	// Find the next pointer page, data page, and record
+	RelationPages* relPages = rpb->rpb_relation->getPages(tdbb);
+
+	const ULONG dpSequence = rpb->rpb_number.getValue() / dbb->dbb_max_records;
+	ULONG page_number = relPages->getDPNumber(dpSequence);
+
+	if (page_number)
+	{
+		window->win_page = page_number;
+		data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, lock_type, pag_undefined);
+		const bool pageOk =
+			dpage->dpg_header.pag_type == pag_data &&
+			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_large | dpg_orphan)) &&
+			dpage->dpg_relation == rpb->rpb_relation->rel_id &&
+			dpage->dpg_sequence == dpSequence &&
+			(dpage->dpg_count > 0);
+
+		if (pageOk && get_header(window, line, rpb) &&
+			!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
+		{
+			return true;
+		}
+
+		CCH_RELEASE(tdbb, window);
+
+		if (pageOk)
+			return false;
+	}
+
+	// Find the pointer page, data page, and record
 	pointer_page* page = get_pointer_page(tdbb, rpb->rpb_relation,
-		rpb->rpb_relation->getPages(tdbb), window, pp_sequence, LCK_read);
+		relPages, window, pp_sequence, LCK_read);
 	if (!page)
 		return false;
 
@@ -1401,7 +1419,8 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 		"    record  %" ULONGFORMAT":%d\n", page->ppg_page[slot], line);
 #endif
 
-	const ULONG page_number = page->ppg_page[slot];
+	page_number = page->ppg_page[slot];
+	relPages->setDPNumber(dpSequence, page_number);
 	if (page_number)
 	{
 		CCH_HANDOFF(tdbb, window, page_number, lock_type, pag_data);
@@ -1614,6 +1633,51 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 		rpb->rpb_number = saveRecNo;
 	}
 
+	ULONG dpSequence = rpb->rpb_number.getValue() / dbb->dbb_max_records;
+	ULONG page_number = relPages->getDPNumber(dpSequence);
+
+	if (page_number)
+	{
+		fb_assert(window->win_page.getPageSpaceID() == relPages->rel_pg_space_id);
+
+		window->win_page = page_number;
+		const data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, lock_type, pag_undefined);
+		const bool pageOk =
+			dpage->dpg_header.pag_type == pag_data &&
+			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_large | dpg_orphan)) &&
+			dpage->dpg_relation == rpb->rpb_relation->rel_id &&
+			dpage->dpg_sequence == dpSequence &&
+			(dpage->dpg_count > 0);
+
+		if (pageOk)
+		{
+			for (; line < dpage->dpg_count; ++line)
+			{
+				if (get_header(window, line, rpb) &&
+					!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
+				{
+					if (sweeper && !rpb->rpb_b_page && rpb->rpb_transaction_nr <= oldest)
+						continue;
+
+					rpb->rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp,
+						line, slot, pp_sequence);
+					return true;
+				}
+			}
+		}
+
+		if (window->win_flags & WIN_large_scan)
+			CCH_RELEASE_TAIL(tdbb, window);
+		else if (window->win_flags & WIN_garbage_collector &&
+				 window->win_flags & WIN_garbage_collect)
+		{
+			CCH_RELEASE_TAIL(tdbb, window);
+			window->win_flags &= ~WIN_garbage_collect;
+		}
+		else
+			CCH_RELEASE(tdbb, window);
+	}
+
 	// Find the next pointer page, data page, and record
 
 	while (true)
@@ -1654,6 +1718,8 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 					}
 				}
 #endif
+				dpSequence = ppage->ppg_sequence * dbb->dbb_dp_per_pp + slot;
+				relPages->setDPNumber(dpSequence, page_number);
 				const data_page* dpage = (data_page*) CCH_HANDOFF(tdbb, window,
 									page_number, lock_type, pag_data);
 
@@ -2569,7 +2635,7 @@ static void fragment(thread_db* tdbb,
 
 	header->rhdf_flags |= rhd_gc_active;
 
-	AutoLock gcLockGuard(tdbb, lock_gc_active(tdbb, transaction, rpb));
+	AutoLock gcLockGuard(tdbb, lockGCActive(tdbb, transaction, rpb));
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_WRITES_INFO,
@@ -3133,6 +3199,29 @@ static rhd* locate_space(thread_db* tdbb,
 		}
 	}
 
+	if (type == DPM_primary && relPages->rel_last_free_pri_dp)
+	{
+		window->win_page = relPages->rel_last_free_pri_dp;
+		data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, LCK_write, pag_undefined);
+		const bool pageOk =
+			dpage->dpg_header.pag_type == pag_data &&
+			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_large | dpg_orphan)) &&
+			dpage->dpg_relation == rpb->rpb_relation->rel_id &&
+			//dpage->dpg_sequence == dpSequence &&
+			(dpage->dpg_count > 0);
+
+		if (pageOk)
+		{
+			UCHAR* space = find_space(tdbb, rpb, size, stack, record, type);
+			if (space)
+				return (rhd*)space;
+		}
+		else
+			CCH_RELEASE(tdbb, window);
+
+		relPages->rel_last_free_pri_dp = 0;
+	}
+
 	// Look for space anywhere
 
 	// Make few tries to lock consecutive data pages without waiting. In highly
@@ -3230,7 +3319,12 @@ static rhd* locate_space(thread_db* tdbb,
 				{
 					UCHAR* space = find_space(tdbb, rpb, size, stack, record, type);
 					if (space)
-						return (rhd*) space;
+					{
+						if (type == DPM_primary)
+							relPages->rel_last_free_pri_dp = dp_number;
+
+						return (rhd*)space;
+					}
 				}
 
 				ppLock = LCK_read;

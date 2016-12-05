@@ -826,6 +826,7 @@ static const struct {
 	{335545123, "42000"}, // 803 dsql_window_cant_overr_order
 	{335545124, "42000"}, // 804 dsql_window_cant_overr_frame
 	{335545125, "42000"}, // 805 dsql_window_duplicate
+	{335545126, "54001"}, // 806 sql_too_long
 	{335740929, "00000"}, //   1 gfix_db_name
 	{335740930, "00000"}, //   2 gfix_invalid_sw
 	{335740932, "00000"}, //   4 gfix_incmp_sw

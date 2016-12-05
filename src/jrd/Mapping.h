@@ -53,6 +53,8 @@ void clearMappingCache(const char* dbName, USHORT index);
 const USHORT MAPPING_CACHE = 0;
 const USHORT SYSTEM_PRIVILEGES_CACHE = 1;
 
+void shutdownMappingIpc();
+
 class GlobalMappingScan: public VirtualTableScan
 {
 public:

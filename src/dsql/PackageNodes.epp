@@ -591,7 +591,6 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 				PKG.RDB$SQL_SECURITY.NULL = FALSE;
 				PKG.RDB$SQL_SECURITY = ssDefiner.value ? FB_TRUE : FB_FALSE;
 			}
-
 		END_MODIFY
 
 		owner = PKG.RDB$OWNER_NAME;

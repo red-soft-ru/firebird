@@ -3630,7 +3630,8 @@ void jrd_tra::rollforwardSavepoint(thread_db* tdbb)
 void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id)
 {
 	USHORT rel_id = blob_id->bid_internal.bid_relation_id;
-	if ((tra_attachment->isGbak()) ||
+
+	if (tra_attachment->isGbak() ||
 		tra_attachment->att_user->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE) ||
 		rel_id == 0)
 	{
@@ -3641,14 +3642,17 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id)
 	{
 		vec<jrd_rel*>* vector = tra_attachment->att_relations;
 		jrd_rel* blb_relation;
+
 		if (rel_id < vector->count() &&	(blb_relation = (*vector)[rel_id]))
 		{
 			if (blb_relation->rel_security_name.isEmpty())
 				MET_scan_relation(tdbb, blb_relation);
+
 			SecurityClass* s_class = SCL_get_class(tdbb, blb_relation->rel_security_name.c_str());
+
 			if (s_class && !s_class->scl_blb_access)
 			{
-				SCL_check_access(tdbb, s_class, 0, 0, NULL, SCL_select, SCL_object_table, false, 
+				SCL_check_access(tdbb, s_class, 0, 0, NULL, SCL_select, SCL_object_table, false,
 					blb_relation->rel_name);
 				s_class->scl_blb_access = true;
 			}

@@ -270,12 +270,15 @@ namespace
 	{
 		LocalStatus ls;
 		CheckStatusWrapper s(&ls);
+
 		if (pluginLoaderConfig)
 		{
 			const ConfigFile::Parameter* p = pluginLoaderConfig->findParameter("Config");
+
 			if (p)
 			{
 				RefPtr<ConfigFile> configSection(findInPluginsConf("Config", p->value.c_str()));
+
 				if (configSection.hasData())
 				{
 					IConfig* rc = FB_NEW ConfigAccess(configSection);
@@ -1026,7 +1029,7 @@ void PluginManager::registerPluginFactory(unsigned int interfaceType, const char
 		changeExtension(plugConfigFile, "conf");
 
 		ConfiguredPlugin* p = FB_NEW ConfiguredPlugin(RefPtr<PluginModule>(builtin), r,
-									findInPluginsConf("Plugin", defaultName), plugConfigFile, defaultName);
+			findInPluginsConf("Plugin", defaultName), plugConfigFile, defaultName);
 		p->addRef();  // Will never be unloaded
 		plugins->put(MapKey(interfaceType, defaultName), p);
 	}
@@ -1116,7 +1119,8 @@ IConfig* PluginManager::getConfig(CheckStatusWrapper* status, const char* filena
 	try
 	{
 		IConfig* rc = FB_NEW ConfigAccess(RefPtr<ConfigFile>(
-			FB_NEW_POOL(*getDefaultMemoryPool()) ConfigFile(*getDefaultMemoryPool(), filename, ConfigFile::HAS_SUB_CONF)));
+			FB_NEW_POOL(*getDefaultMemoryPool()) ConfigFile(*getDefaultMemoryPool(),
+				filename, ConfigFile::HAS_SUB_CONF)));
 		rc->addRef();
 		return rc;
 	}

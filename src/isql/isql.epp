@@ -367,7 +367,7 @@ static void frontend_load_parms(const TEXT* p, TEXT* parms[], TEXT* lparms[],
 static processing_state do_set_command(const TEXT*, bool*);
 static processing_state get_dialect(const char* const dialect_str,
 	char* const bad_dialect_buf, bool& bad_dialect);
-static processing_state get_statement(TEXT* const, const size_t, const TEXT*);
+static processing_state get_statement(Firebird::string&, const TEXT*);
 static bool get_numeric(const UCHAR*, USHORT, SSHORT*, SINT64*);
 static void print_set(const char* str, bool v);
 static processing_state print_sets();
@@ -3848,9 +3848,7 @@ static void do_isql()
 	// Read statements and process them from Ifp until the ret
 	// code tells us we are done
 
-	Firebird::Array<TEXT> stmt;
-	const size_t stmtLength = MAX_SQL_LENGTH;
-	TEXT* statement = stmt.getBuffer(stmtLength);
+	Firebird::string stmt;
 	processing_state ret;
 
 	bool done = false;
@@ -3916,7 +3914,7 @@ static void do_isql()
 			}
 		}
 
-		ret = get_statement(statement, stmtLength, sql_prompt);
+		ret = get_statement(stmt, sql_prompt);
 
 		// If there is no database yet, remind us of the need to connect
 
@@ -3938,7 +3936,7 @@ static void do_isql()
 		switch (ret)
 		{
 		case CONT:
-			if (process_statement(statement) == ps_ERR)
+			if (process_statement(stmt.c_str()) == ps_ERR)
 			{
 				Exit_value = FINI_ERROR;
 				if (!Interactive && setValues.BailOnError)
@@ -5117,8 +5115,7 @@ static processing_state get_dialect(const char* const dialect_str,
 }
 
 
-static processing_state get_statement(TEXT* const statement,
-							const size_t bufsize,
+static processing_state get_statement(Firebird::string& statement,
 							const TEXT* statement_prompt)
 {
 /**************************************
@@ -5144,13 +5141,10 @@ static processing_state get_statement(TEXT* const statement,
 	}
 
 	// Clear out statement buffer
-
-	TEXT* p = statement;
-	*p = '\0';
+	statement.resize(0);
 
 	// Set count of characters to zero
 
-	size_t count = 0;
 	size_t valuable_count = 0; // counter of valuable (non-space) chars
 	size_t comment_pos = 0; // position of block comment start
 	size_t non_comment_pos = 0; // position of char after block comment
@@ -5232,7 +5226,7 @@ static processing_state get_statement(TEXT* const statement,
 			}
 
 			// Catch the help ? without a terminator
-			if (*statement == '?' && count == 1)
+			if (statement.length() == 1 && statement[0] == '?')
 			{
 				c = 0;
 				done = true;
@@ -5262,7 +5256,8 @@ static processing_state get_statement(TEXT* const statement,
 
 		case '-':
 			// Could this the be start of a single-line comment.
-			if (state == normal && count > 0 && p[-1] == '-')
+			if (state == normal && statement.length() > 0 &&
+				statement[statement.length() - 1] == '-')
 			{
 				state = in_single_line_comment;
 				if (valuable_count == 1)
@@ -5275,10 +5270,11 @@ static processing_state get_statement(TEXT* const statement,
 			// not forward.
 			// Ignore possibilities of a comment beginning inside
 			// quoted strings.
-			if (state == normal && count > 0 && p[-1] == '/' && count != non_comment_pos)
+			if (state == normal && statement.length() > 0 &&
+				statement[statement.length() - 1] == '/' && statement.length() != non_comment_pos)
 			{
 				state = in_block_comment;
-				comment_pos = count - 1;
+				comment_pos = statement.length() - 1;
 				if (valuable_count == 1)
 					valuable_count = 0;
 			}
@@ -5289,10 +5285,11 @@ static processing_state get_statement(TEXT* const statement,
 			// Ignore possibilities of a comment ending inside
 			// quoted strings.
 			// Ignore things like /*/ since it isn't a block comment; only the start of it. Or end.
-			if (state == in_block_comment && count > 2 && p[-1] == '*' && count > comment_pos + 2)
+			if (state == in_block_comment && statement.length() > 2 &&
+				statement[statement.length() - 1] == '*' && statement.length() > comment_pos + 2)
 			{
 				state = normal;
-				non_comment_pos = count + 1; // mark start of non-comment to track this: /**/*
+				non_comment_pos = statement.length() + 1; // mark start of non-comment to track this: /**/*
 				valuable_count--; // This char is not valuable
 			}
 			break;
@@ -5303,8 +5300,7 @@ static processing_state get_statement(TEXT* const statement,
 				case normal:
 					if (lastChar == 'q' || lastChar == 'Q')
 					{
-						*p++ = lastChar = c;
-						count++;
+						statement += (lastChar = c);
 						altQuoteChar = c = getNextInputChar();
 
 						switch (altQuoteChar)
@@ -5353,12 +5349,12 @@ static processing_state get_statement(TEXT* const statement,
 				// one-char terminator or the beginning also match
 				(isqlGlob.Termlen == 1u ||
 				 (valuable_count >= term_length &&
-				  strncmp(p - term_length, isqlGlob.global_Term, term_length) == 0)))
+				  strncmp(&statement[statement.length() - term_length],
+				  	isqlGlob.global_Term, term_length) == 0)))
 			{
 				c = 0;
 				done = true;
-				p -= term_length;
-				count -= term_length;
+				statement.resize(statement.length() - term_length);
 			}
 		}
 
@@ -5371,42 +5367,27 @@ static processing_state get_statement(TEXT* const statement,
 			if (valuable_count == 1) // this is the first valuable char in stream
 			{
 				// ignore all previous crap
-				p = statement;
-				count = 0;
+				statement.resize(0);
 				non_comment_pos = 0;
 			}
 		}
 
-		*p++ = lastChar = c;
-		count++;
-
-		if (count > bufsize && !done)
-		{
-				ret = ERR_BUFFER_OVERFLOW;
-
-				// move some content to start of buffer just in case if
-				// the overflow has splitted terminator
-				count = MAX(isqlGlob.Termlen, 2u);
-				memcpy(statement, p - count, count);
-				p = statement + count;
-				*p = '\0';
-		}
-
+		statement += (lastChar = c);
 	}
 
 	// If this was a null statement, skip it
-	if (ret == CONT && !*statement)
+	if (ret == CONT && statement.isEmpty())
 		ret = SKIP;
 
 	if (ret == CONT)
-		ret = frontend(statement);
+		ret = frontend(statement.c_str());
 
 	if (ret == CONT)
 	{
 		// Place each non frontend statement in the temp file if we are reading
 		// from stdin.
 
-		Filelist->saveCommand(statement, isqlGlob.global_Term);
+		Filelist->saveCommand(statement.c_str(), isqlGlob.global_Term);
 	}
 
 	return ret;
