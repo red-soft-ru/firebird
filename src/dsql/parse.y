@@ -611,6 +611,7 @@ using namespace Firebird;
 %token <metaNamePtr> TIES
 %token <metaNamePtr> UNBOUNDED
 %token <metaNamePtr> WINDOW
+%token <metaNamePtr> ADAPTER
 
 // precedence declarations for expression evaluation
 
@@ -2061,14 +2062,18 @@ page_noise
 
 %type <createRelationNode> table_clause
 table_clause
-	: simple_table_name external_file
+	: simple_table_name external_file adapter_nullable
 			{
-				$<createRelationNode>$ = newNode<CreateRelationNode>($1, $2);
+				$<createRelationNode>$ = newNode<CreateRelationNode>($1, $2, $3);
 			}
-		'(' table_elements($3) ')' sql_security_clause
+		'(' table_elements($4) ')' sql_security_clause
 			{
-				$$ = $3;
-				$$->ssDefiner = $7;
+				$$ = $4;
+				$$->ssDefiner = $8;
+			}
+	| simple_table_name external_file adapter
+			{
+				$<createRelationNode>$ = newNode<CreateRelationNode>($1, $2, $3);
 			}
 	;
 
@@ -2106,6 +2111,17 @@ external_file
 	: /* nothing */					{ $$ = NULL; }
 	| EXTERNAL FILE utf_string		{ $$ = $3; }
 	| EXTERNAL utf_string			{ $$ = $2; }
+	;
+
+%type <stringPtr> adapter_nullable
+adapter_nullable
+	: /* nothing */					{ $$ = NULL; }
+	| ADAPTER utf_string			{ $$ = $2; }
+	;
+
+%type <stringPtr> adapter
+adapter
+	: ADAPTER utf_string			{ $$ = $2; }
 	;
 
 %type table_elements(<createRelationNode>)

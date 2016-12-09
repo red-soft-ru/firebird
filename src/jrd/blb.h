@@ -94,6 +94,8 @@ public:
 	ULONG getSegmentCount() const;
 	USHORT getFragmentSize() const;
 	USHORT getMaxSegment() const;
+	USHORT getClumpSize() const;
+	const bid* getBlobId() const;
 	// end inline
 
 	void	BLB_cancel(thread_db* tdbb);
@@ -121,6 +123,7 @@ public:
 	void toPageHeader(Ods::blh* header) const;
 	void getFromPage(USHORT length, const UCHAR* data);
 	void storeToPage(USHORT* length, Firebird::Array<UCHAR>& buffer, const UCHAR** data, void* stack);
+	void getExtBlob();
 
 private:
 	static blb* allocate_blob(thread_db*, jrd_tra*);
@@ -240,6 +243,16 @@ inline USHORT blb::getFragmentSize() const
 inline USHORT blb::getMaxSegment() const
 {
 	return blb_max_segment;
+}
+
+inline USHORT blb::getClumpSize() const
+{
+	return blb_clump_size;
+}
+
+inline const bid* blb::getBlobId() const
+{
+	return &blb_blob_id;
 }
 
 

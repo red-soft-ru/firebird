@@ -812,6 +812,12 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (-833, '42', '000', 0, 803, 'dsql_window_cant_overr_order', NULL, NULL)
 (-833, '42', '000', 0, 804, 'dsql_window_cant_overr_frame', NULL, NULL)
 (-833, '42', '000', 0, 805, 'dsql_window_duplicate', NULL, NULL)
+(-901, '22', '000', 0, 806, 'bad_ext_file', NULL, NULL)
+(-901, '42', '000', 0, 807, 'wrong_adp_fields_def', NULL, NULL)
+(-901, '42', '000', 0, 808, 'wrong_adp_field_name', NULL, NULL)
+(-901, '42', '000', 0, 809, 'wrong_adp_field_type', NULL, NULL)
+(-901, '22', '000', 0, 810, 'bad_ext_record', NULL, NULL)
+(-901, '42', '000', 0, 811, 'bad_adp_type', NULL, NULL)
 -- GFIX
 (-901, '00', '000', 3, 1, 'gfix_db_name', NULL, NULL)
 (-901, '00', '000', 3, 2, 'gfix_invalid_sw', NULL, NULL)

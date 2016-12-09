@@ -57,7 +57,7 @@ const ULONG LogPacketBuilder::getPacketSize() const {
 	return packetLength;
 }
 
-void LogPacketBuilder::growBuffer(size_t requiredSize) {
+void LogPacketBuilder::growBuffer(ntrace_size_t requiredSize) {
 	if (requiredSize < buffSize * 2)
 		requiredSize = buffSize * 2;
 	UCHAR* newBuffer = FB_NEW_POOL(*getDefaultMemoryPool()) UCHAR[requiredSize];
@@ -71,9 +71,9 @@ void LogPacketBuilder::growBuffer(size_t requiredSize) {
 }
 
 template <typename T>
-inline T* LogPacketBuilder::alloc(size_t count) {
-	size_t newStart = FB_ALIGN(packetLength, sizeof(T));
-	size_t newLength = newStart + sizeof(T) * count;
+inline T* LogPacketBuilder::alloc(ntrace_size_t count) {
+	ntrace_size_t newStart = FB_ALIGN(packetLength, sizeof(T));
+	ntrace_size_t newLength = newStart + sizeof(T) * count;
 	if (newLength > buffSize)
 		growBuffer(newLength);
 	packetLength = newLength;
@@ -129,7 +129,7 @@ void LogPacketBuilder::putUSHORT(USHORT value) {
 
 void LogPacketBuilder::putOffset() {
 	// packetLenght is changed inside alloc, so use "offset" var
-	size_t offset = FB_ALIGN(packetLength, sizeof(ntrace_size_t));
+	ntrace_size_t offset = FB_ALIGN(packetLength, sizeof(ntrace_size_t));
 	*alloc<ntrace_size_t>() = offset;
 }
 
@@ -152,4 +152,18 @@ void LogPacketBuilder::putDsc(const dsc* param) {
 	dest += sizeof(param->dsc_sub_type);
 
 	memcpy(dest, param->dsc_address, param->dsc_length);
+}
+
+void LogPacketBuilder::putParams(Firebird::ITraceParams* params) {
+	putOffset();
+	if (!params)
+	{
+		putCounter(0);
+		return;
+	}
+
+	const unsigned paramcount = params->getCount();
+	putCounter(paramcount);
+	for (unsigned i = 0; i < paramcount; i++)
+		putDsc(params->getParam(i));
 }

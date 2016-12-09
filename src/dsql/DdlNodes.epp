@@ -24,9 +24,11 @@
 #include "../dsql/BoolNodes.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
+#include "../jrd/Adapter.h"
 #include "../jrd/blr.h"
 #include "../jrd/btr.h"
 #include "../jrd/dyn.h"
+#include "../jrd/ext.h"
 #include "../jrd/flags.h"
 #include "../jrd/intl.h"
 #include "../jrd/jrd.h"
@@ -6264,7 +6266,8 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		}
 
 		if ((relation->rel_flags & REL_external) &&
-			(field->dtype == dtype_blob || field->dtype == dtype_array || field->dimensions))
+			((field->dtype == dtype_blob && dsqlScratch->adapter != ext_fbtrace) ||
+				field->dtype == dtype_array || field->dimensions))
 		{
 			const char* typeName = (field->dtype == dtype_blob ? "BLOB" : "ARRAY");
 
@@ -7209,6 +7212,7 @@ string CreateRelationNode::internalPrint(NodePrinter& printer) const
 	RelationNode::internalPrint(printer);
 
 	NODE_PRINT(printer, externalFile);
+	NODE_PRINT(printer, adapter);
 	NODE_PRINT(printer, relationType);
 
 	return "CreateRelationNode";
@@ -7218,6 +7222,69 @@ bool CreateRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
 	SCL_check_create_access(tdbb, SCL_object_table);
 	return true;
+}
+
+void CreateRelationNode::checkAdapterFields(const AdapterField* adp_fields)
+{
+	if (!adp_fields || clauses.isEmpty())
+		return;
+
+	for (NestConst<Clause>* i = clauses.begin(); i != clauses.end(); ++i)
+	{
+		if ((*i)->type != Clause::TYPE_ADD_COLUMN)
+			status_exception::raise(Arg::Gds(isc_wrong_adp_fields_def));
+
+		const dsql_fld* field = (static_cast<AddColumnClause*>(i->getObject()))->field;
+		bool found = false;
+		for (const AdapterField* adp_field = adp_fields;
+			adp_field->fld_name; adp_field++)
+		{
+			if (field->fld_name == adp_field->fld_name)
+			{
+				if (adp_field->fld_character_length == field->charLength &&
+					adp_field->fld_dtype == field->dtype)
+				{
+					found = true;
+					break;
+				}
+				else
+					status_exception::raise(Arg::Gds(isc_wrong_adp_field_type) << Arg::Str(field->fld_name));
+			}
+		}
+		if (!found)
+			status_exception::raise(Arg::Gds(isc_wrong_adp_field_name) << Arg::Str(field->fld_name));
+	}
+}
+
+void CreateRelationNode::defineAdapterFields(thread_db* tdbb, jrd_tra* transaction, 
+	const AdapterField* adp_fields, dsql_rel* relation)
+{
+	for (const AdapterField* adp_field = adp_fields; adp_field->fld_name; adp_field++)
+	{
+		dsql_fld* field = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_fld(*tdbb->getDefaultPool());
+		field->fld_name.assign(adp_field->fld_name);
+		field->flags |= FLD_nullable;
+		field->dtype = adp_field->fld_dtype;
+		field->charLength = adp_field->fld_character_length;
+		field->notNull = adp_field->fld_not_nullable;
+		field->length = adp_field->fld_length;
+		field->scale = adp_field->fld_scale;
+		field->subType = adp_field->fld_sub_type;
+		field->precision = adp_field->fld_precision;
+		field->fullDomain = false;
+		field->explicitCollation = false;
+
+		FieldDefinition fieldDefinition(*tdbb->getDefaultPool());
+		fieldDefinition.relationName = relation->rel_name;
+		fieldDefinition.name = field->fld_name;
+		fieldDefinition.position = adp_field->fld_id;
+
+		storeGlobalField(tdbb, transaction, fieldDefinition.fieldSource, field);
+		fieldDefinition.store(tdbb, transaction);
+
+		field->fld_next = relation->rel_fields;
+		relation->rel_fields = field;
+	}
 }
 
 void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -7276,6 +7343,29 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 			REL.RDB$EXTERNAL_FILE.NULL = FALSE;
 			strcpy(REL.RDB$EXTERNAL_FILE, externalFile->c_str());
 			REL.RDB$RELATION_TYPE = rel_external;
+		}
+
+		if (adapter)
+		{
+			if (adapter->length() >= sizeof(REL.RDB$ADAPTER))
+				status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+
+			BaseAdapter* adp = EXT_create_adapter(adapter->c_str(), 0, externalFile->c_str());
+			const AdapterField* adp_fields = adp->get_adapter_fields();
+
+			if (clauses.isEmpty())
+				if (!adp_fields)
+					status_exception::raise(Arg::Gds(isc_wrong_adp_fields_def));
+				else
+					defineAdapterFields(tdbb, transaction, adp_fields, dsqlScratch->relation);
+			else
+				if (adp_fields)
+					checkAdapterFields(adp_fields);
+
+			dsqlScratch->adapter = adp->adapter_type;
+
+			REL.RDB$ADAPTER.NULL = FALSE;
+			strcpy(REL.RDB$ADAPTER, adapter->c_str());
 		}
 	}
 	END_STORE

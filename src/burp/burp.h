@@ -272,6 +272,7 @@ enum att_type {
 	att_relation_ext_file_name, // name of file for external tables
 	att_relation_type,
 	att_relation_sql_security,
+	att_relation_adapter,
 
 	// Field attributes (used for both global and local fields)
 

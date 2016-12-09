@@ -913,6 +913,12 @@ Data source : @4', NULL, NULL)
 ('dsql_window_cant_overr_order', NULL, 'ExprNodes.cpp', NULL, 0, 803, NULL, 'Cannot use ORDER BY clause while overriding the window @1 which already has an ORDER BY clause', NULL, NULL);
 ('dsql_window_cant_overr_frame', NULL, 'ExprNodes.cpp', NULL, 0, 804, NULL, 'Cannot override the window @1 because it has a frame clause. Tip: it can be used without parenthesis in OVER', NULL, NULL);
 ('dsql_window_duplicate', NULL, 'ExprNodes.cpp', NULL, 0, 805, NULL, 'Duplicate window definition for @1', NULL, NULL);
+('bad_ext_file', 'check_file_format', 'Adapter.cpp', NULL, 0, 806, NULL, 'Invalid external file format', NULL, NULL);
+('wrong_adp_fields_def', NULL, 'DdlNodes.epp', NULL, 0, 807, NULL, 'Wrong set of adapter fields', NULL, NULL);
+('wrong_adp_field_name', NULL, 'DdlNodes.epp', NULL, 0, 808, NULL, 'Adapter field named "@1" is not supported', NULL, NULL);
+('wrong_adp_field_type', NULL, 'DdlNodes.epp', NULL, 0, 809, NULL, 'Wrong type of adapter field "@1"', NULL, NULL);
+('bad_ext_record', 'read_record', 'Adapter.cpp', NULL, 0, 810, NULL, 'Unknown record type in external file "@1" at offset @2', NULL, NULL);
+('bad_adp_type', 'EXT_create_adapter', 'ext.cpp', NULL, 0, 811, NULL, 'Unknown adapter type "@1"', NULL, NULL);
 -- QLI
 (NULL, NULL, NULL, NULL, 1, 0, NULL, 'expected type', NULL, NULL);
 (NULL, NULL, NULL, NULL, 1, 1, NULL, 'bad block type', NULL, NULL);

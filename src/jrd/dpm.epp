@@ -50,6 +50,7 @@
 #include "../jrd/pag.h"
 #include "../jrd/rse.h"
 #include "../jrd/val.h"
+#include "../jrd/Adapter.h"
 #include "../jrd/vio_debug.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/cmp_proto.h"
@@ -1457,6 +1458,12 @@ ULONG DPM_get_blob(thread_db* tdbb,
 	USHORT slot, line;
 
 	record_number.decompose(dbb->dbb_max_records, dbb->dbb_dp_per_pp, line, slot, pp_sequence);
+
+	if (blob->blb_relation->rel_adapter == ext_fbtrace)
+	{
+		blob->getExtBlob();
+		return 0UL;
+	}
 
 	// Find the next pointer page, data page, and record.  If the page or
 	// record doesn't exist, or the record isn't a blob, give up and

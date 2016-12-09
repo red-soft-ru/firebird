@@ -43,6 +43,7 @@
 #include "../jrd/tra.h"
 #include "../jrd/val.h"
 #include "../jrd/exe.h"
+#include "../jrd/ext.h"
 #include "../jrd/req.h"
 #include "../jrd/blb.h"
 #include "../jrd/ods.h"
@@ -52,6 +53,7 @@
 #include "../common/sdl.h"
 #include "../jrd/intl.h"
 #include "../jrd/cch.h"
+#include "../jrd/Adapter.h"
 #include "../dsql/ExprNodes.h"
 #include "../common/gdsassert.h"
 #include "../jrd/blb_proto.h"
@@ -1410,6 +1412,9 @@ blb* blb::open2(thread_db* tdbb,
 		{
 				ERR_post(Arg::Gds(isc_bad_segstr_id));
 		}
+
+		if (blob->blb_relation->rel_adapter == ext_fbtrace)
+			blob->blb_blob_id = *blob_id;
 
 		blob->blb_pg_space_id = blob->blb_relation->getPages(tdbb)->rel_pg_space_id;
 		DPM_get_blob(tdbb, blob, blobId.get_permanent_number(), false, 0);
@@ -2992,4 +2997,15 @@ void blb::storeToPage(USHORT* length, Firebird::Array<UCHAR>& buffer, const UCHA
 			}
 		}
 	}
+}
+
+void blb::getExtBlob()
+{
+	blb_relation->rel_file->ext_adapter->get_blob_data(this);
+	blb_space_remaining = blb_length + 2;
+	blb_max_segment = blb_length;
+	blb_lead_page = 0;
+	blb_max_sequence = 0;
+	blb_count = 1;
+	blb_level = 0;
 }

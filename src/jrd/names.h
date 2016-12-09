@@ -408,3 +408,4 @@ NAME("SEC$USER_TYPE", nam_sec_user_type)
 
 NAME("RDB$SYSTEM_PRIVILEGES", nam_system_privileges)
 NAME("RDB$SQL_SECURITY", nam_sql_security)
+NAME("RDB$ADAPTER", nam_adapter)

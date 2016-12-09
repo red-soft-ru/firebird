@@ -335,6 +335,7 @@ public:
 	Firebird::Array<dsql_var*> variables;
 	Firebird::Array<dsql_var*> outputVariables;
 	const Firebird::string* const* currCteAlias;
+	USHORT adapter;						// external table adapter
 
 private:
 	Firebird::HalfStaticArray<SelectExprNode*, 4> ctes; // common table expressions

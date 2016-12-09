@@ -326,7 +326,7 @@ static const SCHAR* Integral_subtypes[] = {
 
 // Blob subtypes
 
-const int MAX_BLOBSUBTYPES	= 8;
+const int MAX_BLOBSUBTYPES	= 10;
 
 static const SCHAR* Sub_types[] = {
 	"BINARY",					// keyword
@@ -337,7 +337,9 @@ static const SCHAR* Sub_types[] = {
 	"SUMMARY",					// keyword
 	"FORMAT",					// keyword
 	"TRANSACTION_DESCRIPTION",	// keyword
-	"EXTERNAL_FILE_DESCRIPTION"	// keyword
+	"EXTERNAL_FILE_DESCRIPTION",// keyword
+	"DEBUG_INFO",				// keyword
+	"DYN"						// keyword
 };
 
 /* CVC: Notice that

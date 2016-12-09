@@ -90,6 +90,7 @@ public:
 	void putUSHORT(USHORT value);
 	void putOffset();
 	void putDsc(const dsc* param);
+	void putParams(class Firebird::ITraceParams* params);
 
 	static const size_t DSC_PACKET_SIZE = sizeof(((dsc*)NULL)->dsc_dtype) + 
 		sizeof(((dsc*)NULL)->dsc_scale) + sizeof(((dsc*)NULL)->dsc_length) +
@@ -97,13 +98,13 @@ public:
 
 private:
 	// Packet buffer management routines
-	void growBuffer(size_t requiredSize);
+	void growBuffer(ntrace_size_t requiredSize);
 	template <typename T>
-		T* alloc(size_t count = 1);
+		T* alloc(ntrace_size_t count = 1);
 	// Most packets should fit into 1K
 	UCHAR inlineBuffer[1024];
 	UCHAR* buffer;
-	size_t buffSize;
+	ntrace_size_t buffSize;
 	ntrace_size_t packetLength;
 };
 

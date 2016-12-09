@@ -195,3 +195,5 @@
 
 	FIELD(fld_system_privileges, nam_system_privileges, dtype_text, 8						, dsc_text_type_fixed		, dflt_no_privs, true)
 	FIELD(fld_b_sql_security, nam_sql_security	, dtype_boolean	, 1							, 0							, NULL		, true)
+
+	FIELD(fld_adapter		, nam_adapter		, dtype_text	, 31						, dsc_text_type_metadata	, NULL		, true)

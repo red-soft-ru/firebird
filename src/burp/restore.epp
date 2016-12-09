@@ -7344,6 +7344,10 @@ bool get_relation(BurpGlobals* tdgbl)
 	ext_file_name[0] = '\0';
 	bool		ext_file_name_null = true;
 
+	BASED_ON RDB$RELATIONS.RDB$ADAPTER adapter;
+	adapter[0] = '\0';
+	bool adapter_null = true;
+
 	// Pick up relation attributes
 
 	burp_rel* relation = (burp_rel*) BURP_alloc_zero (sizeof(burp_rel));
@@ -7459,6 +7463,11 @@ bool get_relation(BurpGlobals* tdgbl)
 			sql_security = get_boolean(tdgbl);
 			break;
 
+		case att_relation_adapter:
+			adapter_null = false;
+			GET_TEXT(adapter);
+			break;
+
 		default:
 			bad_attribute(scan_next_attr, attribute, 111);
 			// msg 111 table
@@ -7490,6 +7499,7 @@ bool get_relation(BurpGlobals* tdgbl)
 			X.RDB$EXTERNAL_FILE.NULL = ext_file_name_null;
 			X.RDB$RELATION_TYPE.NULL = type_null;
 			X.RDB$SQL_SECURITY.NULL = sql_security_null;
+			X.RDB$ADAPTER.NULL = adapter_null;
 
 			X.RDB$SYSTEM_FLAG = (USHORT) sys_flag;
 			X.RDB$FLAGS = (USHORT) rel_flags;
@@ -7501,6 +7511,7 @@ bool get_relation(BurpGlobals* tdgbl)
 			strcpy(X.RDB$SECURITY_CLASS, sec_class);
 			strcpy(X.RDB$RELATION_NAME, relation->rel_name);
 			strcpy(X.RDB$EXTERNAL_FILE, ext_file_name);
+			strcpy(X.RDB$ADAPTER, adapter);
 
 			X.RDB$RELATION_TYPE = (USHORT) type;
 			X.RDB$SQL_SECURITY = (FB_BOOLEAN) sql_security;

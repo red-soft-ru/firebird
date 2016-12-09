@@ -53,6 +53,7 @@
 #include "../jrd/jrd.h"
 #include "../jrd/ods.h"
 #include "../jrd/ini.h"
+#include "../jrd/Adapter.h"
 #include "../jrd/scl_proto.h"
 #include "../common/dsc_proto.h"
 #include "../common/cvt.h"

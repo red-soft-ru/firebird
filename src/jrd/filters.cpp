@@ -39,6 +39,8 @@
 #include "../yvalve/gds_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/DebugInterface.h"
+#include "../common/prett_proto.h"
+#include "../include/dyn_consts.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -1407,6 +1409,51 @@ ISC_STATUS filter_debug_info(USHORT action, BlobControl* control)
 	}
 
 	control->ctl_data[1] = control->ctl_data[0];
+
+	return FB_SUCCESS;
+}
+
+ISC_STATUS filter_dyn(USHORT action, BlobControl* control)
+{
+/**************************************
+*
+*	f i l t e r _ d y n
+*
+**************************************
+*
+* Functional description
+*	Pretty print dyn blob data.
+*	The function is implemented to view dyn requests collected
+*	by the binary fbtrace adapter.
+*
+**************************************/
+	if (action != isc_blob_filter_open)
+		return string_filter(action, control);
+
+	/* Initialize for retrieval */
+	UCHAR buffer[BUFFER_MEDIUM];
+	const SLONG l = 1 + control->ctl_handle->ctl_total_length;
+	UCHAR* const temp = (l <= (SLONG) sizeof(buffer)) ? buffer : (UCHAR*)gds__alloc((SLONG)l);
+	/* FREE: at procedure exit */
+	if (!temp)					/* NOMEM: */
+		return isc_virmemexh;
+
+	USHORT length;
+	const ISC_STATUS status = caller(isc_blob_filter_get_segment, control, (USHORT)l, temp, &length);
+
+	if (!status)
+	{
+		if (l > length && temp[length - 1] != isc_dyn_eoc)
+			temp[length] = isc_dyn_eoc;
+
+		// dump_blr callback serves well for dyn requests too
+		PRETTY_print_dyn(temp, dump_blr, control, 0);
+	}
+
+	control->ctl_data[1] = control->ctl_data[0];
+
+	if (temp != buffer)
+		gds__free(temp);
 
 	return FB_SUCCESS;
 }

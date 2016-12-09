@@ -1504,24 +1504,7 @@ void TracePluginImpl::log_event_proc_execute(ITraceDatabaseConnection* connectio
 		packetBuilder.putConnectionId(connection->getConnectionID());
 		packetBuilder.putTransactionId(transaction->getTransactionID());
 		packetBuilder.putBytes(strlen(proc_name), proc_name);
-
-		ITraceParams* params = procedure->getInputs();
-
-		packetBuilder.putOffset();
-		if (params)
-		{
-			size_t paramcount = params->getCount();
-			packetBuilder.putCounter(paramcount);
-			for (size_t i = 0; i < paramcount; i++)
-			{
-				const dsc* parameter = params->getParam(i);
-				packetBuilder.putDsc(parameter);
-			}
-		}
-		else
-		{
-			packetBuilder.putCounter(0);
-		}
+		packetBuilder.putParams(procedure->getInputs());
 
 		if (!started)
 		{
@@ -1620,27 +1603,11 @@ void TracePluginImpl::log_event_func_execute(ITraceDatabaseConnection* connectio
 		packetBuilder.putConnectionId(connection->getConnectionID());
 		packetBuilder.putTransactionId(transaction->getTransactionID());
 		packetBuilder.putBytes(strlen(func_name), func_name);
-
-		ITraceParams* params = function->getInputs();
-
-		packetBuilder.putOffset();
-		if (params)
-		{
-			size_t paramcount = params->getCount();
-			packetBuilder.putCounter(paramcount);
-			for (size_t i = 0; i < paramcount; i++)
-			{
-				const dsc* parameter = params->getParam(i);
-				packetBuilder.putDsc(parameter);
-			}
-		}
-		else
-		{
-			packetBuilder.putCounter(0);
-		}
+		packetBuilder.putParams(function->getInputs());
 
 		if (!started)
 		{
+			packetBuilder.putParams(function->getResult());
 			appendPerfInfo(info, packetBuilder);
 			packetBuilder.putCounter(info->pin_records_fetched);
 		}
@@ -1903,24 +1870,7 @@ void TracePluginImpl::log_event_dsql_execute(ITraceDatabaseConnection* connectio
 		packetBuilder.putConnectionId(connection->getConnectionID());
 		packetBuilder.putTransactionId(transaction->getTransactionID());
 		packetBuilder.putStatementId(statement->getStmtID());
-
-		ITraceParams* params = statement->getInputs();
-
-		packetBuilder.putOffset();
-		if (params)
-		{
-			size_t paramcount = params->getCount();
-			packetBuilder.putCounter(paramcount);
-			for (size_t i = 0; i < paramcount; i++)
-			{
-				const dsc* parameter = params->getParam(i);
-				packetBuilder.putDsc(parameter);
-			}
-		}
-		else
-		{
-			packetBuilder.putCounter(0);
-		}
+		packetBuilder.putParams(statement->getInputs());
 
 		if (!started)
 		{

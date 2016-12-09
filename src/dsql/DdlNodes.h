@@ -37,6 +37,8 @@
 #include "../jrd/Savepoint.h"
 #include "../dsql/errd_proto.h"
 
+class AdapterField;
+
 namespace Jrd {
 
 class CompoundStmtNode;
@@ -1477,9 +1479,11 @@ class CreateRelationNode : public RelationNode
 {
 public:
 	CreateRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode,
-				const Firebird::string* aExternalFile = NULL)
+				const Firebird::string* aExternalFile = NULL,
+				const Firebird::string* aExternalAdapter = NULL)
 		: RelationNode(p, aDsqlNode),
 		  externalFile(aExternalFile),
+		  adapter(aExternalAdapter),
 		  relationType(rel_persistent)
 	{
 	}
@@ -1488,7 +1492,10 @@ public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual bool checkPermission(thread_db* tdbb, jrd_tra* transaction);
 	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
-
+	virtual void checkAdapterFields(const AdapterField* adp_fields);
+	virtual void defineAdapterFields(thread_db* tdbb, jrd_tra* transaction, 
+		const AdapterField* adp_fields, dsql_rel* relation);
+	
 protected:
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
 	{
@@ -1500,6 +1507,7 @@ private:
 
 public:
 	const Firebird::string* externalFile;
+	const Firebird::string* adapter;
 	Nullable<rel_t> relationType;
 	bool preserveRowsOpt;
 	bool deleteRowsOpt;

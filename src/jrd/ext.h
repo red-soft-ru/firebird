@@ -26,6 +26,9 @@
 
 #include <stdio.h>
 
+class BaseAdapter* EXT_create_adapter(const char* adapter_name,
+	USHORT rel_id, const char* filename);
+
 namespace Jrd {
 
 // External file access block
@@ -36,6 +39,7 @@ public:
 	USHORT	ext_flags;			// Misc and cruddy flags
 	USHORT	ext_tra_cnt;		// How many transactions used the file
 	FILE*	ext_ifi;			// Internal file identifier
+	class BaseAdapter*	ext_adapter;
 	char	ext_filename[1];
 };
 

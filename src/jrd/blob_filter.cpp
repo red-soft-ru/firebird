@@ -46,7 +46,7 @@ using namespace Firebird;
 
 // System provided internal filters for filtering internal
 // subtypes to text.
-// (from_type in [0..8], to_type == isc_blob_text)
+// (from_type in [0..10], to_type == isc_blob_text)
 
 static const FPTR_BFILTER_CALLBACK filters[] =
 {
@@ -59,7 +59,9 @@ static const FPTR_BFILTER_CALLBACK filters[] =
 	filter_format,
 	filter_trans,
 	filter_trans,				// should be filter_external_file
-	filter_debug_info
+	filter_debug_info,
+	0,
+	filter_dyn
 };
 
 

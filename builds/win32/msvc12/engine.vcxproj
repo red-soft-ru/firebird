@@ -145,6 +145,7 @@
     <ClCompile Include="..\..\..\src\jrd\TempSpace.cpp" />
     <ClCompile Include="..\..\..\src\jrd\tpc.cpp" />
     <ClCompile Include="..\..\..\src\jrd\tra.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\trace\TraceAdapter.cpp" />
     <ClCompile Include="..\..\..\src\jrd\trace\TraceCmdLine.cpp" />
     <ClCompile Include="..\..\..\src\jrd\trace\TraceConfigStorage.cpp" />
     <ClCompile Include="..\..\..\src\jrd\trace\TraceLog.cpp" />
@@ -191,6 +192,7 @@
     <ClInclude Include="..\..\..\src\dsql\WinNodes.h" />
     <ClInclude Include="..\..\..\src\include\gen\iberror.h" />
     <ClInclude Include="..\..\..\src\jrd\acl.h" />
+    <ClInclude Include="..\..\..\src\jrd\Adapter.h" />
     <ClInclude Include="..\..\..\src\jrd\align.h" />
     <ClInclude Include="..\..\..\src\jrd\Attachment.h" />
     <ClInclude Include="..\..\..\src\jrd\blb.h" />
@@ -318,6 +320,7 @@
     <ClInclude Include="..\..\..\src\jrd\TempSpace.h" />
     <ClInclude Include="..\..\..\src\jrd\tpc_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\tra.h" />
+    <ClInclude Include="..\..\..\src\jrd\trace\TraceAdapter.h" />
     <ClInclude Include="..\..\..\src\jrd\trace\TraceConfigStorage.h" />
     <ClInclude Include="..\..\..\src\jrd\trace\TraceDSQLHelpers.h" />
     <ClInclude Include="..\..\..\src\jrd\trace\TraceJrdHelpers.h" />

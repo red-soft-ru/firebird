@@ -77,6 +77,7 @@
 #include "../dsql/dsql.h"
 #include "../dsql/ExprNodes.h"
 #include "../jrd/ibase.h"
+#include "../jrd/Adapter.h"
 #include "../jrd/Attachment.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/intl.h"
@@ -241,7 +242,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			field->subType = blob_sub_type;
 		}
 
-		if (field->subType > isc_blob_text)
+		if (field->subType > isc_blob_text && dsqlScratch->adapter != ext_fbtrace)
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 					  Arg::Gds(isc_dsql_datatype_err) <<

@@ -36,12 +36,12 @@ namespace Jrd {
 
 double	EXT_cardinality(Jrd::thread_db*, Jrd::jrd_rel*);
 void	EXT_erase(Jrd::record_param*, Jrd::jrd_tra*);
-Jrd::ExternalFile*	EXT_file(Jrd::jrd_rel*, const TEXT*); //, Jrd::bid*);
+Jrd::ExternalFile*	EXT_file(Jrd::jrd_rel*, const TEXT*, const TEXT*);
 void	EXT_fini(Jrd::jrd_rel*, bool);
 bool	EXT_get(Jrd::thread_db*, Jrd::record_param*, FB_UINT64&);
 void	EXT_modify(Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
 
-void	EXT_open(Jrd::Database*, Jrd::ExternalFile*);
+USHORT	EXT_open(Jrd::Database*, Jrd::ExternalFile*);
 void	EXT_store(Jrd::thread_db*, Jrd::record_param*);
 
 void EXT_tra_attach(Jrd::ExternalFile*, Jrd::jrd_tra*);

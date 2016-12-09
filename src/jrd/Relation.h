@@ -157,6 +157,7 @@ public:
 	ViewContexts	rel_view_contexts;	// sorted array of view contexts
 
 	ExternalFile* 	rel_file;			// external file name
+	USHORT			rel_adapter;		// adapter for external file
 
 	GCRecordList	rel_gc_records;		// records for garbage collection
 

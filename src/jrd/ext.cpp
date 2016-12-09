@@ -45,6 +45,8 @@
 #include "../jrd/rse.h"
 #include "../jrd/ext.h"
 #include "../jrd/tra.h"
+#include "../jrd/Adapter.h"
+#include "../jrd/trace/TraceAdapter.h"
 #include "../dsql/ExprNodes.h"
 #include "gen/iberror.h"
 #include "../jrd/cmp_proto.h"
@@ -138,8 +140,11 @@ namespace {
 		// If the database is updateable, then try opening the external files in
 		// RW mode. If the DB is ReadOnly, then open the external files only in
 		// ReadOnly mode, thus being consistent.
-		if (!dbb->readOnly())
+		if (!dbb->readOnly() &&
+			ext_file->ext_adapter->adapter_type != ext_fbtrace)
+		{
 			ext_file->ext_ifi = os_utils::fopen(file_name, FOPEN_TYPE);
+		}
 
 		if (!ext_file->ext_ifi)
 		{
@@ -153,11 +158,31 @@ namespace {
 				ext_file->ext_flags |= EXT_readonly;
 			}
 		}
+		ext_file->ext_adapter->set_file_handle(ext_file->ext_ifi);
 
 		return ext_file->ext_ifi;
 	}
 } // namespace
 
+BaseAdapter* EXT_create_adapter(const char* adapter_name, USHORT rel_id,
+	const char* filename)
+{
+	Firebird::string adapter;
+	if (adapter_name[0])
+		adapter.assign(adapter_name);
+	else
+		return (BaseAdapter*) new DefaultAdapter(filename);
+	adapter.upper();
+	adapter.trim();
+	if (adapter == "FBTRACE")
+		return new FBTraceAdapter(rel_id, filename);
+	else if (adapter == "DEFAULT")
+		return (BaseAdapter*) new DefaultAdapter(filename);
+	else
+		ERR_post(Arg::Gds(isc_bad_adp_type) << Arg::Str(adapter_name));
+
+	return NULL;
+};
 
 double EXT_cardinality(thread_db* tdbb, jrd_rel* relation)
 {
@@ -236,7 +261,7 @@ void EXT_erase(record_param*, jrd_tra*)
 
 
 // Third param is unused.
-ExternalFile* EXT_file(jrd_rel* relation, const TEXT* file_name) //, bid* description)
+ExternalFile* EXT_file(jrd_rel* relation, const TEXT* file_name, const TEXT* adapter_name)
 {
 /**************************************
  *
@@ -306,7 +331,9 @@ ExternalFile* EXT_file(jrd_rel* relation, const TEXT* file_name) //, bid* descri
 	paths.clear();
 
 	ExternalFile* file = FB_NEW_RPT(*relation->rel_pool, (strlen(file_name) + 1)) ExternalFile();
+	file->ext_adapter = EXT_create_adapter(adapter_name, relation->rel_id, file_name);
 	relation->rel_file = file;
+	relation->rel_adapter = file->ext_adapter->adapter_type;
 	strcpy(file->ext_filename, file_name);
 	file->ext_flags = 0;
 	file->ext_ifi = NULL;
@@ -339,6 +366,7 @@ void EXT_fini(jrd_rel* relation, bool close_only)
 		// before zeroing out the rel_file we need to deallocate the memory
 		if (!close_only)
 		{
+			delete file->ext_adapter;
 			delete file;
 			relation->rel_file = NULL;
 		}
@@ -367,7 +395,7 @@ bool EXT_get(thread_db* /*tdbb*/, record_param* rpb, FB_UINT64& position)
 
 	const USHORT offset = (USHORT) (IPTR) format->fmt_desc[0].dsc_address;
 	UCHAR* p = record->getData() + offset;
-	const ULONG l = record->getLength() - offset;
+	ULONG l = record->getLength() - offset;
 
 	if (file->ext_ifi == NULL)
 	{
@@ -408,15 +436,27 @@ bool EXT_get(thread_db* /*tdbb*/, record_param* rpb, FB_UINT64& position)
 		}
 	}
 
-	if (!fread(p, l, 1, file->ext_ifi))
+	if (file->ext_adapter->adapter_type == ext_fbtrace)
 	{
-		return false;
+		l = file->ext_adapter->read_record(relation, record);
+		if (!l)
+		{
+			return false;
+		}
 	}
+	else
+		if (!fread(p, l, 1, file->ext_ifi))
+		{
+			return false;
+		}
 
 	position += l;
 	file->ext_flags |= EXT_last_read;
 
 	// Loop thru fields setting missing fields to either blanks/zeros or the missing value
+
+	if (file->ext_adapter->adapter_type == ext_fbtrace)
+		return true;
 
 	dsc desc;
 	Format::fmt_desc_const_iterator desc_ptr = format->fmt_desc.begin();
@@ -467,7 +507,7 @@ void EXT_modify(record_param* /*old_rpb*/, record_param* /*new_rpb*/, jrd_tra* /
 }
 
 
-void EXT_open(Database* dbb, ExternalFile* file)
+USHORT EXT_open(Database* dbb, ExternalFile* file)
 {
 /**************************************
  *
@@ -482,6 +522,7 @@ void EXT_open(Database* dbb, ExternalFile* file)
 	if (!file->ext_ifi) {
 		ext_fopen(dbb, file);
 	}
+	return file->ext_adapter->header_length;
 }
 
 

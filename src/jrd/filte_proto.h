@@ -32,6 +32,7 @@ ISC_STATUS filter_runtime(USHORT, Jrd::BlobControl*);
 ISC_STATUS filter_text(USHORT, Jrd::BlobControl*);
 ISC_STATUS filter_transliterate_text(USHORT, Jrd::BlobControl*);
 ISC_STATUS filter_trans(USHORT, Jrd::BlobControl*);
+ISC_STATUS filter_dyn(USHORT, Jrd::BlobControl*);
 
 #endif // JRD_FILTE_PROTO_H
 

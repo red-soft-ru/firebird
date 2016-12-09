@@ -3769,6 +3769,7 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 	Jrd::ContextPoolHolder context(tdbb, attachment->att_pool);
 	bool dependencies = false;
 	bool sys_triggers = false;
+	Firebird::MetaName rel_adapter;
 
 	blb* blob = NULL;
 
@@ -3846,7 +3847,10 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 		relation->rel_flags |= REL_scanned;
 		if (REL.RDB$EXTERNAL_FILE[0])
 		{
-			EXT_file(relation, REL.RDB$EXTERNAL_FILE); //, &REL.RDB$EXTERNAL_DESCRIPTION);
+			if (!REL.RDB$ADAPTER.NULL)
+				rel_adapter = REL.RDB$ADAPTER;
+
+			EXT_file(relation, REL.RDB$EXTERNAL_FILE, rel_adapter.c_str());
 		}
 
 		if (!REL.RDB$RELATION_TYPE.NULL)

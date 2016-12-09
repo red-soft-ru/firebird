@@ -1662,6 +1662,18 @@ C --
       PARAMETER (GDS__dsql_window_cant_overr_frame     = 335545124)
       INTEGER*4 GDS__dsql_window_duplicate           
       PARAMETER (GDS__dsql_window_duplicate            = 335545125)
+      INTEGER*4 GDS__bad_ext_file                    
+      PARAMETER (GDS__bad_ext_file                     = 335545126)
+      INTEGER*4 GDS__wrong_adp_fields_def            
+      PARAMETER (GDS__wrong_adp_fields_def             = 335545127)
+      INTEGER*4 GDS__wrong_adp_field_name            
+      PARAMETER (GDS__wrong_adp_field_name             = 335545128)
+      INTEGER*4 GDS__wrong_adp_field_type            
+      PARAMETER (GDS__wrong_adp_field_type             = 335545129)
+      INTEGER*4 GDS__bad_ext_record                  
+      PARAMETER (GDS__bad_ext_record                   = 335545130)
+      INTEGER*4 GDS__bad_adp_type                    
+      PARAMETER (GDS__bad_adp_type                     = 335545131)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 

@@ -61,6 +61,7 @@ static const TOK tokens[] =
 	{TOK_ACOSH, "ACOSH", false},
 	{TOK_ACTION, "ACTION", true},
 	{TOK_ACTIVE, "ACTIVE", false},
+	{TOK_ADAPTER, "ADAPTER", false},
 	{TOK_ADD, "ADD", false},
 	{TOK_ADMIN, "ADMIN", false},
 	{TOK_AFTER, "AFTER", false},

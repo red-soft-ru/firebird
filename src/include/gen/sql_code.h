@@ -826,6 +826,12 @@ static const struct {
 	{335545123, -833}, /* 803 dsql_window_cant_overr_order */
 	{335545124, -833}, /* 804 dsql_window_cant_overr_frame */
 	{335545125, -833}, /* 805 dsql_window_duplicate */
+	{335545126, -901}, /* 806 bad_ext_file */
+	{335545127, -901}, /* 807 wrong_adp_fields_def */
+	{335545128, -901}, /* 808 wrong_adp_field_name */
+	{335545129, -901}, /* 809 wrong_adp_field_type */
+	{335545130, -901}, /* 810 bad_ext_record */
+	{335545131, -901}, /* 811 bad_adp_type */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */
