@@ -7331,6 +7331,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		REL.RDB$VIEW_BLR.NULL = TRUE;
 		REL.RDB$VIEW_SOURCE.NULL = TRUE;
 		REL.RDB$EXTERNAL_FILE.NULL = TRUE;
+		REL.RDB$ADAPTER.NULL = TRUE;
 
 		if (externalFile)
 		{
