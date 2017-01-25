@@ -31,6 +31,7 @@
     <ClCompile Include="..\..\..\src\common\classes\DbImplementation.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\fb_string.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\Hash.cpp" />
+	<ClCompile Include="..\..\..\src\common\classes\WipeFile.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\ImplementHelper.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\init.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\InternalMessageBuffer.cpp" />
@@ -91,7 +92,6 @@
     <ClCompile Include="..\..\..\src\common\utils.cpp" />
     <ClCompile Include="..\..\..\src\common\UtilSvc.cpp" />
     <ClCompile Include="..\..\..\src\common\xdr.cpp" />
-	<ClCompile Include="..\..\..\src\common\classes\WipeFile.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\common\Auth.h" />
@@ -119,6 +119,7 @@
     <ClInclude Include="..\..\..\src\common\classes\FpeControl.h" />
     <ClInclude Include="..\..\..\src\common\classes\GenericMap.h" />
     <ClInclude Include="..\..\..\src\common\classes\Hash.h" />
+	<ClInclude Include="..\..\..\src\common\classes\WipeFile.h" />
     <ClInclude Include="..\..\..\src\common\classes\ImplementHelper.h" />
     <ClInclude Include="..\..\..\src\common\classes\init.h" />
     <ClInclude Include="..\..\..\src\common\classes\InternalMessageBuffer.h" />
