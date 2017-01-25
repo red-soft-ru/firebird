@@ -157,6 +157,20 @@ bool SecureOverwrite(HANDLE fileHandle, ULONGLONG length)
 	return true;
 }
 
+int WipeCompressedFile(HANDLE handle)
+{
+	// Compressed temp files cannot be wiped. Rewind + write can not be used since
+	// after rewriting the compressed file its size will be changed
+	// and stored to other parts of the hard disk.
+	// Wipe of file through direct access to the disk will not work.
+	// Direct access to the disk has been limited starting
+	// with Windows Vista and Windows Server 2008.
+	// https://technet.microsoft.com/ru-ru/sysinternals/sdelete.aspx
+	// https://support.microsoft.com/en-us/kb/942448
+	
+	fatal_exception::raise("Compressed temp files can not be wiped.");
+	return 0;
+}
 
 int WipeFile(HANDLE handle) {
 	ULONGLONG bytesToWrite, bytesWritten;
@@ -177,7 +191,7 @@ int WipeFile(HANDLE handle) {
 		fatal_exception::raiseFmt("IO error (%d) retrieving attributes for file.", GetLastError());
 
 	if (fileAttrs & (FILE_ATTRIBUTE_COMPRESSED | FILE_ATTRIBUTE_ENCRYPTED | FILE_ATTRIBUTE_SPARSE_FILE))
-		fatal_exception::raise("Compressed temp files can not be wiped.");
+		return WipeCompressedFile(handle);
 
 	dwSizeLow = GetFileSize(handle, &dwSizeHigh);
 
