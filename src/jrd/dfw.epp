@@ -5789,11 +5789,11 @@ static bool clear_met_cache(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 {
 /**************************************
  *
- *	i n v a l i d a t e _ c a c h e d _ p r c
+ *	c l e a r _ m e t _ c a c h e
  *
  **************************************
  *
- * Invalidate cached procedure. Useful after changing column privileges for example.
+ * Invalidate metadata cache. Useful after changing column privileges for example.
  *
  **************************************/
 
