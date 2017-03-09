@@ -64,6 +64,10 @@ using namespace Jrd;
 using namespace Ods;
 using namespace Firebird;
 
+// These lists keep information of the deleted indices
+static Firebird::GlobalPtr<Firebird::Array<Firebird::MetaName> > deleted_index_names;
+static Firebird::GlobalPtr<Firebird::Array<Jrd::index_desc> > deleted_indices;
+
 //#define DEBUG_BTR_SPLIT
 
 //Debug page numbers into log file
@@ -339,6 +343,18 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 }
 
 
+Firebird::Array<Firebird::MetaName> *getDeletedIndexNames()
+{
+  return &deleted_index_names;
+}
+
+
+Firebird::Array<index_desc> *getDeletedIndices()
+{
+  return &deleted_indices;
+}
+
+
 USHORT BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescAlloc** csb_idx, RelationPages* relPages)
 {
 /**************************************
@@ -371,7 +387,32 @@ USHORT BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescAlloc** csb_idx, Rel
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
 		if (BTR_description(tdbb, relation, root, &buffer[count], i))
-			count++;
+		{
+			// So, if someone started to delete index, but transaction is not committed
+			// DropIndexNode erased index record in RDB$INDICES, but btree
+			// holds the index in case of cancellation of transaction.
+			// To ensure that the index will not be selected on the next query,
+			// we check, that the index desc is not exist in the list. If index desc exists in list,
+			// it means that the index is deleted and no need to use it.
+			// If the transaction rolled back, index name is restored in table
+			// and the index is used in the usual way.
+			bool skip = false;
+			Firebird::Array<index_desc> *deletedIndices = getDeletedIndices();
+
+			if (deletedIndices->getCount() > 0)
+			{
+			  for (Array<Jrd::index_desc>::iterator i = deletedIndices->begin(); i != deletedIndices->end(); ++i)
+			  {
+				if ((*i).idx_root == buffer[count].idx_root && (*i).idx_id == buffer[count].idx_id)
+				{
+				  skip = true;
+				  break;
+				}
+			  }
+			}
+			if (!skip)
+			  count++;
+		}
 	}
 
 	CCH_RELEASE(tdbb, &window);
@@ -531,8 +572,26 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 
 	if (idx->idx_flags & idx_expressn)
 	{
-		MET_lookup_index_expression(tdbb, relation, idx);
-		fb_assert(idx->idx_expression != NULL);
+		// No need to get information about an index if it is deleted,
+		// because its information has been removed from system table
+		Firebird::Array<index_desc> *deletedIndices = getDeletedIndices();
+		bool skip = false;
+		if (deletedIndices->getCount() > 0)
+		{
+		  for (Array<Jrd::index_desc>::iterator i = deletedIndices->begin(); i != deletedIndices->end(); ++i)
+		  {
+			if ((*i).idx_root == idx->idx_root && (*i).idx_id == idx->idx_id)
+			{
+			  skip = true;
+			  break;
+			}
+		  }
+		}
+		if (!skip)
+		{
+			MET_lookup_index_expression(tdbb, relation, idx);
+			fb_assert(idx->idx_expression != NULL);
+		}
 	}
 
 	return true;

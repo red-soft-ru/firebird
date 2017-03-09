@@ -1291,6 +1291,49 @@ void DFW_delete_deferred( jrd_tra* transaction, SavNumber sav_number)
 	for (DfwHash::iterator i(h->hash); i.hasData();)
 	{
 		DeferredWork* work(i);
+		// If the index deleting was rolled back,
+		// We need exclude the index from the lists for future use
+		if (work->dfw_type == dfw_delete_index ||
+			work->dfw_type == dfw_delete_expression_index)
+		{
+			DeferredWork* w = work;
+			const DeferredWork* arg = w->findArg(dfw_arg_index_name);
+			fb_assert(arg);
+			fb_assert(arg->dfw_id > 0);
+			const USHORT id = arg->dfw_id - 1;
+			Firebird::Array<MetaName> *deletedIndexNames = getDeletedIndexNames();
+			Firebird::Array<index_desc> *deletedIndices = getDeletedIndices();
+			if (deletedIndexNames->getCount() > 0)
+			{
+				Jrd::thread_db* tdbb = JRD_get_thread_data();
+				jrd_rel* relation = MET_lookup_relation_id(tdbb, w->dfw_id, false);
+				if (!relation)
+				{
+					break;
+				}
+				RelationPages* relPages = relation->getPages(tdbb, -1, false);
+				if (!relPages)
+				{
+					break;
+				}
+				index_desc desc;
+				BTR_lookup(tdbb, relation, id, &desc, relPages);
+				int idx = -1;
+				for (Array<Jrd::index_desc>::iterator i = deletedIndices->begin(); i != deletedIndices->end(); ++i)
+				{
+					idx++;
+					if ((*i).idx_root == desc.idx_root && (*i).idx_id == desc.idx_id)
+					{
+						break;
+					}
+				}
+				if (idx != - 1)
+				{
+					deletedIndexNames->remove(idx);
+					deletedIndices->remove(idx);
+				}
+			}
+		}
 		++i;
 		delete work;
 	}
@@ -4578,6 +4621,29 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 						break;
 					}
 				}
+			}
+		}
+		// Get arrays of the deleted indices and their names
+		Firebird::Array<MetaName> *deletedIndexNames = getDeletedIndexNames();
+		Firebird::Array<index_desc> *deletedIndices = getDeletedIndices();
+		// Search the index name in the names array that is equal the work index name
+		// and remove it from the array, and its index desc from desc array
+		if (deletedIndexNames->getCount() > 0)
+		{
+			int idx = -1;
+			AbstractString::const_pointer index_name = work->dfw_name.c_str();
+			for (Array<MetaName>::iterator i = deletedIndexNames->begin(); i != deletedIndexNames->end(); ++i)
+			{
+				idx++;
+				if ((*i).compare(index_name) == 0)
+				{
+					break;
+				}
+			}
+			if (idx != - 1)
+			{
+				deletedIndexNames->remove(idx);
+				deletedIndices->remove(idx);
 			}
 		}
 		break;

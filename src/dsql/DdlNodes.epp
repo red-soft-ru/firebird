@@ -62,6 +62,7 @@
 #include "../common/StatusArg.h"
 #include "../auth/SecureRemotePassword/Message.h"
 #include "../jrd/Mapping.h"
+#include "../jrd/btr_proto.h"
 
 namespace Jrd {
 
@@ -9775,6 +9776,31 @@ void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 
 	AutoCacheRequest request(tdbb, drq_e_indices, DYN_REQUESTS);
 	bool found = false;
+
+	Jrd::IndexStatus idx_state;
+	SLONG idx_id;
+	SLONG rel_id;
+
+	// Need to add the index name and desc to lists. These lists store indexes,
+	// which are deleted and should not be used in future queries
+	idx_id = MET_lookup_index_name(tdbb, name, &rel_id, &idx_state);
+
+	if (idx_id != -1)
+	{
+		index_desc idx_desc;
+
+		jrd_rel* relation = MET_lookup_relation_id(tdbb, rel_id, true);
+
+		RelationPages* relPages = relation->getPages(tdbb);
+
+		Firebird::Array<MetaName> *deletedIndexNames = getDeletedIndexNames();
+		Firebird::Array<index_desc> *deletedIndices = getDeletedIndices();
+
+		BTR_lookup(tdbb, relation, idx_id, &idx_desc, relPages);
+
+		deletedIndexNames->add(name);
+		deletedIndices->add(idx_desc);
+	}
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES
