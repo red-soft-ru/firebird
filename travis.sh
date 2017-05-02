@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
 
-start_server() {
-    until ./gen/Release/firebird/bin/firebird; do
-        echo "Firebird crashed with exit code $?.  Restarting..." >&2
-    done
-}
-
 dummy_output() {
     while true; do
         sleep 9m

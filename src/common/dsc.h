@@ -31,6 +31,7 @@
 #include "consts_pub.h"
 #include "../jrd/ods.h"
 #include "../intl/charsets.h"
+#include "../common/DecFloat.h"
 
 // Data type information
 
@@ -67,9 +68,14 @@ inline bool DTYPE_IS_APPROX(UCHAR d)
 	return d == dtype_double || d == dtype_real;
 }
 
+inline bool DTYPE_IS_DECFLOAT(UCHAR d)
+{
+	return d == dtype_dec128 || d  == dtype_dec64;
+}
+
 inline bool DTYPE_IS_NUMERIC(UCHAR d)
 {
-	return (d >= dtype_byte && d <= dtype_d_float) || d == dtype_int64;
+	return (d >= dtype_byte && d <= dtype_d_float) || d == dtype_int64 || DTYPE_IS_DECFLOAT(d);
 }
 
 // Descriptor format
@@ -153,6 +159,21 @@ typedef struct dsc
 	bool isDateTime() const
 	{
 		return dsc_dtype >= dtype_sql_date && dsc_dtype <= dtype_timestamp;
+	}
+
+	bool isDecFloat() const
+	{
+		return DTYPE_IS_DECFLOAT(dsc_dtype);
+	}
+
+	bool isDecOrInt() const
+	{
+		return isDecFloat() || isExact();
+	}
+
+	bool isApprox() const
+	{
+		return DTYPE_IS_APPROX(dsc_dtype);
 	}
 
 	bool isUnknown() const
@@ -256,6 +277,22 @@ typedef struct dsc
 		clear();
 		dsc_dtype = dtype_double;
 		dsc_length = sizeof(double);
+		dsc_address = (UCHAR*) address;
+	}
+
+	void makeDecimal64(Firebird::Decimal64* address = NULL)
+	{
+		clear();
+		dsc_dtype = dtype_dec64;
+		dsc_length = sizeof(Firebird::Decimal64);
+		dsc_address = (UCHAR*) address;
+	}
+
+	void makeDecimal128(Firebird::Decimal128* address = NULL)
+	{
+		clear();
+		dsc_dtype = dtype_dec128;
+		dsc_length = sizeof(Firebird::Decimal128);
 		dsc_address = (UCHAR*) address;
 	}
 

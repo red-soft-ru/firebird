@@ -151,7 +151,7 @@ void DSQL_execute(thread_db* tdbb,
 
 	if (!*tra_handle &&
 		statement->getType() != DsqlCompiledStatement::TYPE_START_TRANS &&
-		statement->getType() != DsqlCompiledStatement::TYPE_SET_SESSION)
+		statement->getType() != DsqlCompiledStatement::TYPE_SESSION_MANAGEMENT)
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
 				  Arg::Gds(isc_bad_trans_handle));
@@ -548,7 +548,7 @@ void DSQL_execute_immediate(thread_db* tdbb, Jrd::Attachment* attachment, jrd_tr
 
 		if (!*tra_handle &&
 			statement->getType() != DsqlCompiledStatement::TYPE_START_TRANS &&
-			statement->getType() != DsqlCompiledStatement::TYPE_SET_SESSION)
+			statement->getType() != DsqlCompiledStatement::TYPE_SESSION_MANAGEMENT)
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
 					  Arg::Gds(isc_bad_trans_handle));
@@ -922,21 +922,22 @@ void DsqlTransactionRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 }
 
 
-void SetSessionRequest::execute(thread_db* tdbb, jrd_tra** /*traHandle*/,
-	IMessageMetadata* /*inMetadata*/, const UCHAR* /*inMsg*/,
-	IMessageMetadata* /*outMetadata*/, UCHAR* /*outMsg*/,
-	bool /*singleton*/)
-{
-	node->execute(tdbb, this);
-}
-
-void SetSessionRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch,
+void DsqlSessionManagementRequest::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch,
 	ntrace_result_t* /*traceResult*/)
 {
 	node = Node::doDsqlPass(scratch, node);
 
 	// Don't trace pseudo-statements (without requests associated).
 	req_traced = false;
+}
+
+// Execute a dynamic SQL statement.
+void DsqlSessionManagementRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
+	Firebird::IMessageMetadata* inMetadata, const UCHAR* inMsg,
+	Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+	bool singleton)
+{
+	node->execute(tdbb, this);
 }
 
 
@@ -1875,8 +1876,6 @@ static void sql_info(thread_db* tdbb,
 				break;
 			case DsqlCompiledStatement::TYPE_CREATE_DB:
 			case DsqlCompiledStatement::TYPE_DDL:
-			case DsqlCompiledStatement::TYPE_SET_ROLE:
-			case DsqlCompiledStatement::TYPE_SET_SESSION:
 				number = isc_info_sql_stmt_ddl;
 				break;
 			case DsqlCompiledStatement::TYPE_COMMIT:
@@ -1889,6 +1888,9 @@ static void sql_info(thread_db* tdbb,
 				break;
 			case DsqlCompiledStatement::TYPE_START_TRANS:
 				number = isc_info_sql_stmt_start_trans;
+				break;
+			case DsqlCompiledStatement::TYPE_SESSION_MANAGEMENT:
+				number = isc_info_sql_stmt_ddl;		// ?????????????????
 				break;
 			case DsqlCompiledStatement::TYPE_INSERT:
 				number = isc_info_sql_stmt_insert;

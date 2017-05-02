@@ -99,6 +99,7 @@ const int idx_sql_time		= 6;
 const int idx_timestamp		= 7;
 const int idx_numeric2		= 8;	// Introduced for 64-bit Integer support
 const int idx_boolean		= 9;
+const int idx_decimal		= 10;
 
 				   // idx_itype space for future expansion
 const int idx_first_intl_string	= 64;	// .. MAX (short) Range of computed key strings

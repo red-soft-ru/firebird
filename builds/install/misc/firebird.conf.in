@@ -483,8 +483,8 @@
 # database feature for encrypted database. In that case special care should be
 # taken to encrypt that key before passing it to server using callback. Make
 # sure your keys are well encrypted before enabling this parameter. Take into
-# account that with CryptSecurityDatabase=TRUE unencrypted by firebird protocol
-# key transfer may take place even with not encrypted security database.
+# account that with AllowEncryptedSecurityDatabase=TRUE unencrypted by firebird
+# protocol key transfer may take place even with not encrypted security database.
 # This feature is not supported by legacy authentication plugin - if you care
 # about security please never use legacy authentication.
 #
@@ -496,7 +496,7 @@
 # Please understand what are you doing before enabling this feature !!! #
 #########################################################################
 #
-#CryptSecurityDatabase = false
+#AllowEncryptedSecurityDatabase = false
 
 # ----------------------------
 #

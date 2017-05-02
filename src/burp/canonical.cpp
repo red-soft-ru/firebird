@@ -157,6 +157,16 @@ ULONG CAN_encode_decode(burp_rel* relation, lstring* buffer, UCHAR* data, bool_t
 				return FALSE;
 			break;
 
+		case dtype_dec64:
+			if (!xdr_dec64(xdrs, (Firebird::Decimal64 *) p))
+				return FALSE;
+			break;
+
+		case dtype_dec128:
+			if (!xdr_dec128(xdrs, (Firebird::Decimal128 *) p))
+				return FALSE;
+			break;
+
 		case dtype_timestamp:
 			if (!xdr_long(xdrs, &((SLONG*) p)[0]))
 				return FALSE;

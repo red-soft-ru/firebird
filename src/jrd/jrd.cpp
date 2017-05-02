@@ -7836,7 +7836,7 @@ ISC_STATUS thread_db::checkCancelState(ISC_STATUS* secondary)
 					*secondary = attachment->getStable() ? attachment->getStable()->getShutError() : 0;
 
 				return isc_att_shutdown;
-		}
+			}
 		}
 
 		// If a cancel has been raised, defer its acknowledgement

@@ -1750,6 +1750,7 @@ public:
 
 private:
 	dsql_udf* dsqlFunction;
+	bool isSubRoutine;
 };
 
 

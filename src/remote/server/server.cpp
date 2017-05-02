@@ -917,6 +917,19 @@ public:
 		if (!allowCancel)
 			return;
 
+		if (!(port->port_flags & PORT_disconnect))
+		{
+			PACKET packet;
+			packet.p_operation = op_event;
+			P_EVENT* p_event = &packet.p_event;
+			p_event->p_event_database = rdb->rdb_id;
+			p_event->p_event_items.cstr_length = length;
+			p_event->p_event_items.cstr_address = items;
+			p_event->p_event_rid = event->rvnt_id;
+
+			port->send(&packet);
+		}
+
 		if (event->rvnt_iface)
 		{
 			LocalStatus ls;
@@ -924,19 +937,6 @@ public:
 			event->rvnt_iface->cancel(&status_vector);
 			event->rvnt_iface = NULL;
 		}
-
-		if (port->port_flags & PORT_disconnect)
-			return;
-
-		PACKET packet;
-		packet.p_operation = op_event;
-		P_EVENT* p_event = &packet.p_event;
-		p_event->p_event_database = rdb->rdb_id;
-		p_event->p_event_items.cstr_length = length;
-		p_event->p_event_items.cstr_address = items;
-		p_event->p_event_rid = event->rvnt_id;
-
-		port->send(&packet);
 	}
 
 	int release()
@@ -1815,7 +1815,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 		protocol < end; protocol++)
 	{
 		if ((protocol->p_cnct_version >= PROTOCOL_VERSION10 &&
-			 protocol->p_cnct_version <= PROTOCOL_VERSION15) &&
+			 protocol->p_cnct_version <= PROTOCOL_VERSION16) &&
 			 (protocol->p_cnct_architecture == arch_generic ||
 			  protocol->p_cnct_architecture == ARCHITECTURE) &&
 			protocol->p_cnct_weight >= weight)
@@ -2966,7 +2966,10 @@ ISC_STATUS rem_port::end_blob(P_OP operation, P_RLSE * release, PACKET* sendL)
 		blob->rbl_iface->cancel(&status_vector);
 
 	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	{
+		blob->rbl_iface = NULL;
 		release_blob(blob);
+	}
 
 	return this->send_response(sendL, 0, 0, &status_vector, false);
 }
@@ -3045,7 +3048,10 @@ ISC_STATUS rem_port::end_request(P_RLSE * release, PACKET* sendL)
 	requestL->rrq_iface->free(&status_vector);
 
 	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	{
+		requestL->rrq_iface = NULL;
 		release_request(requestL);
+	}
 
 	return this->send_response(sendL, 0, 0, &status_vector, true);
 }
@@ -4743,8 +4749,8 @@ ISC_STATUS rem_port::que_events(P_EVENT * stuff, PACKET* sendL)
 	{
 		if (!event->rvnt_iface)
 		{
-			event->rvnt_destroyed = 0;
-			break;
+			if (event->rvnt_destroyed.compareExchange(1, 0))
+				break;
 		}
 	}
 
@@ -5168,6 +5174,7 @@ static void release_transaction( Rtr* transaction)
 	{
 		Rsr* const statement = transaction->rtr_cursors.pop();
 		fb_assert(statement->rsr_cursor);
+		statement->rsr_cursor->release();
 		statement->rsr_cursor = NULL;
 	}
 
@@ -5289,6 +5296,8 @@ ISC_STATUS rem_port::send_response(	PACKET*	sendL,
 	char buffer[1024];
 	char* p = buffer;
 	char* bufferEnd = p + sizeof(buffer);
+	// Set limit of status vector size since old client 2.5 and below cannot correctly handle them
+	const FB_SIZE_T limit = port_protocol < PROTOCOL_VERSION13 ? ISC_STATUS_LENGTH : 0;
 
 	for (bool sw = true; *old_vector && sw;)
 	{
@@ -5296,6 +5305,8 @@ ISC_STATUS rem_port::send_response(	PACKET*	sendL,
 		{
 		case isc_arg_warning:
 		case isc_arg_gds:
+			if (limit && new_vector.getCount() > limit - 3) // 2 for numbers and 1 reserved for isc_arg_end
+				break;
 			new_vector.push(*old_vector++);
 
 			// The status codes are converted to their offsets so that they
@@ -5312,11 +5323,15 @@ ISC_STATUS rem_port::send_response(	PACKET*	sendL,
 				switch (*old_vector)
 				{
 				case isc_arg_cstring:
+					if (limit && new_vector.getCount() > limit - 4)
+						break;
 					new_vector.push(*old_vector++);
 					// fall through ...
 
 				case isc_arg_string:
 				case isc_arg_number:
+					if (limit && new_vector.getCount() > limit - 3)
+						break;
 					new_vector.push(*old_vector++);
 					new_vector.push(*old_vector++);
 					continue;
@@ -5327,11 +5342,15 @@ ISC_STATUS rem_port::send_response(	PACKET*	sendL,
 
 		case isc_arg_interpreted:
 		case isc_arg_sql_state:
+			if (limit && new_vector.getCount() > limit - 3)
+				break;
 			new_vector.push(*old_vector++);
 			new_vector.push(*old_vector++);
 			continue;
 		}
 
+		if (limit && new_vector.getCount() > limit - 3)
+			break;
 		const int l = (p < bufferEnd) ? fb_interpret(p, bufferEnd - p, &old_vector) : 0;
 		if (l == 0)
 			break;

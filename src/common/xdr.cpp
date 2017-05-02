@@ -30,6 +30,7 @@
 #include "../common/xdr_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/gdsassert.h"
+#include "../common/DecFloat.h"
 
 inline UCHAR* XDR_ALLOC(ULONG size)
 {
@@ -104,20 +105,13 @@ bool_t xdr_hyper( XDR* xdrs, void* pi64)
 {
 /**************************************
  *
- *	x d r _ h y p e r       ( n o n - S O L A R I S )
+ *	x d r _ h y p e r
  *
  **************************************
  *
  * Functional description
  *	Map a 64-bit Integer from external to internal representation
  *      (or vice versa).
- *
- *      Enable this for all platforms except Solaris (since it is
- *      available in the XDR library on Solaris). This function (normally)
- *      would have been implemented in REMOTE/xdr.c. Since some system
- *      XDR libraries (HP-UX) do not implement this function, we have it
- *      in this module. At a later date, when the function is available
- *      on all platforms, we can start using the system-provided version.
  *
  *      Handles "swapping" of the 2 long's to be "Endian" sensitive.
  *
@@ -259,6 +253,18 @@ bool_t xdr_datum( XDR* xdrs, const dsc* desc, UCHAR* buffer)
 			return FALSE;
 		break;
 
+	case dtype_dec64:
+		fb_assert(desc->dsc_length >= sizeof(Firebird::Decimal64));
+		if (!xdr_dec64(xdrs, reinterpret_cast<Firebird::Decimal64*>(p)))
+			return FALSE;
+		break;
+
+	case dtype_dec128:
+		fb_assert(desc->dsc_length >= sizeof(Firebird::Decimal128));
+		if (!xdr_dec128(xdrs, reinterpret_cast<Firebird::Decimal128*>(p)))
+			return FALSE;
+		break;
+
 	case dtype_timestamp:
 		fb_assert(desc->dsc_length >= 2 * sizeof(SLONG));
 		if (!xdr_long(xdrs, &((SLONG*) p)[0]))
@@ -334,6 +340,26 @@ bool_t xdr_double(XDR* xdrs, double* ip)
 	}
 
 	return FALSE;
+}
+
+
+
+bool_t xdr_dec64(XDR* xdrs, Firebird::Decimal64* ip)
+{
+	return xdr_hyper(xdrs, ip->getBytes());
+}
+
+
+bool_t xdr_dec128(XDR* xdrs, Firebird::Decimal128* ip)
+{
+	UCHAR* bytes = ip->getBytes();
+
+#ifndef WORDS_BIGENDIAN
+	return xdr_hyper(xdrs, &bytes[8]) && xdr_hyper(xdrs, &bytes[0]);
+#else
+	fb_assert(false);			// Dec64/128 XDR not tested on bigendians!
+	return xdr_hyper(xdrs, &bytes[0]) && xdr_hyper(xdrs, &bytes[8]);
+#endif
 }
 
 

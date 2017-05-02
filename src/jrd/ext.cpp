@@ -346,7 +346,7 @@ void EXT_fini(jrd_rel* relation, bool close_only)
 }
 
 
-bool EXT_get(thread_db* /*tdbb*/, record_param* rpb, FB_UINT64& position)
+bool EXT_get(thread_db* tdbb, record_param* rpb, FB_UINT64& position)
 {
 /**************************************
  *
@@ -439,7 +439,7 @@ bool EXT_get(thread_db* /*tdbb*/, record_param* rpb, FB_UINT64& position)
 			desc = *desc_ptr;
 			desc.dsc_address = record->getData() + (IPTR) desc.dsc_address;
 
-			if (!MOV_compare(&literal->litDesc, &desc))
+			if (!MOV_compare(tdbb, &literal->litDesc, &desc))
 				continue;
 		}
 

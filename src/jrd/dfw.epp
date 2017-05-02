@@ -1241,6 +1241,9 @@ USHORT DFW_assign_index_type(thread_db* tdbb, const Firebird::MetaName& name, SS
 		return idx_numeric2;
 	case dtype_boolean:
 		return idx_boolean;
+	case dtype_dec64:
+	case dtype_dec128:
+		return idx_decimal;
 	default:
 		return idx_numeric;
 	}
@@ -6518,7 +6521,7 @@ static string get_string(const dsc* desc)
 	// Find the actual length of the string, searching until the claimed
 	// end of the string, or the terminating \0, whichever comes first.
 
-	USHORT length = MOV_make_string(desc, ttype_metadata, &str, &temp, sizeof(temp));
+	USHORT length = MOV_make_string(JRD_get_thread_data(), desc, ttype_metadata, &str, &temp, sizeof(temp));
 
 	const char* p = str;
 	const char* const q = str + length;

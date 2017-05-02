@@ -29,6 +29,12 @@
 #include "../yvalve/keywords.h"
 #include "../jrd/intl_proto.h"
 
+#ifdef HAVE_FLOAT_H
+#include <float.h>
+#else
+#define DBL_MAX_10_EXP          308
+#endif
+
 using namespace Firebird;
 using namespace Jrd;
 
@@ -928,10 +934,12 @@ int Parser::yylexAux()
 		bool have_error = false;	// syntax error or value too large
 		bool have_digit = false;	// we've seen a digit
 		bool have_decimal = false;	// we've seen a '.'
-		bool have_exp = false;	// digit ... [eE]
-		bool have_exp_sign = false; // digit ... [eE] {+-]
+		bool have_exp = false;		// digit ... [eE]
+		bool have_exp_sign = false;	// digit ... [eE] {+-]
 		bool have_exp_digit = false; // digit ... [eE] ... digit
+		bool have_overflow = false;	// value of digits > MAX_SINT64
 		FB_UINT64 number = 0;
+		FB_UINT64 expVal = 0;
 		FB_UINT64 limit_by_10 = MAX_SINT64 / 10;
 		SCHAR scale = 0;
 
@@ -955,8 +963,16 @@ int Parser::yylexAux()
 				if ( ('-' == c) || ('+' == c) )
 					have_exp_sign = true;
 				else if ( classes(c) & CHR_DIGIT )
+				{
 					// We have a digit: we haven't seen a sign yet, but it's too late now.
 					have_exp_digit = have_exp_sign  = true;
+					if (!have_overflow)
+					{
+						expVal = expVal * 10 + (c - '0');
+						if (expVal > DBL_MAX_10_EXP)
+							have_overflow = true;
+					}
+				}
 				else
 				{
 					// end of the token
@@ -978,22 +994,27 @@ int Parser::yylexAux()
 			{
 				// Before computing the next value, make sure there will be no overflow.
 
-				have_digit = true;
-
-				if (number >= limit_by_10)
+				if (!have_overflow)
 				{
-					// possibility of an overflow
-					if ((number > limit_by_10) || (c > '8'))
+					have_digit = true;
+
+					if (number >= limit_by_10)
 					{
-						have_error = true;
-						break;
+						// possibility of an overflow
+						if ((number > limit_by_10) || (c > '8'))
+						{
+							have_overflow = true;
+						}
 					}
 				}
 
-				number = number * 10 + (c - '0');
+				if (!have_overflow)
+				{
+					number = number * 10 + (c - '0');
 
-				if (have_decimal)
-					--scale;
+					if (have_decimal)
+						--scale;
+				}
 			}
 			else if ( (('E' == c) || ('e' == c)) && have_digit )
 				have_exp = true;
@@ -1009,7 +1030,7 @@ int Parser::yylexAux()
 		{
 			fb_assert(have_digit);
 
-			if (have_exp_digit)
+			if (have_exp_digit || have_overflow)
 			{
 				yylval.stringPtr = newString(
 					Firebird::string(lex.last_token, lex.ptr - lex.last_token));
@@ -1017,7 +1038,7 @@ int Parser::yylexAux()
 				lex.line_start_bk = lex.line_start;
 				lex.lines_bk = lex.lines;
 
-				return TOK_FLOAT_NUMBER;
+				return have_overflow ? TOK_DECIMAL_NUMBER : TOK_FLOAT_NUMBER;
 			}
 
 			if (!have_exp)

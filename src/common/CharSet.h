@@ -31,6 +31,7 @@
 #define JRD_CHARSET_H
 
 #include "CsConvert.h"
+#include "IntlUtil.h"
 
 namespace Jrd {
 
@@ -42,8 +43,7 @@ public:
 	public:
 		static void clear(charset* cs)
 		{
-			if (cs->charset_fn_destroy)
-				cs->charset_fn_destroy(cs);
+			Firebird::IntlUtil::finiCharset(cs);
 			delete cs;
 		}
 	};
@@ -116,8 +116,7 @@ public:
 
 	void destroy()
 	{
-		if (cs->charset_fn_destroy)
-			cs->charset_fn_destroy(cs);
+		Firebird::IntlUtil::finiCharset(cs);
 	}
 
 	const UCHAR* getSqlMatchAny() const { return sqlMatchAny; }

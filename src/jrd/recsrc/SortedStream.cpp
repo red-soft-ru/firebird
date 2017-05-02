@@ -276,6 +276,7 @@ bool SortedStream::compareKeys(const UCHAR* p, const UCHAR* q) const
 
 	fb_assert(m_map->keyItems.getCount() % 2 == 0);
 	const USHORT count = m_map->keyItems.getCount() / 2;
+	thread_db* tdbb = JRD_get_thread_data();
 
 	for (USHORT i = 0; i < count; i++)
 	{
@@ -295,7 +296,7 @@ bool SortedStream::compareKeys(const UCHAR* p, const UCHAR* q) const
 			dsc desc2 = item->desc;
 			desc2.dsc_address = const_cast<UCHAR*>(q) + (IPTR) desc2.dsc_address;
 
-			if (MOV_compare(&desc1, &desc2))
+			if (MOV_compare(tdbb, &desc1, &desc2))
 				return false;
 		}
 	}
@@ -338,7 +339,7 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 		// a sort key, there is a later nod_field in the item
 		// list that contains the data to send back
 
-		if (IS_INTL_DATA(&item->desc) &&
+		if ((IS_INTL_DATA(&item->desc) || item->desc.isDecFloat()) &&
 			(ULONG)(IPTR) item->desc.dsc_address < m_map->keyLength)
 		{
 			continue;

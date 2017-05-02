@@ -916,7 +916,7 @@ const void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, jrd_req*
 		if (m_frameExtent->unit == WindowClause::FrameExtent::Unit::ROWS)
 		{
 			// Purposedly used 32-bit here. So long distance will complicate things for no gain.
-			impureValue->vlux_count = MOV_get_long(desc, 0);
+			impureValue->vlux_count = MOV_get_long(tdbb, desc, 0);
 
 			if (impureValue->vlux_count < 0)
 				error = true;
@@ -924,7 +924,7 @@ const void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, jrd_req*
 			if (frame->bound == WindowClause::Frame::Bound::PRECEDING)
 				impureValue->vlux_count = -impureValue->vlux_count;
 		}
-		else if (MOV_compare(desc, &zeroDsc) < 0)
+		else if (MOV_compare(tdbb, desc, &zeroDsc) < 0)
 			error = true;
 
 		if (!error)

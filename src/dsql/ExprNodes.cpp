@@ -48,6 +48,7 @@
 #include "../jrd/mov_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/par_proto.h"
+#include "../jrd/cvt2_proto.h"
 #include "../dsql/ddl_proto.h"
 #include "../dsql/errd_proto.h"
 #include "../dsql/gen_proto.h"
@@ -647,6 +648,14 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 					desc->dsc_length = sizeof(double);
 					break;
 
+				case dtype_dec64:
+				case dtype_dec128:
+					desc->dsc_dtype = dtype_dec128;
+					desc->dsc_sub_type = 0;
+					desc->dsc_scale = 0;
+					desc->dsc_length = sizeof(Decimal128);
+					break;
+
 				default:
 					desc->dsc_dtype = dtype_long;
 					desc->dsc_sub_type = 0;
@@ -670,6 +679,13 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 
 			switch (dtype)
 			{
+				case dtype_dec128:
+					desc->dsc_dtype = dtype_dec128;
+					desc->dsc_sub_type = 0;
+					desc->dsc_scale = 0;
+					desc->dsc_length = sizeof(Decimal128);
+					break;
+
 				case dtype_double:
 					desc->dsc_dtype = dtype_double;
 					desc->dsc_sub_type = 0;
@@ -709,7 +725,16 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 
 			dtype = MAX(dtype1, dtype2);
 
-			if (!DTYPE_IS_NUMERIC(dtype))
+			if (DTYPE_IS_DECFLOAT(dtype))
+			{
+				desc->dsc_dtype = dtype_dec128;
+				desc->dsc_length = sizeof(Decimal128);
+				desc->dsc_scale = 0;
+				desc->dsc_flags = (desc1.dsc_flags | desc2.dsc_flags) & DSC_nullable;
+				break;
+			}
+
+			if (!DTYPE_IS_NUMERIC(type))
 			{
 				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
 						  Arg::Gds(isc_dsql_mustuse_numeric_div_dial1));
@@ -755,6 +780,8 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 			// <timestamp> arithmetic, but returns a <double>
 			if (DTYPE_IS_EXACT(dtype1) && DTYPE_IS_EXACT(dtype2))
 				dtype = dtype_int64;
+			else if (desc1.isDecOrInt() && desc2.isDecOrInt())
+				dtype = dtype_dec128;
 			else if (DTYPE_IS_NUMERIC(dtype1) && DTYPE_IS_NUMERIC(dtype2))
 			{
 				fb_assert(DTYPE_IS_APPROX(dtype1) || DTYPE_IS_APPROX(dtype2));
@@ -771,7 +798,7 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 				if (dtype_int64 == dtype2)
 					dtype2 = dtype_double;
 
-				dtype = MAX(dtype1, dtype2);
+				dtype = CVT2_compare_priority[dtype1] > CVT2_compare_priority[dtype2] ? dtype1 : dtype2;
 			}
 
 			desc->dsc_flags = (desc1.dsc_flags | desc2.dsc_flags) & DSC_nullable;
@@ -875,6 +902,14 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 					desc->dsc_length = sizeof(double);
 					break;
 
+				case dtype_dec64:
+				case dtype_dec128:
+					desc->dsc_dtype = dtype_dec128;
+					desc->dsc_sub_type = 0;
+					desc->dsc_scale = 0;
+					desc->dsc_length = sizeof(Decimal128);
+					break;
+
 				case dtype_short:
 				case dtype_long:
 				case dtype_int64:
@@ -920,6 +955,13 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 
 			switch (dtype)
 			{
+				case dtype_dec128:
+					desc->dsc_dtype = dtype_dec128;
+					desc->dsc_sub_type = 0;
+					desc->dsc_scale = 0;
+					desc->dsc_length = sizeof(Decimal128);
+					break;
+
 				case dtype_double:
 					desc->dsc_dtype = dtype_double;
 					desc->dsc_sub_type = 0;
@@ -970,6 +1012,11 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 
 				case dtype_double:
 					desc->dsc_length = sizeof(double);
+					desc->dsc_scale = 0;
+					break;
+
+				case dtype_dec128:
+					desc->dsc_length = sizeof(Decimal128);
 					desc->dsc_scale = 0;
 					break;
 
@@ -1168,6 +1215,16 @@ void ArithmeticNode::getDescDialect1(thread_db* /*tdbb*/, dsc* desc, dsc& desc1,
 					desc->dsc_flags = 0;
 					return;
 
+				case dtype_dec64:
+				case dtype_dec128:
+					nodFlags |= FLAG_DECFLOAT;
+					desc->dsc_dtype = dtype_dec128;
+					desc->dsc_length = sizeof(Decimal128);
+					desc->dsc_scale = 0;
+					desc->dsc_sub_type = 0;
+					desc->dsc_flags = 0;
+					break;
+
 				case dtype_unknown:
 					desc->dsc_dtype = dtype_unknown;
 					desc->dsc_length = 0;
@@ -1210,6 +1267,15 @@ void ArithmeticNode::getDescDialect1(thread_db* /*tdbb*/, dsc* desc, dsc& desc1,
 					desc->dsc_flags = 0;
 					return;
 
+				case dtype_dec128:
+					nodFlags |= FLAG_DECFLOAT;
+					desc->dsc_dtype = dtype_dec128;
+					desc->dsc_length = sizeof(Decimal128);
+					desc->dsc_scale = 0;
+					desc->dsc_sub_type = 0;
+					desc->dsc_flags = 0;
+					break;
+
 				case dtype_unknown:
 					desc->dsc_dtype = dtype_unknown;
 					desc->dsc_length = 0;
@@ -1230,6 +1296,16 @@ void ArithmeticNode::getDescDialect1(thread_db* /*tdbb*/, dsc* desc, dsc& desc1,
 			break;
 
 		case blr_divide:
+			if (desc1.isDecOrInt() && desc2.isDecOrInt())
+			{
+				desc->dsc_dtype = dtype_dec128;
+				desc->dsc_length = sizeof(Decimal128);
+				desc->dsc_scale = 0;
+				desc->dsc_sub_type = 0;
+				desc->dsc_flags = 0;
+				break;
+			}
+
 			// for compatibility with older versions of the product, we accept
 			// text types for division in blr_version4 (dialect <= 1) only
 			if (!(DTYPE_IS_NUMERIC(desc1.dsc_dtype) || DTYPE_IS_TEXT(desc1.dsc_dtype)))
@@ -1270,7 +1346,7 @@ void ArithmeticNode::getDescDialect3(thread_db* /*tdbb*/, dsc* desc, dsc& desc1,
 			USHORT dtype1 = desc1.dsc_dtype;
 			USHORT dtype2 = desc2.dsc_dtype;
 
-			// In Dialect 2 or 3, strings can never partipate in addition / sub
+			// In Dialect 2 or 3, strings can never participate in addition / sub
 			// (use a specific cast instead)
 			if (DTYPE_IS_TEXT(dtype1) || DTYPE_IS_TEXT(dtype2))
 				ERR_post(Arg::Gds(isc_expression_eval_err));
@@ -1281,6 +1357,8 @@ void ArithmeticNode::getDescDialect3(thread_db* /*tdbb*/, dsc* desc, dsc& desc1,
 
 			if (DTYPE_IS_EXACT(desc1.dsc_dtype) && DTYPE_IS_EXACT(desc2.dsc_dtype))
 				dtype = dtype_int64;
+			else if (desc1.isDecOrInt() && desc2.isDecOrInt())
+				dtype = dtype_dec128;
 			else if (DTYPE_IS_NUMERIC(desc1.dsc_dtype) && DTYPE_IS_NUMERIC(desc2.dsc_dtype))
 				dtype = dtype_double;
 			else
@@ -1411,6 +1489,16 @@ void ArithmeticNode::getDescDialect3(thread_db* /*tdbb*/, dsc* desc, dsc& desc1,
 					desc->dsc_flags = 0;
 					return;
 
+				case dtype_dec64:
+				case dtype_dec128:
+					nodFlags |= FLAG_DECFLOAT;
+					desc->dsc_dtype = dtype_dec128;
+					desc->dsc_length = sizeof(Decimal128);
+					desc->dsc_scale = 0;
+					desc->dsc_sub_type = 0;
+					desc->dsc_flags = 0;
+					return;
+
 				case dtype_short:
 				case dtype_long:
 				case dtype_int64:
@@ -1455,6 +1543,15 @@ void ArithmeticNode::getDescDialect3(thread_db* /*tdbb*/, dsc* desc, dsc& desc1,
 					nodFlags |= FLAG_DOUBLE;
 					desc->dsc_dtype = DEFAULT_DOUBLE;
 					desc->dsc_length = sizeof(double);
+					desc->dsc_scale = 0;
+					desc->dsc_sub_type = 0;
+					desc->dsc_flags = 0;
+					return;
+
+				case dtype_dec128:
+					nodFlags |= FLAG_DECFLOAT;
+					desc->dsc_dtype = dtype_dec128;
+					desc->dsc_length = sizeof(Decimal128);
 					desc->dsc_scale = 0;
 					desc->dsc_sub_type = 0;
 					desc->dsc_flags = 0;
@@ -1590,7 +1687,7 @@ dsc* ArithmeticNode::execute(thread_db* tdbb, jrd_req* request) const
 
 			case blr_divide:
 			{
-				const double divisor = MOV_get_double(desc2);
+				const double divisor = MOV_get_double(tdbb, desc2);
 
 				if (divisor == 0)
 				{
@@ -1598,7 +1695,7 @@ dsc* ArithmeticNode::execute(thread_db* tdbb, jrd_req* request) const
 							 Arg::Gds(isc_exception_float_divide_by_zero));
 				}
 
-				impure->vlu_misc.vlu_double = MOV_get_double(desc1) / divisor;
+				impure->vlu_misc.vlu_double = MOV_get_double(tdbb, desc1) / divisor;
 
 				if (isinf(impure->vlu_misc.vlu_double))
 				{
@@ -1642,6 +1739,7 @@ dsc* ArithmeticNode::execute(thread_db* tdbb, jrd_req* request) const
 dsc* ArithmeticNode::add(const dsc* desc, impure_value* value, const ValueExprNode* node, const UCHAR blrOp)
 {
 	const ArithmeticNode* arithmeticNode = node->as<ArithmeticNode>();
+	thread_db* tdbb = JRD_get_thread_data();
 
 #ifdef DEV_BUILD
 	const SubQueryNode* subQueryNode = node->as<SubQueryNode>();
@@ -1662,12 +1760,31 @@ dsc* ArithmeticNode::add(const dsc* desc, impure_value* value, const ValueExprNo
 		return arithmeticNode->addDateTime(desc, value);
 	}
 
+	// Handle decimal arithmetic
+
+	if (node->nodFlags & FLAG_DECFLOAT)
+	{
+		const Decimal128 d1 = MOV_get_dec128(tdbb, desc);
+		const Decimal128 d2 = MOV_get_dec128(tdbb, &value->vlu_desc);
+
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		value->vlu_misc.vlu_dec128 = (blrOp == blr_subtract) ? d2.sub(decSt, d1) : d1.add(decSt, d2);
+
+		result->dsc_dtype = dtype_dec128;
+		result->dsc_length = sizeof(Decimal128);
+		result->dsc_scale = 0;
+		result->dsc_sub_type = 0;
+		result->dsc_address = (UCHAR*) &value->vlu_misc.vlu_dec128;
+
+		return result;
+	}
+
 	// Handle floating arithmetic
 
 	if (node->nodFlags & FLAG_DOUBLE)
 	{
-		const double d1 = MOV_get_double(desc);
-		const double d2 = MOV_get_double(&value->vlu_desc);
+		const double d1 = MOV_get_double(tdbb, desc);
+		const double d2 = MOV_get_double(tdbb, &value->vlu_desc);
 
 		value->vlu_misc.vlu_double = (blrOp == blr_subtract) ? d2 - d1 : d1 + d2;
 
@@ -1688,8 +1805,8 @@ dsc* ArithmeticNode::add(const dsc* desc, impure_value* value, const ValueExprNo
 	// CVC: Maybe we should upgrade the sum to double if it doesn't fit?
 	// This is what was done for multiplicaton in dialect 1.
 
-	const SLONG l1 = MOV_get_long(desc, node->nodScale);
-	const SINT64 l2 = MOV_get_long(&value->vlu_desc, node->nodScale);
+	const SLONG l1 = MOV_get_long(tdbb, desc, node->nodScale);
+	const SINT64 l2 = MOV_get_long(tdbb, &value->vlu_desc, node->nodScale);
 	const SINT64 rc = (blrOp == blr_subtract) ? l2 - l1 : l2 + l1;
 
 	if (rc < MIN_SLONG || rc > MAX_SLONG)
@@ -1721,12 +1838,33 @@ dsc* ArithmeticNode::add2(const dsc* desc, impure_value* value, const ValueExprN
 		return arithmeticNode->addDateTime(desc, value);
 	}
 
+	thread_db* tdbb = JRD_get_thread_data();
+
+	// Handle decimal arithmetic
+
+	if (node->nodFlags & FLAG_DECFLOAT)
+	{
+		const Decimal128 d1 = MOV_get_dec128(tdbb, desc);
+		const Decimal128 d2 = MOV_get_dec128(tdbb, &value->vlu_desc);
+
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		value->vlu_misc.vlu_dec128 = (blrOp == blr_subtract) ? d2.sub(decSt, d1) : d1.add(decSt, d2);
+
+		result->dsc_dtype = dtype_dec128;
+		result->dsc_length = sizeof(Decimal128);
+		result->dsc_scale = 0;
+		result->dsc_sub_type = 0;
+		result->dsc_address = (UCHAR*) &value->vlu_misc.vlu_dec128;
+
+		return result;
+	}
+
 	// Handle floating arithmetic
 
 	if (node->nodFlags & FLAG_DOUBLE)
 	{
-		const double d1 = MOV_get_double(desc);
-		const double d2 = MOV_get_double(&value->vlu_desc);
+		const double d1 = MOV_get_double(tdbb, desc);
+		const double d2 = MOV_get_double(tdbb, &value->vlu_desc);
 
 		value->vlu_misc.vlu_double = (blrOp == blr_subtract) ? d2 - d1 : d1 + d2;
 
@@ -1744,8 +1882,8 @@ dsc* ArithmeticNode::add2(const dsc* desc, impure_value* value, const ValueExprN
 
 	// Everything else defaults to int64
 
-	SINT64 i1 = MOV_get_int64(desc, node->nodScale);
-	const SINT64 i2 = MOV_get_int64(&value->vlu_desc, node->nodScale);
+	SINT64 i1 = MOV_get_int64(tdbb, desc, node->nodScale);
+	const SINT64 i2 = MOV_get_int64(tdbb, &value->vlu_desc, node->nodScale);
 
 	result->dsc_dtype = dtype_int64;
 	result->dsc_length = sizeof(SINT64);
@@ -1785,14 +1923,34 @@ dsc* ArithmeticNode::add2(const dsc* desc, impure_value* value, const ValueExprN
 // This function can be removed when dialect-3 becomes the lowest supported dialect. (Version 7.0?)
 dsc* ArithmeticNode::multiply(const dsc* desc, impure_value* value) const
 {
+	thread_db* tdbb = JRD_get_thread_data();
 	DEV_BLKCHK(node, type_nod);
+
+	// Handle decimal arithmetic
+
+	if (nodFlags & FLAG_DECFLOAT)
+	{
+		const Decimal128 d1 = MOV_get_dec128(tdbb, desc);
+		const Decimal128 d2 = MOV_get_dec128(tdbb, &value->vlu_desc);
+
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		value->vlu_misc.vlu_dec128 = d1.mul(decSt, d2);
+
+		value->vlu_desc.dsc_dtype = dtype_dec128;
+		value->vlu_desc.dsc_length = sizeof(Decimal128);
+		value->vlu_desc.dsc_scale = 0;
+		value->vlu_desc.dsc_sub_type = 0;
+		value->vlu_desc.dsc_address = (UCHAR*) &value->vlu_misc.vlu_dec128;
+
+		return &value->vlu_desc;
+	}
 
 	// Handle floating arithmetic
 
 	if (nodFlags & FLAG_DOUBLE)
 	{
-		const double d1 = MOV_get_double(desc);
-		const double d2 = MOV_get_double(&value->vlu_desc);
+		const double d1 = MOV_get_double(tdbb, desc);
+		const double d2 = MOV_get_double(tdbb, &value->vlu_desc);
 		value->vlu_misc.vlu_double = d1 * d2;
 
 		if (isinf(value->vlu_misc.vlu_double))
@@ -1820,8 +1978,8 @@ dsc* ArithmeticNode::multiply(const dsc* desc, impure_value* value) const
 	// SLONG l1, l2;
 	//{
 	const SSHORT scale = NUMERIC_SCALE(value->vlu_desc);
-	const SINT64 i1 = MOV_get_long(desc, nodScale - scale);
-	const SINT64 i2 = MOV_get_long(&value->vlu_desc, scale);
+	const SINT64 i1 = MOV_get_long(tdbb, desc, nodScale - scale);
+	const SINT64 i2 = MOV_get_long(tdbb, &value->vlu_desc, scale);
 	value->vlu_desc.dsc_dtype = dtype_long;
 	value->vlu_desc.dsc_length = sizeof(SLONG);
 	value->vlu_desc.dsc_scale = nodScale;
@@ -1833,7 +1991,7 @@ dsc* ArithmeticNode::multiply(const dsc* desc, impure_value* value) const
 		value->vlu_desc.dsc_address = (UCHAR*) &value->vlu_misc.vlu_int64;
 		value->vlu_desc.dsc_dtype = dtype_int64;
 		value->vlu_desc.dsc_length = sizeof(SINT64);
-		value->vlu_misc.vlu_double = MOV_get_double(&value->vlu_desc);
+		value->vlu_misc.vlu_double = MOV_get_double(tdbb, &value->vlu_desc);
 		/* This is the Borland solution instead of the five lines above.
 		d1 = MOV_get_double (desc);
 		d2 = MOV_get_double (&value->vlu_desc);
@@ -1859,14 +2017,34 @@ dsc* ArithmeticNode::multiply(const dsc* desc, impure_value* value) const
 // Multiply two numbers, with dialect-3 semantics, implementing blr_version5 ... blr_multiply.
 dsc* ArithmeticNode::multiply2(const dsc* desc, impure_value* value) const
 {
+	thread_db* tdbb = JRD_get_thread_data();
 	DEV_BLKCHK(node, type_nod);
+
+	// Handle decimal arithmetic
+
+	if (nodFlags & FLAG_DECFLOAT)
+	{
+		const Decimal128 d1 = MOV_get_dec128(tdbb, desc);
+		const Decimal128 d2 = MOV_get_dec128(tdbb, &value->vlu_desc);
+
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		value->vlu_misc.vlu_dec128 = d1.mul(decSt, d2);
+
+		value->vlu_desc.dsc_dtype = dtype_dec128;
+		value->vlu_desc.dsc_length = sizeof(Decimal128);
+		value->vlu_desc.dsc_scale = 0;
+		value->vlu_desc.dsc_sub_type = 0;
+		value->vlu_desc.dsc_address = (UCHAR*) &value->vlu_misc.vlu_dec128;
+
+		return &value->vlu_desc;
+	}
 
 	// Handle floating arithmetic
 
 	if (nodFlags & FLAG_DOUBLE)
 	{
-		const double d1 = MOV_get_double(desc);
-		const double d2 = MOV_get_double(&value->vlu_desc);
+		const double d1 = MOV_get_double(tdbb, desc);
+		const double d2 = MOV_get_double(tdbb, &value->vlu_desc);
 		value->vlu_misc.vlu_double = d1 * d2;
 
 		if (isinf(value->vlu_misc.vlu_double))
@@ -1886,8 +2064,8 @@ dsc* ArithmeticNode::multiply2(const dsc* desc, impure_value* value) const
 	// Everything else defaults to int64
 
 	const SSHORT scale = NUMERIC_SCALE(value->vlu_desc);
-	const SINT64 i1 = MOV_get_int64(desc, nodScale - scale);
-	const SINT64 i2 = MOV_get_int64(&value->vlu_desc, scale);
+	const SINT64 i1 = MOV_get_int64(tdbb, desc, nodScale - scale);
+	const SINT64 i2 = MOV_get_int64(tdbb, &value->vlu_desc, scale);
 
 	/*
 	We need to report an overflow if
@@ -1935,19 +2113,39 @@ dsc* ArithmeticNode::multiply2(const dsc* desc, impure_value* value) const
 // blr_version5 ... blr_average ....
 dsc* ArithmeticNode::divide2(const dsc* desc, impure_value* value) const
 {
+	thread_db* tdbb = JRD_get_thread_data();
 	DEV_BLKCHK(node, type_nod);
+
+	// Handle decimal arithmetic
+
+	if (nodFlags & FLAG_DECFLOAT)
+	{
+		const Decimal128 d1 = MOV_get_dec128(tdbb, desc);
+		const Decimal128 d2 = MOV_get_dec128(tdbb, &value->vlu_desc);
+
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		value->vlu_misc.vlu_dec128 = d2.div(decSt, d1);
+
+		value->vlu_desc.dsc_dtype = dtype_dec128;
+		value->vlu_desc.dsc_length = sizeof(Decimal128);
+		value->vlu_desc.dsc_scale = 0;
+		value->vlu_desc.dsc_sub_type = 0;
+		value->vlu_desc.dsc_address = (UCHAR*) &value->vlu_misc.vlu_dec128;
+
+		return &value->vlu_desc;
+	}
 
 	// Handle floating arithmetic
 
 	if (nodFlags & FLAG_DOUBLE)
 	{
-		const double d2 = MOV_get_double(desc);
+		const double d2 = MOV_get_double(tdbb, desc);
 		if (d2 == 0.0)
 		{
 			ERR_post(Arg::Gds(isc_arith_except) <<
 					 Arg::Gds(isc_exception_float_divide_by_zero));
 		}
-		const double d1 = MOV_get_double(&value->vlu_desc);
+		const double d1 = MOV_get_double(tdbb, &value->vlu_desc);
 		value->vlu_misc.vlu_double = d1 / d2;
 		if (isinf(value->vlu_misc.vlu_double))
 		{
@@ -1998,14 +2196,14 @@ dsc* ArithmeticNode::divide2(const dsc* desc, impure_value* value) const
 	 * Who'da thunk that 9th-grade algebra would prove so useful.
 	 *                                      -- Chris Jewell, December 1998
 	 */
-	SINT64 i2 = MOV_get_int64(desc, desc->dsc_scale);
+	SINT64 i2 = MOV_get_int64(tdbb, desc, desc->dsc_scale);
 	if (i2 == 0)
 	{
 		ERR_post(Arg::Gds(isc_arith_except) <<
 				 Arg::Gds(isc_exception_integer_divide_by_zero));
 	}
 
-	SINT64 i1 = MOV_get_int64(&value->vlu_desc, nodScale - desc->dsc_scale);
+	SINT64 i1 = MOV_get_int64(tdbb, &value->vlu_desc, nodScale - desc->dsc_scale);
 
 	// MIN_SINT64 / -1 = (MAX_SINT64 + 1), which overflows in SINT64.
 	if ((i1 == MIN_SINT64) && (i2 == -1))
@@ -2141,6 +2339,7 @@ dsc* ArithmeticNode::addSqlDate(const dsc* desc, impure_value* value) const
 	fb_assert(blrOp == blr_add || blrOp == blr_subtract);
 
 	dsc* result = &value->vlu_desc;
+	thread_db* tdbb = JRD_get_thread_data();
 
 	fb_assert(value->vlu_desc.dsc_dtype == dtype_sql_date || desc->dsc_dtype == dtype_sql_date);
 
@@ -2153,7 +2352,7 @@ dsc* ArithmeticNode::addSqlDate(const dsc* desc, impure_value* value) const
 		op1_is_date = true;
 	}
 	else
-		d1 = MOV_get_int64(&value->vlu_desc, 0);
+		d1 = MOV_get_int64(tdbb, &value->vlu_desc, 0);
 
 	SINT64 d2;
 	// Coerce operand2 to a count of days
@@ -2164,7 +2363,7 @@ dsc* ArithmeticNode::addSqlDate(const dsc* desc, impure_value* value) const
 		op2_is_date = true;
 	}
 	else
-		d2 = MOV_get_int64(desc, 0);
+		d2 = MOV_get_int64(tdbb, desc, 0);
 
 	if (blrOp == blr_subtract && op1_is_date && op2_is_date)
 	{
@@ -2210,6 +2409,7 @@ dsc* ArithmeticNode::addSqlTime(const dsc* desc, impure_value* value) const
 	fb_assert(blrOp == blr_add || blrOp == blr_subtract);
 
 	dsc* result = &value->vlu_desc;
+	thread_db* tdbb = JRD_get_thread_data();
 
 	fb_assert(value->vlu_desc.dsc_dtype == dtype_sql_time || desc->dsc_dtype == dtype_sql_time);
 
@@ -2223,7 +2423,7 @@ dsc* ArithmeticNode::addSqlTime(const dsc* desc, impure_value* value) const
 		fb_assert(d1 >= 0 && d1 < ISC_TICKS_PER_DAY);
 	}
 	else
-		d1 = MOV_get_int64(&value->vlu_desc, ISC_TIME_SECONDS_PRECISION_SCALE);
+		d1 = MOV_get_int64(tdbb, &value->vlu_desc, ISC_TIME_SECONDS_PRECISION_SCALE);
 
 	SINT64 d2;
 	// Coerce operand2 to a count of seconds
@@ -2235,7 +2435,7 @@ dsc* ArithmeticNode::addSqlTime(const dsc* desc, impure_value* value) const
 		fb_assert(d2 >= 0 && d2 < ISC_TICKS_PER_DAY);
 	}
 	else
-		d2 = MOV_get_int64(desc, ISC_TIME_SECONDS_PRECISION_SCALE);
+		d2 = MOV_get_int64(tdbb, desc, ISC_TIME_SECONDS_PRECISION_SCALE);
 
 	if (blrOp == blr_subtract && op1_is_time && op2_is_time)
 	{
@@ -4101,7 +4301,7 @@ dsc* DecodeNode::execute(thread_db* tdbb, jrd_req* request) const
 		{
 			dsc* desc = EVL_expr(tdbb, request, condition);
 
-			if (desc && !(request->req_flags & req_null) && MOV_compare(testDesc, desc) == 0)
+			if (desc && !(request->req_flags & req_null) && MOV_compare(tdbb, testDesc, desc) == 0)
 				return EVL_expr(tdbb, request, *valuesPtr);
 
 			++valuesPtr;
@@ -6234,7 +6434,7 @@ dsc* GenIdNode::execute(thread_db* tdbb, jrd_req* request) const
 		if (request->req_flags & req_null)
 			return NULL;
 
-		change = MOV_get_int64(value, 0);
+		change = MOV_get_int64(tdbb, value, 0);
 	}
 
 	if (sysGen && change != 0)
@@ -6549,11 +6749,14 @@ DmlNode* LiteralNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 
 	PAR_desc(tdbb, csb, &node->litDesc);
 
-	UCHAR* p = FB_NEW_POOL(csb->csb_pool) UCHAR[node->litDesc.dsc_length];
+	USHORT l = node->litDesc.dsc_length;
+	USHORT dataLen = l;
+	if (node->litDesc.dsc_dtype == dtype_double && dataLen < sizeof(Decimal128))
+		dataLen = sizeof(Decimal128);
+	UCHAR* p = FB_NEW_POOL(csb->csb_pool) UCHAR[dataLen];
 	node->litDesc.dsc_address = p;
 	node->litDesc.dsc_flags = 0;
 	const UCHAR* q = csb->csb_blr_reader.getPos();
-	USHORT l = node->litDesc.dsc_length;
 
 	switch (node->litDesc.dsc_dtype)
 	{
@@ -6583,6 +6786,7 @@ DmlNode* LiteralNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 			break;
 
 		case dtype_double:
+		case dtype_dec128:
 		{
 			SSHORT scale;
 			UCHAR dtype;
@@ -6593,13 +6797,16 @@ DmlNode* LiteralNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 
 			l = csb->csb_blr_reader.getWord();
 			q = csb->csb_blr_reader.getPos();
-			dtype = CVT_get_numeric(q, l, &scale, (double*) p);
+			dtype = CVT_get_numeric(q, l, &scale, p);			// use decfloat to pass literal ???
 			node->litDesc.dsc_dtype = dtype;
 
 			switch (dtype)
 			{
 				case dtype_double:
 					node->litDesc.dsc_length = sizeof(double);
+					break;
+				case dtype_dec128:
+					node->litDesc.dsc_length = sizeof(Decimal128);
 					break;
 				case dtype_long:
 					node->litDesc.dsc_length = sizeof(SLONG);
@@ -6668,6 +6875,7 @@ void LiteralNode::genConstant(DsqlCompilerScratch* dsqlScratch, const dsc* desc,
 			break;
 
 		case dtype_double:
+		case dtype_dec128:
 		{
 			// this is used for approximate/large numeric literal
 			// which is transmitted to the engine as a string.
@@ -6951,8 +7159,9 @@ bool LiteralNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 
 	const LiteralNode* const otherNode = other->as<LiteralNode>();
 	fb_assert(otherNode);
+	thread_db* tdbb = JRD_get_thread_data();
 
-	return !MOV_compare(&litDesc, &otherNode->litDesc);
+	return !MOV_compare(tdbb, &litDesc, &otherNode->litDesc);
 }
 
 ValueExprNode* LiteralNode::pass2(thread_db* tdbb, CompilerScratch* csb)
@@ -7511,7 +7720,7 @@ void NegateNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 void NegateNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 {
 	arg->getDesc(tdbb, csb, desc);
-	nodFlags = arg->nodFlags & FLAG_DOUBLE;
+	nodFlags = arg->nodFlags & (FLAG_DOUBLE | FLAG_DECFLOAT);
 
 	if (desc->dsc_dtype == dtype_quad)
 		IBERROR(224);	// msg 224 quad word arithmetic not supported
@@ -7568,6 +7777,14 @@ dsc* NegateNode::execute(thread_db* tdbb, jrd_req* request) const
 			impure->vlu_misc.vlu_double = -impure->vlu_misc.vlu_double;
 			break;
 
+		case dtype_dec64:
+			impure->vlu_misc.vlu_dec64 = impure->vlu_misc.vlu_dec64.neg();
+			break;
+
+		case dtype_dec128:
+			impure->vlu_misc.vlu_dec128 = impure->vlu_misc.vlu_dec128.neg();
+			break;
+
 		case dtype_int64:
 			if (impure->vlu_misc.vlu_int64 == MIN_SINT64)
 				ERR_post(Arg::Gds(isc_exception_integer_overflow));
@@ -7575,7 +7792,7 @@ dsc* NegateNode::execute(thread_db* tdbb, jrd_req* request) const
 			break;
 
 		default:
-			impure->vlu_misc.vlu_double = -MOV_get_double(&impure->vlu_desc);
+			impure->vlu_misc.vlu_double = -MOV_get_double(tdbb, &impure->vlu_desc);
 			impure->vlu_desc.dsc_dtype = DEFAULT_DOUBLE;
 			impure->vlu_desc.dsc_length = sizeof(double);
 			impure->vlu_desc.dsc_scale = 0;
@@ -8412,7 +8629,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, jrd_req* request) const
 	if (argFlag)
 	{
 		desc = EVL_expr(tdbb, request, argFlag);
-		if (MOV_get_long(desc, 0))
+		if (MOV_get_long(tdbb, desc, 0))
 			request->req_flags |= req_null;
 	}
 
@@ -9151,7 +9368,7 @@ dsc* ScalarNode::execute(thread_db* tdbb, jrd_req* request) const
 		const dsc* temp = EVL_expr(tdbb, request, subscript);
 
 		if (temp && !(request->req_flags & req_null))
-			numSubscripts[iter++] = MOV_get_long(temp, 0);
+			numSubscripts[iter++] = MOV_get_long(tdbb, temp, 0);
 		else
 			return NULL;
 	}
@@ -9399,7 +9616,7 @@ dsc* StrCaseNode::execute(thread_db* tdbb, jrd_req* request) const
 		USHORT ttype;
 
 		dsc desc;
-		desc.dsc_length = MOV_get_string_ptr(value, &ttype, &ptr, &temp, sizeof(temp));
+		desc.dsc_length = MOV_get_string_ptr(tdbb, value, &ttype, &ptr, &temp, sizeof(temp));
 		desc.dsc_dtype = dtype_text;
 		desc.dsc_address = NULL;
 		desc.setTextType(ttype);
@@ -9629,7 +9846,7 @@ dsc* StrLenNode::execute(thread_db* tdbb, jrd_req* request) const
 	USHORT ttype;
 	UCHAR* p;
 
-	length = MOV_get_string_ptr(value, &ttype, &p, &temp, sizeof(temp));
+	length = MOV_get_string_ptr(tdbb, value, &ttype, &p, &temp, sizeof(temp));
 
 	switch (blrSubOp)
 	{
@@ -9835,6 +10052,17 @@ void SubQueryNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 
 	if (blrOp == blr_average)
 	{
+		if (DTYPE_IS_DECFLOAT(desc->dsc_dtype))
+		{
+			desc->dsc_dtype = dtype_dec128;
+			desc->dsc_length = sizeof(Decimal128);
+			desc->dsc_scale = 0;
+			desc->dsc_sub_type = 0;
+			desc->dsc_flags = 0;
+			nodFlags |= FLAG_DECFLOAT;
+			return;
+		}
+
 		if (!(DTYPE_IS_NUMERIC(desc->dsc_dtype) || DTYPE_IS_TEXT(desc->dsc_dtype)))
 		{
 			if (desc->dsc_dtype != dtype_unknown)
@@ -9882,6 +10110,16 @@ void SubQueryNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 				desc->dsc_sub_type = 0;
 				desc->dsc_flags = 0;
 				nodFlags |= FLAG_DOUBLE;
+				return;
+
+			case dtype_dec64:
+			case dtype_dec128:
+				desc->dsc_dtype = dtype_dec128;
+				desc->dsc_length = sizeof(Decimal128);
+				desc->dsc_scale = 0;
+				desc->dsc_sub_type = 0;
+				desc->dsc_flags = 0;
+				nodFlags |= FLAG_DECFLOAT;
 				return;
 
 			case dtype_sql_time:
@@ -9954,13 +10192,12 @@ ValueExprNode* SubQueryNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	impureOffset = CMP_impure(csb, sizeof(impure_value_ex));
 
-	if (blrOp == blr_average)
-		nodFlags |= FLAG_DOUBLE;
-	else if (blrOp == blr_total)
 	{
 		dsc desc;
 		getDesc(tdbb, csb, &desc);
 	}
+	if (blrOp == blr_average && !(nodFlags & FLAG_DECFLOAT))
+		nodFlags |= FLAG_DOUBLE;
 
 	// Bind values of invariant nodes to top-level RSE (if present).
 	if ((nodFlags & FLAG_INVARIANT) && csb->csb_current_nodes.hasData())
@@ -10049,7 +10286,7 @@ dsc* SubQueryNode::execute(thread_db* tdbb, jrd_req* request) const
 
 					int result;
 
-					if (flag || ((result = MOV_compare(value, desc)) < 0 && blrOp == blr_minimum) ||
+					if (flag || ((result = MOV_compare(tdbb, value, desc)) < 0 && blrOp == blr_minimum) ||
 						(blrOp != blr_minimum && result > 0))
 					{
 						flag = 0;
@@ -10086,7 +10323,7 @@ dsc* SubQueryNode::execute(thread_db* tdbb, jrd_req* request) const
 				if (!count)
 					break;
 
-				d = MOV_get_double(&impure->vlu_desc);
+				d = MOV_get_double(tdbb, &impure->vlu_desc);
 				impure->vlu_misc.vlu_double = d / count;
 				impure->vlu_desc.dsc_dtype = DEFAULT_DOUBLE;
 				impure->vlu_desc.dsc_length = sizeof(double);
@@ -10284,7 +10521,7 @@ void SubstringNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 	{
 		if (length->is<LiteralNode>() && desc2.dsc_dtype == dtype_long)
 		{
-			const SLONG len = MOV_get_long(&desc2, 0);
+			const SLONG len = MOV_get_long(tdbb, &desc2, 0);
 
 			if (len < 0)
 				ERR_post(Arg::Gds(isc_bad_substring_length) << Arg::Num(len));
@@ -10338,8 +10575,8 @@ dsc* SubstringNode::execute(thread_db* tdbb, jrd_req* request) const
 dsc* SubstringNode::perform(thread_db* tdbb, impure_value* impure, const dsc* valueDsc,
 	const dsc* startDsc, const dsc* lengthDsc)
 {
-	SINT64 sStart = MOV_get_long(startDsc, 0);
-	SINT64 sLength = MOV_get_long(lengthDsc, 0);
+	SINT64 sStart = MOV_get_long(tdbb, startDsc, 0);
+	SINT64 sLength = MOV_get_long(tdbb, lengthDsc, 0);
 
 	if (sLength < 0)
 		status_exception::raise(Arg::Gds(isc_bad_substring_length) << Arg::Num(sLength));
@@ -10434,7 +10671,7 @@ dsc* SubstringNode::perform(thread_db* tdbb, impure_value* impure, const dsc* va
 		//		they aren't accepted, so they will cause error() to be called anyway.
 		VaryStr<32> temp;
 		USHORT ttype;
-		desc.dsc_length = MOV_get_string_ptr(valueDsc, &ttype, &desc.dsc_address,
+		desc.dsc_length = MOV_get_string_ptr(tdbb, valueDsc, &ttype, &desc.dsc_address,
 			&temp, sizeof(temp));
 		desc.setTextType(ttype);
 
@@ -11276,7 +11513,8 @@ UdfCallNode::UdfCallNode(MemoryPool& pool, const QualifiedName& aName, ValueList
 	  name(pool, aName),
 	  args(aArgs),
 	  function(NULL),
-	  dsqlFunction(NULL)
+	  dsqlFunction(NULL),
+	  isSubRoutine(false)
 {
 	addChildNode(args, args);
 }
@@ -11338,6 +11576,8 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 		csb->csb_blr_reader.seekBackward(count);
 		PAR_error(csb, Arg::Gds(isc_funnotdef) << Arg::Str(name.toString()));
 	}
+
+	node->isSubRoutine = function->isSubRoutine();
 
 	const UCHAR argCount = csb->csb_blr_reader.getByte();
 
@@ -11431,7 +11671,7 @@ ValueExprNode* UdfCallNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
 	UdfCallNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) UdfCallNode(*tdbb->getDefaultPool(), name);
 	node->args = copier.copy(tdbb, args);
-	node->function = function;
+	node->function = isSubRoutine ? function : Function::lookup(tdbb, name, false);
 	return node;
 }
 
@@ -12212,6 +12452,7 @@ static SINT64 getDayFraction(const dsc* d)
 {
 	dsc result;
 	double result_days;
+	thread_db* tdbb = JRD_get_thread_data();
 
 	result.dsc_dtype = dtype_double;
 	result.dsc_scale = 0;
@@ -12221,7 +12462,7 @@ static SINT64 getDayFraction(const dsc* d)
 	result.dsc_address = reinterpret_cast<UCHAR*>(&result_days);
 
 	// Convert the input number to a double
-	CVT_move(d, &result);
+	CVT_move(d, &result, tdbb->getAttachment()->att_dec_status);
 
 	// There's likely some loss of precision here due to rounding of number
 
@@ -12253,6 +12494,7 @@ static SINT64 getDayFraction(const dsc* d)
 // This is derived from the ISC_TIME_SECONDS_PRECISION.
 static SINT64 getTimeStampToIscTicks(const dsc* d)
 {
+	thread_db* tdbb = JRD_get_thread_data();
 	dsc result;
 	GDS_TIMESTAMP result_timestamp;
 
@@ -12263,7 +12505,7 @@ static SINT64 getTimeStampToIscTicks(const dsc* d)
 	result.dsc_length = sizeof(GDS_TIMESTAMP);
 	result.dsc_address = reinterpret_cast<UCHAR*>(&result_timestamp);
 
-	CVT_move(d, &result);
+	CVT_move(d, &result, tdbb->getAttachment()->att_dec_status);
 
 	return ((SINT64) result_timestamp.timestamp_date) * ISC_TICKS_PER_DAY +
 		(SINT64) result_timestamp.timestamp_time;

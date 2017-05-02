@@ -80,7 +80,7 @@ namespace Jrd
 	class RseNode;
 	class StmtNode;
 	class TransactionNode;
-	class SetSessionNode;
+	class SessionManagementNode;
 	class ValueExprNode;
 	class ValueListNode;
 	class WindowClause;
@@ -433,7 +433,7 @@ public:
 		TYPE_SELECT, TYPE_SELECT_UPD, TYPE_INSERT, TYPE_DELETE, TYPE_UPDATE, TYPE_UPDATE_CURSOR,
 		TYPE_DELETE_CURSOR, TYPE_COMMIT, TYPE_ROLLBACK, TYPE_CREATE_DB, TYPE_DDL, TYPE_START_TRANS,
 		TYPE_EXEC_PROCEDURE, TYPE_COMMIT_RETAIN, TYPE_ROLLBACK_RETAIN, TYPE_SET_GENERATOR,
-		TYPE_SAVEPOINT, TYPE_EXEC_BLOCK, TYPE_SELECT_BLOCK, TYPE_SET_ROLE, TYPE_SET_SESSION
+		TYPE_SAVEPOINT, TYPE_EXEC_BLOCK, TYPE_SELECT_BLOCK, TYPE_SESSION_MANAGEMENT
 	};
 
 	// Statement flags.
@@ -686,10 +686,10 @@ private:
 	NestConst<TransactionNode> node;
 };
 
-class SetSessionRequest : public dsql_req
+class DsqlSessionManagementRequest : public dsql_req
 {
 public:
-	explicit SetSessionRequest(MemoryPool& pool, SetSessionNode* aNode)
+	explicit DsqlSessionManagementRequest(MemoryPool& pool, SessionManagementNode* aNode)
 		: dsql_req(pool),
 		  node(aNode)
 	{
@@ -705,7 +705,7 @@ public:
 		bool singleton);
 
 private:
-	NestConst<SetSessionNode> node;
+	NestConst<SessionManagementNode> node;
 };
 
 //! Implicit (NATURAL and USING) joins

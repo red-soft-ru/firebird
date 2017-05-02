@@ -49,8 +49,7 @@ namespace
 
 		~TextTypeImpl()
 		{
-			if (cs->charset_fn_destroy)
-				cs->charset_fn_destroy(cs);
+			Firebird::IntlUtil::finiCharset(cs);
 
 			delete cs;
 			delete collation;
@@ -536,6 +535,17 @@ bool IntlUtil::initUnicodeCollation(texttype* tt, charset* cs, const ASCII* name
 	tt->texttype_impl = FB_NEW TextTypeImpl(cs, collation);
 
 	return true;
+}
+
+
+void IntlUtil::finiCharset(charset* cs)
+{
+	if (cs->charset_to_unicode.csconvert_fn_destroy)
+		cs->charset_to_unicode.csconvert_fn_destroy(&cs->charset_to_unicode);
+	if (cs->charset_from_unicode.csconvert_fn_destroy)
+		cs->charset_from_unicode.csconvert_fn_destroy(&cs->charset_from_unicode);
+	if (cs->charset_fn_destroy)
+		cs->charset_fn_destroy(cs);
 }
 
 

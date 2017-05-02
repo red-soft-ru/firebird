@@ -505,40 +505,6 @@ SLONG ISC_set_prefix(const TEXT* sw, const TEXT* path)
 }
 
 
-#ifdef WIN9X_SUPPORT
-
-static DWORD os_type = 0;
-
-// Returns the type of OS: true for NT,
-// false for the 16-bit based ones (9x/ME, ...).
-//
-bool ISC_is_WinNT()
-{
-	// NS: this is thread safe.
-	// In the worst case initialization will be called more than once
-	if (!os_type)
-	{
-		// The first time this routine is called we use the Windows API
-		// call GetVersion to determine whether Windows NT or 9X
-		// is running.
-		OSVERSIONINFO OsVersionInfo;
-
-		OsVersionInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-		if (GetVersionEx((LPOSVERSIONINFO) &OsVersionInfo))
-		{
-			os_type = OsVersionInfo.dwPlatformId;
-			fb_assert(os_type);
-		}
-		else {
-			os_type = VER_PLATFORM_WIN32_NT; // Default to NT
-		}
-	}
-
-	return os_type >= VER_PLATFORM_WIN32_NT; // Windows NT, CE and future platforms
-}
-#endif
-
-
 #ifdef WIN_NT
 LPSECURITY_ATTRIBUTES ISC_get_security_desc()
 {

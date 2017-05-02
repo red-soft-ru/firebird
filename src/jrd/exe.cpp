@@ -280,7 +280,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 
 	SSHORT null = from_null ? -1 : 0;
 
-	if (!null && missing && MOV_compare(missing, from_desc) == 0)
+	if (!null && missing && MOV_compare(tdbb, missing, from_desc) == 0)
 		null = -1;
 
 	USHORT* impure_flags = NULL;
@@ -909,7 +909,7 @@ void EXE_unwind(thread_db* tdbb, jrd_req* request)
 	{
 		const JrdStatement* statement = request->getStatement();
 
-		if (statement->fors.getCount() || request->req_ext_stmt)
+		if (statement->fors.getCount() || request->req_ext_resultset || request->req_ext_stmt)
 		{
 			Jrd::ContextPoolHolder context(tdbb, request->req_pool);
 			jrd_req* old_request = tdbb->getRequest();
@@ -925,7 +925,10 @@ void EXE_unwind(thread_db* tdbb, jrd_req* request)
 				}
 
 				if (request->req_ext_resultset)
+				{
 					delete request->req_ext_resultset;
+					request->req_ext_resultset = NULL;
+				}
 
 				while (request->req_ext_stmt)
 					request->req_ext_stmt->close(tdbb);

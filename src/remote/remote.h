@@ -257,6 +257,9 @@ public:
 	{
 		if (rbl_self && *rbl_self == this)
 			*rbl_self = NULL;
+
+		if (rbl_iface)
+			rbl_iface->release();
 	}
 
 	static ISC_STATUS badHandle() { return isc_bad_segstr_handle; }
@@ -392,6 +395,9 @@ public:
 	{
 		if (rrq_self && *rrq_self == this)
 			*rrq_self = NULL;
+
+		if (rrq_iface)
+			rrq_iface->release();
 	}
 
 	Rrq* clone() const
@@ -506,6 +512,12 @@ public:
 	{
 		if (rsr_self && *rsr_self == this)
 			*rsr_self = NULL;
+
+		if (rsr_cursor)
+			rsr_cursor->release();
+
+		if (rsr_iface)
+			rsr_iface->release();
 
 		delete rsr_status;
 	}

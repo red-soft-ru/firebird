@@ -57,7 +57,9 @@ const USHORT blr_dtypes[] = {
 	blr_short,					// dtype_array
 	blr_int64,					// dtype_int64
 	0,							// DB_KEY
-	blr_bool					// dtype_boolean
+	blr_bool,					// dtype_boolean
+	blr_dec64,					// dtype_dec64
+	blr_dec128					// dtype_dec128
 };
 
 bool DDL_ids(const Jrd::DsqlCompilerScratch*);

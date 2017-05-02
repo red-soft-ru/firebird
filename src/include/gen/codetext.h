@@ -839,6 +839,7 @@ static const struct {
 	{"overriding_system_invalid", 335545135},
 	{"overriding_user_invalid", 335545136},
 	{"overriding_system_missing", 335545137},
+	{"decprecision_err", 335545138},
 	{"gfix_db_name", 335740929},
 	{"gfix_invalid_sw", 335740930},
 	{"gfix_incmp_sw", 335740932},

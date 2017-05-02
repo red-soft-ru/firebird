@@ -1618,6 +1618,12 @@ void put_data(burp_rel* relation)
 			add_byte(blr, field->fld_type);
 			break;
 
+		case blr_dec64:
+		case blr_dec128:
+			alignment = type_alignments[dtype];
+			add_byte(blr, field->fld_type);
+			break;
+
 		default:
 			BURP_error_redirect(NULL, 26, SafeArg() << field->fld_type);
 			// msg 26 datatype %ld not understood

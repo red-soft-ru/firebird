@@ -1057,6 +1057,86 @@ IXpbBuilder* UtilInterface::getXpbBuilder(CheckStatusWrapper* status,
 	}
 }
 
+class DecFloat16 FB_FINAL : public AutoIface<IDecFloat16Impl<DecFloat16, CheckStatusWrapper> >
+{
+public:
+	// IDecFloat16 implementation
+	void toBcd(const FB_DEC16* from, int* sign, unsigned char* bcd, int* exp)
+	{
+		*sign = decDoubleToBCD(reinterpret_cast<const decDouble*>(from), exp, bcd);
+	}
+
+	void toString(const FB_DEC16* from, char* to)
+	{
+		decDoubleToString(reinterpret_cast<const decDouble*>(from), to);
+	}
+
+	void fromBcd(int sign, const unsigned char* bcd, int exp, FB_DEC16* to)
+	{
+		decDoubleFromBCD(reinterpret_cast<decDouble*>(to), exp, bcd, sign ? DECFLOAT_Sign : 0);
+	}
+
+	void fromString(CheckStatusWrapper* status, const char* from, FB_DEC16* to)
+	{
+		try
+		{
+			DecimalStatus decSt(DEC_Errors);
+			Decimal64* val = reinterpret_cast<Decimal64*>(to);
+			val->set(from, decSt);
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
+	}
+};
+
+IDecFloat16* UtilInterface::getDecFloat16(CheckStatusWrapper* status)
+{
+	static DecFloat16 decFloat16;
+	return &decFloat16;
+}
+
+class DecFloat34 FB_FINAL : public AutoIface<IDecFloat34Impl<DecFloat34, CheckStatusWrapper> >
+{
+public:
+	// IDecFloat34 implementation
+	void toBcd(const FB_DEC34* from, int* sign, unsigned char* bcd, int* exp)
+	{
+		*sign = decQuadToBCD(reinterpret_cast<const decQuad*>(from), exp, bcd);
+	}
+
+	void toString(const FB_DEC34* from, char* to)
+	{
+		decQuadToString(reinterpret_cast<const decQuad*>(from), to);
+	}
+
+	void fromBcd(int sign, const unsigned char* bcd, int exp, FB_DEC34* to)
+	{
+		decQuadFromBCD(reinterpret_cast<decQuad*>(to), exp, bcd, sign ? DECFLOAT_Sign : 0);
+	}
+
+	void fromString(CheckStatusWrapper* status, const char* from, FB_DEC34* to)
+	{
+		try
+		{
+			DecimalStatus decSt(DEC_Errors);
+			Decimal128* val = reinterpret_cast<Decimal128*>(to);
+			val->set(from, decSt);
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
+	}
+};
+
+IDecFloat34* UtilInterface::getDecFloat34(CheckStatusWrapper* status)
+{
+	static DecFloat34 decFloat34;
+	return &decFloat34;
+}
+
 unsigned UtilInterface::setOffsets(CheckStatusWrapper* status, IMessageMetadata* metadata,
 	IOffsetsCallback* callback)
 {

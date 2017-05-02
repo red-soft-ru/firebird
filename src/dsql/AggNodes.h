@@ -186,9 +186,16 @@ public:
 		TYPE_VAR_POP
 	};
 
-	struct StdDevImpure
+	union StdDevImpure
 	{
-		double x, x2;
+		struct
+		{
+			double x, x2;
+		} dbl;
+		struct
+		{
+			Firebird::Decimal128 x, x2;
+		} dec;
 	};
 
 	explicit StdDevAggNode(MemoryPool& pool, StdDevType aType, ValueExprNode* aArg = NULL);
@@ -230,9 +237,16 @@ public:
 		TYPE_CORR
 	};
 
-	struct CorrImpure
+	union CorrImpure
 	{
-		double x, x2, y, y2, xy;
+		struct
+		{
+			double x, x2, y, y2, xy;
+		} dbl;
+		struct
+		{
+			Firebird::Decimal128 x, x2, y, y2, xy;
+		} dec;
 	};
 
 	explicit CorrAggNode(MemoryPool& pool, CorrType aType,
@@ -282,9 +296,16 @@ public:
 		TYPE_REGR_SYY
 	};
 
-	struct RegrImpure
+	union RegrImpure
 	{
-		double x, x2, y, y2, xy;
+		struct
+		{
+			double x, x2, y, y2, xy;
+		} dbl;
+		struct
+		{
+			Firebird::Decimal128 x, x2, y, y2, xy;
+		} dec;
 	};
 
 	explicit RegrAggNode(MemoryPool& pool, RegrType aType,

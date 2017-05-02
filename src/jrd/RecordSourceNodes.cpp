@@ -940,6 +940,8 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 		*tdbb->getDefaultPool());
 
 	node->procedure = procedure;
+	node->isSubRoutine = procedure->isSubRoutine();
+	node->procedureId = node->isSubRoutine ? 0 : procedure->getId();
 	node->stream = PAR_context(csb, &node->context);
 
 	csb->csb_rpt[node->stream].csb_procedure = procedure;
@@ -1108,16 +1110,17 @@ ProcedureSourceNode* ProcedureSourceNode::copy(thread_db* tdbb, NodeCopier& copi
 		newSource->targetList = copier.copy(tdbb, targetList);
 	}
 
-	jrd_prc* const new_procedure =
-		MET_lookup_procedure_id(tdbb, procedure->getId(), false, false, 0);
-
 	newSource->stream = copier.csb->nextStream();
 	copier.remap[stream] = newSource->stream;
 	newSource->context = context;
-	newSource->procedure = new_procedure;
+	newSource->procedure = isSubRoutine ? procedure :
+		MET_lookup_procedure_id(tdbb, procedureId, false, false, 0);
+	newSource->isSubRoutine = isSubRoutine;
+	newSource->procedureId = procedureId;
 	newSource->view = view;
+
 	CompilerScratch::csb_repeat* element = CMP_csb_element(copier.csb, newSource->stream);
-	element->csb_procedure = new_procedure;
+	element->csb_procedure = newSource->procedure;
 	element->csb_view = newSource->view;
 	element->csb_view_stream = copier.remap[0];
 
@@ -1148,10 +1151,10 @@ void ProcedureSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, Rse
 
 	pass1(tdbb, csb);
 
-	if (!procedure->isSubRoutine())
+	if (!isSubRoutine)
 	{
 		CMP_post_procedure_access(tdbb, csb, procedure);
-		CMP_post_resource(&csb->csb_resources, procedure, Resource::rsc_procedure, procedure->getId());
+		CMP_post_resource(&csb->csb_resources, procedure, Resource::rsc_procedure, procedureId);
 	}
 
 	jrd_rel* const parentView = csb->csb_view;

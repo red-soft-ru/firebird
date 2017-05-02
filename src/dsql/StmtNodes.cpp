@@ -1189,7 +1189,7 @@ const StmtNode* CursorStmtNode::execute(thread_db* tdbb, jrd_req* request, ExeSt
 
 						const dsc* desc = EVL_expr(tdbb, request, scrollExpr);
 						const bool unknown = !desc || (request->req_flags & req_null);
-						const SINT64 offset = unknown ? 0 : MOV_get_int64(desc, 0);
+						const SINT64 offset = unknown ? 0 : MOV_get_int64(tdbb, desc, 0);
 
 						switch (scrollOp)
 						{
@@ -5521,11 +5521,8 @@ void MessageNode::setup(thread_db* tdbb, CompilerScratch* csb, USHORT message, U
 		// So we only check even indexes, which is the actual parameter.
 		if (itemInfo.isSpecial() && index % 2 == 0)
 		{
-			csb->csb_dbg_info->argInfoToName.get(
-				ArgumentInfo(csb->csb_msg_number, index / 2), itemInfo.name);
-
-			csb->csb_map_item_info.put(Item(Item::TYPE_PARAMETER, csb->csb_msg_number, index),
-				itemInfo);
+			csb->csb_dbg_info->argInfoToName.get(ArgumentInfo(csb->csb_msg_number, index / 2), itemInfo.name);
+			csb->csb_map_item_info.put(Item(Item::TYPE_PARAMETER, message, index), itemInfo);
 		}
 	}
 
@@ -7532,7 +7529,7 @@ const StmtNode* SetGeneratorNode::execute(thread_db* tdbb, jrd_req* request, Exe
 			DDL_TRIGGER_ALTER_SEQUENCE, generator.name, NULL, *request->getStatement()->sqlText);
 
 		dsc* const desc = EVL_expr(tdbb, request, value);
-		DPM_gen_id(tdbb, generator.id, true, MOV_get_int64(desc, 0));
+		DPM_gen_id(tdbb, generator.id, true, MOV_get_int64(tdbb, desc, 0));
 
 		DdlNode::executeDdlTrigger(tdbb, transaction, DdlNode::DTW_AFTER,
 			DDL_TRIGGER_ALTER_SEQUENCE, generator.name, NULL, *request->getStatement()->sqlText);
@@ -7955,14 +7952,7 @@ void SetTransactionNode::genTableLock(DsqlCompilerScratch* dsqlScratch,
 //--------------------
 
 
-SetRoleNode* SetRoleNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
-{
-	dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_SET_ROLE);
-
-	return this;
-}
-
-void SetRoleNode::execute(thread_db* tdbb, dsql_req* request, jrd_tra** transaction) const
+void SetRoleNode::execute(thread_db* tdbb, dsql_req* request) const
 {
 	SET_TDBB(tdbb);
 	Attachment* const attachment = tdbb->getAttachment();
@@ -7986,8 +7976,122 @@ void SetRoleNode::execute(thread_db* tdbb, dsql_req* request, jrd_tra** transact
 //--------------------
 
 
+namespace
+{
+
+struct TextCode
+{
+	const char* name;
+	USHORT val;
+};
+
+//#define FB_TEXTCODE(x) { STRINGIZE(x), x }
+#define FB_TEXTCODE(x) { #x, x }
+
+const TextCode roundModes[] = {
+	FB_TEXTCODE(DEC_ROUND_CEILING),
+	FB_TEXTCODE(DEC_ROUND_UP),
+	FB_TEXTCODE(DEC_ROUND_HALF_UP),
+	FB_TEXTCODE(DEC_ROUND_HALF_EVEN),
+	FB_TEXTCODE(DEC_ROUND_HALF_DOWN),
+	FB_TEXTCODE(DEC_ROUND_DOWN),
+	FB_TEXTCODE(DEC_ROUND_FLOOR),
+	{ "DEC_ROUND_REROUND", DEC_ROUND_05UP },
+	{ NULL, 0 }
+};
+
+//DEC_ROUND_
+//0123456789
+const unsigned FB_RMODE_OFFSET = 10;
+
+const TextCode ieeeTraps[] = {
+	FB_TEXTCODE(DEC_IEEE_754_Division_by_zero),
+	FB_TEXTCODE(DEC_IEEE_754_Inexact),
+	FB_TEXTCODE(DEC_IEEE_754_Invalid_operation),
+	FB_TEXTCODE(DEC_IEEE_754_Overflow),
+	FB_TEXTCODE(DEC_IEEE_754_Underflow),
+	{ NULL, 0 }
+};
+
+//DEC_IEEE_754_
+//0123456789012
+const unsigned FB_TRAPS_OFFSET = 13;
+
+#undef FB_TEXTCODE
+
+const TextCode* getCodeByText(const MetaName& text, const TextCode* textCode, unsigned offset)
+{
+	NoCaseString name(text.c_str(), text.length());
+
+	for (const TextCode* tc = textCode; tc->name; ++tc)
+	{
+		if (name == &tc->name[offset])
+			return tc;
+	}
+
+	return nullptr;
+}
+
+}
+
+
+//--------------------
+
+
+SetRoundNode::SetRoundNode(MemoryPool& pool, Firebird::MetaName* name)
+		: SessionManagementNode(pool)
+{
+	fb_assert(name);
+	const TextCode* mode = getCodeByText(*name, roundModes, FB_RMODE_OFFSET);
+	if (!mode)
+		(Arg::Gds(isc_random) << "Invalid round mode for decfloat").raise();
+	rndMode = mode->val;
+}
+
+void SetRoundNode::execute(thread_db* tdbb, dsql_req* /*request*/) const
+{
+	SET_TDBB(tdbb);
+	Attachment* const attachment = tdbb->getAttachment();
+	attachment->att_dec_status.roundingMode = rndMode;
+}
+
+
+//--------------------
+
+
+void SetTrapsNode::trap(Firebird::MetaName* name)
+{
+	fb_assert(name);
+	const TextCode* trap = getCodeByText(*name, ieeeTraps, FB_TRAPS_OFFSET);
+	if (!trap)
+		(Arg::Gds(isc_random) << "Invalid decfloat trap").raise();
+	traps |= trap->val;
+}
+
+void SetTrapsNode::execute(thread_db* tdbb, dsql_req* /*request*/) const
+{
+	SET_TDBB(tdbb);
+	Attachment* const attachment = tdbb->getAttachment();
+	attachment->att_dec_status.decExtFlag = traps;
+}
+
+
+//--------------------
+
+
+void SetBindNode::execute(thread_db* tdbb, dsql_req* /*request*/) const
+{
+	SET_TDBB(tdbb);
+	Attachment* const attachment = tdbb->getAttachment();
+	attachment->att_dec_binding = bind;
+}
+
+
+//--------------------
+
+
 SetSessionNode::SetSessionNode(MemoryPool& pool, Type aType, ULONG aVal, UCHAR blr_timepart)
-	: Node(pool),
+	: SessionManagementNode(pool),
 	  m_type(aType),
 	  m_value(0)
 {
@@ -8032,12 +8136,6 @@ string SetSessionNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, m_value);
 
 	return "SetSessionNode";
-}
-
-SetSessionNode* SetSessionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
-{
-	dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_SET_SESSION);
-	return this;
 }
 
 void SetSessionNode::execute(thread_db* tdbb, dsql_req* request) const
@@ -9445,7 +9543,7 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 
 			const dsc* desc = EVL_expr(tdbb, request, i->value);
 			const USHORT length = (desc && !(request->req_flags & req_null)) ?
-				MOV_make_string(desc, ttype_dynamic, &value, &temp, sizeof(temp) - 1) : 0;
+				MOV_make_string(tdbb, desc, ttype_dynamic, &value, &temp, sizeof(temp) - 1) : 0;
 
 			if (!desc || (request->req_flags & req_null))
 				value = NULL_STRING_MARK;

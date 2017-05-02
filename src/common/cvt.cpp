@@ -137,6 +137,7 @@ enum EXPECT_DATETIME
 
 static void datetime_to_text(const dsc*, dsc*, Callbacks*);
 static void float_to_text(const dsc*, dsc*, Callbacks*);
+static void decimal_float_to_text(const dsc*, dsc*, DecimalStatus, Callbacks*);
 static void integer_to_text(const dsc*, dsc*, Callbacks*);
 static void string_to_datetime(const dsc*, GDS_TIMESTAMP*, const EXPECT_DATETIME, ErrorFunction);
 static SINT64 hex_to_value(const char*& string, const char* end);
@@ -296,7 +297,38 @@ static void float_to_text(const dsc* from, dsc* to, Callbacks* cb)
 		intermediate.dsc_length = chars_printed - 1;
 	}
 
-	CVT_move_common(&intermediate, to, cb);
+	CVT_move_common(&intermediate, to, 0, cb);
+}
+
+
+static void decimal_float_to_text(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* cb)
+{
+	char temp[50];
+
+	try
+	{
+		Decimal128 d;
+		if (from->dsc_dtype == dtype_dec64)
+			d = *((Decimal64*)from->dsc_address);
+		else
+			d = *((Decimal128*)from->dsc_address);
+
+		d.toString(decSt, sizeof(temp), temp);
+	}
+	catch(const Exception& ex)
+	{
+		// reraise using function passed in callbacks
+		Arg::StatusVector v(ex);
+		cb->err(v);
+	}
+
+	dsc intermediate;
+	intermediate.dsc_dtype = dtype_text;
+	intermediate.dsc_ttype() = ttype_ascii;
+	intermediate.dsc_address = reinterpret_cast<UCHAR*>(temp);
+	intermediate.dsc_length = strlen(temp);
+
+	CVT_move_common(&intermediate, to, 0, cb);
 }
 
 
@@ -343,7 +375,7 @@ static void integer_to_text(const dsc* from, dsc* to, Callbacks* cb)
 	intermediate.dsc_scale = scale;
 	intermediate.dsc_address = (UCHAR*) &n;
 
-	CVT_move_common(from, &intermediate, cb);
+	CVT_move_common(from, &intermediate, 0, cb);
 
 	// Check for negation, then convert the number to a string of digits
 
@@ -528,7 +560,7 @@ static void string_to_datetime(const dsc* desc,
 	VaryStr<100> buffer;			// arbitrarily large
 
 	const char* p = NULL;
-	const USHORT length = CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), err);
+	const USHORT length = CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), 0, err);
 
 	const char* const end = p + length;
 
@@ -862,7 +894,7 @@ static void string_to_datetime(const dsc* desc,
 }
 
 
-SLONG CVT_get_long(const dsc* desc, SSHORT scale, ErrorFunction err)
+SLONG CVT_get_long(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************
  *
@@ -878,6 +910,7 @@ SLONG CVT_get_long(const dsc* desc, SSHORT scale, ErrorFunction err)
 	SLONG value, high;
 
 	double d, eps;
+	Decimal128 d128;
 	SINT64 val64;
 	VaryStr<50> buffer;			// long enough to represent largest long in ASCII
 
@@ -940,6 +973,15 @@ SLONG CVT_get_long(const dsc* desc, SSHORT scale, ErrorFunction err)
 		err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 		break;
 
+	case dtype_dec64:
+	case dtype_dec128:
+		if (desc->dsc_dtype == dtype_dec64)
+			d128 = *((Decimal64*) p);
+		else
+			d128 = *((Decimal128*) p);
+
+		return d128.toInteger(decSt, scale);
+
 	case dtype_real:
 	case dtype_double:
 		if (desc->dsc_dtype == dtype_real)
@@ -986,7 +1028,7 @@ SLONG CVT_get_long(const dsc* desc, SSHORT scale, ErrorFunction err)
 	case dtype_text:
 		{
 			USHORT length =
-				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), err);
+				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
 			scale -= CVT_decompose(p, length, dtype_long, &value, err);
 		}
 		break;
@@ -1054,7 +1096,7 @@ bool CVT_get_boolean(const dsc* desc, ErrorFunction err)
 		{
 			VaryStr<100> buffer;	// arbitrarily large
 			const char* p = NULL;
-			int len = CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), err);
+			int len = CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), 0, err);
 
 			// Remove heading and trailing spaces.
 
@@ -1082,7 +1124,7 @@ bool CVT_get_boolean(const dsc* desc, ErrorFunction err)
 }
 
 
-double CVT_get_double(const dsc* desc, ErrorFunction err)
+double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, bool* getNumericOverflow)
 {
 /**************************************
  *
@@ -1128,6 +1170,18 @@ double CVT_get_double(const dsc* desc, ErrorFunction err)
 		memcpy(&value, desc->dsc_address, sizeof(double));
 		return value;
 
+	case dtype_dec64:
+	case dtype_dec128:
+		{
+			Decimal128 d128;
+			if (desc->dsc_dtype == dtype_dec64)
+				d128 = *((Decimal64*) desc->dsc_address);
+			else
+				d128 = *((Decimal128*) desc->dsc_address);
+
+			return d128.toDouble(decSt);
+		}
+
 	case dtype_varying:
 	case dtype_cstring:
 	case dtype_text:
@@ -1136,7 +1190,7 @@ double CVT_get_double(const dsc* desc, ErrorFunction err)
 			const char* p;
 
 			const USHORT length =
-				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), err);
+				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
 			value = 0.0;
 			int scale = 0;
 			SSHORT sign = 0;
@@ -1217,7 +1271,14 @@ double CVT_get_double(const dsc* desc, ErrorFunction err)
 						// later in this routine.
 
 						if (exp >= SHORT_LIMIT)
+						{
+							if (getNumericOverflow)
+							{
+								*getNumericOverflow = true;
+								return 0;
+							}
 							err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+						}
 					}
 					else if (*p == '-' && !digit_seen && !sign)
 						sign = -1;
@@ -1250,8 +1311,14 @@ double CVT_get_double(const dsc* desc, ErrorFunction err)
 			// the user know...
 
 			if (ABSOLUT(scale) > DBL_MAX_10_EXP)
+			{
+				if (getNumericOverflow)
+				{
+					*getNumericOverflow = true;
+					return 0;
+				}
 				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
-
+			}
 
 			//  Repeated division is a good way to mung the least significant bits
 			//  of your value, so we have replaced this iterative multiplication/division
@@ -1266,7 +1333,14 @@ double CVT_get_double(const dsc* desc, ErrorFunction err)
 				value *= CVT_power_of_ten(-scale);
 
 			if (isinf(value))
+			{
+				if (getNumericOverflow)
+				{
+					*getNumericOverflow = true;
+					return 0;
+				}
 				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+			}
 		}
 		return value;
 
@@ -1308,7 +1382,7 @@ double CVT_get_double(const dsc* desc, ErrorFunction err)
 }
 
 
-void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
+void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* cb)
 {
 /**************************************
  *
@@ -1391,6 +1465,8 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 		case dtype_real:
 		case dtype_double:
 		case dtype_boolean:
+		case dtype_dec64:
+		case dtype_dec128:
 			CVT_conversion_error(from, cb->err);
 			break;
 		}
@@ -1424,6 +1500,8 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 		case dtype_real:
 		case dtype_double:
 		case dtype_boolean:
+		case dtype_dec64:
+		case dtype_dec128:
 			CVT_conversion_error(from, cb->err);
 			break;
 		}
@@ -1457,6 +1535,8 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 		case dtype_real:
 		case dtype_double:
 		case dtype_boolean:
+		case dtype_dec64:
+		case dtype_dec128:
 			CVT_conversion_error(from, cb->err);
 			break;
 		}
@@ -1548,7 +1628,7 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 				{ // scope
 					USHORT strtype_unused;
 					UCHAR *ptr;
-					length = len = CVT_get_string_ptr_common(from, &strtype_unused, &ptr, NULL, 0, cb);
+					length = len = CVT_get_string_ptr_common(from, &strtype_unused, &ptr, NULL, 0, decSt, cb);
 					q = ptr;
 				} // end scope
 
@@ -1644,6 +1724,11 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 			float_to_text(from, to, cb);
 			return;
 
+		case dtype_dec64:
+		case dtype_dec128:
+			decimal_float_to_text(from, to, decSt, cb);
+			return;
+
 		case dtype_sql_date:
 		case dtype_sql_time:
 		case dtype_timestamp:
@@ -1660,7 +1745,7 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 				intermediate.makeText(static_cast<USHORT>(strlen(text)), CS_ASCII,
 					reinterpret_cast<UCHAR*>(text));
 
-				CVT_move_common(&intermediate, to, cb);
+				CVT_move_common(&intermediate, to, decSt, cb);
 				return;
 			}
 
@@ -1695,7 +1780,7 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 
 	case dtype_short:
 		{
-			ULONG lval = CVT_get_long(from, (SSHORT) to->dsc_scale, cb->err);
+			ULONG lval = CVT_get_long(from, (SSHORT) to->dsc_scale, decSt, cb->err);
 			// TMN: Here we should really have the following fb_assert
 			// fb_assert(lval <= MAX_SSHORT);
 			*(SSHORT*) p = (SSHORT) lval;
@@ -1705,11 +1790,11 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 		return;
 
 	case dtype_long:
-		*(SLONG *) p = CVT_get_long(from, (SSHORT) to->dsc_scale, cb->err);
+		*(SLONG *) p = CVT_get_long(from, (SSHORT) to->dsc_scale, decSt, cb->err);
 		return;
 
 	case dtype_int64:
-		*(SINT64 *) p = CVT_get_int64(from, (SSHORT) to->dsc_scale, cb->err);
+		*(SINT64 *) p = CVT_get_int64(from, (SSHORT) to->dsc_scale, decSt, cb->err);
 		return;
 
 	case dtype_quad:
@@ -1719,12 +1804,12 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 			((SLONG *) p)[1] = ((SLONG *) q)[1];
 			return;
 		}
-		*(SQUAD *) p = CVT_get_quad(from, (SSHORT) to->dsc_scale, cb->err);
+		*(SQUAD *) p = CVT_get_quad(from, (SSHORT) to->dsc_scale, decSt, cb->err);
 		return;
 
 	case dtype_real:
 		{
-			double d_value = CVT_get_double(from, cb->err);
+			double d_value = CVT_get_double(from, decSt, cb->err);
 			if (ABSOLUT(d_value) > FLOAT_MAX)
 				cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 			*(float*) p = (float) d_value;
@@ -1736,7 +1821,7 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 		{
 			USHORT strtype_unused;
 			UCHAR* ptr;
-			USHORT len = CVT_get_string_ptr_common(from, &strtype_unused, &ptr, NULL, 0, cb);
+			USHORT len = CVT_get_string_ptr_common(from, &strtype_unused, &ptr, NULL, 0, decSt, cb);
 
 			if (len == to->dsc_length)
 			{
@@ -1751,12 +1836,20 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 	case DEFAULT_DOUBLE:
 #ifdef HPUX
 		{
-			const double d_value = CVT_get_double(from, cb->err);
+			const double d_value = CVT_get_double(from, decSt, cb->err);
 			memcpy(p, &d_value, sizeof(double));
 		}
 #else
-		*(double*) p = CVT_get_double(from, cb->err);
+		*(double*) p = CVT_get_double(from, decSt, cb->err);
 #endif
+		return;
+
+	case dtype_dec64:
+		*((Decimal64*) p) = CVT_get_dec64(from, decSt, cb->err);
+		return;
+
+	case dtype_dec128:
+		*((Decimal128*) p) = CVT_get_dec128(from, decSt, cb->err);
 		return;
 
 	case dtype_boolean:
@@ -1779,6 +1872,8 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 		case dtype_quad:
 		case dtype_real:
 		case dtype_double:
+		case dtype_dec64:
+		case dtype_dec128:
 			CVT_conversion_error(from, cb->err);
 			break;
 		}
@@ -1832,7 +1927,7 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
 			const char* p;
 			VaryStr<128> s;
 			const USHORT length =
-				CVT_make_string(desc, ttype_ascii, &p, &s, sizeof(s), localError);
+				CVT_make_string(desc, ttype_ascii, &p, &s, sizeof(s), 0, localError);
 			message.assign(p, length);
 		}
 		/*
@@ -1975,7 +2070,42 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 		desc.dsc_length = MIN(desc.dsc_length, (to->dsc_length - l));
 	}
 
-	CVT_move_common(&desc, to, cb);
+	CVT_move_common(&desc, to, 0, cb);
+}
+
+
+void CVT_make_null_string(const dsc*    desc,
+						  USHORT        to_interp,
+						  const char**  address,
+						  vary*         temp,
+						  USHORT        length,
+						  DecimalStatus decSt,
+						  ErrorFunction err)
+{
+/**************************************
+ *
+ *      C V T _ m a k e _ n u l l _ s t r i n g
+ *
+ **************************************
+ *
+ * Functional description
+ *     Convert the data from the desc to a zero-terminated string.
+ *     The pointer to this string is returned in address.
+ *	   Data always placed to temp buffer.
+ *
+ **************************************/
+	fb_assert(temp);
+
+	USHORT len = CVT_make_string(desc, to_interp, address, temp, --length, decSt, err);
+	if (*address != temp->vary_string)
+	{
+		if (len > length)
+			len = length;
+		memcpy(temp->vary_string, *address, len);
+		temp->vary_length = len;
+	}
+	fb_assert(temp->vary_length == len);
+	temp->vary_string[len] = 0;
 }
 
 
@@ -1984,6 +2114,7 @@ USHORT CVT_make_string(const dsc*    desc,
 					   const char**  address,
 					   vary*         temp,
 					   USHORT        length,
+					   DecimalStatus decSt,
 					   ErrorFunction err)
 {
 /**************************************
@@ -2035,7 +2166,7 @@ USHORT CVT_make_string(const dsc*    desc,
 	temp_desc.dsc_address = (UCHAR *) temp;
 	temp_desc.dsc_dtype = dtype_varying;
 	temp_desc.setTextType(to_interp);
-	CVT_move(desc, &temp_desc, err);
+	CVT_move(desc, &temp_desc, decSt, err);
 	*address = temp->vary_string;
 
 	return temp->vary_length;
@@ -2305,7 +2436,7 @@ SSHORT CVT_decompose(const char* string,
 
 
 USHORT CVT_get_string_ptr_common(const dsc* desc, USHORT* ttype, UCHAR** address,
-								 vary* temp, USHORT length, Callbacks* cb)
+								 vary* temp, USHORT length, DecimalStatus decSt, Callbacks* cb)
 {
 /**************************************
  *
@@ -2371,7 +2502,7 @@ USHORT CVT_get_string_ptr_common(const dsc* desc, USHORT* ttype, UCHAR** address
 	temp_desc.dsc_address = (UCHAR *) temp;
 	temp_desc.dsc_dtype = dtype_varying;
 	temp_desc.setTextType(ttype_ascii);
-	CVT_move_common(desc, &temp_desc, cb);
+	CVT_move_common(desc, &temp_desc, decSt, cb);
 	*address = reinterpret_cast<UCHAR*>(temp->vary_string);
 	*ttype = INTL_TTYPE(&temp_desc);
 
@@ -2379,7 +2510,182 @@ USHORT CVT_get_string_ptr_common(const dsc* desc, USHORT* ttype, UCHAR** address
 }
 
 
-SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, ErrorFunction err)
+static inline void SINT64_to_SQUAD(const SINT64 input, const SQUAD& value)
+{
+	((SLONG*) &value)[LOW_WORD] = (SLONG) (input & 0xffffffff);
+	((SLONG*) &value)[HIGH_WORD] = (SLONG) (input >> 32);
+}
+
+
+Decimal64 CVT_get_dec64(const dsc* desc, DecimalStatus decSt, ErrorFunction err)
+{
+/**************************************
+ *
+ *      C V T _ g e t _ d e c 6 4
+ *
+ **************************************
+ *
+ * Functional description
+ *      Convert something arbitrary to a DecFloat(16) / (64 bit).
+ *
+ **************************************/
+	VaryStr<50> buffer;			// long enough to represent largest decimal float in ASCII
+	Decimal64 d64;
+
+	// adjust exact numeric values to same scaling
+	int scale = 0;
+	if (DTYPE_IS_EXACT(desc->dsc_dtype))
+		scale = -desc->dsc_scale;
+
+	const char* p = reinterpret_cast<char*>(desc->dsc_address);
+
+	try
+	{
+		switch (desc->dsc_dtype)
+		{
+		case dtype_short:
+			return d64.set(*(SSHORT*) p, decSt, scale);
+
+		case dtype_long:
+			return d64.set(*(SLONG*) p, decSt, scale);
+
+		case dtype_quad:
+			return d64.set(CVT_get_int64(desc, 0, decSt, err), decSt, scale);
+
+		case dtype_int64:
+			return d64.set(*(SINT64*) p, decSt, scale);
+
+		case dtype_varying:
+		case dtype_cstring:
+		case dtype_text:
+			CVT_make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
+			return d64.set(buffer.vary_string, decSt);
+
+		case dtype_blob:
+		case dtype_sql_date:
+		case dtype_sql_time:
+		case dtype_timestamp:
+		case dtype_array:
+		case dtype_dbkey:
+		case dtype_boolean:
+			CVT_conversion_error(desc, err);
+			break;
+
+		case dtype_real:
+			return d64.set(*((float*) p), decSt);
+
+		case dtype_double:
+			return d64.set(*((double*) p), decSt);
+
+		case dtype_dec64:
+			return *(Decimal64*) p;
+
+		case dtype_dec128:
+			return ((Decimal128*) p)->toDecimal64(decSt);
+
+		default:
+			fb_assert(false);
+			err(Arg::Gds(isc_badblk));	// internal error
+			break;
+		}
+	}
+	catch(const Exception& ex)
+	{
+		// reraise using passed error function
+		Arg::StatusVector v(ex);
+		err(v);
+	}
+
+	// compiler silencer
+	return d64;
+}
+
+
+Decimal128 CVT_get_dec128(const dsc* desc, DecimalStatus decSt, ErrorFunction err)
+{
+/**************************************
+ *
+ *      C V T _ g e t _ d e c 1 2 8
+ *
+ **************************************
+ *
+ * Functional description
+ *      Convert something arbitrary to a DecFloat(34) / (128 bit).
+ *
+ **************************************/
+	VaryStr<50> buffer;			// long enough to represent largest decimal float in ASCII
+	Decimal128 d128;
+
+	// adjust exact numeric values to same scaling
+	int scale = 0;
+	if (DTYPE_IS_EXACT(desc->dsc_dtype))
+		scale = -desc->dsc_scale;
+
+	const char* p = reinterpret_cast<char*>(desc->dsc_address);
+
+	try
+	{
+		switch (desc->dsc_dtype)
+		{
+		case dtype_short:
+			return d128.set(*(SSHORT*) p, decSt, scale);
+
+		case dtype_long:
+			return d128.set(*(SLONG*) p, decSt, scale);
+
+		case dtype_quad:
+			return d128.set(CVT_get_int64(desc, 0, decSt, err), decSt, scale);
+
+		case dtype_int64:
+			return d128.set(*(SINT64*) p, decSt, scale);
+
+		case dtype_varying:
+		case dtype_cstring:
+		case dtype_text:
+			CVT_make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
+			return d128.set(buffer.vary_string, decSt);
+
+		case dtype_blob:
+		case dtype_sql_date:
+		case dtype_sql_time:
+		case dtype_timestamp:
+		case dtype_array:
+		case dtype_dbkey:
+		case dtype_boolean:
+			CVT_conversion_error(desc, err);
+			break;
+
+		case dtype_real:
+			return d128.set(*((float*) p), decSt);
+
+		case dtype_double:
+			return d128.set(*((double*) p), decSt);
+
+		case dtype_dec64:
+			return (d128 = (*(Decimal64*) p));			// cast to higher precision never cause rounding/traps
+
+		case dtype_dec128:
+			return *(Decimal128*) p;
+
+		default:
+			fb_assert(false);
+			err(Arg::Gds(isc_badblk));	// internal error
+			break;
+		}
+	}
+	catch(const Exception& ex)
+	{
+		// reraise using passed error function
+		Arg::StatusVector v(ex);
+		err(v);
+	}
+
+	// compiler silencer
+	return d128;
+}
+
+
+SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************
  *
@@ -2425,11 +2731,7 @@ SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, ErrorFunction err)
 		break;
 
 	case dtype_int64:
-		{
-			const SINT64 input = *(SINT64*) p;
-			((SLONG*) &value)[LOW_WORD] = (SLONG) (input & 0xffffffff);
-			((SLONG*) &value)[HIGH_WORD] = (SLONG) (input >> 32);
-		}
+		SINT64_to_SQUAD(*(SINT64*) p, value);
 		break;
 
 	case dtype_varying:
@@ -2437,7 +2739,7 @@ SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, ErrorFunction err)
 	case dtype_text:
 		{
 			USHORT length =
-				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), err);
+				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
 			scale -= CVT_decompose(p, length, dtype_quad, &value.gds_quad_high, err);
 		}
 		break;
@@ -2450,6 +2752,11 @@ SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, ErrorFunction err)
 	case dtype_dbkey:
 	case dtype_boolean:
 		CVT_conversion_error(desc, err);
+		break;
+
+	case dtype_dec64:
+	case dtype_dec128:
+		SINT64_to_SQUAD(CVT_get_int64(desc, scale, decSt, err), value);
 		break;
 
 	default:
@@ -2470,7 +2777,7 @@ SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, ErrorFunction err)
 }
 
 
-SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, ErrorFunction err)
+SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************
  *
@@ -2511,6 +2818,18 @@ SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, ErrorFunction err)
 	case dtype_quad:
 		value = (((SINT64) ((SLONG*) p)[HIGH_WORD]) << 32) + (((ULONG*) p)[LOW_WORD]);
 		break;
+
+	case dtype_dec64:
+	case dtype_dec128:
+		{
+			Decimal128 d128;
+			if (desc->dsc_dtype == dtype_dec64)
+				d128 = *((Decimal64*) p);
+			else
+				d128 = *((Decimal128*) p);
+
+			return d128.toInt64(decSt, scale);
+		}
 
 	case dtype_real:
 	case dtype_double:
@@ -2556,7 +2875,7 @@ SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, ErrorFunction err)
 	case dtype_text:
 		{
 			USHORT length =
-				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), err);
+				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
 			scale -= CVT_decompose(p, length, dtype_int64, (SLONG *) & value, err);
 		}
 		break;
@@ -2725,7 +3044,7 @@ namespace
 
 
 USHORT CVT_get_string_ptr(const dsc* desc, USHORT* ttype, UCHAR** address,
-						  vary* temp, USHORT length, ErrorFunction err)
+						  vary* temp, USHORT length, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************
  *
@@ -2752,11 +3071,11 @@ USHORT CVT_get_string_ptr(const dsc* desc, USHORT* ttype, UCHAR** address,
 	fb_assert(err != NULL);
 
 	CommonCallbacks callbacks(err);
-	return CVT_get_string_ptr_common(desc, ttype, address, temp, length, &callbacks);
+	return CVT_get_string_ptr_common(desc, ttype, address, temp, length, decSt, &callbacks);
 }
 
 
-void CVT_move(const dsc* from, dsc* to, ErrorFunction err)
+void CVT_move(const dsc* from, dsc* to, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************
  *
@@ -2769,5 +3088,5 @@ void CVT_move(const dsc* from, dsc* to, ErrorFunction err)
  *
  **************************************/
 	CommonCallbacks callbacks(err);
-	CVT_move_common(from, to, &callbacks);
+	CVT_move_common(from, to, decSt, &callbacks);
 }

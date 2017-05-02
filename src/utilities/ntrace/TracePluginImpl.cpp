@@ -725,21 +725,12 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 				else
 					paramtype = "smallint";
 				break;
-
 			case dtype_long:
 				if (parameters->dsc_scale)
 					paramtype.printf("integer(*, %d)", parameters->dsc_scale);
 				else
 					paramtype = "integer";
 				break;
-
-			case dtype_double:
-				if (parameters->dsc_scale)
-					paramtype.printf("double precision(*, %d)", parameters->dsc_scale);
-				else
-					paramtype = "double precision";
-				break;
-
 			case dtype_int64:
 				if (parameters->dsc_scale)
 					paramtype.printf("bigint(*, %d)", parameters->dsc_scale);
@@ -750,6 +741,20 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 			case dtype_real:
 				paramtype = "float";
 				break;
+			case dtype_double:
+				if (parameters->dsc_scale)
+					paramtype.printf("double precision(*, %d)", parameters->dsc_scale);
+				else
+					paramtype = "double precision";
+				break;
+
+			case dtype_dec64:
+				paramtype = "decfloat(16)";
+				break;
+			case dtype_dec128:
+				paramtype = "decfloat(34)";
+				break;
+
 			case dtype_sql_date:
 				paramtype = "date";
 				break;
@@ -759,9 +764,11 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 			case dtype_timestamp:
 				paramtype = "timestamp";
 				break;
+
 			case dtype_dbkey:
 				paramtype = "db_key";
 				break;
+
 			case dtype_boolean:
 				paramtype = "boolean";
 				break;
@@ -837,6 +844,14 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 						paramvalue.printf("%.15g",
 							*(double*) parameters->dsc_address * pow(10.0, -parameters->dsc_scale));
 					}
+					break;
+
+				case dtype_dec64:
+					((Decimal64*) parameters->dsc_address)->toString(paramvalue);
+					break;
+
+				case dtype_dec128:
+					((Decimal128*) parameters->dsc_address)->toString(paramvalue);
 					break;
 
 				case dtype_sql_date:

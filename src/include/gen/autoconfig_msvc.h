@@ -207,6 +207,11 @@
 #define isnan _isnan
 #endif
 
+#if !defined(HAS_NOEXCEPT)
+#if defined(_MSC_FULL_VER) && _MSC_FULL_VER >= 190023026
+#define HAS_NOEXCEPT
+#endif
+#endif
 
 /* Types */
 #undef HAVE_SOCKLEN_T

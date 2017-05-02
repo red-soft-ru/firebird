@@ -286,6 +286,7 @@ void MsgMetadata::addItem(const MetaName& name, bool nullable, const dsc& desc)
 	item.subType = sqlSubType;
 	item.length = sqlLen;
 	item.scale = sqlScale;
+	item.charSet = desc.getCharSet();
 
 	item.finished = true;
 }

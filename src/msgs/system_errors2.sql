@@ -824,6 +824,7 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (-902, '42', '000', 0, 815, 'overriding_system_invalid', NULL, NULL)
 (-902, '42', '000', 0, 816, 'overriding_user_invalid', NULL, NULL)
 (-902, '42', '000', 0, 817, 'overriding_system_missing', NULL, NULL)
+(-842, 'HY', '104', 0, 818, 'decprecision_err', NULL, NULL)
 -- GFIX
 (-901, '00', '000', 3, 1, 'gfix_db_name', NULL, NULL)
 (-901, '00', '000', 3, 2, 'gfix_invalid_sw', NULL, NULL)

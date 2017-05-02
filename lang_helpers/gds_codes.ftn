@@ -1686,6 +1686,8 @@ C --
       PARAMETER (GDS__overriding_user_invalid          = 335545136)
       INTEGER*4 GDS__overriding_system_missing       
       PARAMETER (GDS__overriding_system_missing        = 335545137)
+      INTEGER*4 GDS__decprecision_err                
+      PARAMETER (GDS__decprecision_err                 = 335545138)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 

@@ -281,21 +281,25 @@ public:
 };
 
 
-class SetSessionNode : public Node
+class SessionManagementNode : public Node
 {
 public:
-	enum Type { TYPE_IDLE_TIMEOUT, TYPE_STMT_TIMEOUT };
-
-	SetSessionNode(MemoryPool& pool, Type aType, ULONG aVal, UCHAR blr_timepart);
+	explicit SessionManagementNode(MemoryPool& pool)
+		: Node(pool)
+	{
+	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual SetSessionNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void execute(thread_db* tdbb, dsql_req* request) const;
+	virtual SessionManagementNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
+	{
+		Node::dsqlPass(dsqlScratch);
 
-private:
-	Type m_type;
-	ULONG m_value;
+		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_SESSION_MANAGEMENT);
+
+		return this;
+	}
+
+	virtual void execute(thread_db* tdbb, dsql_req* request) const = 0;
 };
 
 
@@ -489,7 +493,8 @@ public:
 	// Value flags.
 	static const unsigned FLAG_DOUBLE		= 0x10;
 	static const unsigned FLAG_DATE			= 0x20;
-	static const unsigned FLAG_VALUE		= 0x40;	// Full value area required in impure space.
+	static const unsigned FLAG_DECFLOAT		= 0x40;
+	static const unsigned FLAG_VALUE		= 0x80;	// Full value area required in impure space.
 
 	explicit ExprNode(Type aType, MemoryPool& pool, Kind aKind)
 		: DmlNode(pool, aKind),

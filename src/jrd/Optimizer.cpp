@@ -1249,12 +1249,16 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 		inversion[i]->used = false;
 		const IndexScratch* const indexScratch = inversion[i]->scratch;
 
-		if (indexScratch && (indexScratch->idx->idx_runtime_flags & idx_plan_dont_use))
+		if (indexScratch &&
+			(indexScratch == navigationCandidate ||
+				(indexScratch->idx->idx_runtime_flags & idx_plan_dont_use)))
+		{
 			inversion[i]->used = true;
+		}
 	}
 
 	// The matches returned in this inversion are always sorted.
-	SortedArray<BoolExprNode*> matches;
+	SortedArray<BoolExprNode*> matches, navigationMatches;
 
 	if (navigationCandidate)
 	{
@@ -1269,10 +1273,12 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 
 			for (FB_SIZE_T j = 0; j < segment->matches.getCount(); j++)
 			{
-				if (!matches.exist(segment->matches[j]))
-					matches.add(segment->matches[j]);
+				if (!navigationMatches.exist(segment->matches[j]))
+					navigationMatches.add(segment->matches[j]);
 			}
 		}
+
+		matches.join(navigationMatches);
 
 		// If the navigational candidate includes any matching segments,
 		// reset the selectivity/cost prerequisites to account these matches
@@ -1338,12 +1344,14 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 				}
 
 				// Look if a match is already used by previous matches.
-				bool anyMatchAlreadyUsed = false;
+				bool anyMatchAlreadyUsed = false, matchUsedByNavigation = false;
 				for (FB_SIZE_T k = 0; k < currentInv->matches.getCount(); k++)
 				{
 					if (matches.exist(currentInv->matches[k]))
 					{
 						anyMatchAlreadyUsed = true;
+						if (navigationMatches.exist(currentInv->matches[k]))
+							matchUsedByNavigation = true;
 						break;
 					}
 				}
@@ -1351,6 +1359,8 @@ InversionCandidate* OptimizerRetrieval::makeInversion(InversionCandidateList* in
 				if (anyMatchAlreadyUsed && !customPlan)
 				{
 					currentInv->used = true;
+					if (matchUsedByNavigation)
+						continue;
 					// If a match on this index was already used by another
 					// index, add also the other matches from this index.
 					for (FB_SIZE_T j = 0; j < currentInv->matches.getCount(); j++)

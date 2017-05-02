@@ -124,18 +124,6 @@ until we are out of records to sort or memory.
 */
 
 
-// Sort key definition block
-
-struct sort_key_def
-{
-	UCHAR	skd_dtype;			// Data type
-	UCHAR	skd_flags;			// Flags
-	USHORT	skd_length;			// Length if string
-	ULONG	skd_offset;			// Offset from beginning
-	ULONG	skd_vary_offset;	// Offset to varying/cstring length
-};
-
-
 // skd_dtype
 
 const int SKD_long			= 1;
@@ -153,11 +141,59 @@ const int SKD_cstring		= 12;		// non-international
 const int SKD_sql_time		= 13;
 const int SKD_sql_date		= 14;
 const int SKD_int64			= 15;
+const int SKD_dec64			= 16;
+const int SKD_dec128		= 17;
 
 // skd_flags
 const UCHAR SKD_ascending		= 0;	// default initializer
 const UCHAR SKD_descending		= 1;
 const UCHAR SKD_binary			= 2;
+
+// Sort key definition block
+
+struct sort_key_def
+{
+	UCHAR	skd_dtype;			// Data type
+	UCHAR	skd_flags;			// Flags
+
+private:
+	USHORT	skd_length;			// Length if string
+	ULONG	skd_offset;			// Offset from beginning
+
+public:
+	ULONG	skd_vary_offset;	// Offset to varying/cstring length
+
+	USHORT getSkdLength() const { return skd_length; }
+	void setSkdLength(UCHAR dtype, USHORT v)
+	{
+		skd_dtype = dtype;
+		skd_length = v;
+		switch (dtype)
+		{
+		case SKD_dec64:
+		case SKD_dec128:
+			skd_length += sizeof(SLONG);
+			break;
+		}
+	}
+
+	ULONG getSkdOffset() const { return skd_offset; }
+	void setSkdOffset(const sort_key_def* prev = nullptr, dsc* desc = nullptr)
+	{
+		skd_offset = 0;
+		if (prev)
+		{
+			skd_offset = prev->skd_offset + prev->skd_length;
+#ifndef WORDS_BIGENDIAN
+			skd_offset = ROUNDUP(skd_offset, sizeof(SLONG));
+#else
+			if (desc && desc->dsc_dtype >= dtype_aligned)
+				skd_offset = FB_ALIGN(skd_offset, type_alignments[desc->dsc_dtype]);
+#endif
+		}
+	}
+};
+
 
 // Run/merge common block header
 

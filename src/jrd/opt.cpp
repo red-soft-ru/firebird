@@ -394,7 +394,9 @@ static const UCHAR sort_dtypes[] =
 	0,							// dtype_array
 	SKD_int64,					// dtype_int64
 	SKD_text,					// dtype_dbkey - use text sort for backward compatibility
-	SKD_bytes					// dtype_boolean
+	SKD_bytes,					// dtype_boolean
+	SKD_dec64,					// dtype_dec64
+	SKD_dec128					// dtype_dec128
 };
 
 
@@ -1900,39 +1902,36 @@ void OPT_gen_aggregate_distincts(thread_db* tdbb, CompilerScratch* csb, MapNode*
 				desc->getTextType() != ttype_binary && desc->getTextType() != ttype_ascii;
 
 			sort_key_def* sort_key = asb->keyItems.getBuffer(asb->intl ? 2 : 1);
-			sort_key->skd_offset = 0;
+			sort_key->setSkdOffset();
 
 			if (asb->intl)
 			{
 				const USHORT key_length = ROUNDUP(INTL_key_length(tdbb,
 					INTL_TEXT_TO_INDEX(desc->getTextType()), desc->getStringLength()), sizeof(SINT64));
 
-				sort_key->skd_dtype = SKD_bytes;
+				sort_key->setSkdLength(SKD_bytes, key_length);
 				sort_key->skd_flags = SKD_ascending;
-				sort_key->skd_length = key_length;
-				sort_key->skd_offset = 0;
 				sort_key->skd_vary_offset = 0;
 
 				++sort_key;
-				asb->length = sort_key->skd_offset = key_length;
+				sort_key->setSkdOffset(&sort_key[-1]);
+				asb->length = sort_key->getSkdOffset();
 			}
 
 			fb_assert(desc->dsc_dtype < FB_NELEM(sort_dtypes));
-			sort_key->skd_dtype = sort_dtypes[desc->dsc_dtype];
+			sort_key->setSkdLength(sort_dtypes[desc->dsc_dtype], desc->dsc_length);
 
 			if (!sort_key->skd_dtype)
 				ERR_post(Arg::Gds(isc_invalid_sort_datatype) << Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
 
-			sort_key->skd_length = desc->dsc_length;
-
 			if (desc->dsc_dtype == dtype_varying)
 			{
 				// allocate space to store varying length
-				sort_key->skd_vary_offset = sort_key->skd_offset + ROUNDUP(desc->dsc_length, sizeof(SLONG));
+				sort_key->skd_vary_offset = sort_key->getSkdOffset() + ROUNDUP(desc->dsc_length, sizeof(SLONG));
 				asb->length = sort_key->skd_vary_offset + sizeof(USHORT);
 			}
 			else
-				asb->length += sort_key->skd_length;
+				asb->length += sort_key->getSkdLength();
 
 			asb->length = ROUNDUP(asb->length, sizeof(SLONG));
 			// dimitr:	allocate an extra longword for the purely artificial counter,
@@ -2454,7 +2453,8 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 						fieldNode->getDesc(tdbb, csb, desc);
 
 						// International type text has a computed key
-						if (IS_INTL_DATA(desc))
+						// Different decimal float values sometimes have same keys
+						if (IS_INTL_DATA(desc) || desc->isDecFloat())
 							break;
 
 						--items;
@@ -2478,7 +2478,7 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 	if (sort->unique)
 		map->flags |= SortedStream::FLAG_UNIQUE;
 
-    ULONG map_length = 0;
+    sort_key_def* prev_key = nullptr;
 
 	// Loop thru sort keys building sort keys.  Actually, to handle null values
 	// correctly, two sort keys are made for each field, one for the null flag
@@ -2519,14 +2519,9 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 		}
 
 		// Make key for null flag
+		sort_key->setSkdLength(SKD_text, 1);
+		sort_key->setSkdOffset(prev_key);
 
-#ifndef WORDS_BIGENDIAN
-		map_length = ROUNDUP(map_length, sizeof(SLONG));
-#endif
-		const ULONG flag_offset = map_length++;
-		sort_key->skd_offset = flag_offset;
-		sort_key->skd_dtype = SKD_text;
-		sort_key->skd_length = 1;
 		// Handle nulls placement
 		sort_key->skd_flags = SKD_ascending;
 
@@ -2534,22 +2529,15 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 		if ((*nullOrder == rse_nulls_default && !*descending) || *nullOrder == rse_nulls_first)
 			sort_key->skd_flags |= SKD_descending;
 
-		++sort_key;
+		prev_key = sort_key++;
 
 		// Make key for sort key proper
-#ifndef WORDS_BIGENDIAN
-		map_length = ROUNDUP(map_length, sizeof(SLONG));
-#else
-		if (desc->dsc_dtype >= dtype_aligned)
-			map_length = FB_ALIGN(map_length, type_alignments[desc->dsc_dtype]);
-#endif
-
-		sort_key->skd_offset = map_length;
+		fb_assert(desc->dsc_dtype < FB_NELEM(sort_dtypes));
+		sort_key->setSkdLength(sort_dtypes[desc->dsc_dtype], desc->dsc_length);
+		sort_key->setSkdOffset(&sort_key[-1], desc);
 		sort_key->skd_flags = SKD_ascending;
 		if (*descending)
 			sort_key->skd_flags |= SKD_descending;
-		fb_assert(desc->dsc_dtype < FB_NELEM(sort_dtypes));
-		sort_key->skd_dtype = sort_dtypes[desc->dsc_dtype];
 
 		if (!sort_key->skd_dtype)
 			ERR_post(Arg::Gds(isc_invalid_sort_datatype) << Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
@@ -2560,14 +2548,13 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 				sort_key->skd_flags |= SKD_binary;
 		}
 
-		sort_key->skd_length = desc->dsc_length;
-		++sort_key;
 		map_item->clear();
 		map_item->node = node;
-		map_item->flagOffset = flag_offset;
+		map_item->flagOffset = prev_key->getSkdOffset();
 		map_item->desc = *desc;
-		map_item->desc.dsc_address = (UCHAR*)(IPTR) map_length;
-		map_length += desc->dsc_length;
+		map_item->desc.dsc_address = (UCHAR*)(IPTR) sort_key->getSkdOffset();
+
+		prev_key = sort_key++;
 
 		FieldNode* fieldNode;
 
@@ -2578,7 +2565,8 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 		}
 	}
 
-	map_length = ROUNDUP(map_length, sizeof(SLONG));
+	fb_assert(prev_key);
+	ULONG map_length = prev_key ? ROUNDUP(prev_key->getSkdOffset() + prev_key->getSkdLength(), sizeof(SLONG)) : 0;
 	map->keyLength = map_length;
 	ULONG flag_offset = map_length;
 	map_length += stream_list.getCount();
@@ -2596,6 +2584,7 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 			IBERROR(157);		// msg 157 cannot sort on a field that does not exist
 		if (desc->dsc_dtype >= dtype_aligned)
 			map_length = FB_ALIGN(map_length, type_alignments[desc->dsc_dtype]);
+
 		map_item->clear();
 		map_item->fieldId = (SSHORT) id;
 		map_item->stream = stream;

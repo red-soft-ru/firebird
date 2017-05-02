@@ -334,7 +334,7 @@ int BaseAggWinStream<ThisType, NextType>::lookForChange(thread_db* tdbb, jrd_req
 		}
 		else if (!vtemp->vlu_desc.dsc_address)
 			return 1 * nullDirection;
-		else if ((n = MOV_compare(desc, &vtemp->vlu_desc)) != 0)
+		else if ((n = MOV_compare(tdbb, desc, &vtemp->vlu_desc)) != 0)
 			return n * direction;
 	}
 

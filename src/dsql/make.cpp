@@ -118,13 +118,14 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag)
 	switch (numeric_flag)
 	{
 	case CONSTANT_DOUBLE:
+	case CONSTANT_DECIMAL:
 		// This is a numeric value which is transported to the engine as
 		// a string.  The engine will convert it. Use dtype_double so that
 		// the engine can distinguish it from an actual string.
 		// Note: Due to the size of dsc_scale we are limited to numeric
 		// constants of less than 256 bytes.
 
-		literal->litDesc.dsc_dtype = dtype_double;
+		literal->litDesc.dsc_dtype = numeric_flag == CONSTANT_DOUBLE ? dtype_double : dtype_dec128;
 		// Scale has no use for double
 		literal->litDesc.dsc_scale = static_cast<signed char>(strlen(str));
 		literal->litDesc.dsc_sub_type = 0;
@@ -169,7 +170,7 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag)
 
 			// Now invoke the string_to_date/time/timestamp routines
 
-			CVT_move(&tmp, &literal->litDesc, ERRD_post);
+			CVT_move(&tmp, &literal->litDesc, tdbb->getAttachment()->att_dec_status, ERRD_post);
 			break;
 		}
 

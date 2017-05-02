@@ -648,7 +648,7 @@ bool_t xdr_protocol(XDR* xdrs, PACKET* p)
 		}
 		{ // scope
 			rem_port* port = (rem_port*) xdrs->x_public;
-			if (port->port_protocol >= PROTOCOL_VERSION15)
+			if (port->port_protocol >= PROTOCOL_STMT_TOUT)
 				MAP(xdr_u_long, sqldata->p_sqldata_timeout);
 		}
 		DEBUG_PRINTSIZE(xdrs, p->p_operation);

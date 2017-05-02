@@ -599,7 +599,7 @@ dsc* NthValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* 
 	if (!desc || (request->req_flags & req_null))
 		return NULL;
 
-	SINT64 records = MOV_get_int64(desc, 0);
+	SINT64 records = MOV_get_int64(tdbb, desc, 0);
 	if (records <= 0)
 	{
 		status_exception::raise(Arg::Gds(isc_sysf_argnmustbe_positive) <<
@@ -607,7 +607,7 @@ dsc* NthValueWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* 
 	}
 
 	desc = EVL_expr(tdbb, request, from);
-	const SLONG fromPos = desc ? MOV_get_long(desc, 0) : FROM_FIRST;
+	const SLONG fromPos = desc ? MOV_get_long(tdbb, desc, 0) : FROM_FIRST;
 
 	if (fromPos == FROM_FIRST)
 		records += -(window->getRecordPosition() - window->getFrameStart()) - 1;
@@ -688,7 +688,7 @@ dsc* LagLeadWinNode::winPass(thread_db* tdbb, jrd_req* request, SlidingWindow* w
 	if (!desc || (request->req_flags & req_null))
 		return NULL;
 
-	SINT64 records = MOV_get_int64(desc, 0);
+	SINT64 records = MOV_get_int64(tdbb, desc, 0);
 	if (records < 0)
 	{
 		status_exception::raise(Arg::Gds(isc_sysf_argnmustbe_nonneg) <<
@@ -850,7 +850,7 @@ void NTileWinNode::aggInit(thread_db* tdbb, jrd_req* request) const
 			Arg::Num(1) << Arg::Str(aggInfo.name));
 	}
 
-	thisImpure->buckets = MOV_get_int64(desc, 0);
+	thisImpure->buckets = MOV_get_int64(tdbb, desc, 0);
 
 	if (thisImpure->buckets <= 0)
 	{

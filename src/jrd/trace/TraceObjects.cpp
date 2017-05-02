@@ -346,7 +346,7 @@ void TraceDscFromValues::fillParams()
 			if (param->argFlag)
 			{
 				const dsc* flag = EVL_expr(tdbb, m_request, param->argFlag);
-				if (MOV_get_long(flag, 0))
+				if (MOV_get_long(tdbb, flag, 0))
 					desc.dsc_flags |= DSC_null;
 			}
 		}

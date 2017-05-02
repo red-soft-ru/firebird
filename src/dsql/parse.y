@@ -333,6 +333,7 @@ using namespace Firebird;
 %token <metaNamePtr> WRITE
 
 %token <stringPtr> FLOAT_NUMBER
+%token <stringPtr> DECIMAL_NUMBER
 %token <metaNamePtr> SYMBOL
 %token <int32Val> NUMBER
 
@@ -590,21 +591,26 @@ using namespace Firebird;
 %token <metaNamePtr> REGR_SYY
 
 // tokens added for Firebird 4.0
-
 %token <metaNamePtr> BINARY
+%token <metaNamePtr> BIND
+%token <metaNamePtr> COMPARE_DECFLOAT
 %token <metaNamePtr> CUME_DIST
+%token <metaNamePtr> DECFLOAT
 %token <metaNamePtr> DEFINER
 %token <metaNamePtr> EXCLUDE
 %token <metaNamePtr> FOLLOWING
 %token <metaNamePtr> IDLE
 %token <metaNamePtr> INVOKER
 %token <metaNamePtr> MESSAGE
+%token <metaNamePtr> NATIVE
+%token <metaNamePtr> NORMALIZE_DECFLOAT
 %token <metaNamePtr> NTILE
 %token <metaNamePtr> OTHERS
 %token <metaNamePtr> OVERRIDING
 %token <metaNamePtr> PERCENT_RANK
 %token <metaNamePtr> PRECEDING
 %token <metaNamePtr> PRIVILEGE
+%token <metaNamePtr> QUANTIZE
 %token <metaNamePtr> RANGE
 %token <metaNamePtr> RDB_ERROR
 %token <metaNamePtr> RDB_ROLE_IN_USE
@@ -614,6 +620,8 @@ using namespace Firebird;
 %token <metaNamePtr> SQL
 %token <metaNamePtr> SYSTEM
 %token <metaNamePtr> TIES
+%token <metaNamePtr> TOTALORDER
+%token <metaNamePtr> TRAPS
 %token <metaNamePtr> UNBOUNDED
 %token <metaNamePtr> VARBINARY
 %token <metaNamePtr> WINDOW
@@ -703,6 +711,7 @@ using namespace Firebird;
 	Jrd::NamedWindowClause* namedWindowClause;
 	Jrd::NamedWindowsClause* namedWindowsClause;
 	Jrd::TransactionNode* traNode;
+	Jrd::SessionManagementNode* mngNode;
 	Firebird::Array<Jrd::PrivilegeClause>* privilegeArray;
 	Jrd::GranteeClause* granteeClause;
 	Firebird::Array<Jrd::GranteeClause>* granteeArray;
@@ -761,6 +770,9 @@ using namespace Firebird;
 	Jrd::SetRoleNode* setRoleNode;
 	Jrd::SetSessionNode* setSessionNode;
 	Jrd::CreateAlterRoleNode* createAlterRoleNode;
+	Jrd::SetRoundNode* setRoundNode;
+	Jrd::SetTrapsNode* setTrapsNode;
+	Jrd::SetBindNode* setBindNode;
 }
 
 %include types.y
@@ -779,7 +791,7 @@ statement
 	: dml_statement		{ $$ = newNode<DsqlDmlRequest>($1); }
 	| ddl_statement		{ $$ = newNode<DsqlDdlRequest>($1); }
 	| tra_statement		{ $$ = newNode<DsqlTransactionRequest>($1); }
-	| session_statement	{ $$ = newNode<SetSessionRequest>($1); }
+	| mng_statement		{ $$ = newNode<DsqlSessionManagementRequest>($1); }
 	;
 
 %type <stmtNode> dml_statement
@@ -814,6 +826,14 @@ tra_statement
 	: set_transaction							{ $$ = $1; }
 	| commit									{ $$ = $1; }
 	| rollback									{ $$ = $1; }
+	;
+
+%type <mngNode> mng_statement
+mng_statement
+	: set_round									{ $$ = $1; }
+	| set_traps									{ $$ = $1; }
+	| set_bind									{ $$ = $1; }
+	| session_statement							{ $$ = $1; }
 	| set_role									{ $$ = $1; }
 	;
 
@@ -4465,6 +4485,7 @@ non_charset_simple_type
 	| binary_character_type
 	| numeric_type
 	| float_type
+	| decfloat_type
 	| BIGINT
 		{
 			$$ = newNode<dsql_fld>();
@@ -4731,6 +4752,20 @@ varbinary_character_keyword
 	;
 
 // numeric type
+
+%type <legacyField> decfloat_type
+decfloat_type
+	: DECFLOAT '(' signed_long_integer ')'
+		{
+			if ($3 != 16 && $3 != 34)
+				yyabandon(YYPOSNARG(3), -842, isc_decprecision_err);	// DecFloat precision must be 16 or 34.
+
+			$$ = newNode<dsql_fld>();
+			$$->precision = $3;
+			$$->dtype = $3 == 16 ? dtype_dec64 : dtype_dec128;
+			$$->length = $3 == 16 ? sizeof(Decimal64) : sizeof(Decimal128);
+		}
+	;
 
 %type <legacyField> numeric_type
 numeric_type
@@ -5015,6 +5050,68 @@ set_role
 	| SET TRUSTED ROLE
 		{ $$ = newNode<SetRoleNode>(); }
 	;
+
+%type <setRoundNode> set_round
+set_round
+	: SET DECFLOAT ROUND valid_symbol_name
+		{ $$ = newNode<SetRoundNode>($4); }
+	;
+
+%type <setTrapsNode> set_traps
+set_traps
+	: SET DECFLOAT TRAPS TO
+			{ $$ = newNode<SetTrapsNode>(); }
+		traps_list_opt($5)
+			{ $$ = $5; }
+	;
+
+%type <setBindNode> set_bind
+set_bind
+	: SET DECFLOAT BIND
+			{ $$ = newNode<SetBindNode>(); }
+		bind_clause($4)
+			{ $$ = $4; }
+	;
+
+%type traps_list_opt(<setTrapsNode>)
+traps_list_opt($setTrapsNode)
+	: // nothing
+	| traps_list($setTrapsNode)
+	;
+
+%type traps_list(<setTrapsNode>)
+traps_list($setTrapsNode)
+	: trap($setTrapsNode)
+	| traps_list ',' trap($setTrapsNode)
+	;
+
+%type trap(<setTrapsNode>)
+trap($setTrapsNode)
+	: valid_symbol_name
+		{ $setTrapsNode->trap($1); }
+	;
+
+%type bind_clause(<setBindNode>)
+bind_clause($setBindNode)
+	: NATIVE
+		// do nothing
+	| character_keyword
+		{ $setBindNode->bind.bind = DecimalBinding::DEC_TEXT; }
+	| DOUBLE PRECISION
+		{ $setBindNode->bind.bind = DecimalBinding::DEC_DOUBLE; }
+	| BIGINT scale_clause($setBindNode)
+		{ $setBindNode->bind.bind = DecimalBinding::DEC_NUMERIC; }
+	;
+
+%type scale_clause(<setBindNode>)
+scale_clause($setBindNode)
+	: // nothing
+	| ',' signed_long_integer
+		{
+			if ($2 > 18 || $2 < 0)
+				yyabandon(YYPOSNARG(2), -842, isc_scale_nogt);	// Scale must be between 0 and precision
+			$setBindNode->bind.numScale = -$2;
+		}
 
 %type <setSessionNode> session_statement
 session_statement
@@ -7052,6 +7149,8 @@ u_numeric_constant
 		{ $$ = MAKE_const_slong($1); }
 	| FLOAT_NUMBER
 		{ $$ = MAKE_constant($1->c_str(), CONSTANT_DOUBLE); }
+	| DECIMAL_NUMBER
+		{ $$ = MAKE_constant($1->c_str(), CONSTANT_DECIMAL); }
 	| NUMBER64BIT
 		{
 			SINT64 signedNumber = (SINT64) $1.number;
@@ -7584,6 +7683,10 @@ system_function_std_syntax
 	| TANH
 	| TRUNC
 	| UUID_TO_CHAR
+	| QUANTIZE
+	| TOTALORDER
+	| NORMALIZE_DECFLOAT
+	| COMPARE_DECFLOAT
 	;
 
 %type <sysFuncCallNode> system_function_special_syntax
@@ -8282,25 +8385,33 @@ non_reserved_word
 	| SERVERWIDE
 	| INCREMENT
 	| TRUSTED
-	| CUME_DIST				// added in FB 4.0
+	| BIND					// added in FB 4.0
+	| COMPARE_DECFLOAT
+	| CUME_DIST
+	| DECFLOAT
 	| DEFINER
 	| EXCLUDE
 	| FOLLOWING
 	| IDLE
 	| INVOKER
 	| MESSAGE
+	| NATIVE
+	| NORMALIZE_DECFLOAT
 	| NTILE
 	| OTHERS
 	| OVERRIDING
 	| PERCENT_RANK
 	| PRECEDING
 	| PRIVILEGE
+	| QUANTIZE
 	| RANGE
 	| SECURITY
 	| SESSION
 	| SQL
 	| SYSTEM
 	| TIES
+	| TOTALORDER
+	| TRAPS
 	;
 
 %%

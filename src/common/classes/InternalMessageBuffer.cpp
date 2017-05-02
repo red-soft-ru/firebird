@@ -172,6 +172,16 @@ MetadataFromBlr::MetadataFromBlr(unsigned aBlrLength, const unsigned char* aBlr,
 			item->length = sizeof(UCHAR);
 			break;
 
+		case blr_dec64:
+			item->type = SQL_DEC16;
+			item->length = sizeof(Decimal64);
+			break;
+
+		case blr_dec128:
+			item->type = SQL_DEC34;
+			item->length = sizeof(Decimal128);
+			break;
+
 		default:
 			(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 			 Arg::Gds(isc_dsql_sqlda_err)

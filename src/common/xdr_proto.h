@@ -27,12 +27,10 @@
 #include "../common/dsc.h"
 #include "../common/xdr.h"
 
-// 15 Jan 2003. Nickolay Samofatov
-// Functions below need to have C++ linkage to avoid name clash with
-// standard XDR. Firebird XDR is NOT compatible with Sun XDR at interface level
-
 bool_t	xdr_datum(XDR*, const dsc*, UCHAR*);
 bool_t	xdr_double(XDR*, double*);
+bool_t	xdr_dec64(XDR*,  Firebird::Decimal64*);
+bool_t	xdr_dec128(XDR*,  Firebird::Decimal128*);
 bool_t	xdr_enum(XDR*, xdr_op*);
 bool_t	xdr_float(XDR*, float*);
 bool_t	xdr_int(XDR*, int*);

@@ -199,7 +199,7 @@ const Config::ConfigEntry Config::entries[MAX_CONFIG_KEY] =
 	{TYPE_BOOLEAN,		"WireCompression",			(ConfigValue) false},
 	{TYPE_INTEGER,		"MaxIdentifierByteLength",	(ConfigValue) -1},
 	{TYPE_INTEGER,		"MaxIdentifierCharLength",	(ConfigValue) -1},
-	{TYPE_BOOLEAN,		"CryptSecurityDatabase",	(ConfigValue) false},
+	{TYPE_BOOLEAN,		"AllowEncryptedSecurityDatabase", (ConfigValue) false},
 	{TYPE_INTEGER,		"StatementTimeout",			(ConfigValue) 0},
 	{TYPE_INTEGER,		"ConnectionIdleTimeout",	(ConfigValue) 0}
 };

@@ -4476,6 +4476,8 @@ void AlterDomainNode::checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld)
 	case blr_d_float:
 	case blr_double:
 	case blr_float:
+	case blr_dec64:
+	case blr_dec128:
 		switch (newFld.dyn_dtype)
 		{
 		case blr_blob:
@@ -4563,6 +4565,44 @@ void AlterDomainNode::checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld)
 			case blr_float:
 			case blr_short:
 			case blr_long:
+				break;
+
+			default:
+				// Cannot change datatype for column %s.  Conversion from base type %s to base type %s is not supported.
+				errorCode = isc_dyn_invalid_dtype_conversion;
+				break;
+			}
+			break;
+
+		case blr_dec64:
+			switch (origFld.dyn_dtype)
+			{
+			case blr_short:
+			case blr_long:
+			case blr_float:
+			case blr_d_float:
+			case blr_double:
+			case blr_dec64:
+				break;
+
+			default:
+				// Cannot change datatype for column %s.  Conversion from base type %s to base type %s is not supported.
+				errorCode = isc_dyn_invalid_dtype_conversion;
+				break;
+			}
+			break;
+
+		case blr_dec128:
+			switch (origFld.dyn_dtype)
+			{
+			case blr_short:
+			case blr_long:
+			case blr_int64:
+			case blr_float:
+			case blr_d_float:
+			case blr_double:
+			case blr_dec64:
+			case blr_dec128:
 				break;
 
 			default:

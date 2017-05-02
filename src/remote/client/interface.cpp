@@ -324,7 +324,7 @@ public:
 
 	unsigned int getTimeout(CheckStatusWrapper* status)
 	{
-		if (statement->rsr_rdb->rdb_port->port_protocol < PROTOCOL_VERSION15)
+		if (statement->rsr_rdb->rdb_port->port_protocol < PROTOCOL_STMT_TOUT)
 		{
 			status->setErrors(Arg::Gds(isc_wish_list).value());
 			return 0;
@@ -335,7 +335,7 @@ public:
 
 	void setTimeout(CheckStatusWrapper* status, unsigned int timeOut)
 	{
-		if (timeOut && statement->rsr_rdb->rdb_port->port_protocol < PROTOCOL_VERSION15)
+		if (timeOut && statement->rsr_rdb->rdb_port->port_protocol < PROTOCOL_STMT_TOUT)
 		{
 			status->setErrors(Arg::Gds(isc_wish_list).value());
 			return;
@@ -1795,7 +1795,7 @@ void Attachment::execWithCheck(CheckStatusWrapper* status, const string& stmt)
  *  case is when modern network server works with legacy engine.
  *
  **************************************/
-	if (rdb->rdb_port->port_protocol >= PROTOCOL_VERSION15)
+	if (rdb->rdb_port->port_protocol >= PROTOCOL_STMT_TOUT)
 	{
 		execute(status, NULL, stmt.length(), stmt.c_str(), SQL_DIALECT_CURRENT, NULL, NULL, NULL, NULL);
 
@@ -1820,7 +1820,7 @@ void Attachment::execWithCheck(CheckStatusWrapper* status, const string& stmt)
 
 unsigned int Attachment::getIdleTimeout(CheckStatusWrapper* status)
 {
-	if (rdb->rdb_port->port_protocol >= PROTOCOL_VERSION15)
+	if (rdb->rdb_port->port_protocol >= PROTOCOL_STMT_TOUT)
 		return getSingleInfo(status, fb_info_ses_idle_timeout_att);
 
 	status->setErrors(Arg::Gds(isc_wish_list).value());
@@ -1839,7 +1839,7 @@ void Attachment::setIdleTimeout(CheckStatusWrapper* status, unsigned int timeOut
 
 unsigned int Attachment::getStatementTimeout(CheckStatusWrapper* status)
 {
-	if (rdb->rdb_port->port_protocol >= PROTOCOL_VERSION15)
+	if (rdb->rdb_port->port_protocol >= PROTOCOL_STMT_TOUT)
 		return getSingleInfo(status, fb_info_statement_timeout_att);
 
 	status->setErrors(Arg::Gds(isc_wish_list).value());
@@ -6616,7 +6616,7 @@ static void mov_dsql_message(const UCHAR* from_msg,
 		// Safe const cast, we are going to move from it to anywhere.
 		from.dsc_address = const_cast<UCHAR*>(from_msg) + (IPTR) from.dsc_address;
 		to.dsc_address = to_msg + (IPTR) to.dsc_address;
-		CVT_move(&from, &to, move_error);
+		CVT_move(&from, &to, DecimalStatus(DEC_Errors), move_error);
 	}
 }
 

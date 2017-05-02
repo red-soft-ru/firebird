@@ -70,7 +70,7 @@ void VirtualTable::erase(thread_db* tdbb, record_param* rpb)
 		// Ignore attempt to stop system attachment
 		dsc sysFlag;
 		if (EVL_field(relation, rpb->rpb_record, f_mon_att_sys_flag, &sysFlag) &&
-			MOV_get_long(&sysFlag, 0) != 0)
+			MOV_get_long(tdbb, &sysFlag, 0) != 0)
 		{
 			return;
 		}
@@ -90,7 +90,7 @@ void VirtualTable::erase(thread_db* tdbb, record_param* rpb)
 		return;
 	}
 
-	const SINT64 id = MOV_get_int64(&desc, 0);
+	const SINT64 id = MOV_get_int64(tdbb, &desc, 0);
 
 	// Post a blocking request
 	Lock temp_lock(tdbb, sizeof(SINT64), lock_type);

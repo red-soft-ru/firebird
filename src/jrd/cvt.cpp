@@ -136,7 +136,7 @@ double CVT_date_to_double(const dsc* desc)
 			temp_desc.dsc_length = sizeof(temp);
 			date = temp;
 			temp_desc.dsc_address = (UCHAR*) date;
-			CVT_move(desc, &temp_desc);
+			CVT_move(desc, &temp_desc, 0);
 		}
 	}
 
@@ -173,7 +173,7 @@ void CVT_double_to_date(double real, SLONG fixed[2])
 }
 
 
-UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, double* ptr)
+UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, void* ptr)
 {
 /**************************************
  *
@@ -207,7 +207,7 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, d
 
 	SINT64 value = 0;
 	SSHORT local_scale = 0, sign = 0;
-	bool digit_seen = false, fraction = false;
+	bool digit_seen = false, fraction = false, over = false;
 
 	const UCHAR* p = string;
 	const UCHAR* const end = p + length;
@@ -225,11 +225,11 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, d
 			if (value >= NUMERIC_LIMIT)
 			{
 				// possibility of an overflow
-				if (value > NUMERIC_LIMIT)
+				if ((value > NUMERIC_LIMIT) || (*p > '8' && sign == -1) || (*p > '7' && sign != -1))
+				{
+					over = true;
 					break;
-
-				if ((*p > '8' && sign == -1) || (*p > '7' && sign != -1))
-					break;
+				}
 			}
 
 			// Force the subtraction to be performed before the addition,
@@ -258,12 +258,20 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, d
 	if (!digit_seen)
 		CVT_conversion_error(&desc, ERR_post);
 
-	if ((p < end) ||			// there is an exponent
-		((value < 0) && (sign != -1))) // MAX_SINT64+1 wrapped around
+	if ((!over) && ((p < end) ||		// there is an exponent
+		((value < 0) && (sign != -1)))) // MAX_SINT64+1 wrapped around
 	{
 		// convert to double
-		*ptr = CVT_get_double(&desc, ERR_post);
-		return dtype_double;
+		*(double *) ptr = CVT_get_double(&desc, 0, ERR_post, &over);
+		if (!over)
+			return dtype_double;
+	}
+
+	if (over)
+	{
+		thread_db* tdbb = JRD_get_thread_data();
+		*(Decimal128 *) ptr = CVT_get_dec128(&desc, tdbb->getAttachment()->att_dec_status, ERR_post);
+		return dtype_dec128;
 	}
 
 	*scale = local_scale;
@@ -313,7 +321,7 @@ GDS_DATE CVT_get_sql_date(const dsc* desc)
 	memset(&temp_desc, 0, sizeof(temp_desc));
 	temp_desc.dsc_dtype = dtype_sql_date;
 	temp_desc.dsc_address = (UCHAR *) &value;
-	CVT_move(desc, &temp_desc);
+	CVT_move(desc, &temp_desc, 0);
 	return value;
 }
 
@@ -338,7 +346,7 @@ GDS_TIME CVT_get_sql_time(const dsc* desc)
 	memset(&temp_desc, 0, sizeof(temp_desc));
 	temp_desc.dsc_dtype = dtype_sql_time;
 	temp_desc.dsc_address = (UCHAR *) &value;
-	CVT_move(desc, &temp_desc);
+	CVT_move(desc, &temp_desc, 0);
 	return value;
 }
 
@@ -363,7 +371,7 @@ GDS_TIMESTAMP CVT_get_timestamp(const dsc* desc)
 	memset(&temp_desc, 0, sizeof(temp_desc));
 	temp_desc.dsc_dtype = dtype_timestamp;
 	temp_desc.dsc_address = (UCHAR *) &value;
-	CVT_move(desc, &temp_desc);
+	CVT_move(desc, &temp_desc, 0);
 	return value;
 }
 

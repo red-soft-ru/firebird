@@ -110,7 +110,7 @@ Remote client implementation notes:
   - Statement::getTimeout() returns saved timeout value
   - fb_dsql_set_timeout() is a wrapper over Statement::setTimeout()
 
-If remote server doesn't support statement timeouts (protocol version less than 15):
+If remote server doesn't support statement timeouts (protocol version less than 16):
   - "set" functions will return isc_wish_list error
   - "get" functions will return zero and set isc_wish_list error 
   - "info" functions will return isc_info_error tag in info buffer (as usual).

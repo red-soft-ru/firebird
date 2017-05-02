@@ -66,7 +66,7 @@ else
   GCC=gcc
 endif
 
-.PHONY:	master_process cross_process firebird Debug Release extern
+.PHONY:	master_process cross_process firebird Debug Release external
 
 all:	firebird
 
@@ -130,9 +130,12 @@ $(GEN_ROOT)/Make.Version : $(SRC_ROOT)/misc/writeBuildNum.sh
 # build external software
 #
 
-extern:
+external:
 	$(MAKE) -C $(ROOT)/extern/btyacc
 	$(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop
+
+	$(MAKE) -C $(ROOT)/extern/decNumber
+	ln -sf $(ROOT)/extern/decNumber/libdecFloat.a $(LIB)
 
 ifeq ($(TOMBUILD_FLG),Y)
 	CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/libtommath -f makefile.shared GCC=$(GCC)
@@ -180,7 +183,7 @@ master_process:
 	ln -sf $(SRC_ROOT)/include/gen/autoconfig.auto $(SRC_ROOT)/include/gen/autoconfig.h
 	$(MAKE) updateBuildNum
 	$(MAKE) export_lists
-	$(MAKE) extern
+	$(MAKE) external
 	$(MAKE) updateCloopInterfaces
 	$(MAKE) boot
 	$(MAKE) yvalve
@@ -215,7 +218,7 @@ cross1:
 	ln -sf $(SRC_ROOT)/include/gen/autoconfig.auto $(SRC_ROOT)/include/gen/autoconfig.h
 	$(MAKE) updateBuildNum
 	$(MAKE) export_lists
-	$(MAKE) extern
+	$(MAKE) external
 	$(MAKE) updateCloopInterfaces
 	$(MAKE) boot
 	$(MAKE) yvalve
@@ -657,11 +660,12 @@ install install-embedded silent_install package packages dist:
 #
 .PHONY: clean clean_objects clean_dependancies clean_extern_objects clean_build \
 		clean_gpre_gen clean_icu clean_dbs clean_examples clean_makefiles \
-		clean_editline clean_all
+		clean_editline clean_all clean_decfloat
 
 
 clean: clean_objects clean_dependancies clean_extern_objects clean_build \
-		clean_yacc_gen clean_gpre_gen clean_dbs clean_examples clean_tommath
+		clean_yacc_gen clean_gpre_gen clean_dbs clean_examples clean_tommath \
+		clean_decfloat
 
 ifeq ($(EDITLINE_FLG),Y)
 ifeq ($(STD_EDITLINE),false)
@@ -700,6 +704,9 @@ clean_editline:
 
 clean_tommath:
 	-$(MAKE) -C $(ROOT)/extern/libtommath clean
+
+clean_decfloat:
+	-$(MAKE) -C $(ROOT)/extern/decNumber clean
 
 clean_objects:
 	$(RM) `find $(TMP_ROOT)/ -type f -name '*.o' -print`

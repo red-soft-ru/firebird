@@ -173,7 +173,9 @@ rem_port* WNET_analyze(ClntAuthBlock* cBlock,
 		REMOTE_PROTOCOL(PROTOCOL_VERSION11, ptype_batch_send, 2),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION12, ptype_batch_send, 3),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION13, ptype_batch_send, 4),
-		REMOTE_PROTOCOL(PROTOCOL_VERSION14, ptype_batch_send, 5)
+		REMOTE_PROTOCOL(PROTOCOL_VERSION14, ptype_batch_send, 5),
+		REMOTE_PROTOCOL(PROTOCOL_VERSION15, ptype_batch_send, 6),
+		REMOTE_PROTOCOL(PROTOCOL_VERSION16, ptype_batch_send, 7)
 	};
 	fb_assert(FB_NELEM(protocols_to_try) <= FB_NELEM(cnct->p_cnct_versions));
 	cnct->p_cnct_count = FB_NELEM(protocols_to_try);

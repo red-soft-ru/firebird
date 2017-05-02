@@ -30,7 +30,7 @@
 
 double		CVT_date_to_double(const dsc*);
 void		CVT_double_to_date(double, SLONG[2]);
-UCHAR		CVT_get_numeric(const UCHAR*, const USHORT, SSHORT*, double*);
+UCHAR		CVT_get_numeric(const UCHAR*, const USHORT, SSHORT*, void*);
 GDS_DATE	CVT_get_sql_date(const dsc*);
 GDS_TIME	CVT_get_sql_time(const dsc*);
 GDS_TIMESTAMP CVT_get_timestamp(const dsc*);
@@ -65,15 +65,15 @@ namespace Jrd
 	};
 }
 
-inline void CVT_move(const dsc* from, dsc* to)
+inline void CVT_move(const dsc* from, dsc* to, Firebird::DecimalStatus decSt)
 {
-	CVT_move_common(from, to, &Jrd::EngineCallbacks::instance);
+	CVT_move_common(from, to, decSt, &Jrd::EngineCallbacks::instance);
 }
 
 inline USHORT CVT_get_string_ptr(const dsc* desc, USHORT* ttype, UCHAR** address,
-                                 vary* temp, USHORT length)
+                                 vary* temp, USHORT length, Firebird::DecimalStatus decSt)
 {
-	return CVT_get_string_ptr_common(desc, ttype, address, temp, length,
+	return CVT_get_string_ptr_common(desc, ttype, address, temp, length, decSt,
 									 &Jrd::EngineCallbacks::instance);
 }
 

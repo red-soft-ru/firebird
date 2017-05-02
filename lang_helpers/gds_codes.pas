@@ -1681,6 +1681,8 @@ const
 	gds_overriding_user_invalid          = 335545136;
 	isc_overriding_system_missing        = 335545137;
 	gds_overriding_system_missing        = 335545137;
+	isc_decprecision_err                 = 335545138;
+	gds_decprecision_err                 = 335545138;
 	isc_gfix_db_name                     = 335740929;
 	gds_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;

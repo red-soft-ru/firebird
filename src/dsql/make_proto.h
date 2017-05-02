@@ -46,6 +46,7 @@ namespace Jrd {
 // Parameters to MAKE_constant
 	enum dsql_constant_type {
 		CONSTANT_DOUBLE = 1,	// stored as a string
+		CONSTANT_DECIMAL,		// stored as a string
 		CONSTANT_DATE,			// stored as a SLONG
 		CONSTANT_TIME,			// stored as a ULONG
 		CONSTANT_TIMESTAMP,		// stored as a QUAD

@@ -870,6 +870,16 @@ dnl if 64-bit mode, then archive tool, ar, needs -X64 option
         [AC_LANG_PROGRAM(,[[int lp64 = __64BIT__; ]])],
         [AR_OPTIONS=-X64],)
 fi
+
+XE_SAVE_ENV()
+CXXFLAGS="$CXXFLAGS -std=c++11"
+AC_CACHE_CHECK([whether the C++ compiler understands noexcept], [ac_cv_cxx_noexcept], [
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[int f(int x) noexcept { return x + 1; }]], [[]])],
+	[ac_cv_cxx_noexcept=yes], [ac_cv_cxx_noexcept=no])])
+XE_RESTORE_ENV()
+if test "$ac_cv_cxx_noexcept" = yes; then
+    AC_DEFINE([HAS_NOEXCEPT], [1], [Define if the C++ compiler understands noexcept.])
+fi
 AC_LANG_POP(C++)
 
 dnl Check for functions

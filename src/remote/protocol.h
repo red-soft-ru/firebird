@@ -84,9 +84,14 @@ const USHORT PROTOCOL_VERSION14	= (FB_PROTOCOL_FLAG | 14);
 
 // Protocol 15:
 //	- supports crypt key callback at connect phase
+
+const USHORT PROTOCOL_VERSION15 = (FB_PROTOCOL_FLAG | 15);
+
+// Protocol 16:
 //	- supports statement timeouts
 
-const USHORT PROTOCOL_VERSION15	= (FB_PROTOCOL_FLAG | 15);
+const USHORT PROTOCOL_VERSION16 = (FB_PROTOCOL_FLAG | 16);
+const USHORT PROTOCOL_STMT_TOUT = PROTOCOL_VERSION16;
 
 // Architecture types
 

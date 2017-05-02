@@ -213,7 +213,7 @@ Sort::Sort(Database* dbb,
 
 		const sort_key_def* p = m_description.end() - 1;
 
-		m_key_length = ROUNDUP(p->skd_offset + p->skd_length, sizeof(SLONG)) >> SHIFTLONG;
+		m_key_length = ROUNDUP(p->getSkdOffset() + p->getSkdLength(), sizeof(SLONG)) >> SHIFTLONG;
 
 		while (unique_keys < keys)
 		{
@@ -221,7 +221,7 @@ Sort::Sort(Database* dbb,
 			unique_keys++;
 		}
 
-		m_unique_length = ROUNDUP(p->skd_offset + p->skd_length, sizeof(SLONG)) >> SHIFTLONG;
+		m_unique_length = ROUNDUP(p->getSkdOffset() + p->getSkdLength(), sizeof(SLONG)) >> SHIFTLONG;
 
 		// Next, try to allocate a "big block". How big? Big enough!
 
@@ -711,8 +711,8 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 
 	for (sort_key_def* key = m_description.begin(), *end = m_description.end(); key < end; key++)
 	{
-		UCHAR* p = record + key->skd_offset;
-		USHORT n = key->skd_length;
+		UCHAR* p = record + key->getSkdOffset();
+		USHORT n = key->getSkdLength();
 		USHORT complement = key->skd_flags & SKD_descending;
 
 		// This trick replaces possibly negative zero with positive zero, so that both
@@ -806,6 +806,47 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 			*p ^= 1 << 7;
 			break;
 
+		case SKD_dec64:
+			if (direction)
+			{
+				((Decimal64*)p)->makeKey(lwp);
+				*p ^= 1 << 7;
+			}
+			else
+			{
+				if (complement && n)
+				{
+					UCHAR* pp = p;
+					do {
+						*pp++ ^= -1;
+					} while (--n);
+				}
+				*p ^= 1 << 7;
+				((Decimal64*)p)->grabKey(lwp);
+			}
+			break;
+
+		case SKD_dec128:
+			fb_assert(false);		// diddleKey for Dec64/128 not tested on bigendians!
+			if (direction)
+			{
+				((Decimal128*)p)->makeKey(lwp);
+				*p ^= 1 << 7;
+			}
+			else
+			{
+				if (complement && n)
+				{
+					UCHAR* pp = p;
+					do {
+						*pp++ ^= -1;
+					} while (--n);
+				}
+				*p ^= 1 << 7;
+				((Decimal128*)p)->grabKey(lwp);
+			}
+			break;
+
 		default:
 			fb_assert(false);
 			break;
@@ -824,13 +865,13 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 
 		if (key->skd_dtype == SKD_varying && !direction)
 		{
-			p = record + key->skd_offset;
+			p = record + key->getSkdOffset();
 			((vary*) p)->vary_length = *((USHORT*) (record + key->skd_vary_offset));
 		}
 
 		if (key->skd_dtype == SKD_cstring && !direction)
 		{
-			p = record + key->skd_offset;
+			p = record + key->getSkdOffset();
 			USHORT l = *((USHORT*) (record + key->skd_vary_offset));
 			*(p + l) = 0;
 		}
@@ -858,11 +899,11 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 
 	for (sort_key_def* key = m_description.begin(), *end = m_description.end(); key < end; key++)
 	{
-		UCHAR* p = (UCHAR*) record + key->skd_offset;
+		UCHAR* p = (UCHAR*) record + key->getSkdOffset();
 		USHORT* wp = (USHORT*) p;
 		SORTP* lwp = (SORTP*) p;
 		USHORT complement = key->skd_flags & SKD_descending;
-		USHORT n = ROUNDUP(key->skd_length, sizeof(SLONG));
+		USHORT n = ROUNDUP(key->getSkdLength(), sizeof(SLONG));
 
 		// This trick replaces possibly negative zero with positive zero, so that both
 		// would be transformed into the same sort key and thus properly compared (see CORE-3547).
@@ -1039,27 +1080,69 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 			break;
 #endif // IEEE
 
+		case SKD_dec64:
+			if (direction)
+			{
+				((Decimal64*)p)->makeKey(lwp);
+				p[3] ^= 1 << 7;
+			}
+			else
+			{
+				if (complement && n)
+				{
+					UCHAR* pp = p;
+					do {
+						*pp++ ^= -1;
+					} while (--n);
+				}
+				p[3] ^= 1 << 7;
+				((Decimal64*)p)->grabKey(lwp);
+			}
+			break;
+
+		case SKD_dec128:
+			if (direction)
+			{
+				((Decimal128*)p)->makeKey(lwp);
+				p[3] ^= 1 << 7;
+			}
+			else
+			{
+				if (complement && n)
+				{
+					UCHAR* pp = p;
+					do {
+						*pp++ ^= -1;
+					} while (--n);
+				}
+				p[3] ^= 1 << 7;
+				((Decimal128*)p)->grabKey(lwp);
+			}
+			break;
+
 		default:
 			fb_assert(false);
 			break;
 		}
 		if (complement && n)
+		{
 			do {
 				*p++ ^= -1;
 			} while (--n);
+		}
 
 		// Flatter but don't complement control info for non-fixed
 		// data types when restoring the data
 
 		if (key->skd_dtype == SKD_varying && !direction)
 		{
-			p = (UCHAR*) record + key->skd_offset;
+			p = (UCHAR*) record + key->getSkdOffset();
 			((vary*) p)->vary_length = *((USHORT*) (record + key->skd_vary_offset));
 		}
 
 		if (key->skd_dtype == SKD_cstring && !direction)
 		{
-			p = (UCHAR*) record + key->skd_offset;
+			p = (UCHAR*) record + key->getSkdOffset();
 			USHORT l = *((USHORT*) (record + key->skd_vary_offset));
 			*(p + l) = 0;
 		}

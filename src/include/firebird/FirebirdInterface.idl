@@ -29,6 +29,8 @@
 typedef ISC_DATE;
 typedef ISC_QUAD;
 typedef ISC_TIME;
+typedef FB_DEC16;
+typedef FB_DEC34;
 
 // Versioned interface - base for all FB interfaces
 interface Versioned
@@ -985,6 +987,8 @@ interface Util : Versioned
 
 version:
 	EventBlock createEventBlock(Status status, const string* events);
+	DecFloat16 getDecFloat16(Status status);
+	DecFloat34 getDecFloat34(Status status);
 }
 
 interface OffsetsCallback : Versioned
@@ -1364,4 +1368,24 @@ interface UdrPlugin : Versioned
 	void registerFunction(Status status, const string name, UdrFunctionFactory factory);
 	void registerProcedure(Status status, const string name, UdrProcedureFactory factory);
 	void registerTrigger(Status status, const string name, UdrTriggerFactory factory);
+}
+
+interface DecFloat16 : Versioned
+{
+	const uint BCD_SIZE = 16;
+	const uint STRING_SIZE = 25;	// includes terminating \0
+	void toBcd(const FB_DEC16* from, int* sign, uchar* bcd, int* exp);
+	void toString(const FB_DEC16* from, string to);
+	void fromBcd(int sign, const uchar* bcd, int exp, FB_DEC16* to);
+	void fromString(Status status, const string from, FB_DEC16* to);
+}
+
+interface DecFloat34 : Versioned
+{
+	const uint BCD_SIZE = 34;
+	const uint STRING_SIZE = 43;	// includes terminating \0
+	void toBcd(const FB_DEC34* from, int* sign, uchar* bcd, int* exp);
+	void toString(const FB_DEC34* from, string to);
+	void fromBcd(int sign, const uchar* bcd, int exp, FB_DEC34* to);
+	void fromString(Status status, const string from, FB_DEC34* to);
 }

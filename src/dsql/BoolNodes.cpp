@@ -768,7 +768,7 @@ bool ComparativeBoolNode::execute(thread_db* tdbb, jrd_req* request) const
 		case blr_leq:
 		case blr_neq:
 		case blr_between:
-			comparison = MOV_compare(desc[0], desc[1]);
+			comparison = MOV_compare(tdbb, desc[0], desc[1]);
 	}
 
 	// If we are checking equality of record_version
@@ -806,7 +806,7 @@ bool ComparativeBoolNode::execute(thread_db* tdbb, jrd_req* request) const
 			desc[1] = EVL_expr(tdbb, request, arg3);
 			if (request->req_flags & req_null)
 				return false;
-			return comparison >= 0 && MOV_compare(desc[0], desc[1]) <= 0;
+			return comparison >= 0 && MOV_compare(tdbb, desc[0], desc[1]) <= 0;
 
 		case blr_containing:
 		case blr_starting:
@@ -849,7 +849,7 @@ bool ComparativeBoolNode::stringBoolean(thread_db* tdbb, jrd_req* request, dsc* 
 
 		VaryStr<256> temp1;
 		USHORT xtype1;
-		const USHORT l1 = MOV_get_string_ptr(desc1, &xtype1, &p1, &temp1, sizeof(temp1));
+		const USHORT l1 = MOV_get_string_ptr(tdbb, desc1, &xtype1, &p1, &temp1, sizeof(temp1));
 
 		fb_assert(xtype1 == type1);
 
@@ -915,7 +915,7 @@ bool ComparativeBoolNode::stringBoolean(thread_db* tdbb, jrd_req* request, dsc* 
 					break;
 				}
 
-				escape_length = MOV_make_string(desc, type1,
+				escape_length = MOV_make_string(tdbb, desc, type1,
 					reinterpret_cast<const char**>(&escape_str), &temp3, sizeof(temp3));
 
 				if (!escape_length || charset->length(escape_length, escape_str, true) != 1)
@@ -1124,7 +1124,7 @@ bool ComparativeBoolNode::stringFunction(thread_db* tdbb, jrd_req* request,
 				return false;
 			}
 
-			escape_length = MOV_make_string(desc, ttype,
+			escape_length = MOV_make_string(tdbb, desc, ttype,
 				reinterpret_cast<const char**>(&escape_str), &temp3, sizeof(temp3));
 
 			if (!escape_length || charset->length(escape_length, escape_str, true) != 1)

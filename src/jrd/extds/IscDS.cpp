@@ -63,7 +63,6 @@ static RegisterFBProvider reg;
 
 static bool isConnectionBrokenError(FbStatusVector* status);
 static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc>& descs);
-static UCHAR sqlTypeToDscType(SSHORT sqlType);
 
 // 	IscProvider
 
@@ -1658,7 +1657,7 @@ static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc> &
 
     for (int i = 0; i < xsqlda->sqld; xVar++, i++)
 	{
-		const UCHAR dtype = sqlTypeToDscType(xVar->sqltype & ~1);
+		const UCHAR dtype = fb_utils::sqlTypeToDscType(xVar->sqltype & ~1);
 		xVar->sqltype |= 1;
 
 		if (type_alignments[dtype])
@@ -1683,7 +1682,7 @@ static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc> &
 
     for (int i = 0; i < xsqlda->sqld; xVar++, i++)
 	{
-		const UCHAR dtype = sqlTypeToDscType(xVar->sqltype & ~1);
+		const UCHAR dtype = fb_utils::sqlTypeToDscType(xVar->sqltype & ~1);
 		if (type_alignments[dtype])
 			offset = FB_ALIGN(offset, type_alignments[dtype]);
 
@@ -1716,48 +1715,6 @@ static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc> &
 		null.makeShort(0, xVar->sqlind);
 
 		offset += sizeof(SSHORT);
-	}
-}
-
-
-static UCHAR sqlTypeToDscType(SSHORT sqlType)
-{
-	switch (sqlType)
-	{
-	case SQL_VARYING:
-		return dtype_varying;
-	case SQL_TEXT:
-		return dtype_text;
-	case SQL_NULL:
-		return dtype_text;
-	case SQL_DOUBLE:
-		return dtype_double;
-	case SQL_FLOAT:
-		return dtype_real;
-	case SQL_D_FLOAT:
-		return dtype_d_float;
-	case SQL_TYPE_DATE:
-		return dtype_sql_date;
-	case SQL_TYPE_TIME:
-		return dtype_sql_time;
-	case SQL_TIMESTAMP:
-		return dtype_timestamp;
-	case SQL_BLOB:
-		return dtype_blob;
-	case SQL_ARRAY:
-		return dtype_array;
-	case SQL_LONG:
-		return dtype_long;
-	case SQL_SHORT:
-		return dtype_short;
-	case SQL_INT64:
-		return dtype_int64;
-	case SQL_QUAD:
-		return dtype_quad;
-	case SQL_BOOLEAN:
-		return dtype_boolean;
-	default:
-		return dtype_unknown;
 	}
 }
 

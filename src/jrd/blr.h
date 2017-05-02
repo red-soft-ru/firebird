@@ -59,7 +59,7 @@
 #define blr_blob_id     	(unsigned char)45	/* added from gds.h */
 #define blr_sql_date		(unsigned char)12
 #define blr_sql_time		(unsigned char)13
-#define blr_int64               (unsigned char)16
+#define blr_int64           (unsigned char)16
 #define blr_blob2			(unsigned char)17
 #define blr_domain_name		(unsigned char)18
 #define blr_domain_name2	(unsigned char)19
@@ -67,6 +67,8 @@
 #define blr_column_name		(unsigned char)21
 #define blr_column_name2	(unsigned char)22
 #define blr_bool			(unsigned char)23
+#define blr_dec64			(unsigned char)24
+#define blr_dec128			(unsigned char)25
 
 // first sub parameter for blr_domain_name[2]
 #define blr_domain_type_of	(unsigned char)0

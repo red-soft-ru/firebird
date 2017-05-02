@@ -64,8 +64,7 @@ static void famasc_destroy(texttype* obj)
 
 	if (impl)
 	{
-		if (impl->cs.charset_fn_destroy)
-			impl->cs.charset_fn_destroy(&impl->cs);
+		Firebird::IntlUtil::finiCharset(&impl->cs);
 
 		delete impl->charSet;
 		delete impl;

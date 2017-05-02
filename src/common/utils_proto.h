@@ -184,6 +184,9 @@ namespace fb_utils
 
 	void logAndDie(const char* text);
 
+	// On incorrect sqlType returns dsc_unknown
+	UCHAR sqlTypeToDscType(SSHORT sqlType);
+
 	// Returns next offset value
 	unsigned sqlTypeToDsc(unsigned prevOffset, unsigned sqlType, unsigned sqlLength,
 		unsigned* dtype, unsigned* len, unsigned* offset, unsigned* nullOffset);

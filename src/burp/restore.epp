@@ -2805,6 +2805,8 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 		case blr_timestamp:
 		case blr_sql_time:
 		case blr_sql_date:
+		case blr_dec64:
+		case blr_dec128:
 			add_byte(blr, field->fld_type);
 			break;
 

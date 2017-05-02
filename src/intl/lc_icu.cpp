@@ -57,8 +57,7 @@ static bool texttype_default_init(texttype* tt,
 	// test if that ICU charset exist
 	if (CSICU_charset_init(&cs, charSetName))
 	{
-		if (cs.charset_fn_destroy)
-			cs.charset_fn_destroy(&cs);
+		IntlUtil::finiCharset(&cs);
 	}
 	else
 		return false;

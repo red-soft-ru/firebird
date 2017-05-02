@@ -79,7 +79,7 @@ Remote client implementation notes:
   - Attachment::getIdleTimeout() calls isc_database_info() with 
     fb_info_ses_idle_timeout_att tag 
 
-If remote server doesn't support idle connection timeouts (protocol version less than 15):
+If remote server doesn't support idle connection timeouts (protocol version less than 16):
   - Attachment::setIdleTimeout() will return isc_wish_list error
   - Attachment::getIdleTimeout() will return zero and set isc_wish_list error 
   - isc_database_info() will return isc_info_error tag in info buffer (as usual).

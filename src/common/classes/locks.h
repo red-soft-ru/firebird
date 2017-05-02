@@ -55,22 +55,6 @@ class Exception;	// Needed for catch
 
 // Windows version of the class
 
-class TryEnterCS
-{
-public:
-	TryEnterCS();
-
-	static bool tryEnter(LPCRITICAL_SECTION lpCS)
-	{
-		return ((m_funct) (lpCS) == TRUE);
-	}
-
-private:
-	typedef BOOL (WINAPI *tTryEnterCriticalSection)(LPCRITICAL_SECTION lpCriticalSection);
-
-	static tTryEnterCriticalSection m_funct;
-};
-
 class Mutex : public Reasons
 {
 protected:
@@ -97,7 +81,7 @@ public:
 
 	~Mutex()
 	{
-#if defined DEV_BUILD && !defined WIN9X_SUPPORT
+#if defined DEV_BUILD
 		if (spinlock.OwningThread != 0)
 			DebugBreak();
 		fb_assert(lockCount == 0);
@@ -116,7 +100,7 @@ public:
 
 	bool tryEnter(const char* aReason)
 	{
-		const bool ret = TryEnterCS::tryEnter(&spinlock);
+		const bool ret = (TryEnterCriticalSection(&spinlock) == TRUE);
 		if (ret)
 		{
 			reason(aReason);
@@ -129,7 +113,7 @@ public:
 
 	void leave()
 	{
-#if defined DEV_BUILD && !defined WIN9X_SUPPORT
+#if defined DEV_BUILD
 		// NS: This check is based on internal structure on CRITICAL_SECTION
 		// On 9X it works differently, and future OS versions may break this check as well
 		if ((U_IPTR) spinlock.OwningThread != GetCurrentThreadId())
