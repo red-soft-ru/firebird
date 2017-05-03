@@ -59,14 +59,11 @@
 #include "../jrd/mov_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/tra_proto.h"
+#include "../jrd/cmp_proto.h"
 
 using namespace Jrd;
 using namespace Ods;
 using namespace Firebird;
-
-// These lists keep information of the deleted indices
-static Firebird::GlobalPtr<Firebird::Array<Firebird::MetaName> > deleted_index_names;
-static Firebird::GlobalPtr<Firebird::Array<Jrd::index_desc> > deleted_indices;
 
 //#define DEBUG_BTR_SPLIT
 
@@ -343,18 +340,6 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 }
 
 
-Firebird::Array<Firebird::MetaName> *getDeletedIndexNames()
-{
-  return &deleted_index_names;
-}
-
-
-Firebird::Array<index_desc> *getDeletedIndices()
-{
-  return &deleted_indices;
-}
-
-
 USHORT BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescAlloc** csb_idx, RelationPages* relPages)
 {
 /**************************************
@@ -392,23 +377,22 @@ USHORT BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescAlloc** csb_idx, Rel
 			// DropIndexNode erased index record in RDB$INDICES, but btree
 			// holds the index in case of cancellation of transaction.
 			// To ensure that the index will not be selected on the next query,
-			// we check, that the index desc is not exist in the list. If index desc exists in list,
+			// we check, that the index does not have a lock on the deletion. If index lock exists,
 			// it means that the index is deleted and no need to use it.
 			// If the transaction rolled back, index name is restored in table
 			// and the index is used in the usual way.
 			bool skip = false;
-			Firebird::Array<index_desc> *deletedIndices = getDeletedIndices();
-
-			if (deletedIndices->getCount() > 0)
+			Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0) Lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
+			lock->setKey((relation->rel_id << 16) | buffer[count].idx_id);
+			const SLONG data =
+				dbb->dbb_lock_mgr->readData2(lock->lck_type,
+											lock->getKeyPtr(), lock->lck_length,
+											lock->lck_owner_handle);
+			if (data != 0)
 			{
-			  for (Array<Jrd::index_desc>::iterator i = deletedIndices->begin(); i != deletedIndices->end(); ++i)
-			  {
-				if ((*i).idx_root == buffer[count].idx_root && (*i).idx_id == buffer[count].idx_id)
-				{
-				  skip = true;
-				  break;
-				}
-			  }
+				SLONG data2 = dbb->dbb_lock_mgr->readData(data);
+				if (data == data2 && data != 0 && data2 != 0)
+					skip = true;
 			}
 			if (!skip)
 			  count++;
@@ -574,18 +558,19 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 	{
 		// No need to get information about an index if it is deleted,
 		// because its information has been removed from system table
-		Firebird::Array<index_desc> *deletedIndices = getDeletedIndices();
 		bool skip = false;
-		if (deletedIndices->getCount() > 0)
+		Database* dbb = tdbb->getDatabase();
+		Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0) Lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
+		lock->setKey((relation->rel_id << 16) | id);
+		const SLONG data =
+			dbb->dbb_lock_mgr->readData2(lock->lck_type,
+										lock->getKeyPtr(), lock->lck_length,
+										lock->lck_owner_handle);
+		if (data != 0)
 		{
-		  for (Array<Jrd::index_desc>::iterator i = deletedIndices->begin(); i != deletedIndices->end(); ++i)
-		  {
-			if ((*i).idx_root == idx->idx_root && (*i).idx_id == idx->idx_id)
-			{
-			  skip = true;
-			  break;
-			}
-		  }
+			SLONG data2 = dbb->dbb_lock_mgr->readData(data);
+			if (data == data2 && data != 0 && data2 != 0)
+				skip = true;
 		}
 		if (!skip)
 		{

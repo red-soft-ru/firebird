@@ -1295,7 +1295,7 @@ void DFW_delete_deferred( jrd_tra* transaction, SavNumber sav_number)
 	{
 		DeferredWork* work(i);
 		// If the index deleting was rolled back,
-		// We need exclude the index from the lists for future use
+		// We need to deque the index lock from lock manager
 		if (work->dfw_type == dfw_delete_index ||
 			work->dfw_type == dfw_delete_expression_index)
 		{
@@ -1304,36 +1304,28 @@ void DFW_delete_deferred( jrd_tra* transaction, SavNumber sav_number)
 			fb_assert(arg);
 			fb_assert(arg->dfw_id > 0);
 			const USHORT id = arg->dfw_id - 1;
-			Firebird::Array<MetaName> *deletedIndexNames = getDeletedIndexNames();
-			Firebird::Array<index_desc> *deletedIndices = getDeletedIndices();
-			if (deletedIndexNames->getCount() > 0)
+
+			Jrd::thread_db* tdbb = JRD_get_thread_data();
+			Database* dbb = tdbb->getDatabase();
+			jrd_rel* relation = MET_lookup_relation_id(tdbb, w->dfw_id, false);
+
+			Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0) Lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
+			lock->setKey((relation->rel_id << 16) | id);
+
+			const SLONG data =
+				dbb->dbb_lock_mgr->readData2(lock->lck_type,
+											lock->getKeyPtr(), lock->lck_length,
+											lock->lck_owner_handle);
+
+			if (data != 0)
 			{
-				Jrd::thread_db* tdbb = JRD_get_thread_data();
-				jrd_rel* relation = MET_lookup_relation_id(tdbb, w->dfw_id, false);
-				if (!relation)
+				SLONG data2 = dbb->dbb_lock_mgr->readData(data);
+
+				if (data == data2 && data != 0 && data2 != 0)
 				{
-					break;
-				}
-				RelationPages* relPages = relation->getPages(tdbb, -1, false);
-				if (!relPages)
-				{
-					break;
-				}
-				index_desc desc;
-				BTR_lookup(tdbb, relation, id, &desc, relPages);
-				int idx = -1;
-				for (Array<Jrd::index_desc>::iterator i = deletedIndices->begin(); i != deletedIndices->end(); ++i)
-				{
-					idx++;
-					if ((*i).idx_root == desc.idx_root && (*i).idx_id == desc.idx_id)
-					{
-						break;
-					}
-				}
-				if (idx != - 1)
-				{
-					deletedIndexNames->remove(idx);
-					deletedIndices->remove(idx);
+					dbb->dbb_lock_mgr->dequeue(data);
+					LCK_release(tdbb, lock);
+					delete lock;
 				}
 			}
 		}
@@ -4626,27 +4618,25 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 				}
 			}
 		}
-		// Get arrays of the deleted indices and their names
-		Firebird::Array<MetaName> *deletedIndexNames = getDeletedIndexNames();
-		Firebird::Array<index_desc> *deletedIndices = getDeletedIndices();
-		// Search the index name in the names array that is equal the work index name
-		// and remove it from the array, and its index desc from desc array
-		if (deletedIndexNames->getCount() > 0)
+		// Unqueing lock for deleted index
+		Database* dbb = tdbb->getDatabase();
+		Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0) Lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
+		lock->setKey((relation->rel_id << 16) | id);
+
+		const SLONG data =
+			dbb->dbb_lock_mgr->readData2(lock->lck_type,
+										lock->getKeyPtr(), lock->lck_length,
+										lock->lck_owner_handle);
+
+		if (data != 0)
 		{
-			int idx = -1;
-			AbstractString::const_pointer index_name = work->dfw_name.c_str();
-			for (Array<MetaName>::iterator i = deletedIndexNames->begin(); i != deletedIndexNames->end(); ++i)
+			SLONG data2 = dbb->dbb_lock_mgr->readData(data);
+
+			if (data == data2 && data != 0 && data2 != 0)
 			{
-				idx++;
-				if ((*i).compare(index_name) == 0)
-				{
-					break;
-				}
-			}
-			if (idx != - 1)
-			{
-				deletedIndexNames->remove(idx);
-				deletedIndices->remove(idx);
+				dbb->dbb_lock_mgr->dequeue(data);
+				LCK_release(tdbb, lock);
+				delete lock;
 			}
 		}
 		break;

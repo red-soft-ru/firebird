@@ -9821,8 +9821,8 @@ void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 	SLONG idx_id;
 	SLONG rel_id;
 
-	// Need to add the index name and desc to lists. These lists store indexes,
-	// which are deleted and should not be used in future queries
+	// Need to create lock on index and add to lock manager. This lock guarantees
+	// that index which are deleted and should not be used in future queries
 	idx_id = MET_lookup_index_name(tdbb, name, &rel_id, &idx_state);
 
 	if (idx_id != -1)
@@ -9833,13 +9833,20 @@ void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 
 		RelationPages* relPages = relation->getPages(tdbb);
 
-		Firebird::Array<MetaName> *deletedIndexNames = getDeletedIndexNames();
-		Firebird::Array<index_desc> *deletedIndices = getDeletedIndices();
-
 		BTR_lookup(tdbb, relation, idx_id, &idx_desc, relPages);
 
-		deletedIndexNames->add(name);
-		deletedIndices->add(idx_desc);
+		Database* dbb = tdbb->getDatabase();
+
+		Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0) Lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
+		lock->setKey((relation->rel_id << 16) | idx_id);
+
+		FbLocalStatus statusVector;
+		lock->lck_id = dbb->dbb_lock_mgr->enqueue(tdbb, &statusVector, lock->lck_id,
+			lock->lck_type, lock->getKeyPtr(), lock->lck_length,
+			LCK_EX, lock->lck_ast, lock->lck_object, lock->lck_data, LCK_WAIT,
+			lock->lck_owner_handle);
+
+		dbb->dbb_lock_mgr->writeData(lock->lck_id, lock->lck_id);
 	}
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
