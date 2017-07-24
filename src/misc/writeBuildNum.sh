@@ -9,7 +9,7 @@ BuildType=T
 MajorVer=4
 MinorVer=0
 RevNo=0
-BuildNum=624
+BuildNum=699
 
 NowAt=`pwd`
 cd `dirname $0`
@@ -20,8 +20,8 @@ Root=`dirname $Root`
 
 if [ "$SPECIAL_BUILD_SUFFIX" = "" ]; then
 # Normal builds
-SuffixKind="Unstable"
-SuffixVer=""
+SuffixKind="Alpha"
+SuffixVer="1"
 BuildSuffix="Firebird 4.0"
 [ "$SuffixKind" = "" ] || BuildSuffix="$BuildSuffix $SuffixKind"
 [ "$SuffixVer" = "" ] || BuildSuffix="$BuildSuffix $SuffixVer"
@@ -94,10 +94,11 @@ eof
 
 createMakeVersion() {
 
+TmpDir="${TMPDIR:-/tmp}"
 OdsH="${Root}/src/jrd/ods.h"
-Mini="/tmp/miniods.h"
-TestCpp="/tmp/test.cpp"
-AOut="/tmp/a.out"
+Mini="${TmpDir}/miniods.h"
+TestCpp="${TmpDir}/test.cpp"
+AOut="${TmpDir}/a.out"
 
 grep ODS_VERSION $OdsH | grep -v ENCODE_ODS >$Mini
 

@@ -241,7 +241,7 @@ public:
 		return tra_attachment->att_dsql_instance;
 	}
 
-	JTransaction* getInterface();
+	JTransaction* getInterface(bool create);
 	void setInterface(JTransaction* jt);
 
 	FB_API_HANDLE tra_public_handle;	// Public handle

@@ -2936,6 +2936,7 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 
 	ULONG records = 0;
 	rec_type record;
+	bool resync = false;
 
 	while (true)
 	{
@@ -3027,10 +3028,12 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 
 		// ASF: Preferable we should call isc_start_and_send only when records == 1, but this leaks
 		// memory when there are blobs and arrays fields - CORE-3802.
-		if (records % 1000 == 1)
+		if (resync || records % 1000 == 1)
 			s = isc_start_and_send(status_vector, &request, &gds_trans, 0, (USHORT) length, buffer, 0);
 		else
 			s = isc_send(status_vector, &request, 0, (USHORT) length, buffer, 0);
+
+		resync = (s != 0);
 
 		if (s)
 		{
@@ -3071,7 +3074,10 @@ rec_type get_data(BurpGlobals* tdgbl, burp_rel* relation, bool skip_relation)
 					BURP_error_redirect (status_vector, 48);
 					// msg 48 isc_send failed
 			}
+
+			records--;
 		}
+
 		if (record != rec_data)
 			break;
 	} // while (true)
@@ -7329,8 +7335,8 @@ bool get_relation(BurpGlobals* tdgbl)
  *
  *
  **************************************/
-	SLONG		rel_flags = 0, sys_flag = 0, type = 0;
-	bool		rel_flags_null = true, type_null = true;
+	SLONG		rel_flags = 0, sys_flag = fb_sysflag_user, type = rel_persistent;
+	bool		rel_flags_null = true;
 	ISC_QUAD	view_blr = isc_blob_null, view_src = isc_blob_null,
 				rel_desc = isc_blob_null, ext_desc = isc_blob_null;
 	bool		view_blr_null = true, view_src_null = true, rel_desc_null = true,
@@ -7345,6 +7351,24 @@ bool get_relation(BurpGlobals* tdgbl)
 	BASED_ON RDB$RELATIONS.RDB$EXTERNAL_FILE ext_file_name;
 	ext_file_name[0] = '\0';
 	bool		ext_file_name_null = true;
+
+	// Before starting to restore relations, commit everything that was restored
+	// prior to this point. This ensures that no pending error can later affect
+	// other metadata being restored.
+
+	if (!tdgbl->relations)
+	{
+		BURP_verbose (68);
+		// msg 68 committing meta data
+		COMMIT
+		ON_ERROR
+			general_on_error ();
+		END_ERROR;
+
+		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+		if (gds_status[1])
+			EXEC SQL SET TRANSACTION;
+	}
 
 	// Pick up relation attributes
 
@@ -7448,10 +7472,7 @@ bool get_relation(BurpGlobals* tdgbl)
 
 		case att_relation_type:
 			if (tdgbl->RESTORE_format >= 8)
-			{
-				type_null = false;
 				type = get_int32(tdgbl);
-			}
 			else
 				bad_attribute(scan_next_attr, attribute, 111);
 			break;
@@ -7490,7 +7511,7 @@ bool get_relation(BurpGlobals* tdgbl)
 			X.RDB$RUNTIME.NULL = TRUE;
 			X.RDB$EXTERNAL_DESCRIPTION.NULL = ext_desc_null;
 			X.RDB$EXTERNAL_FILE.NULL = ext_file_name_null;
-			X.RDB$RELATION_TYPE.NULL = type_null;
+			X.RDB$RELATION_TYPE.NULL = FALSE;
 			X.RDB$SQL_SECURITY.NULL = sql_security_null;
 
 			X.RDB$SYSTEM_FLAG = (USHORT) sys_flag;

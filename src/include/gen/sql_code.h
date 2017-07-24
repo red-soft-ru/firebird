@@ -839,6 +839,19 @@ static const struct {
 	{335545136, -902}, /* 816 overriding_user_invalid */
 	{335545137, -902}, /* 817 overriding_system_missing */
 	{335545138, -842}, /* 818 decprecision_err */
+	{335545139, -901}, /* 819 decfloat_divide_by_zero */
+	{335545140, -901}, /* 820 decfloat_inexact_result */
+	{335545141, -901}, /* 821 decfloat_invalid_operation */
+	{335545142, -901}, /* 822 decfloat_overflow */
+	{335545143, -901}, /* 823 decfloat_underflow */
+	{335545144, -901}, /* 824 subfunc_notdef */
+	{335545145, -901}, /* 825 subproc_notdef */
+	{335545146, -901}, /* 826 subfunc_signat */
+	{335545147, -901}, /* 827 subproc_signat */
+	{335545148, -901}, /* 828 subfunc_defvaldecl */
+	{335545149, -901}, /* 829 subproc_defvaldecl */
+	{335545150, -901}, /* 830 subfunc_not_impl */
+	{335545151, -901}, /* 831 subproc_not_impl */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */

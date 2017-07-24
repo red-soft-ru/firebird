@@ -141,8 +141,7 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 				ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 				dpb.insertByte(isc_dpb_sec_attach, TRUE);
 				dpb.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
-				const char* providers = "Providers=" CURRENT_ENGINE;
-				dpb.insertString(isc_dpb_config, providers, fb_strlen(providers));
+				dpb.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
 				att = p->attachDatabase(status, secDbName, dpb.getBufferLength(), dpb.getBuffer());
 				check(status);
 				HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: attached sec db %s\n", secDbName));

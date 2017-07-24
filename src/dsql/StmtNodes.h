@@ -420,6 +420,9 @@ public:
 		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_SUBFUNC>(pool),
 		  name(pool, aName),
 		  dsqlDeterministic(false),
+		  dsqlParameters(pool),
+		  dsqlReturns(pool),
+		  dsqlSignature(pool, aName),
 		  dsqlBlock(NULL),
 		  blockScratch(NULL),
 		  dsqlFunction(NULL),
@@ -451,6 +454,9 @@ private:
 public:
 	Firebird::MetaName name;
 	bool dsqlDeterministic;
+	Firebird::Array<NestConst<ParameterClause> > dsqlParameters;
+	Firebird::Array<NestConst<ParameterClause> > dsqlReturns;
+	Signature dsqlSignature;
 	NestConst<ExecBlockNode> dsqlBlock;
 	DsqlCompilerScratch* blockScratch;
 	dsql_udf* dsqlFunction;
@@ -467,6 +473,9 @@ public:
 	explicit DeclareSubProcNode(MemoryPool& pool, const Firebird::MetaName& aName)
 		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_SUBPROC>(pool),
 		  name(pool, aName),
+		  dsqlParameters(pool),
+		  dsqlReturns(pool),
+		  dsqlSignature(pool, aName),
 		  dsqlBlock(NULL),
 		  blockScratch(NULL),
 		  dsqlProcedure(NULL),
@@ -497,6 +506,9 @@ private:
 
 public:
 	Firebird::MetaName name;
+	Firebird::Array<NestConst<ParameterClause> > dsqlParameters;
+	Firebird::Array<NestConst<ParameterClause> > dsqlReturns;
+	Signature dsqlSignature;
 	NestConst<ExecBlockNode> dsqlBlock;
 	DsqlCompilerScratch* blockScratch;
 	dsql_prc* dsqlProcedure;

@@ -173,6 +173,7 @@ typedef int (*FB_SHUTDOWN_CALLBACK)(const int reason, const int mask, void* arg)
 struct FB_DEC16_t {
 	ISC_UINT64 fb_data[1];
 };
+
 struct FB_DEC34_t {
 	ISC_UINT64 fb_data[2];
 };

@@ -213,7 +213,7 @@ void SHOW_stuff( qli_syntax* node)
 		case show_system_relations:
 			// No need to define a buffer here; we are interested in its length.
 			width = get_window_size(buf_len - 1);
-			if (dbb = (qli_dbb*) value)
+			if ((dbb = (qli_dbb*) value))
 				show_rels(dbb, sw, width);
 			else
 			{
@@ -1116,7 +1116,7 @@ static void show_fields( qli_rel* relation, qli_fld* fields)
 		USHORT l = symbol->sym_length;
 		printf("        %s", symbol->sym_string);
 
-		if (symbol = field->fld_query_name)
+		if ((symbol = field->fld_query_name))
 		{
 			l += symbol->sym_length + 3;
 			printf(" (%s)", symbol->sym_string);

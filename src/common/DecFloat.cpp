@@ -47,6 +47,21 @@ using namespace Firebird;
 
 namespace {
 
+struct Dec2fb
+{
+	USHORT decError;
+	ISC_STATUS fbError;
+};
+
+Dec2fb dec2fb[] = {
+	{ DEC_IEEE_754_Division_by_zero, isc_decfloat_divide_by_zero },
+	{ DEC_IEEE_754_Inexact, isc_decfloat_inexact_result },
+	{ DEC_IEEE_754_Invalid_operation, isc_decfloat_invalid_operation },
+	{ DEC_IEEE_754_Overflow, isc_decfloat_overflow },
+	{ DEC_IEEE_754_Underflow, isc_decfloat_underflow },
+	{ 0, 0 }
+};
+
 class DecimalContext : public decContext
 {
 public:
@@ -64,7 +79,7 @@ public:
 
 	~DecimalContext() NOEXCEPT_ARG(false)
 	{
-		// Typically excptions should better be not thrown from destructors.
+		// Typically exceptions should better be not thrown from destructors.
 		// But in our case there should never be any exception raised inside
 		// Decimal64/128 functions - C library never throw, i.e. dtor will
 		// be never called due to exception processing.
@@ -78,16 +93,13 @@ public:
 		if (!unmaskedExceptions)
 			return;
 
-		for (USHORT mask = 1; mask; mask <<= 1)
+		decContextZeroStatus(this);
+
+		for (Dec2fb* e = dec2fb; e->decError; ++e)
 		{
-			if (mask & unmaskedExceptions)
-			{
-				decContextSetStatusQuiet(this, mask);
-				const char* statusString = decContextStatusToString(this);
-				decContextSetStatusQuiet(this, 0);
-				(Arg::Gds(isc_random) << "Decimal float error" <<
-					Arg::Gds(isc_random) << statusString).raise();
-			}
+			// Arg::Gds(isc_arith_except) as first vector element ?
+			if (e->decError & unmaskedExceptions)
+				Arg::Gds(e->fbError).raise();
 		}
 	}
 
@@ -121,11 +133,13 @@ unsigned digits(const unsigned pMax, unsigned char* const coeff, int& exp)
 			}
 
 			i = pMax - i;
+
 			while (!coeff[i - 1])
 			{
 				fb_assert(i > 0);
 				--i;
 			}
+
 			return i;
 		}
 	}
@@ -152,11 +166,13 @@ void make(ULONG* key,
 		if (sign)
 			exp = -exp;
 	}
+
 	*key++ = exp;
 
 	// convert to SLONG
 	fb_assert(pMax / 9 < decSize / sizeof(int));
 	memset(key, 0, decSize);
+
 	for (unsigned i = 0; i < pMax; ++i)
 	{
 		unsigned c = i / 9;
@@ -178,6 +194,7 @@ void grab(ULONG* key,
 		sign = DECFLOAT_Sign;
 		exp = -exp;
 	}
+
 	if (exp != 0)
 		exp -= (bias + 2);
 
@@ -187,6 +204,7 @@ void grab(ULONG* key,
 		int c = i / 9;
 		bcd[i] = key[c] % 10;
 		key[c] /= 10;
+
 		if (sign)
 			bcd[i] = 9 - bcd[i];
 	}
@@ -202,6 +220,7 @@ void grab(ULONG* key,
 				memset(bcd, 0, pMax - 1 - i);
 				exp += (pMax - 1 - i);
 			}
+
 			break;
 		}
 	}
@@ -223,7 +242,14 @@ void Decimal64::setScale(DecimalStatus decSt, int scale)
 	}
 }
 
+#if SIZEOF_LONG < 8
 Decimal64 Decimal64::set(int value, DecimalStatus decSt, int scale)
+{
+	return set(SLONG(value), decSt, scale);
+}
+#endif
+
+Decimal64 Decimal64::set(SLONG value, DecimalStatus decSt, int scale)
 {
 	decDoubleFromInt32(&dec, value);
 	setScale(decSt, -scale);
@@ -239,6 +265,7 @@ Decimal64 Decimal64::set(SINT64 value, DecimalStatus decSt, int scale)
 		DecimalContext context(this, decSt);
 		decDoubleFromString(&dec, s, &context);
 	}
+
 	setScale(decSt, -scale);
 
 	return *this;
@@ -265,16 +292,19 @@ Decimal64 Decimal64::set(double value, DecimalStatus decSt)
 void Decimal64::toString(DecimalStatus decSt, unsigned length, char* to) const
 {
 	DecimalContext context(this, decSt);
+
 	if (length)
 	{
 		--length;
-		char s[DECDOUBLE_String];
+		char s[IDecFloat16::STRING_SIZE];
 		memset(s, 0, sizeof(s));
 		decDoubleToString(&dec, s);
+
 		if (strlen(s) > length)
 			decContextSetStatus(&context, DEC_Invalid_operation);
 		else
 			length = strlen(s);
+
 		memcpy(to, s, length + 1);
 	}
 	else
@@ -283,7 +313,7 @@ void Decimal64::toString(DecimalStatus decSt, unsigned length, char* to) const
 
 void Decimal64::toString(string& to) const
 {
-	to.grow(DECDOUBLE_String);
+	to.grow(IDecFloat16::STRING_SIZE);
 	toString(DecimalStatus(0), to.length(), to.begin());		// provide long enough string, i.e. no traps
 	to.recalculate_length();
 }
@@ -326,7 +356,7 @@ int Decimal64::compare(DecimalStatus decSt, Decimal64 tgt) const
 
 bool Decimal64::isInf() const
 {
-	switch(decDoubleClass(&dec))
+	switch (decDoubleClass(&dec))
 	{
 	case DEC_CLASS_NEG_INF:
 	case DEC_CLASS_POS_INF:
@@ -338,7 +368,7 @@ bool Decimal64::isInf() const
 
 bool Decimal64::isNan() const
 {
-	switch(decDoubleClass(&dec))
+	switch (decDoubleClass(&dec))
 	{
     case DEC_CLASS_SNAN:
     case DEC_CLASS_QNAN:
@@ -346,6 +376,15 @@ bool Decimal64::isNan() const
 	}
 
 	return false;
+}
+
+int Decimal64::sign() const
+{
+	if (decDoubleIsZero(&dec))
+		return 0;
+	if (decDoubleIsSigned(&dec))
+		return -1;
+	return 1;
 }
 
 #ifdef DEV_BUILD
@@ -445,7 +484,14 @@ Decimal128 Decimal128::set(Decimal64 d64)
 	return *this;
 }
 
+#if SIZEOF_LONG < 8
 Decimal128 Decimal128::set(int value, DecimalStatus decSt, int scale)
+{
+	return set(SLONG(value), decSt, scale);
+}
+#endif
+
+Decimal128 Decimal128::set(SLONG value, DecimalStatus decSt, int scale)
 {
 	decQuadFromInt32(&dec, value);
 	setScale(decSt, -scale);
@@ -468,6 +514,7 @@ Decimal128 Decimal128::set(SINT64 value, DecimalStatus decSt, int scale)
 		decQuadFromUInt32(&down, low);
 		decQuadFMA(&dec, &up, &pow2_32, &down, &context);
 	}
+
 	setScale(decSt, -scale);
 
 	return *this;
@@ -509,16 +556,19 @@ int Decimal128::toInteger(DecimalStatus decSt, int scale) const
 void Decimal128::toString(DecimalStatus decSt, unsigned length, char* to) const
 {
 	DecimalContext context(this, decSt);
+
 	if (length)
 	{
 		--length;
-		char s[DECQUAD_String];
+		char s[IDecFloat34::STRING_SIZE];
 		memset(s, 0, sizeof(s));
 		decQuadToString(&dec, s);
+
 		if (strlen(s) > length)
 			decContextSetStatus(&context, DEC_Invalid_operation);
 		else
 			length = strlen(s);
+
 		memcpy(to, s, length + 1);
 	}
 	else
@@ -527,7 +577,7 @@ void Decimal128::toString(DecimalStatus decSt, unsigned length, char* to) const
 
 void Decimal128::toString(string& to) const
 {
-	to.grow(DECQUAD_String);
+	to.grow(IDecFloat34::STRING_SIZE);
 	toString(DecimalStatus(0), to.length(), to.begin());		// provide long enough string, i.e. no traps
 	to.recalculate_length();
 }
@@ -535,15 +585,17 @@ void Decimal128::toString(string& to) const
 double Decimal128::toDouble(DecimalStatus decSt) const
 {
 	DecimalContext context(this, decSt);
+
 	if (compare(decSt, dmin) < 0 || compare(decSt, dmax) > 0)
 		decContextSetStatus(&context, DEC_Overflow);
 	else
 	{
-		char s[DECQUAD_String];
+		char s[IDecFloat34::STRING_SIZE];
 		memset(s, 0, sizeof(s));
 		decQuadToString(&dec, s);
 		return atof(s);
 	}
+
 	return 0.0;
 }
 
@@ -565,6 +617,7 @@ SINT64 Decimal128::toInt64(DecimalStatus decSt, int scale) const
 	unsigned char coeff[DECQUAD_Pmax];
 	int sign = decQuadGetCoefficient(&wrk.dec, coeff);
 	SINT64 rc = 0;
+
 	for (int i = 0; i < DECQUAD_Pmax; ++i)
 	{
 		rc *= 10;
@@ -573,6 +626,7 @@ SINT64 Decimal128::toInt64(DecimalStatus decSt, int scale) const
 		else
 			rc += coeff[i];
 	}
+
 	return rc;
 }
 
@@ -629,6 +683,15 @@ bool Decimal128::isNan() const
 	}
 
 	return false;
+}
+
+int Decimal128::sign() const
+{
+	if (decQuadIsZero(&dec))
+		return 0;
+	if (decQuadIsSigned(&dec))
+		return -1;
+	return 1;
 }
 
 Decimal128 Decimal128::abs() const

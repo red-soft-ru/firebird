@@ -567,8 +567,7 @@ unsigned int Service::getAuthBlock(const unsigned char** bytes)
 
 void Service::fillDpb(ClumpletWriter& dpb)
 {
-	const char* providers = "Providers=" CURRENT_ENGINE;
-	dpb.insertString(isc_dpb_config, providers, fb_strlen(providers));
+	dpb.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
 	if (svc_address_path.hasData())
 	{
 		dpb.insertString(isc_dpb_address_path, svc_address_path);
@@ -728,14 +727,20 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 			{
 				if (svc_auth_block.hasData())
 				{
+					// remote connection - use svc_auth_block
 					PathName dummy;
 					RefPtr<const Config> config;
 					expandDatabaseName(svc_expected_db, dummy, &config);
 
+					Mapping mapping(Mapping::MAP_THROW_NOT_FOUND, svc_crypt_callback);
+					mapping.needAuthBlock(svc_auth_block);
+
+					mapping.setAuthBlock(svc_auth_block);
+					mapping.setErrorMessagesContextName("services manager");
+					mapping.setSecurityDbAlias(config->getSecurityDatabase(), nullptr);
+
 					string trusted_role;
-					mapUser(true, svc_username, trusted_role, NULL, &svc_auth_block, NULL,
-						svc_auth_block, "services manager", NULL, config->getSecurityDatabase(), "",
-						svc_crypt_callback, NULL);
+					mapping.mapUser(svc_username, trusted_role);
 					trusted_role.upper();
 					svc_trusted_role = trusted_role == ADMIN_ROLE;
 				}

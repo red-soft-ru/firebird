@@ -1066,9 +1066,30 @@ public:
 		*sign = decDoubleToBCD(reinterpret_cast<const decDouble*>(from), exp, bcd);
 	}
 
-	void toString(const FB_DEC16* from, char* to)
+	void toString(CheckStatusWrapper* status, const FB_DEC16* from, unsigned bufSize, char* buffer)
 	{
-		decDoubleToString(reinterpret_cast<const decDouble*>(from), to);
+		try
+		{
+			if (bufSize >= STRING_SIZE)
+				decDoubleToString(reinterpret_cast<const decDouble*>(from), buffer);
+			else
+			{
+				char temp[STRING_SIZE];
+				decDoubleToString(reinterpret_cast<const decDouble*>(from), temp);
+				int len = strlen(temp);
+				if (len < bufSize)
+					strncpy(buffer, temp, bufSize);
+				else
+				{
+					(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+					 Arg::Gds(isc_trunc_limits) << Arg::Num(bufSize) << Arg::Num(len));
+				}
+			}
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
 	}
 
 	void fromBcd(int sign, const unsigned char* bcd, int exp, FB_DEC16* to)
@@ -1106,9 +1127,30 @@ public:
 		*sign = decQuadToBCD(reinterpret_cast<const decQuad*>(from), exp, bcd);
 	}
 
-	void toString(const FB_DEC34* from, char* to)
+	void toString(CheckStatusWrapper* status, const FB_DEC34* from, unsigned bufSize, char* buffer)
 	{
-		decQuadToString(reinterpret_cast<const decQuad*>(from), to);
+		try
+		{
+			if (bufSize >= STRING_SIZE)
+				decQuadToString(reinterpret_cast<const decQuad*>(from), buffer);
+			else
+			{
+				char temp[STRING_SIZE];
+				decQuadToString(reinterpret_cast<const decQuad*>(from), temp);
+				int len = strlen(temp);
+				if (len < bufSize)
+					strncpy(buffer, temp, bufSize);
+				else
+				{
+					(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+					 Arg::Gds(isc_trunc_limits) << Arg::Num(bufSize) << Arg::Num(len));
+				}
+			}
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
 	}
 
 	void fromBcd(int sign, const unsigned char* bcd, int exp, FB_DEC34* to)

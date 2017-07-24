@@ -238,6 +238,31 @@ public:
 	}
 
 public:
+	void setExactPrecision()
+	{
+		if (precision != 0)
+			return;
+
+		switch (dtype)
+		{
+			case dtype_short:
+				precision = 4;
+				break;
+
+			case dtype_long:
+				precision = 9;
+				break;
+
+			case dtype_int64:
+				precision = 18;
+				break;
+
+			default:
+				fb_assert(!DTYPE_IS_EXACT(dtype));
+		}
+	}
+
+public:
 	USHORT dtype;
 	FLD_LENGTH length;
 	SSHORT scale;
@@ -957,6 +982,213 @@ private:
 	Firebird::MetaName charset;
 	Firebird::string s;
 };
+
+class Lim64String : public Firebird::string
+{
+public:
+	Lim64String(Firebird::MemoryPool& p, const Firebird::string& str, int sc)
+		: Firebird::string(p, str),
+		  scale(sc)
+	{ }
+
+	int getScale()
+	{
+		return scale;
+	}
+
+private:
+	int scale;
+};
+
+struct SignatureParameter
+{
+	explicit SignatureParameter(MemoryPool& p)
+		: type(0),
+		  number(0),
+		  name(p),
+		  fieldSource(p),
+		  fieldName(p),
+		  relationName(p),
+		  charSetName(p),
+		  collationName(p),
+		  subTypeName(p),
+		  mechanism(0)
+	{
+	}
+
+	SignatureParameter(MemoryPool& p, const SignatureParameter& o)
+		: type(o.type),
+		  number(o.number),
+		  name(p, o.name),
+		  fieldSource(p, o.fieldSource),
+		  fieldName(p, o.fieldName),
+		  relationName(p, o.relationName),
+		  charSetName(p, o.charSetName),
+		  collationName(p, o.collationName),
+		  subTypeName(p, o.subTypeName),
+		  collationId(o.collationId),
+		  nullFlag(o.nullFlag),
+		  mechanism(o.mechanism),
+		  fieldLength(o.fieldLength),
+		  fieldScale(o.fieldScale),
+		  fieldType(o.fieldType),
+		  fieldSubType(o.fieldSubType),
+		  fieldSegmentLength(o.fieldSegmentLength),
+		  fieldNullFlag(o.fieldNullFlag),
+		  fieldCharLength(o.fieldCharLength),
+		  fieldCollationId(o.fieldCollationId),
+		  fieldCharSetId(o.fieldCharSetId),
+		  fieldPrecision(o.fieldPrecision)
+	{
+	}
+
+	void fromType(const TypeClause* type)
+	{
+		fieldType = type->dtype;
+		fieldScale = type->scale;
+		subTypeName = type->subTypeName;
+		fieldSubType = type->subType;
+		fieldLength = type->length;
+		fieldCharLength = type->charLength;
+		charSetName = type->charSet;
+		fieldCharSetId = type->charSetId;
+		collationName = type->collate;
+		fieldCollationId = type->collationId;
+		fieldSource = type->fieldSource;
+		fieldName = type->typeOfName;
+		relationName = type->typeOfTable;
+		fieldSegmentLength = type->segLength;
+		fieldPrecision = type->precision;
+		nullFlag = (SSHORT) type->notNull;
+		mechanism = (SSHORT) type->fullDomain;
+	}
+
+	SSHORT type;
+	SSHORT number;
+	Firebird::MetaName name;
+	Firebird::MetaName fieldSource;
+	Firebird::MetaName fieldName;
+	Firebird::MetaName relationName;
+	Firebird::MetaName charSetName;
+	Firebird::MetaName collationName;
+	Firebird::MetaName subTypeName;
+	Nullable<SSHORT> collationId;
+	Nullable<SSHORT> nullFlag;
+	SSHORT mechanism;
+	Nullable<SSHORT> fieldLength;
+	Nullable<SSHORT> fieldScale;
+	Nullable<SSHORT> fieldType;
+	Nullable<SSHORT> fieldSubType;
+	Nullable<SSHORT> fieldSegmentLength;
+	Nullable<SSHORT> fieldNullFlag;
+	Nullable<SSHORT> fieldCharLength;
+	Nullable<SSHORT> fieldCollationId;
+	Nullable<SSHORT> fieldCharSetId;
+	Nullable<SSHORT> fieldPrecision;
+
+	bool operator >(const SignatureParameter& o) const
+	{
+		return type > o.type || (type == o.type && number > o.number);
+	}
+
+	bool operator ==(const SignatureParameter& o) const
+	{
+		return type == o.type && number == o.number && name == o.name &&
+			(fieldSource == o.fieldSource ||
+				(fb_utils::implicit_domain(fieldSource.c_str()) &&
+					fb_utils::implicit_domain(o.fieldSource.c_str()))) &&
+			fieldName == o.fieldName && relationName == o.relationName &&
+			collationId == o.collationId && nullFlag == o.nullFlag &&
+			mechanism == o.mechanism && fieldLength == o.fieldLength &&
+			fieldScale == o.fieldScale && fieldType == o.fieldType &&
+			fieldSubType == o.fieldSubType && fieldSegmentLength == o.fieldSegmentLength &&
+			fieldNullFlag == o.fieldNullFlag && fieldCharLength == o.fieldCharLength &&
+			charSetName == o.charSetName && collationName == o.collationName && subTypeName == o.subTypeName &&
+			fieldCollationId == o.fieldCollationId && fieldCharSetId == o.fieldCharSetId &&
+			fieldPrecision == o.fieldPrecision;
+	}
+
+	bool operator !=(const SignatureParameter& o) const
+	{
+		return !(*this == o);
+	}
+};
+
+struct Signature
+{
+	const static unsigned FLAG_DETERMINISTIC = 0x01;
+
+	Signature(MemoryPool& p, const Firebird::MetaName& aName)
+		: name(p, aName),
+		  parameters(p),
+		  flags(0),
+		  defined(false)
+	{
+	}
+
+	explicit Signature(const Firebird::MetaName& aName)
+		: name(aName),
+		  parameters(*getDefaultMemoryPool()),
+		  flags(0),
+		  defined(false)
+	{
+	}
+
+	explicit Signature(MemoryPool& p)
+		: name(p),
+		  parameters(p),
+		  flags(0),
+		  defined(false)
+	{
+	}
+
+	Signature(MemoryPool& p, const Signature& o)
+		: name(p, o.name),
+		  parameters(p),
+		  flags(o.flags),
+		  defined(o.defined)
+	{
+		for (Firebird::SortedObjectsArray<SignatureParameter>::const_iterator i = o.parameters.begin();
+			 i != o.parameters.end();
+			 ++i)
+		{
+			parameters.add(*i);
+		}
+	}
+
+	bool operator >(const Signature& o) const
+	{
+		return name > o.name;
+	}
+
+	bool operator ==(const Signature& o) const
+	{
+		if (name != o.name || flags != o.flags || parameters.getCount() != o.parameters.getCount())
+			return false;
+
+		for (Firebird::SortedObjectsArray<SignatureParameter>::const_iterator i = parameters.begin(),
+				j = o.parameters.begin();
+			i != parameters.end();
+			++i, ++j)
+		{
+			if (*i != *j)
+				return false;
+		}
+
+		return true;
+	}
+
+	bool operator !=(const Signature& o) const
+	{
+		return !(*this == o);
+	}
+
+	Firebird::MetaName name;
+	Firebird::SortedObjectsArray<SignatureParameter> parameters;
+	unsigned flags;
+	bool defined;
+};
+
 
 } // namespace
 

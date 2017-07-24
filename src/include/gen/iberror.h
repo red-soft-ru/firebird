@@ -874,6 +874,19 @@ const ISC_STATUS isc_overriding_system_invalid        = 335545135L;
 const ISC_STATUS isc_overriding_user_invalid          = 335545136L;
 const ISC_STATUS isc_overriding_system_missing        = 335545137L;
 const ISC_STATUS isc_decprecision_err                 = 335545138L;
+const ISC_STATUS isc_decfloat_divide_by_zero          = 335545139L;
+const ISC_STATUS isc_decfloat_inexact_result          = 335545140L;
+const ISC_STATUS isc_decfloat_invalid_operation       = 335545141L;
+const ISC_STATUS isc_decfloat_overflow                = 335545142L;
+const ISC_STATUS isc_decfloat_underflow               = 335545143L;
+const ISC_STATUS isc_subfunc_notdef                   = 335545144L;
+const ISC_STATUS isc_subproc_notdef                   = 335545145L;
+const ISC_STATUS isc_subfunc_signat                   = 335545146L;
+const ISC_STATUS isc_subproc_signat                   = 335545147L;
+const ISC_STATUS isc_subfunc_defvaldecl               = 335545148L;
+const ISC_STATUS isc_subproc_defvaldecl               = 335545149L;
+const ISC_STATUS isc_subfunc_not_impl                 = 335545150L;
+const ISC_STATUS isc_subproc_not_impl                 = 335545151L;
 const ISC_STATUS isc_gfix_db_name                     = 335740929L;
 const ISC_STATUS isc_gfix_invalid_sw                  = 335740930L;
 const ISC_STATUS isc_gfix_incmp_sw                    = 335740932L;
@@ -1348,7 +1361,7 @@ const ISC_STATUS isc_trace_switch_user_only           = 337182757L;
 const ISC_STATUS isc_trace_switch_param_miss          = 337182758L;
 const ISC_STATUS isc_trace_param_act_notcompat        = 337182759L;
 const ISC_STATUS isc_trace_mandatory_switch_miss      = 337182760L;
-const ISC_STATUS isc_err_max                          = 1292;
+const ISC_STATUS isc_err_max                          = 1305;
 
 #else /* c definitions */
 
@@ -2192,6 +2205,19 @@ const ISC_STATUS isc_err_max                          = 1292;
 #define isc_overriding_user_invalid          335545136L
 #define isc_overriding_system_missing        335545137L
 #define isc_decprecision_err                 335545138L
+#define isc_decfloat_divide_by_zero          335545139L
+#define isc_decfloat_inexact_result          335545140L
+#define isc_decfloat_invalid_operation       335545141L
+#define isc_decfloat_overflow                335545142L
+#define isc_decfloat_underflow               335545143L
+#define isc_subfunc_notdef                   335545144L
+#define isc_subproc_notdef                   335545145L
+#define isc_subfunc_signat                   335545146L
+#define isc_subproc_signat                   335545147L
+#define isc_subfunc_defvaldecl               335545148L
+#define isc_subproc_defvaldecl               335545149L
+#define isc_subfunc_not_impl                 335545150L
+#define isc_subproc_not_impl                 335545151L
 #define isc_gfix_db_name                     335740929L
 #define isc_gfix_invalid_sw                  335740930L
 #define isc_gfix_incmp_sw                    335740932L
@@ -2666,7 +2692,7 @@ const ISC_STATUS isc_err_max                          = 1292;
 #define isc_trace_switch_param_miss          337182758L
 #define isc_trace_param_act_notcompat        337182759L
 #define isc_trace_mandatory_switch_miss      337182760L
-#define isc_err_max                          1292
+#define isc_err_max                          1305
 
 #endif
 

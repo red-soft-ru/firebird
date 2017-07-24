@@ -309,13 +309,13 @@ static void decimal_float_to_text(const dsc* from, dsc* to, DecimalStatus decSt,
 	{
 		Decimal128 d;
 		if (from->dsc_dtype == dtype_dec64)
-			d = *((Decimal64*)from->dsc_address);
+			d = *((Decimal64*) from->dsc_address);
 		else
-			d = *((Decimal128*)from->dsc_address);
+			d = *((Decimal128*) from->dsc_address);
 
 		d.toString(decSt, sizeof(temp), temp);
 	}
-	catch(const Exception& ex)
+	catch (const Exception& ex)
 	{
 		// reraise using function passed in callbacks
 		Arg::StatusVector v(ex);
@@ -1277,6 +1277,7 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 								*getNumericOverflow = true;
 								return 0;
 							}
+
 							err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 						}
 					}
@@ -1317,6 +1318,7 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 					*getNumericOverflow = true;
 					return 0;
 				}
+
 				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 			}
 
@@ -1339,6 +1341,7 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 					*getNumericOverflow = true;
 					return 0;
 				}
+
 				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 			}
 		}
@@ -2097,13 +2100,20 @@ void CVT_make_null_string(const dsc*    desc,
 	fb_assert(temp);
 
 	USHORT len = CVT_make_string(desc, to_interp, address, temp, --length, decSt, err);
+
 	if (*address != temp->vary_string)
 	{
+		length -= sizeof(USHORT);	// Take into an account VaryStr specifics
 		if (len > length)
-			len = length;
+		{
+			err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+				Arg::Gds(isc_imp_exc) <<
+				Arg::Gds(isc_trunc_limits) << Arg::Num(length) << Arg::Num(len));
+		}
 		memcpy(temp->vary_string, *address, len);
 		temp->vary_length = len;
 	}
+
 	fb_assert(temp->vary_length == len);
 	temp->vary_string[len] = 0;
 }
@@ -2529,7 +2539,7 @@ Decimal64 CVT_get_dec64(const dsc* desc, DecimalStatus decSt, ErrorFunction err)
  *      Convert something arbitrary to a DecFloat(16) / (64 bit).
  *
  **************************************/
-	VaryStr<50> buffer;			// long enough to represent largest decimal float in ASCII
+	VaryStr<512> buffer;			// long enough to represent largest decimal float in ASCII
 	Decimal64 d64;
 
 	// adjust exact numeric values to same scaling
@@ -2589,7 +2599,7 @@ Decimal64 CVT_get_dec64(const dsc* desc, DecimalStatus decSt, ErrorFunction err)
 			break;
 		}
 	}
-	catch(const Exception& ex)
+	catch (const Exception& ex)
 	{
 		// reraise using passed error function
 		Arg::StatusVector v(ex);
@@ -2613,7 +2623,7 @@ Decimal128 CVT_get_dec128(const dsc* desc, DecimalStatus decSt, ErrorFunction er
  *      Convert something arbitrary to a DecFloat(34) / (128 bit).
  *
  **************************************/
-	VaryStr<50> buffer;			// long enough to represent largest decimal float in ASCII
+	VaryStr<1024> buffer;			// represents unreasonably long decfloat literal in ASCII
 	Decimal128 d128;
 
 	// adjust exact numeric values to same scaling
@@ -2673,7 +2683,7 @@ Decimal128 CVT_get_dec128(const dsc* desc, DecimalStatus decSt, ErrorFunction er
 			break;
 		}
 	}
-	catch(const Exception& ex)
+	catch (const Exception& ex)
 	{
 		// reraise using passed error function
 		Arg::StatusVector v(ex);

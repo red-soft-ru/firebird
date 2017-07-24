@@ -140,7 +140,7 @@ const int HLP_QUIT					= 40;		// QUIT -- Exit program and rollback changes\n\n
 const int HLP_ALL					= 41;		// All commands may be abbreviated to letters in CAPs\n
 const int HLP_SETSCHEMA				= 42;		// \tSET SCHema/DB <db name> -- changes current database\n
 const int YES_ANS					= 43;		// Yes
-const int REPORT1					= 44;		// Current memory = !c\nDelta memory = !d\nMax memory = !x\nElapsed time= !e sec\n
+const int REPORT1					= 44;		// Current memory = !c\nDelta memory = !d\nMax memory = !x\nElapsed time = !e sec\n
 #if (defined WIN_NT)
 const int REPORT2					= 93;		// Buffers = !b\nReads = !r\nWrites = !w\nFetches = !f\n
 #else
@@ -255,7 +255,7 @@ const int NO_GRANT_ON_CS			= 177;		// There is no privilege granted on character
 const int NO_GRANT_ON_COLL			= 178;		// There is no privilege granted on collation @1 in this database
 const int NO_GRANT_ON_PKG			= 179;		// There is no privilege granted on package @1 in this database
 const int NO_GRANT_ON_FUN			= 180;		// There is no privilege granted on function @1 in this database
-const int REPORT_NEW1				= 181;		// Current memory = !\nDelta memory = !\nMax memory = !\nElapsed time= ~ sec\n
+const int REPORT_NEW1				= 181;		// Current memory = !\nDelta memory = !\nMax memory = !\nElapsed time = ~ sec\n
 const int REPORT_NEW2				= 182;		// Cpu = ~ sec\n (skipped on windows)
 const int REPORT_NEW3				= 183;		// Buffers = !\nReads = !\nWrites = !\nFetches = !\n
 const int NO_MAP					= 184;		// There is no mapping from @1 in this database
@@ -314,8 +314,8 @@ static const sqltypes Column_types[] = {
 	{blr_timestamp, "TIMESTAMP"},	// keyword
 	{BIGINT, "BIGINT"},			// keyword
 	{BOOLEAN_TYPE, "BOOLEAN"},	// keyword
-	{DEC64_TYPE, "DECIMAL(16)"},
-	{DEC128_TYPE, "DECIMAL(34)"},
+	{DEC64_TYPE, "DECFLOAT(16)"},
+	{DEC128_TYPE, "DECFLOAT(34)"},
 	{0, ""}
 };
 

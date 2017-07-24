@@ -195,7 +195,7 @@ namespace
 				return NULL;
 
 			// nod_returning was already processed
-			CompoundStmtNode* processedStmt = processed->as<CompoundStmtNode>();
+			CompoundStmtNode* processedStmt = nodeAs<CompoundStmtNode>(processed);
 			fb_assert(processed);
 
 			// And we create a RETURNING node where the targets are already processed.
@@ -211,7 +211,7 @@ namespace
 			{
 				AssignmentNode* temp = FB_NEW_POOL(scratch->getPool()) AssignmentNode(scratch->getPool());
 				temp->asgnFrom = *srcPtr;
-				temp->asgnTo = (*dstPtr)->as<AssignmentNode>()->asgnTo;
+				temp->asgnTo = nodeAs<AssignmentNode>(*dstPtr)->asgnTo;
 				newNode->statements.add(temp);
 			}
 
@@ -291,7 +291,7 @@ void AssignmentNode::validateTarget(CompilerScratch* csb, const ValueExprNode* t
 {
 	const FieldNode* fieldNode;
 
-	if ((fieldNode = target->as<FieldNode>()))
+	if ((fieldNode = nodeAs<FieldNode>(target)))
 	{
 		CompilerScratch::csb_repeat* tail = &csb->csb_rpt[fieldNode->fieldStream];
 
@@ -311,13 +311,13 @@ void AssignmentNode::validateTarget(CompilerScratch* csb, const ValueExprNode* t
 		if (fieldNode->cursorNumber.specified)
 			ERR_post(Arg::Gds(isc_read_only_field));
 	}
-	else if (!(target->is<ParameterNode>() || target->is<VariableNode>() || target->is<NullNode>()))
+	else if (!(nodeIs<ParameterNode>(target) || nodeIs<VariableNode>(target) || nodeIs<NullNode>(target)))
 		ERR_post(Arg::Gds(isc_read_only_field));
 }
 
 void AssignmentNode::dsqlValidateTarget(const ValueExprNode* target)
 {
-	const DerivedFieldNode* fieldNode = target->as<DerivedFieldNode>();
+	const DerivedFieldNode* fieldNode = nodeAs<DerivedFieldNode>(target);
 
 	if (fieldNode && fieldNode->context &&
 		(fieldNode->context->ctx_flags & (CTX_system | CTX_cursor)) == CTX_cursor)
@@ -381,7 +381,7 @@ AssignmentNode* AssignmentNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	StreamType stream;
 	CompilerScratch::csb_repeat* tail;
 
-	if ((fieldNode = sub->as<FieldNode>()))
+	if ((fieldNode = nodeAs<FieldNode>(sub)))
 	{
 		stream = fieldNode->fieldStream;
 		jrd_fld* field = MET_get_field(csb->csb_rpt[stream].csb_relation, fieldNode->fieldId);
@@ -392,7 +392,7 @@ AssignmentNode* AssignmentNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	sub = asgnTo;
 
-	if ((fieldNode = sub->as<FieldNode>()))
+	if ((fieldNode = nodeAs<FieldNode>(sub)))
 	{
 		stream = fieldNode->fieldStream;
 		tail = &csb->csb_rpt[stream];
@@ -603,7 +603,7 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, jrd_req* request, ExeState* 
 					 ptr != end;
 					 ++ptr)
 				{
-					const ErrorHandlerNode* const handlerNode = (*ptr)->as<ErrorHandlerNode>();
+					const ErrorHandlerNode* const handlerNode = nodeAs<ErrorHandlerNode>(*ptr);
 
 					if (testAndFixupError(tdbb, request, handlerNode->conditions))
 					{
@@ -1402,7 +1402,8 @@ DmlNode* DeclareSubFuncNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 
 	{	// scope
 		CompilerScratch* const subCsb = node->subCsb =
-			FB_NEW_POOL(csb->csb_pool) CompilerScratch(csb->csb_pool);
+			FB_NEW_POOL(csb->csb_pool) CompilerScratch(csb->csb_pool, csb);
+
 		subCsb->csb_g_flags |= csb_subroutine | (csb->csb_g_flags & csb_get_dependencies);
 		subCsb->csb_blr_reader = csb->csb_blr_reader;
 
@@ -1520,6 +1521,97 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE)
 		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << "nested sub function");
 
+	DeclareSubFuncNode* prevDecl = dsqlScratch->getSubFunction(name);
+	bool implemetingForward = prevDecl && !prevDecl->dsqlBlock && dsqlBlock;
+
+	dsqlFunction = implemetingForward ? prevDecl->dsqlFunction : FB_NEW_POOL(pool) dsql_udf(pool);
+
+	dsqlFunction->udf_flags = UDF_subfunc;
+	dsqlFunction->udf_name.identifier = name;
+
+	fb_assert(dsqlReturns.getCount() == 1);
+	const TypeClause* returnType = dsqlReturns[0]->type;
+
+	dsqlFunction->udf_dtype = returnType->dtype;
+	dsqlFunction->udf_scale = returnType->scale;
+	dsqlFunction->udf_sub_type = returnType->subType;
+	dsqlFunction->udf_length = returnType->length;
+	dsqlFunction->udf_character_set_id = returnType->charSetId;
+
+	if (dsqlDeterministic)
+		dsqlSignature.flags |= Signature::FLAG_DETERMINISTIC;
+
+	SignatureParameter sigRet(pool);
+	sigRet.type = 1;
+	sigRet.number = -1;
+	sigRet.fromType(returnType);
+	dsqlSignature.parameters.add(sigRet);
+
+	Array<NestConst<ParameterClause> >& paramArray = dsqlParameters;
+	bool defaultFound = false;
+
+	for (NestConst<ParameterClause>* i = paramArray.begin(); i != paramArray.end(); ++i)
+	{
+		ParameterClause* param = *i;
+		const unsigned paramIndex = i - paramArray.begin();
+
+		SignatureParameter sigParam(pool);
+		sigParam.type = 0;
+		sigParam.number = (SSHORT) dsqlSignature.parameters.getCount();
+		sigParam.name = param->name;
+		sigParam.fromType(param->type);
+		dsqlSignature.parameters.add(sigParam);
+
+		if (!implemetingForward)
+		{
+			// ASF: dsqlFunction->udf_arguments is only checked for its count for now.
+			dsqlFunction->udf_arguments.add(dsc());
+		}
+
+		if (param->defaultClause)
+		{
+			if (prevDecl)
+			{
+				status_exception::raise(
+					Arg::Gds(isc_subfunc_defvaldecl) <<
+					name.c_str());
+			}
+
+			defaultFound = true;
+
+			if (!implemetingForward && dsqlFunction->udf_def_count == 0)
+				dsqlFunction->udf_def_count = paramArray.end() - i;
+		}
+		else
+		{
+			if (defaultFound)
+			{
+				// Parameter without default value after parameters with default.
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+						Arg::Gds(isc_bad_default_value) <<
+						Arg::Gds(isc_invalid_clause) << Arg::Str("defaults must be last"));
+			}
+
+			if (prevDecl && paramIndex < prevDecl->dsqlParameters.getCount())
+				param->defaultClause = prevDecl->dsqlParameters[paramIndex]->defaultClause;
+		}
+	}
+
+	if (!implemetingForward)
+		dsqlScratch->putSubFunction(this);
+	else if (dsqlSignature != prevDecl->dsqlSignature)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_subfunc_signat) <<
+			name.c_str());
+	}
+
+	if (!dsqlBlock)	// forward decl
+		return this;
+
+	if (prevDecl)
+		dsqlScratch->putSubFunction(this, true);
+
 	DsqlCompiledStatement* statement = FB_NEW_POOL(pool) DsqlCompiledStatement(pool);
 
 	if (dsqlScratch->clientDialect > SQL_DIALECT_V5)
@@ -1535,58 +1627,23 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	statement->setType(DsqlCompiledStatement::TYPE_SELECT);
 
 	blockScratch = FB_NEW_POOL(pool) DsqlCompilerScratch(pool,
-		dsqlScratch->getAttachment(), dsqlScratch->getTransaction(), statement);
+		dsqlScratch->getAttachment(), dsqlScratch->getTransaction(), statement, dsqlScratch);
 	blockScratch->clientDialect = dsqlScratch->clientDialect;
-	blockScratch->flags |= DsqlCompilerScratch::FLAG_FUNCTION | DsqlCompilerScratch::FLAG_SUB_ROUTINE;
-	blockScratch->flags |= dsqlScratch->flags & DsqlCompilerScratch::FLAG_DDL;
+	blockScratch->flags |=
+		DsqlCompilerScratch::FLAG_FUNCTION |
+		DsqlCompilerScratch::FLAG_SUB_ROUTINE |
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_DDL);
 
 	dsqlBlock = dsqlBlock->dsqlPass(blockScratch);
-
-	dsqlFunction = FB_NEW_POOL(pool) dsql_udf(pool);
-	dsqlFunction->udf_flags = UDF_subfunc;
-	dsqlFunction->udf_name.identifier = name;
-
-	fb_assert(dsqlBlock->returns.getCount() == 1);
-	const TypeClause* returnType = dsqlBlock->returns[0]->type;
-	dsqlFunction->udf_dtype = returnType->dtype;
-	dsqlFunction->udf_scale = returnType->scale;
-	dsqlFunction->udf_sub_type = returnType->subType;
-	dsqlFunction->udf_length = returnType->length;
-	dsqlFunction->udf_character_set_id = returnType->charSetId;
-
-	const Array<NestConst<ParameterClause> >& paramArray = dsqlBlock->parameters;
-	bool defaultFound = false;
-
-	for (const NestConst<ParameterClause>* i = paramArray.begin(); i != paramArray.end(); ++i)
-	{
-		// ASF: dsqlFunction->udf_arguments is only checked for its count for now.
-		dsqlFunction->udf_arguments.add(dsc());
-
-		const ParameterClause* param = *i;
-
-		if (param->defaultClause)
-		{
-			defaultFound = true;
-
-			if (dsqlFunction->udf_def_count == 0)
-				dsqlFunction->udf_def_count = paramArray.end() - i;
-		}
-		else if (defaultFound)
-		{
-			// Parameter without default value after parameters with default.
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  Arg::Gds(isc_bad_default_value) <<
-					  Arg::Gds(isc_invalid_clause) << Arg::Str("defaults must be last"));
-		}
-	}
-
-	dsqlScratch->putSubFunction(dsqlFunction);
 
 	return this;
 }
 
 void DeclareSubFuncNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	if (!dsqlBlock)	// forward decl
+		return;
+
 	GEN_request(blockScratch, dsqlBlock);
 
 	dsqlScratch->appendUChar(blr_subfunc_decl);
@@ -1677,7 +1734,8 @@ DmlNode* DeclareSubProcNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 
 	{	// scope
 		CompilerScratch* const subCsb = node->subCsb =
-			FB_NEW_POOL(csb->csb_pool) CompilerScratch(csb->csb_pool);
+			FB_NEW_POOL(csb->csb_pool) CompilerScratch(csb->csb_pool, csb);
+
 		subCsb->csb_g_flags |= csb_subroutine | (csb->csb_g_flags & csb_get_dependencies);
 		subCsb->csb_blr_reader = csb->csb_blr_reader;
 
@@ -1803,6 +1861,100 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE)
 		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << "nested sub procedure");
 
+	DeclareSubProcNode* prevDecl = dsqlScratch->getSubProcedure(name);
+	bool implemetingForward = prevDecl && !prevDecl->dsqlBlock && dsqlBlock;
+
+	dsqlProcedure = implemetingForward ? prevDecl->dsqlProcedure : FB_NEW_POOL(pool) dsql_prc(pool);
+
+	dsqlProcedure->prc_flags = PRC_subproc;
+	dsqlProcedure->prc_name.identifier = name;
+	dsqlProcedure->prc_in_count = USHORT(dsqlParameters.getCount());
+	dsqlProcedure->prc_out_count = USHORT(dsqlReturns.getCount());
+
+	if (dsqlParameters.hasData())
+	{
+		Array<NestConst<ParameterClause> >& paramArray = dsqlParameters;
+		bool defaultFound = false;
+
+		dsqlProcedure->prc_inputs = paramArray.front()->type;
+
+		for (NestConst<ParameterClause>* i = paramArray.begin(); i != paramArray.end(); ++i)
+		{
+			ParameterClause* param = *i;
+			const unsigned paramIndex = i - paramArray.begin();
+
+			SignatureParameter sigParam(pool);
+			sigParam.type = 0;	// input
+			sigParam.number = (SSHORT) dsqlSignature.parameters.getCount();
+			sigParam.name = param->name;
+			sigParam.fromType(param->type);
+			dsqlSignature.parameters.add(sigParam);
+
+			if (param->defaultClause)
+			{
+				if (prevDecl)
+				{
+					status_exception::raise(
+						Arg::Gds(isc_subproc_defvaldecl) <<
+						name.c_str());
+				}
+
+				defaultFound = true;
+
+				if (!implemetingForward && dsqlProcedure->prc_def_count == 0)
+					dsqlProcedure->prc_def_count = paramArray.end() - i;
+			}
+			else
+			{
+				if (defaultFound)
+				{
+					// Parameter without default value after parameters with default.
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+							Arg::Gds(isc_bad_default_value) <<
+							Arg::Gds(isc_invalid_clause) << Arg::Str("defaults must be last"));
+				}
+
+				if (prevDecl && paramIndex < prevDecl->dsqlParameters.getCount())
+					param->defaultClause = prevDecl->dsqlParameters[paramIndex]->defaultClause;
+			}
+		}
+	}
+
+	if (dsqlReturns.hasData())
+	{
+		Array<NestConst<ParameterClause> >& paramArray = dsqlReturns;
+
+		dsqlProcedure->prc_outputs = paramArray.front()->type;
+
+		for (NestConst<ParameterClause>* i = paramArray.begin(); i != paramArray.end(); ++i)
+		{
+			ParameterClause* param = *i;
+			const unsigned paramIndex = i - paramArray.begin();
+
+			SignatureParameter sigParam(pool);
+			sigParam.type = 1;	// output
+			sigParam.number = (SSHORT) dsqlSignature.parameters.getCount();
+			sigParam.name = param->name;
+			sigParam.fromType(param->type);
+			dsqlSignature.parameters.add(sigParam);
+		}
+	}
+
+	if (!implemetingForward)
+		dsqlScratch->putSubProcedure(this);
+	else if (dsqlSignature != prevDecl->dsqlSignature)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_subproc_signat) <<
+			name.c_str());
+	}
+
+	if (!dsqlBlock)	// forward decl
+		return this;
+
+	if (prevDecl)
+		dsqlScratch->putSubProcedure(this, true);
+
 	DsqlCompiledStatement* statement = FB_NEW_POOL(pool) DsqlCompiledStatement(pool);
 
 	if (dsqlScratch->clientDialect > SQL_DIALECT_V5)
@@ -1818,54 +1970,21 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	statement->setType(DsqlCompiledStatement::TYPE_SELECT);
 
 	blockScratch = FB_NEW_POOL(pool) DsqlCompilerScratch(pool,
-		dsqlScratch->getAttachment(), dsqlScratch->getTransaction(), statement);
+		dsqlScratch->getAttachment(), dsqlScratch->getTransaction(), statement, dsqlScratch);
 	blockScratch->clientDialect = dsqlScratch->clientDialect;
 	blockScratch->flags |= DsqlCompilerScratch::FLAG_PROCEDURE | DsqlCompilerScratch::FLAG_SUB_ROUTINE;
 	blockScratch->flags |= dsqlScratch->flags & DsqlCompilerScratch::FLAG_DDL;
 
 	dsqlBlock = dsqlBlock->dsqlPass(blockScratch);
 
-	dsqlProcedure = FB_NEW_POOL(pool) dsql_prc(pool);
-	dsqlProcedure->prc_flags = PRC_subproc;
-	dsqlProcedure->prc_name.identifier = name;
-	dsqlProcedure->prc_in_count = USHORT(dsqlBlock->parameters.getCount());
-	dsqlProcedure->prc_out_count = USHORT(dsqlBlock->returns.getCount());
-
-	if (dsqlBlock->parameters.hasData())
-	{
-		Array<NestConst<ParameterClause> >& paramArray = dsqlBlock->parameters;
-
-		dsqlProcedure->prc_inputs = paramArray.front()->type;
-
-		for (const NestConst<ParameterClause>* i = paramArray.begin(); i != paramArray.end(); ++i)
-		{
-			const ParameterClause* param = *i;
-
-			if (param->defaultClause)
-			{
-				if (dsqlProcedure->prc_def_count == 0)
-					dsqlProcedure->prc_def_count = paramArray.end() - i;
-			}
-			else if (dsqlProcedure->prc_def_count != 0)
-			{
-				// Parameter without default value after parameters with default.
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-						  Arg::Gds(isc_bad_default_value) <<
-						  Arg::Gds(isc_invalid_clause) << Arg::Str("defaults must be last"));
-			}
-		}
-	}
-
-	if (dsqlBlock->returns.hasData())
-		dsqlProcedure->prc_outputs = dsqlBlock->returns.front()->type;
-
-	dsqlScratch->putSubProcedure(dsqlProcedure);
-
 	return this;
 }
 
 void DeclareSubProcNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	if (!dsqlBlock)	// forward decl
+		return;
+
 	GEN_request(blockScratch, dsqlBlock);
 
 	dsqlScratch->appendUChar(blr_subproc_decl);
@@ -2115,7 +2234,7 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		rse->dsqlFlags |= RecordSourceNode::DFLAG_SINGLETON;
 
 	node->dsqlRse = rse;
-	node->dsqlRelation = rse->dsqlStreams->items[0]->as<RelationSourceNode>();
+	node->dsqlRelation = nodeAs<RelationSourceNode>(rse->dsqlStreams->items[0]);
 
 	node->statement = dsqlProcessReturning(dsqlScratch, dsqlReturning, statement);
 
@@ -2636,8 +2755,12 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 		if (blrOp == blr_exec_subproc)
 		{
 			DeclareSubProcNode* declareNode;
-			if (csb->subProcedures.get(name.identifier, declareNode))
-				procedure = declareNode->routine;
+
+			for (auto curCsb = csb; curCsb && !procedure; curCsb = curCsb->mainCsb)
+			{
+				if (curCsb->subProcedures.get(name.identifier, declareNode))
+					procedure = declareNode->routine;
+			}
 		}
 		else
 			procedure = MET_lookup_procedure(tdbb, name, false);
@@ -2669,7 +2792,10 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	dsql_prc* procedure = NULL;
 
 	if (dsqlName.package.isEmpty())
-		procedure = dsqlScratch->getSubProcedure(dsqlName.identifier);
+	{
+		DeclareSubProcNode* subProcedure = dsqlScratch->getSubProcedure(dsqlName.identifier);
+		procedure = subProcedure ? subProcedure->dsqlProcedure : NULL;
+	}
 
 	if (!procedure)
 		procedure = METD_get_procedure(dsqlScratch->getTransaction(), dsqlScratch, dsqlName);
@@ -2683,10 +2809,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	}
 
 	if (!dsqlScratch->isPsql())
-	{
-		dsqlScratch->procedure = procedure;
 		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_EXEC_PROCEDURE);
-	}
 
 	ExecProcedureNode* node = FB_NEW_POOL(getPool()) ExecProcedureNode(getPool(), dsqlName);
 	node->dsqlProcedure = procedure;
@@ -2740,7 +2863,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					  Arg::Gds(isc_random) << Arg::Str("RETURNING_VALUES"));
 		}
 
-		node->outputSources = explodeOutputs(dsqlScratch, dsqlScratch->procedure);
+		node->outputSources = explodeOutputs(dsqlScratch, procedure);
 	}
 
 	if (node->outputSources)
@@ -5153,9 +5276,9 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		forNode->dsqlForceSingular = true;
 
 	// Get the already processed relations.
-	RseNode* processedRse = forNode->rse->dsqlStreams->items[0]->as<RseNode>();
+	RseNode* processedRse = nodeAs<RseNode>(forNode->rse->dsqlStreams->items[0]);
 	source = processedRse->dsqlStreams->items[0];
-	target = processedRse->dsqlStreams->items[1]->as<RelationSourceNode>();
+	target = nodeAs<RelationSourceNode>(processedRse->dsqlStreams->items[1]);
 
 	DsqlContextStack usingCtxs;
 	dsqlGetContexts(usingCtxs, source);
@@ -5181,7 +5304,7 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			// Separate the new and org values to process in correct contexts.
 			for (FB_SIZE_T i = 0; i < stmts->statements.getCount(); ++i)
 			{
-				AssignmentNode* const assign = stmts->statements[i]->as<AssignmentNode>();
+				AssignmentNode* const assign = nodeAs<AssignmentNode>(stmts->statements[i]);
 				fb_assert(assign);
 				orgValues.add(assign->asgnFrom);
 				newValues.add(assign->asgnTo);
@@ -5345,7 +5468,7 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		store->overrideClause = notMatched->overrideClause;
 
 		bool needSavePoint; // unused
-		thisIf->trueAction = store = store->internalDsqlPass(dsqlScratch, false, needSavePoint)->as<StoreNode>();
+		thisIf->trueAction = store = nodeAs<StoreNode>(store->internalDsqlPass(dsqlScratch, false, needSavePoint));
 		fb_assert(store);
 
 		if (notMatched->condition)
@@ -5651,18 +5774,18 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 
 	Array<NestConst<ValueExprNode> > orgValues, newValues;
 
-	CompoundStmtNode* assignments = statement->as<CompoundStmtNode>();
+	CompoundStmtNode* assignments = nodeAs<CompoundStmtNode>(statement);
 	fb_assert(assignments);
 
 	for (FB_SIZE_T i = 0; i < assignments->statements.getCount(); ++i)
 	{
-		AssignmentNode* const assign = assignments->statements[i]->as<AssignmentNode>();
+		AssignmentNode* const assign = nodeAs<AssignmentNode>(assignments->statements[i]);
 		fb_assert(assign);
 		orgValues.add(assign->asgnFrom);
 		newValues.add(assign->asgnTo);
 	}
 
-	NestConst<RelationSourceNode> relation = dsqlRelation->as<RelationSourceNode>();
+	NestConst<RelationSourceNode> relation = nodeAs<RelationSourceNode>(dsqlRelation);
 	fb_assert(relation);
 
 	NestConst<ValueExprNode>* ptr;
@@ -5851,7 +5974,7 @@ string ModifyNode::internalPrint(NodePrinter& printer) const
 
 void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	RseNode* rse = dsqlRse->as<RseNode>();
+	RseNode* rse = nodeAs<RseNode>(dsqlRse);
 
 	const dsql_msg* message = dsqlGenDmlHeader(dsqlScratch, rse);
 
@@ -5881,7 +6004,7 @@ void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 ModifyNode* ModifyNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
-	preprocessAssignments(tdbb, csb, newStream, statement->as<CompoundStmtNode>(), NULL);
+	preprocessAssignments(tdbb, csb, newStream, nodeAs<CompoundStmtNode>(statement), NULL);
 
 	pass1Modify(tdbb, csb, this);
 
@@ -6446,7 +6569,7 @@ DmlNode* StoreNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 
 	const UCHAR* blrPos = csb->csb_blr_reader.getPos();
 
-	node->relationSource = PAR_parseRecordSource(tdbb, csb)->as<RelationSourceNode>();
+	node->relationSource = nodeAs<RelationSourceNode>(PAR_parseRecordSource(tdbb, csb));
 
 	if (!node->relationSource)
 	{
@@ -6486,7 +6609,7 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 
 	if (dsqlRse)
 	{
-		SelectExprNode* selExpr = dsqlRse->as<SelectExprNode>();
+		SelectExprNode* selExpr = nodeAs<SelectExprNode>(dsqlRse);
 		fb_assert(selExpr);
 
 		if (dsqlReturning || statement2)
@@ -6537,13 +6660,13 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 			const FieldNode* fieldNode;
 			const DerivedFieldNode* derivedField;
 
-			if ((fieldNode = ExprNode::as<FieldNode>(temp2)))
+			if ((fieldNode = nodeAs<FieldNode>(temp2)))
 			{
 				tmp_ctx = fieldNode->dsqlContext;
 				if (fieldNode->dsqlField)
 					tmp_name = fieldNode->dsqlField->fld_name.c_str();
 			}
-			else if ((derivedField = ExprNode::as<DerivedFieldNode>(temp2)))
+			else if ((derivedField = nodeAs<DerivedFieldNode>(temp2)))
 			{
 				tmp_ctx = derivedField->context;
 				tmp_name = derivedField->name.nullStr();
@@ -6591,7 +6714,7 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 
 			if (!*ptr2)
 			{
-				const FieldNode* field = (*ptr)->as<FieldNode>();
+				const FieldNode* field = nodeAs<FieldNode>(*ptr);
 
 				if (field && field->dsqlField)
 				{
@@ -6658,7 +6781,7 @@ StmtNode* StoreNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	StmtNode* node = SavepointEncloseNode::make(getPool(), dsqlScratch,
 		internalDsqlPass(dsqlScratch, false, needSavePoint));
 
-	if (!needSavePoint || node->is<SavepointEncloseNode>())
+	if (!needSavePoint || nodeIs<SavepointEncloseNode>(node))
 		return node;
 
 	return FB_NEW SavepointEncloseNode(getPool(), node);
@@ -6684,7 +6807,7 @@ string StoreNode::internalPrint(NodePrinter& printer) const
 
 void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	const dsql_msg* message = dsqlGenDmlHeader(dsqlScratch, dsqlRse->as<RseNode>());
+	const dsql_msg* message = dsqlGenDmlHeader(dsqlScratch, nodeAs<RseNode>(dsqlRse));
 
 	dsqlScratch->appendUChar(overrideClause.specified ? blr_store3 : (statement2 ? blr_store2 : blr_store));
 
@@ -6706,7 +6829,7 @@ void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 StoreNode* StoreNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
-	preprocessAssignments(tdbb, csb, relationSource->getStream(), statement->as<CompoundStmtNode>(), &overrideClause);
+	preprocessAssignments(tdbb, csb, relationSource->getStream(), nodeAs<CompoundStmtNode>(statement), &overrideClause);
 
 	if (pass1Store(tdbb, csb, this))
 		makeDefaults(tdbb, csb);
@@ -6868,7 +6991,7 @@ void StoreNode::makeDefaults(thread_db* tdbb, CompilerScratch* csb)
 
 				if (assign)
 				{
-					const FieldNode* fieldNode = assign->asgnTo->as<FieldNode>();
+					const FieldNode* fieldNode = nodeAs<FieldNode>(assign->asgnTo);
 					fb_assert(fieldNode);
 
 					if (fieldNode && fieldNode->fieldStream == stream && fieldNode->fieldId == fieldId)
@@ -6981,7 +7104,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, jrd_req* request, WhichTrigger
 	switch (request->req_operation)
 	{
 		case jrd_req::req_evaluate:
-			if (!parentStmt->is<ForNode>())
+			if (!nodeIs<ForNode>(parentStmt))
 				request->req_records_affected.clear();
 
 			request->req_records_affected.bumpModified(false);
@@ -7205,7 +7328,7 @@ const StmtNode* UserSavepointNode::execute(thread_db* tdbb, jrd_req* request, Ex
 			}
 
 			default:
-				BUGCHECK(232);
+				SOFT_BUGCHECK(232);	// msg 232 EVL_expr: invalid operation
 				break;
 		}
 
@@ -7257,7 +7380,7 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		// stored procedure occurs in the select list. In these cases all of stored procedure is
 		// executed under savepoint for open cursor.
 
-		RseNode* rseNode = node->dsqlRse->as<RseNode>();
+		RseNode* rseNode = nodeAs<RseNode>(node->dsqlRse);
 
 		if (rseNode->dsqlOrder || rseNode->dsqlDistinct)
 		{
@@ -7285,7 +7408,7 @@ string SelectNode::internalPrint(NodePrinter& printer) const
 // Generate BLR for a SELECT statement.
 void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	RseNode* const rse = dsqlRse->as<RseNode>();
+	RseNode* const rse = nodeAs<RseNode>(dsqlRse);
 	fb_assert(rse);
 
 	DsqlCompiledStatement* const statement = dsqlScratch->getStatement();
@@ -7323,7 +7446,7 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			RecordSourceNode* const item = *ptr2;
 			RelationSourceNode* relNode;
 
-			if (item && (relNode = ExprNode::as<RelationSourceNode>(item)))
+			if (item && (relNode = nodeAs<RelationSourceNode>(item)))
 			{
 				context = relNode->dsqlContext;
 				const dsql_rel* const relation = context->ctx_relation;
@@ -7682,11 +7805,11 @@ const StmtNode* SuspendNode::execute(thread_db* tdbb, jrd_req* request, ExeState
 			if (!(request->req_flags & req_proc_fetch))
 				return statement;
 
-			const CompoundStmtNode* list = parentStmt->as<CompoundStmtNode>();
+			const CompoundStmtNode* list = nodeAs<CompoundStmtNode>(parentStmt);
 
 			if (list && !list->parentStmt && list->statements[list->statements.getCount() - 1] == this)
 			{
-				list = statement->as<CompoundStmtNode>();
+				list = nodeAs<CompoundStmtNode>(statement);
 
 				if (list && list->onlyAssignments && list->statements.hasData())
 				{
@@ -8039,7 +8162,7 @@ const TextCode* getCodeByText(const MetaName& text, const TextCode* textCode, un
 
 
 SetRoundNode::SetRoundNode(MemoryPool& pool, Firebird::MetaName* name)
-		: SessionManagementNode(pool)
+	: SessionManagementNode(pool)
 {
 	fb_assert(name);
 	const TextCode* mode = getCodeByText(*name, roundModes, FB_RMODE_OFFSET);
@@ -8166,7 +8289,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (!dsqlScratch->isPsql())
 		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT;
 
-	const MetaName& relation_name = relation->as<RelationSourceNode>()->dsqlName;
+	const MetaName& relation_name = nodeAs<RelationSourceNode>(relation)->dsqlName;
 	MetaName base_name = relation_name;
 
 	bool needSavePoint;
@@ -8178,7 +8301,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	insert->dsqlValues = values;
 	insert->dsqlReturning = returning;
 	insert->overrideClause = overrideClause;
-	insert = insert->internalDsqlPass(dsqlScratch, true, needSavePoint)->as<StoreNode>();
+	insert = nodeAs<StoreNode>(insert->internalDsqlPass(dsqlScratch, true, needSavePoint));
 	fb_assert(insert);
 
 	dsql_ctx* context = insert->dsqlRelation->dsqlContext;
@@ -8250,7 +8373,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	NestConst<ValueExprNode>* valuePtr = values->items.begin();
 
 	Array<NestConst<StmtNode> >& insertStatements =
-		insert->statement->as<CompoundStmtNode>()->statements;
+		nodeAs<CompoundStmtNode>(insert->statement)->statements;
 
 	for (; fieldPtr != fieldsCopy.end(); ++fieldPtr, ++valuePtr)
 	{
@@ -8288,7 +8411,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					++matchCount;
 
 					const FB_SIZE_T fieldPos = fieldPtr - fieldsCopy.begin();
-					AssignmentNode* assign2 = insertStatements[fieldPos]->as<AssignmentNode>();
+					AssignmentNode* assign2 = nodeAs<AssignmentNode>(insertStatements[fieldPos]);
 					NestConst<ValueExprNode>& expr = assign2->asgnFrom;
 					ValueExprNode* var = dsqlPassHiddenVariable(dsqlScratch, expr);
 
@@ -8336,7 +8459,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch, returning, insert->statement2);
 	}
 
-	update = update->internalDsqlPass(dsqlScratch, true)->as<ModifyNode>();
+	update = nodeAs<ModifyNode>(update->internalDsqlPass(dsqlScratch, true));
 	fb_assert(update);
 
 	// test if ROW_COUNT = 0
@@ -8365,7 +8488,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_INSERT);
 
 	StmtNode* ret = SavepointEncloseNode::make(getPool(), dsqlScratch, list);
-	if (!needSavePoint || ret->is<SavepointEncloseNode>())
+	if (!needSavePoint || nodeIs<SavepointEncloseNode>(ret))
 		return ret;
 
 	return FB_NEW SavepointEncloseNode(getPool(), ret);
@@ -8511,13 +8634,13 @@ static dsql_ctx* dsqlGetContext(const RecordSourceNode* node)
 	const RelationSourceNode* relNode;
 	const RseNode* rseNode;
 
-	if ((procNode = ExprNode::as<ProcedureSourceNode>(node)))
+	if ((procNode = nodeAs<ProcedureSourceNode>(node)))
 		return procNode->dsqlContext;
 
-	if ((relNode = ExprNode::as<RelationSourceNode>(node)))
+	if ((relNode = nodeAs<RelationSourceNode>(node)))
 		return relNode->dsqlContext;
 
-	if ((rseNode = ExprNode::as<RseNode>(node)))
+	if ((rseNode = nodeAs<RseNode>(node)))
 		return rseNode->dsqlContext;
 
 	fb_assert(false);
@@ -8531,11 +8654,11 @@ static void dsqlGetContexts(DsqlContextStack& contexts, const RecordSourceNode* 
 	const RelationSourceNode* relNode;
 	const RseNode* rseNode;
 
-	if ((procNode = ExprNode::as<ProcedureSourceNode>(node)))
+	if ((procNode = nodeAs<ProcedureSourceNode>(node)))
 		contexts.push(procNode->dsqlContext);
-	else if ((relNode = ExprNode::as<RelationSourceNode>(node)))
+	else if ((relNode = nodeAs<RelationSourceNode>(node)))
 		contexts.push(relNode->dsqlContext);
-	else if ((rseNode = ExprNode::as<RseNode>(node)))
+	else if ((rseNode = nodeAs<RseNode>(node)))
 	{
 		if (rseNode->dsqlContext)	// derived table
 			contexts.push(rseNode->dsqlContext);
@@ -8568,11 +8691,11 @@ static StmtNode* dsqlNullifyReturning(DsqlCompilerScratch* dsqlScratch, StmtNode
 	ModifyNode* modifyNode;
 	StoreNode* storeNode;
 
-	if (eraseNode = input->as<EraseNode>())
+	if (eraseNode = nodeAs<EraseNode>(input))
 		returning = eraseNode->statement;
-	else if (modifyNode = input->as<ModifyNode>())
+	else if (modifyNode = nodeAs<ModifyNode>(input))
 		returning = modifyNode->statement2;
-	else if (storeNode = input->as<StoreNode>())
+	else if (storeNode = nodeAs<StoreNode>(input))
 		returning = storeNode->statement2;
 	else
 	{
@@ -8589,7 +8712,7 @@ static StmtNode* dsqlNullifyReturning(DsqlCompilerScratch* dsqlScratch, StmtNode
 	// completely removed.
 
 	// nod_returning was already processed
-	CompoundStmtNode* returningStmt = returning->as<CompoundStmtNode>();
+	CompoundStmtNode* returningStmt = nodeAs<CompoundStmtNode>(returning);
 	fb_assert(returningStmt);
 
 	CompoundStmtNode* nullAssign = FB_NEW_POOL(pool) CompoundStmtNode(pool);
@@ -8603,7 +8726,7 @@ static StmtNode* dsqlNullifyReturning(DsqlCompilerScratch* dsqlScratch, StmtNode
 	{
 		AssignmentNode* assign = FB_NEW_POOL(pool) AssignmentNode(pool);
 		assign->asgnFrom = FB_NEW_POOL(pool) NullNode(pool);
-		assign->asgnTo = (*ret_ptr)->as<AssignmentNode>()->asgnTo;
+		assign->asgnTo = nodeAs<AssignmentNode>(*ret_ptr)->asgnTo;
 		*null_ptr = assign;
 	}
 
@@ -8625,7 +8748,7 @@ static void dsqlFieldAppearsOnce(const Array<NestConst<ValueExprNode> >& values,
 {
 	for (FB_SIZE_T i = 0; i < values.getCount(); ++i)
 	{
-		const FieldNode* field1 = values[i]->as<FieldNode>();
+		const FieldNode* field1 = nodeAs<FieldNode>(values[i]);
 		if (!field1)
 			continue;
 
@@ -8633,7 +8756,7 @@ static void dsqlFieldAppearsOnce(const Array<NestConst<ValueExprNode> >& values,
 
 		for (FB_SIZE_T j = i + 1; j < values.getCount(); ++j)
 		{
-			const FieldNode* field2 = values[j]->as<FieldNode>();
+			const FieldNode* field2 = nodeAs<FieldNode>(values[j]);
 			if (!field2)
 				continue;
 
@@ -8685,7 +8808,7 @@ static dsql_ctx* dsqlPassCursorContext(DsqlCompilerScratch* dsqlScratch, const M
 		DeclareCursorNode::CUR_TYPE_ALL, true);
 	fb_assert(node);
 
-	const RseNode* nodeRse = node->rse->as<RseNode>();
+	const RseNode* nodeRse = nodeAs<RseNode>(node->rse);
 	fb_assert(nodeRse);
 
 	if (nodeRse->dsqlDistinct)
@@ -8703,7 +8826,7 @@ static dsql_ctx* dsqlPassCursorContext(DsqlCompilerScratch* dsqlScratch, const M
 	for (const NestConst<RecordSourceNode>* const end = temp->items.end(); ptr != end; ++ptr)
 	{
 		RecordSourceNode* r_node = *ptr;
-		RelationSourceNode* relNode = ExprNode::as<RelationSourceNode>(r_node);
+		RelationSourceNode* relNode = nodeAs<RelationSourceNode>(r_node);
 
 		if (relNode)
 		{
@@ -8724,7 +8847,7 @@ static dsql_ctx* dsqlPassCursorContext(DsqlCompilerScratch* dsqlScratch, const M
 					context = candidate;
 			}
 		}
-		else if (ExprNode::as<AggregateSourceNode>(r_node))
+		else if (nodeAs<AggregateSourceNode>(r_node))
 		{
 			// cursor with aggregation is not updatable
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-510) <<
@@ -8790,8 +8913,7 @@ static RseNode* dsqlPassCursorReference(DsqlCompilerScratch* dsqlScratch, const 
 
 	RseNode* rse = FB_NEW_POOL(pool) RseNode(pool);
 	rse->dsqlStreams = FB_NEW_POOL(pool) RecSourceListNode(pool, 1);
-	RelationSourceNode* relation_node =
-		PASS1_relation(dsqlScratch, relation_name)->as<RelationSourceNode>();
+	RelationSourceNode* relation_node = nodeAs<RelationSourceNode>(PASS1_relation(dsqlScratch, relation_name));
 	rse->dsqlStreams->items[0] = relation_node;
 
 	RecordKeyNode* dbKeyNode = FB_NEW_POOL(pool) RecordKeyNode(pool, blr_dbkey);
@@ -9057,7 +9179,7 @@ static void dsqlSetParameterName(ExprNode* exprNode, const ValueExprNode* fld_no
 	if (!exprNode)
 		return;
 
-	const FieldNode* fieldNode = ExprNode::as<FieldNode>(fld_node);
+	const FieldNode* fieldNode = nodeAs<FieldNode>(fld_node);
 	fb_assert(fieldNode);	// Could it be something else ???
 
 	if (fieldNode->nodDesc.dsc_dtype != dtype_array)
@@ -9080,7 +9202,7 @@ static void dsqlSetParameterName(ExprNode* exprNode, const ValueExprNode* fld_no
 
 		case ExprNode::TYPE_PARAMETER:
 		{
-			ParameterNode* paramNode = exprNode->as<ParameterNode>();
+			ParameterNode* paramNode = nodeAs<ParameterNode>(exprNode);
 			dsql_par* parameter = paramNode->dsqlParameter;
 			parameter->par_name = fieldNode->dsqlField->fld_name.c_str();
 			parameter->par_rel_name = relation->rel_name.c_str();
@@ -9101,7 +9223,7 @@ static void dsqlSetParametersName(CompoundStmtNode* statements, const RecordSour
 
 	for (NestConst<StmtNode>* const end = ptr + count; ptr != end; ++ptr)
 	{
-		AssignmentNode* assign = (*ptr)->as<AssignmentNode>();
+		AssignmentNode* assign = nodeAs<AssignmentNode>(*ptr);
 
 		if (assign)
 			dsqlSetParameterName(assign->asgnFrom, assign->asgnTo, relation);
@@ -9250,7 +9372,7 @@ static StmtNode* pass1ExpandView(thread_db* tdbb, CompilerScratch* csb, StreamTy
 				const jrd_fld* field = MET_get_field(relation, id);
 
 				if (field->fld_source)
-					newId = field->fld_source->as<FieldNode>()->fieldId;
+					newId = nodeAs<FieldNode>(field->fld_source)->fieldId;
 				else
 					newId = id;
 			}
@@ -9449,13 +9571,13 @@ static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
 
 	for (size_t i = compoundNode->statements.getCount(); i--; )
 	{
-		const AssignmentNode* assign = compoundNode->statements[i]->as<AssignmentNode>();
+		const AssignmentNode* assign = nodeAs<AssignmentNode>(compoundNode->statements[i]);
 		fb_assert(assign);
 		if (!assign)
 			continue;
 
 		const ExprNode* assignFrom = assign->asgnFrom;
-		const FieldNode* assignToField = assign->asgnTo->as<FieldNode>();
+		const FieldNode* assignToField = nodeAs<FieldNode>(assign->asgnTo);
 
 		if (assignToField)
 		{
@@ -9470,7 +9592,7 @@ static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
 				{
 					if (insertOverride && fld->fld_identity_type.specified)
 					{
-						if (insertOverride->specified || !assignFrom->is<DefaultNode>())
+						if (insertOverride->specified || !nodeIs<DefaultNode>(assignFrom))
 							identityType = fld->fld_identity_type;
 
 						if (*insertOverride == OverrideClause::USER_VALUE)
@@ -9482,7 +9604,7 @@ static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
 
 					if (fld->fld_computation)
 					{
-						if (assignFrom->is<DefaultNode>())
+						if (nodeIs<DefaultNode>(assignFrom))
 							compoundNode->statements.remove(i);
 					}
 					else if (relation->rel_view_rse && fld->fld_source_rel_field.first.hasData())
@@ -9553,7 +9675,7 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 				const_cast<char*>(value)[length] = 0;	// safe cast - data is actually on the stack
 
 			string name;
-			const FieldNode* fieldNode = i->value->as<FieldNode>();
+			const FieldNode* fieldNode = nodeAs<FieldNode>(i->value);
 
 			if (fieldNode)
 			{

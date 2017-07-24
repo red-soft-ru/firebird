@@ -316,6 +316,7 @@ template <typename DSC>
 bool areParamsDouble(int argsCount, DSC** args)
 {
 	bool decSeen = false;
+
 	for (int i = 0; i < argsCount; ++i)
 	{
 		if (args[i]->isApprox())
@@ -323,6 +324,7 @@ bool areParamsDouble(int argsCount, DSC** args)
 		if (args[i]->isDecFloat())
 			decSeen = true;
 	}
+
 	return !decSeen;
 }
 
@@ -600,7 +602,7 @@ void makeDecFloatResult(DataTypeUtilBase*, const SysFunction*, dsc* result,
 
 void makePi(DataTypeUtilBase*, const SysFunction*, dsc* result, int, const dsc**)
 {
-	result->makeDecimal128();
+	result->makeDouble();
 	result->clearNull();
 	result->setNullable(false);
 }
@@ -2885,7 +2887,8 @@ dsc* evlQuantize(thread_db* tdbb, const SysFunction* function, const NestValueAr
 		impure->vlu_misc.vlu_dec64 = v1.quantize(decSt, v2);
 		impure->vlu_desc.makeDecimal64(&impure->vlu_misc.vlu_dec64);
 	}
-	else {
+	else
+	{
 		Decimal128 v1 = MOV_get_dec128(tdbb, value[0]);
 		Decimal128 v2 = MOV_get_dec128(tdbb, value[1]);
 
@@ -2930,7 +2933,8 @@ dsc* evlCompare(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			fb_assert(false);
 		}
 	}
-	else {
+	else
+	{
 		Decimal128 v1 = MOV_get_dec128(tdbb, value[0]);
 		Decimal128 v2 = MOV_get_dec128(tdbb, value[1]);
 
@@ -2973,7 +2977,8 @@ dsc* evlNormDec(thread_db* tdbb, const SysFunction* function, const NestValueArr
 		impure->vlu_misc.vlu_dec64 = v.normalize(decSt);
 		impure->vlu_desc.makeDecimal64(&impure->vlu_misc.vlu_dec64);
 	}
-	else {
+	else
+	{
 		Decimal128 v = MOV_get_dec128(tdbb, value);
 
 		impure->vlu_misc.vlu_dec128 = v.normalize(decSt);
@@ -3421,14 +3426,13 @@ dsc* evlPad(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 }
 
 
-dsc* evlPi(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
+dsc* evlPi(thread_db* /*tdbb*/, const SysFunction*, const NestValueArray& args,
 	impure_value* impure)
 {
 	fb_assert(args.getCount() == 0);
 
-	impure->vlu_misc.vlu_dec128.set("3.141592653589793238462643383279502884197",
-		tdbb->getAttachment()->att_dec_status);
-	impure->vlu_desc.makeDecimal128(&impure->vlu_misc.vlu_dec128);
+	impure->vlu_misc.vlu_double = 3.14159265358979323846;
+	impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
 
 	return &impure->vlu_desc;
 }
@@ -3996,14 +4000,19 @@ dsc* evlSign(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	const double val = MOV_get_double(tdbb, value);
+	if (value->isDecFloat())
+		impure->vlu_misc.vlu_short = MOV_get_dec128(tdbb, value).sign();
+	else
+	{
+		const double val = MOV_get_double(tdbb, value);
 
-	if (val > 0)
-		impure->vlu_misc.vlu_short = 1;
-	else if (val < 0)
-		impure->vlu_misc.vlu_short = -1;
-	else	// val == 0
-		impure->vlu_misc.vlu_short = 0;
+		if (val > 0)
+			impure->vlu_misc.vlu_short = 1;
+		else if (val < 0)
+			impure->vlu_misc.vlu_short = -1;
+		else	// val == 0
+			impure->vlu_misc.vlu_short = 0;
+	}
 
 	impure->vlu_desc.makeShort(0, &impure->vlu_misc.vlu_short);
 

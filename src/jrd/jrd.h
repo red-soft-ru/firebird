@@ -67,9 +67,10 @@
 #endif
 #define DEBUG
 
-#define BUGCHECK(number)        ERR_bugcheck (number, __FILE__, __LINE__)
-#define CORRUPT(number)         ERR_corrupt (number)
-#define IBERROR(number)         ERR_error (number)
+#define BUGCHECK(number)		ERR_bugcheck(number, __FILE__, __LINE__)
+#define SOFT_BUGCHECK(number)	ERR_soft_bugcheck(number, __FILE__, __LINE__)
+#define CORRUPT(number)			ERR_corrupt(number)
+#define IBERROR(number)			ERR_error(number)
 
 
 #define BLKCHK(blk, type)       if (!blk->checkHandle()) BUGCHECK(147)

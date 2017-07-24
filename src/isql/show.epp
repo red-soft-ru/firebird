@@ -3845,7 +3845,7 @@ static processing_state show_domains(const SCHAR* domain_name)
 			first = false;
 			// Print the name of the domain
 			fb_utils::exact_name(FLD.RDB$FIELD_NAME);
-			isqlGlob.printf("%-32s", FLD.RDB$FIELD_NAME);
+			isqlGlob.printf("%-31s ", FLD.RDB$FIELD_NAME);
 
 			// Array dimensions
 			if (!FLD.RDB$DIMENSIONS.NULL)
@@ -4841,7 +4841,7 @@ static processing_state show_packages(const SCHAR* package_name)
 			first = false;
 			// Print the name of the package
 			fb_utils::exact_name(PACK.RDB$PACKAGE_NAME);
-			isqlGlob.printf("%-32s", PACK.RDB$PACKAGE_NAME);
+			isqlGlob.printf("%-31s ", PACK.RDB$PACKAGE_NAME);
 
 			isqlGlob.printf(NEWLINE);
 

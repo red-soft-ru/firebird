@@ -51,164 +51,6 @@ DATABASE DB = STATIC "ODS.RDB";
 
 namespace
 {
-	struct ParameterInfo
-	{
-		explicit ParameterInfo(MemoryPool& p)
-			: type(0),
-			  number(0),
-			  name(p),
-			  fieldSource(p),
-			  fieldName(p),
-			  relationName(p),
-			  mechanism(0)
-		{
-			defaultSource.clear();
-			defaultValue.clear();
-		}
-
-		ParameterInfo(MemoryPool& p, const ParameterInfo& o)
-			: type(o.type),
-			  number(o.number),
-			  name(p, o.name),
-			  fieldSource(p, o.fieldSource),
-			  fieldName(p, o.fieldName),
-			  relationName(p, o.relationName),
-			  collationId(o.collationId),
-			  nullFlag(o.nullFlag),
-			  mechanism(o.mechanism),
-			  fieldLength(o.fieldLength),
-			  fieldScale(o.fieldScale),
-			  fieldType(o.fieldType),
-			  fieldSubType(o.fieldSubType),
-			  fieldSegmentLength(o.fieldSegmentLength),
-			  fieldNullFlag(o.fieldNullFlag),
-			  fieldCharLength(o.fieldCharLength),
-			  fieldCollationId(o.fieldCollationId),
-			  fieldCharSetId(o.fieldCharSetId),
-			  fieldPrecision(o.fieldPrecision),
-			  defaultSource(o.defaultSource),
-			  defaultValue(o.defaultValue)
-		{
-		}
-
-		SSHORT type;
-		SSHORT number;
-		MetaName name;
-		MetaName fieldSource;
-		MetaName fieldName;
-		MetaName relationName;
-		Nullable<SSHORT> collationId;
-		Nullable<SSHORT> nullFlag;
-		SSHORT mechanism;
-		Nullable<SSHORT> fieldLength;
-		Nullable<SSHORT> fieldScale;
-		Nullable<SSHORT> fieldType;
-		Nullable<SSHORT> fieldSubType;
-		Nullable<SSHORT> fieldSegmentLength;
-		Nullable<SSHORT> fieldNullFlag;
-		Nullable<SSHORT> fieldCharLength;
-		Nullable<SSHORT> fieldCollationId;
-		Nullable<SSHORT> fieldCharSetId;
-		Nullable<SSHORT> fieldPrecision;
-
-		// Not compared
-		bid defaultSource;
-		bid defaultValue;
-
-		bool operator >(const ParameterInfo& o) const
-		{
-			return type > o.type || (type == o.type && number > o.number);
-		}
-
-		bool operator ==(const ParameterInfo& o) const
-		{
-			return type == o.type && number == o.number && name == o.name &&
-				(fieldSource == o.fieldSource ||
-					(fb_utils::implicit_domain(fieldSource.c_str()) &&
-						fb_utils::implicit_domain(o.fieldSource.c_str()))) &&
-				fieldName == o.fieldName && relationName == o.relationName &&
-				collationId == o.collationId && nullFlag == o.nullFlag &&
-				mechanism == o.mechanism && fieldLength == o.fieldLength &&
-				fieldScale == o.fieldScale && fieldType == o.fieldType &&
-				fieldSubType == o.fieldSubType && fieldSegmentLength == o.fieldSegmentLength &&
-				fieldNullFlag == o.fieldNullFlag && fieldCharLength == o.fieldCharLength &&
-				fieldCollationId == o.fieldCollationId && fieldCharSetId == o.fieldCharSetId &&
-				fieldPrecision == o.fieldPrecision;
-		}
-
-		bool operator !=(const ParameterInfo& o) const
-		{
-			return !(*this == o);
-		}
-	};
-
-	struct Signature
-	{
-		Signature(MemoryPool& p, const MetaName& aName)
-			: name(p, aName),
-			  parameters(p),
-			  defined(false)
-		{
-		}
-
-		explicit Signature(const MetaName& aName)
-			: name(aName),
-			  parameters(*getDefaultMemoryPool()),
-			  defined(false)
-		{
-		}
-
-		explicit Signature(MemoryPool& p)
-			: name(p),
-			  parameters(p),
-			  defined(false)
-		{
-		}
-
-		Signature(MemoryPool& p, const Signature& o)
-			: name(p, o.name),
-			  parameters(p),
-			  defined(o.defined)
-		{
-			for (SortedObjectsArray<ParameterInfo>::const_iterator i = o.parameters.begin();
-				 i != o.parameters.end(); ++i)
-			{
-				parameters.add(*i);
-			}
-		}
-
-		bool operator >(const Signature& o) const
-		{
-			return name > o.name;
-		}
-
-		bool operator ==(const Signature& o) const
-		{
-			if (name != o.name || parameters.getCount() != o.parameters.getCount())
-				return false;
-
-			for (SortedObjectsArray<ParameterInfo>::const_iterator i = parameters.begin(),
-																   j = o.parameters.begin();
-				i != parameters.end(); ++i, ++j)
-			{
-				if (*i != *j)
-					return false;
-			}
-
-			return true;
-		}
-
-		bool operator !=(const Signature& o) const
-		{
-			return !(*this == o);
-		}
-
-		MetaName name;
-		SortedObjectsArray<ParameterInfo> parameters;
-		bool defined;
-	};
-
-
 	// Return function and procedure names (in the user charset) and optionally its details for a
 	// given package.
 	void collectPackagedItems(thread_db* tdbb, jrd_tra* transaction, const MetaName& metaName,
@@ -225,6 +67,9 @@ namespace
 			Signature function(FUN.RDB$FUNCTION_NAME);
 			function.defined = !FUN.RDB$FUNCTION_BLR.NULL || !FUN.RDB$ENTRYPOINT.NULL;
 
+			if (!FUN.RDB$DETERMINISTIC_FLAG.NULL && FUN.RDB$DETERMINISTIC_FLAG != 0)
+				function.flags |= Signature::FLAG_DETERMINISTIC;
+
 			if (details)
 			{
 				FOR (REQUEST_HANDLE requestHandle2 TRANSACTION_HANDLE transaction)
@@ -234,7 +79,7 @@ namespace
 						 ARG.RDB$FUNCTION_NAME EQ FUN.RDB$FUNCTION_NAME AND
 						 FLD.RDB$FIELD_NAME EQ ARG.RDB$FIELD_SOURCE
 				{
-					ParameterInfo parameter(*getDefaultMemoryPool());
+					SignatureParameter parameter(*getDefaultMemoryPool());
 
 					parameter.number = ARG.RDB$ARGUMENT_POSITION;
 					parameter.name = ARG.RDB$ARGUMENT_NAME;
@@ -271,11 +116,6 @@ namespace
 					if (!FLD.RDB$FIELD_PRECISION.NULL)
 						parameter.fieldPrecision = FLD.RDB$FIELD_PRECISION;
 
-					if (!ARG.RDB$DEFAULT_SOURCE.NULL)
-						parameter.defaultSource = ARG.RDB$DEFAULT_SOURCE;
-					if (!ARG.RDB$DEFAULT_VALUE.NULL)
-						parameter.defaultValue = ARG.RDB$DEFAULT_VALUE;
-
 					function.parameters.add(parameter);
 				}
 				END_FOR
@@ -304,7 +144,7 @@ namespace
 						 PRM.RDB$PROCEDURE_NAME EQ PRC.RDB$PROCEDURE_NAME AND
 						 FLD.RDB$FIELD_NAME EQ PRM.RDB$FIELD_SOURCE
 				{
-					ParameterInfo parameter(*getDefaultMemoryPool());
+					SignatureParameter parameter(*getDefaultMemoryPool());
 					parameter.type = PRM.RDB$PARAMETER_TYPE;
 					parameter.number = PRM.RDB$PARAMETER_NUMBER;
 					parameter.name = PRM.RDB$PARAMETER_NAME;
@@ -340,11 +180,6 @@ namespace
 						parameter.fieldCharSetId = FLD.RDB$CHARACTER_SET_ID;
 					if (!FLD.RDB$FIELD_PRECISION.NULL)
 						parameter.fieldPrecision = FLD.RDB$FIELD_PRECISION;
-
-					if (!PRM.RDB$DEFAULT_SOURCE.NULL)
-						parameter.defaultSource = PRM.RDB$DEFAULT_SOURCE;
-					if (!PRM.RDB$DEFAULT_VALUE.NULL)
-						parameter.defaultValue = PRM.RDB$DEFAULT_VALUE;
 
 					procedure.parameters.add(parameter);
 				}

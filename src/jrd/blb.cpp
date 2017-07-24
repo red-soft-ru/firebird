@@ -999,13 +999,13 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc, const ValueExprNod
 
 	if (field)
 	{
-		if ((fieldNode = ExprNode::as<FieldNode>(field)))
+		if ((fieldNode = nodeAs<FieldNode>(field)))
 		{
 			// We should not materialize the blob if the destination field
 			// stream (nod_union, for example) doesn't have a relation.
 			simpleMove = tdbb->getRequest()->req_rpb[fieldNode->fieldStream].rpb_relation == NULL;
 		}
-		else if (!(ExprNode::is<ParameterNode>(field) || ExprNode::is<VariableNode>(field)))
+		else if (!(nodeIs<ParameterNode>(field) || nodeIs<VariableNode>(field)))
 			BUGCHECK(199);	// msg 199 expected field node
 	}
 

@@ -761,7 +761,7 @@ template <typename T> static void makeSubRoutines(thread_db* tdbb, JrdStatement*
 		Routine* subRoutine = subNode->routine;
 		CompilerScratch*& subCsb = subNode->subCsb;
 
-		JrdStatement* subStatement = JrdStatement::makeStatement(tdbb, subCsb, true);
+		JrdStatement* subStatement = JrdStatement::makeStatement(tdbb, subCsb, false);
 		subStatement->parentStatement = statement;
 		subRoutine->setStatement(subStatement);
 

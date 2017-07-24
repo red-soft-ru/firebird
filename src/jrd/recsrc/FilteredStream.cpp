@@ -159,7 +159,7 @@ bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
 	{
 		// see if there's a select node to work with
 
-		const BinaryBoolNode* booleanNode = column_node->as<BinaryBoolNode>();
+		const BinaryBoolNode* booleanNode = nodeAs<BinaryBoolNode>(column_node);
 
 		if (booleanNode && booleanNode->blrOp == blr_and)
 		{

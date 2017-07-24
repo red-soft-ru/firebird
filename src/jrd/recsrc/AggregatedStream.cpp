@@ -205,11 +205,11 @@ void BaseAggWinStream<ThisType, NextType>::aggInit(thread_db* tdbb, jrd_req* req
 		 source != sourceEnd;
 		 ++source, ++target)
 	{
-		const AggNode* aggNode = (*source)->as<AggNode>();
+		const AggNode* aggNode = nodeAs<AggNode>(*source);
 
 		if (aggNode)
 			aggNode->aggInit(tdbb, request);
-		else if ((*source)->is<LiteralNode>())
+		else if (nodeIs<LiteralNode>(*source))
 			EXE_assignment(tdbb, *source, *target);
 	}
 }
@@ -227,7 +227,7 @@ bool BaseAggWinStream<ThisType, NextType>::aggPass(thread_db* tdbb, jrd_req* req
 		 source != sourceEnd;
 		 ++source, ++target)
 	{
-		const AggNode* aggNode = (*source)->as<AggNode>();
+		const AggNode* aggNode = nodeAs<AggNode>(*source);
 
 		if (aggNode)
 		{
@@ -256,11 +256,11 @@ void BaseAggWinStream<ThisType, NextType>::aggExecute(thread_db* tdbb, jrd_req* 
 		 source != sourceEnd;
 		 ++source, ++target)
 	{
-		const AggNode* aggNode = (*source)->as<AggNode>();
+		const AggNode* aggNode = nodeAs<AggNode>(*source);
 
 		if (aggNode)
 		{
-			const FieldNode* field = (*target)->as<FieldNode>();
+			const FieldNode* field = nodeAs<FieldNode>(*target);
 			const USHORT id = field->fieldId;
 			Record* record = request->req_rpb[field->fieldStream].rpb_record;
 
@@ -287,7 +287,7 @@ void BaseAggWinStream<ThisType, NextType>::aggFinish(thread_db* tdbb, jrd_req* r
 		 source != sourceEnd;
 		 ++source)
 	{
-		const AggNode* aggNode = (*source)->as<AggNode>();
+		const AggNode* aggNode = nodeAs<AggNode>(*source);
 
 		if (aggNode)
 			aggNode->aggFinish(tdbb, request);

@@ -260,15 +260,19 @@ void TraceManager::update_session(const TraceSession& session)
 
 				Database* dbb = attachment->att_database;
 				fb_assert(dbb);
-				mapResult = mapUser(false, s_user, t_role, NULL, NULL, &priv, session.ses_auth,
-					attachment->att_filename.c_str(), dbb->dbb_filename.c_str(),
-					dbb->dbb_config->getSecurityDatabase(), session.ses_role,
-					dbb->dbb_provider->getCryptCallback(), attachment->getInterface());
+				Mapping mapping(Mapping::MAP_NO_FLAGS, dbb->dbb_provider->getCryptCallback());
+				mapping.needSystemPrivileges(priv);
+				mapping.setAuthBlock(session.ses_auth);
+				mapping.setSqlRole(session.ses_role);
+				mapping.setSecurityDbAlias(dbb->dbb_config->getSecurityDatabase(), dbb->dbb_filename.c_str());
+				mapping.setDb(attachment->att_filename.c_str(), dbb->dbb_filename.c_str(),
+					attachment->getInterface());
+				mapResult = mapping.mapUser(s_user, t_role);
 			}
 
 			if (session.ses_auth.hasData())
 			{
-				if (mapResult & MAPUSER_ERROR_NOT_THROWN)
+				if (mapResult & Mapping::MAP_ERROR_NOT_THROWN)
 					return;		// Error in mapUser() means missing context
 
 				t_role.upper();
@@ -291,9 +295,13 @@ void TraceManager::update_session(const TraceSession& session)
 				RefPtr<const Config> config;
 				expandDatabaseName(service->getExpectedDb(), dummy, &config);
 
-				if (mapUser(false, s_user, t_role, NULL, NULL, NULL, session.ses_auth, "services manager",
-					NULL, config->getSecurityDatabase(), session.ses_role, service->getCryptCallback(),
-					NULL) & MAPUSER_ERROR_NOT_THROWN)
+				Mapping mapping(Mapping::MAP_NO_FLAGS, service->getCryptCallback());
+				mapping.setAuthBlock(session.ses_auth);
+				mapping.setErrorMessagesContextName("services manager");
+				mapping.setSqlRole(session.ses_role);
+				mapping.setSecurityDbAlias(config->getSecurityDatabase(), nullptr);
+
+				if (mapping.mapUser(s_user, t_role) & Mapping::MAP_ERROR_NOT_THROWN)
 				{
 					// Error in mapUser() means missing context, therefore...
 					return;

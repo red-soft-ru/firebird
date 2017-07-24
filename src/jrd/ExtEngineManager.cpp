@@ -640,10 +640,10 @@ void ExtEngineManager::ExternalContextImpl::setTransaction(thread_db* tdbb)
 
 	if ((internalTransaction = newTransaction))
 	{
-		internalTransaction->getInterface()->addRef();
+		internalTransaction->getInterface(true)->addRef();
 
 		externalTransaction = MasterInterfacePtr()->registerTransaction(externalAttachment,
-			internalTransaction->getInterface());
+			internalTransaction->getInterface(true));
 	}
 }
 

@@ -120,7 +120,7 @@ ValueExprNode* CMP_clone_node_opt(thread_db* tdbb, CompilerScratch* csb, ValueEx
 
 	DEV_BLKCHK(csb, type_csb);
 
-	if (node->is<ParameterNode>())
+	if (nodeIs<ParameterNode>(node))
 		return node;
 
 	SubExprNodeCopier copier(csb);

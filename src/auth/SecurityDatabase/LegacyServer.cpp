@@ -293,8 +293,7 @@ void SecurityDatabase::prepare()
 	dpb.insertString(isc_dpb_trusted_auth, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
 
 	// Do not use other providers except current engine
-	const char* providers = "Providers=" CURRENT_ENGINE;
-	dpb.insertString(isc_dpb_config, providers, fb_strlen(providers));
+	dpb.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
 
 	isc_db_handle tempHandle = 0;
 	isc_attach_database(status, 0, secureDbName, &tempHandle,

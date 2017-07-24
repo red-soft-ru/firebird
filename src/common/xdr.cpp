@@ -343,7 +343,6 @@ bool_t xdr_double(XDR* xdrs, double* ip)
 }
 
 
-
 bool_t xdr_dec64(XDR* xdrs, Firebird::Decimal64* ip)
 {
 	return xdr_hyper(xdrs, ip->getBytes());

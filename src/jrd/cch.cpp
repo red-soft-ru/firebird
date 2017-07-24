@@ -2107,7 +2107,7 @@ void CCH_unwind(thread_db* tdbb, const bool punt)
 				if (bdb->ourExclusiveLock())
 					bdb->bdb_flags &= ~(BDB_writer | BDB_faked | BDB_must_write);
 
-				bdb->release(tdbb, false);
+				bdb->release(tdbb, true);
 			}
 		}
 	}
@@ -3302,7 +3302,7 @@ static void down_grade(thread_db* tdbb, BufferDesc* bdb, int high)
 				syncPrec.unlock();
 				down_grade(tdbb, blocking_bdb, high + 1);
 
-				if (blocking_bdb->bdb_flags & BDB_dirty && !(precedence->pre_flags & PRE_cleared))
+				if ((blocking_bdb->bdb_flags & BDB_dirty) && !(precedence->pre_flags & PRE_cleared))
 					in_use = true;
 
 				if (blocking_bdb->bdb_flags & BDB_not_valid)
@@ -3577,7 +3577,7 @@ static LatchState latch_buffer(thread_db* tdbb, Sync &bcbSync, BufferDesc *bdb,
 			return lsOk;
 		}
 
-		bdb->release(tdbb, false);
+		bdb->release(tdbb, true);
 	}
 	return lsPageChanged; // try again
 }
@@ -5164,7 +5164,7 @@ void BufferDesc::release(thread_db* tdbb, bool repost)
 	else
 		bdb_syncPage.unlock(NULL, SYNC_SHARED);
 
-	if (repost && !bdb_use_count && (bdb_ast_flags & BDB_blocking))
+	if (repost && !isLocked() && (bdb_ast_flags & BDB_blocking))
 	{
 		PAGE_LOCK_RE_POST(tdbb, bdb_bcb, bdb_lock);
 	}

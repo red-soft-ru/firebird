@@ -102,6 +102,26 @@ void ERR_bugcheck_msg(const TEXT* msg)
 }
 
 
+void ERR_soft_bugcheck(int number, const TEXT* file, int line)
+{
+/**************************************
+ *
+ *	E R R _ s o f t _ b u g c h e c k
+ *
+ **************************************
+ *
+ * Functional description
+ *	Things seem to be going poorly today.
+ *  Use this function instead of ERR_bugcheck in bugcheck conditions that do not affect
+ *  whole server/database/attachment state.
+ *
+ **************************************/
+
+	fb_assert(false);
+	internal_error(isc_bug_check, number, file, line);
+}
+
+
 void ERR_corrupt(int number)
 {
 /**************************************

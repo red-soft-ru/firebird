@@ -936,7 +936,7 @@ ULONG INF_request_info(const jrd_req* request, const ULONG item_length, const UC
 				{
 					const StmtNode* node = request->req_next;
 
-					if (node->is<SelectNode>())
+					if (nodeIs<SelectNode>(node))
 						state = isc_info_req_select;
 					else
 						state = isc_info_req_receive;

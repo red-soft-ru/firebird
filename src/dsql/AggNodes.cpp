@@ -281,7 +281,7 @@ bool AggNode::dsqlMatch(const ExprNode* other, bool ignoreMapCast) const
 	if (!ExprNode::dsqlMatch(other, ignoreMapCast))
 		return false;
 
-	const AggNode* o = other->as<AggNode>();
+	const AggNode* o = nodeAs<AggNode>(other);
 	fb_assert(o);
 
 	// ASF: We compare name address. That should be ok, as we have only one AggInfo instance
@@ -1604,7 +1604,7 @@ void CorrAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 	if (nodFlags & FLAG_DECFLOAT)
 	{
 		impure->make_decimal128(CDecimal128(0));
-		impure2->dec.x = impure2->dec.x2 = CDecimal128(0);
+		impure2->dec.x = impure2->dec.x2 = impure2->dec.y = impure2->dec.y2 = impure2->dec.xy = CDecimal128(0);
 	}
 	else
 	{
@@ -1878,7 +1878,6 @@ void RegrAggNode::aggInit(thread_db* tdbb, jrd_req* request) const
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	RegrImpure* impure2 = request->getImpure<RegrImpure>(impure2Offset);
-
 
 	if (nodFlags & FLAG_DECFLOAT)
 	{

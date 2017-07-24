@@ -356,6 +356,37 @@ public:
 };
 
 
+template <typename To, typename From> static To* nodeAs(From* fromNode)
+{
+	return fromNode && fromNode->type == To::TYPE ? static_cast<To*>(fromNode) : NULL;
+}
+
+template <typename To, typename From> static To* nodeAs(NestConst<From>& fromNode)
+{
+	return fromNode && fromNode->type == To::TYPE ? static_cast<To*>(fromNode.getObject()) : NULL;
+}
+
+template <typename To, typename From> static const To* nodeAs(const From* fromNode)
+{
+	return fromNode && fromNode->type == To::TYPE ? static_cast<const To*>(fromNode) : NULL;
+}
+
+template <typename To, typename From> static const To* nodeAs(const NestConst<From>& fromNode)
+{
+	return fromNode && fromNode->type == To::TYPE ? static_cast<const To*>(fromNode.getObject()) : NULL;
+}
+
+template <typename To, typename From> static bool nodeIs(const From* fromNode)
+{
+	return fromNode && fromNode->type == To::TYPE;
+}
+
+template <typename To, typename From> static bool nodeIs(const NestConst<From>& fromNode)
+{
+	return fromNode && fromNode->type == To::TYPE;
+}
+
+
 // Stores a reference to a specialized ExprNode.
 // This class and NodeRefImpl exists for nodes to replace themselves (eg. pass1) in a type-safe way.
 class NodeRef
@@ -505,39 +536,6 @@ public:
 		  dsqlChildNodes(pool),
 		  jrdChildNodes(pool)
 	{
-	}
-
-	template <typename T> T* as()
-	{
-		const ExprNode* const thisPointer = this;	// avoid warning
-		return thisPointer && type == T::TYPE ? static_cast<T*>(this) : NULL;
-	}
-
-	template <typename T> const T* as() const
-	{
-		const ExprNode* const thisPointer = this;	// avoid warning
-		return thisPointer && type == T::TYPE ? static_cast<const T*>(this) : NULL;
-	}
-
-	template <typename T> bool is() const
-	{
-		const ExprNode* const thisPointer = this;	// avoid warning
-		return thisPointer && type == T::TYPE;
-	}
-
-	template <typename T, typename LegacyType> static T* as(LegacyType* node)
-	{
-		return node ? node->template as<T>() : NULL;
-	}
-
-	template <typename T, typename LegacyType> static const T* as(const LegacyType* node)
-	{
-		return node ? node->template as<T>() : NULL;
-	}
-
-	template <typename T, typename LegacyType> static bool is(const LegacyType* node)
-	{
-		return node ? node->template is<T>() : false;
 	}
 
 	// Allocate and assign impure space for various nodes.

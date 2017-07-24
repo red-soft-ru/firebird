@@ -394,26 +394,8 @@ void defineComputed(DsqlCompilerScratch* dsqlScratch, RelationSourceNode* relati
 			field->subType = desc.dsc_sub_type;
 	}
 
-	if (field && field->precision == 0 && field->scale != 0)
-	{
-		switch (field->dtype)
-		{
-			case dtype_short:
-				field->precision = 4;
-				break;
-
-			case dtype_long:
-				field->precision = 9;
-				break;
-
-			case dtype_int64:
-				field->precision = 18;
-				break;
-
-			default:
-				fb_assert(!DTYPE_IS_EXACT(field->dtype));
-		}
-	}
+	if (field)
+		field->setExactPrecision();
 
 	dsqlScratch->resetContextStack();
 
@@ -1044,9 +1026,9 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, MetaName& 
 			 ++ptr, ++position)
 		{
 			const ValueExprNode* element = *ptr++;
-			const SLONG lrange = element->as<LiteralNode>()->getSlong();
+			const SLONG lrange = nodeAs<LiteralNode>(element)->getSlong();
 			element = *ptr;
-			const SLONG hrange = element->as<LiteralNode>()->getSlong();
+			const SLONG hrange = nodeAs<LiteralNode>(element)->getSlong();
 
 			if (lrange >= hrange)
 			{
@@ -1566,7 +1548,7 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		const NestConst<StmtNode>* ptr = variables->statements.begin();
 		for (const NestConst<StmtNode>* const end = variables->statements.end(); ptr != end; ++ptr)
 		{
-			const DeclareVariableNode* varNode = (*ptr)->as<DeclareVariableNode>();
+			const DeclareVariableNode* varNode = nodeAs<DeclareVariableNode>(*ptr);
 
 			if (varNode)
 			{
@@ -2012,9 +1994,11 @@ void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch
 		ARG.RDB$MECHANISM.NULL = TRUE;
 		ARG.RDB$FIELD_TYPE.NULL = TRUE;
 		ARG.RDB$FIELD_LENGTH.NULL = TRUE;
+		ARG.RDB$FIELD_SUB_TYPE.NULL = TRUE;
 		ARG.RDB$FIELD_PRECISION.NULL = TRUE;
 		ARG.RDB$FIELD_SCALE.NULL = TRUE;
 		ARG.RDB$CHARACTER_SET_ID.NULL = TRUE;
+		ARG.RDB$CHARACTER_LENGTH.NULL = TRUE;
 		ARG.RDB$COLLATION_ID.NULL = TRUE;
 		ARG.RDB$ARGUMENT_MECHANISM.NULL = TRUE;
 
@@ -2570,7 +2554,7 @@ DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		const NestConst<StmtNode>* ptr = variables->statements.begin();
 		for (const NestConst<StmtNode>* const end = variables->statements.end(); ptr != end; ++ptr)
 		{
-			const DeclareVariableNode* varNode = (*ptr)->as<DeclareVariableNode>();
+			const DeclareVariableNode* varNode = nodeAs<DeclareVariableNode>(*ptr);
 
 			if (varNode)
 			{
@@ -3879,6 +3863,7 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		{
 			if (MET_get_char_coll_subtype_info(tdbb,
 					INTL_CS_COLL_TO_TTYPE(forCharSetId, fromCollationId), &info) &&
+				forCharSetId != CS_METADATA &&
 				info.specificAttributes.hasData())
 			{
 				UCharBuffer temp;
@@ -6406,7 +6391,7 @@ bool RelationNode::defineDefault(thread_db* /*tdbb*/, DsqlCompilerScratch* dsqlS
 
 	value.assign(dsqlScratch->getBlrData());
 
-	return ExprNode::is<NullNode>(input);
+	return nodeIs<NullNode>(input);
 }
 
 // Make a constraint object from a legacy node.
@@ -8682,22 +8667,21 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		ValueExprNode* nameNode = fieldNode;
 		const char* aliasName = NULL;
 
-		while (nameNode->is<DsqlAliasNode>() || nameNode->is<DerivedFieldNode>() ||
-			nameNode->is<DsqlMapNode>())
+		while (nodeIs<DsqlAliasNode>(nameNode) || nodeIs<DerivedFieldNode>(nameNode) || nodeIs<DsqlMapNode>(nameNode))
 		{
 			DsqlAliasNode* aliasNode;
 			DsqlMapNode* mapNode;
 			DerivedFieldNode* derivedField;
 
-			if ((aliasNode = nameNode->as<DsqlAliasNode>()))
+			if ((aliasNode = nodeAs<DsqlAliasNode>(nameNode)))
 			{
 				if (!aliasName)
 					aliasName = aliasNode->name.c_str();
 				nameNode = aliasNode->value;
 			}
-			else if ((mapNode = nameNode->as<DsqlMapNode>()))
+			else if ((mapNode = nodeAs<DsqlMapNode>(nameNode)))
 				nameNode = mapNode->map->map_node;
-			else if ((derivedField = nameNode->as<DerivedFieldNode>()))
+			else if ((derivedField = nodeAs<DerivedFieldNode>(nameNode)))
 			{
 				if (!aliasName)
 					aliasName = derivedField->name.c_str();
@@ -8706,7 +8690,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		}
 
 		const dsql_fld* nameField = NULL;
-		const FieldNode* fieldNameNode = nameNode->as<FieldNode>();
+		const FieldNode* fieldNameNode = nodeAs<FieldNode>(nameNode);
 
 		if (fieldNameNode)
 			nameField = fieldNameNode->dsqlField;
@@ -8720,7 +8704,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 		// Check if this is a field or an expression.
 
-		DsqlAliasNode* aliasNode = fieldNode->as<DsqlAliasNode>();
+		DsqlAliasNode* aliasNode = nodeAs<DsqlAliasNode>(fieldNode);
 
 		if (aliasNode)
 			fieldNode = aliasNode->value;
@@ -8728,7 +8712,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		dsql_fld* field = NULL;
 		const dsql_ctx* context = NULL;
 
-		fieldNameNode = fieldNode->as<FieldNode>();
+		fieldNameNode = nodeAs<FieldNode>(fieldNode);
 
 		if (fieldNameNode)
 		{
@@ -8755,7 +8739,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		if (ptr)
 		{
 			if (ptr < end)
-				fieldStr = (*ptr)->as<FieldNode>()->dsqlName.c_str();
+				fieldStr = nodeAs<FieldNode>(*ptr)->dsqlName.c_str();
 			else
 			{
 				// Generate an error when going out of this loop.
@@ -8871,6 +8855,8 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 			else
 				newField.subType = desc.dsc_sub_type;
 
+			newField.setExactPrecision();
+
 			if (relField)	// modifying a view
 			{
 				AutoRequest request2;
@@ -8966,11 +8952,11 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 				Arg::Gds(isc_col_name_err));
 		}
 
-		RseNode* querySpec = selectExpr->querySpec->as<RseNode>();
+		RseNode* querySpec = nodeAs<RseNode>(selectExpr->querySpec);
 		fb_assert(querySpec);
 
 		if (querySpec->dsqlFrom->items.getCount() != 1 ||
-			!querySpec->dsqlFrom->items[0]->is<ProcedureSourceNode>())
+			!nodeIs<ProcedureSourceNode>(querySpec->dsqlFrom->items[0]))
 		{
 			// Only one table allowed for VIEW WITH CHECK OPTION
 			status_exception::raise(
@@ -9038,10 +9024,10 @@ void CreateAlterViewNode::createCheckTrigger(thread_db* tdbb, DsqlCompilerScratc
 
 	dsqlScratch->resetContextStack();
 
-	RseNode* querySpec = selectExpr->querySpec->as<RseNode>();
+	RseNode* querySpec = nodeAs<RseNode>(selectExpr->querySpec);
 	fb_assert(querySpec);
 
-	ProcedureSourceNode* sourceNode = querySpec->dsqlFrom->items[0]->as<ProcedureSourceNode>();
+	ProcedureSourceNode* sourceNode = nodeAs<ProcedureSourceNode>(querySpec->dsqlFrom->items[0]);
 
 	if (triggerType == PRE_MODIFY_TRIGGER)
 	{
@@ -9110,14 +9096,14 @@ void CreateAlterViewNode::createCheckTrigger(thread_db* tdbb, DsqlCompilerScratc
 			NestConst<ValueExprNode> valueNod = *ptr2;
 			DsqlAliasNode* aliasNode;
 
-			if ((aliasNode = fieldNod->as<DsqlAliasNode>()))
+			if ((aliasNode = nodeAs<DsqlAliasNode>(fieldNod)))
 				fieldNod = aliasNode->value;
 
-			if ((aliasNode = valueNod->as<DsqlAliasNode>()))
+			if ((aliasNode = nodeAs<DsqlAliasNode>(valueNod)))
 				valueNod = aliasNode->value;
 
-			FieldNode* fieldNode = fieldNod->as<FieldNode>();
-			FieldNode* valueNode = valueNod->as<FieldNode>();
+			FieldNode* fieldNode = nodeAs<FieldNode>(fieldNod);
+			FieldNode* valueNode = nodeAs<FieldNode>(valueNod);
 
 			// Generate the actual comparisons.
 
@@ -9176,10 +9162,10 @@ void CreateAlterViewNode::createCheckTrigger(thread_db* tdbb, DsqlCompilerScratc
 		ValueExprNode* valueNode = *ptr;
 		DsqlAliasNode* aliasNode;
 
-		if ((aliasNode = valueNode->as<DsqlAliasNode>()))
+		if ((aliasNode = nodeAs<DsqlAliasNode>(valueNode)))
 			valueNode = aliasNode->value;
 
-		FieldNode* fieldNode = valueNode->as<FieldNode>();
+		FieldNode* fieldNode = nodeAs<FieldNode>(valueNode);
 		fb_assert(fieldNode);
 
 		savedNames.add(field->fld_name);
@@ -9618,7 +9604,7 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		for (; ptr != end; ++ptr)
 		{
 			MetaName& column = definition.columns.add();
-			column = (*ptr)->as<FieldNode>()->dsqlName;
+			column = nodeAs<FieldNode>(*ptr)->dsqlName;
 		}
 	}
 	else if (computed)
@@ -10686,7 +10672,7 @@ void MappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd
 	if (ddlTriggerAction > 0)
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, ddlTriggerAction, name, NULL);
 
-	DFW_post_work(transaction, dfw_clear_cache, NULL, MAPPING_CACHE);
+	DFW_post_work(transaction, dfw_clear_cache, NULL, Mapping::MAPPING_CACHE);
 	savePoint.release();	// everything is ok
 }
 
@@ -11078,7 +11064,7 @@ void GrantRevokeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 			}
 
 			// Invalidate system privileges cache
-			DFW_post_work(transaction, dfw_clear_cache, NULL, SYSTEM_PRIVILEGES_CACHE);
+			DFW_post_work(transaction, dfw_clear_cache, NULL, Mapping::SYSTEM_PRIVILEGES_CACHE);
 		}
 	}
 
@@ -11196,7 +11182,7 @@ void GrantRevokeNode::modifyPrivileges(thread_db* tdbb, jrd_tra* transaction, SS
 			for (NestConst<ValueExprNode>* ptr = fields->items.begin(); ptr != fields->items.end(); ++ptr)
 			{
 				grantRevoke(tdbb, transaction, object, user, privs0,
-					(*ptr)->as<FieldNode>()->dsqlName, option);
+					nodeAs<FieldNode>(*ptr)->dsqlName, option);
 			}
 		}
 		else

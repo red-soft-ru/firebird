@@ -772,7 +772,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 	}
 	else
 	{
-		switch(value->vlu_desc.dsc_dtype)
+		switch (value->vlu_desc.dsc_dtype)
 		{
 		case dtype_double:
 			if (isinf(value->vlu_misc.vlu_double))
@@ -819,13 +819,13 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 			}
 			break;
 		}
+
 		request->req_flags &= ~req_null;
 	}
 
 	while (array_stack.hasData())
-	{
 		delete[] array_stack.pop();
-	}
+
 	blob_stack.close();
 
 	} // try

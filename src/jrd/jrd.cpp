@@ -279,13 +279,15 @@ void JAttachment::addRef()
 
 int JAttachment::release()
 {
+#ifdef DEV_BUILD
+	int r = --refCounter;
 #ifdef DEBUG_ATT_COUNTERS
-	int x = --refCounter;
 	ReferenceCounterDebugger* my = ReferenceCounterDebugger::get(DEB_RLS_JATT);
 	const char* point = my ? my->rcd_point : " <Unknown> ";
-	fprintf(stderr, "Release from <%s> att %p cnt=%d\n", point, this, x);
-	if (x != 0)
-		return 1;
+	fprintf(stderr, "Release from <%s> att %p cnt=%d\n", point, this, r);
+#endif
+	if (r != 0)
+		return r;
 #else
 	if (--refCounter != 0)
 		return 1;
@@ -1066,8 +1068,8 @@ static void		start_transaction(thread_db* tdbb, bool transliterate, jrd_tra** tr
 static void		release_attachment(thread_db*, Jrd::Attachment*);
 static void		rollback(thread_db*, jrd_tra*, const bool);
 static void		purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsigned flags = 0);
-static void		getUserInfo(UserId&, const DatabaseOptions&, const char*, const char*,
-	const RefPtr<const Config>*, bool, IAttachment*, ICryptKeyCallback*);
+static void		getUserInfo(UserId&, const DatabaseOptions&, const char*,
+	const RefPtr<const Config>*, bool, Mapping& mapping);
 
 static THREAD_ENTRY_DECLARE shutdown_thread(THREAD_ENTRY_PARAM);
 
@@ -1080,7 +1082,9 @@ TraceFailedConnection::TraceFailedConnection(const char* filename, const Databas
 	m_filename(filename),
 	m_options(options)
 {
-	getUserInfo(m_id, *m_options, m_filename, NULL, NULL, false, NULL, NULL);
+	Mapping mapping(Mapping::MAP_ERROR_HANDLER, NULL);
+	mapping.setAuthBlock(m_options->dpb_auth_block);
+	getUserInfo(m_id, *m_options, m_filename, NULL, false, mapping);
 }
 
 
@@ -1359,11 +1363,15 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 		PathName org_filename, expanded_name;
 		bool is_alias = false;
 		MutexEnsureUnlock guardDbInit(dbInitMutex, FB_FUNCTION);
+		Mapping mapping(Mapping::MAP_THROW_NOT_FOUND, cryptCallback);
 
 		try
 		{
 			// Process database parameter block
 			options.get(dpb, dpb_length, invalid_client_SQL_dialect);
+
+			// And provide info about auth block to mapping
+			mapping.setAuthBlock(options.dpb_auth_block);
 
 			if (options.dpb_org_filename.hasData())
 				org_filename = options.dpb_org_filename;
@@ -1395,6 +1403,9 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			// Check to see if the database is truly local
 			if (ISC_check_if_remote(expanded_name, true))
 				ERR_post(Arg::Gds(isc_unavailable));
+
+			// We are ready to setup security database - before entering guardDbInit!!!
+			mapping.setSecurityDbAlias(config->getSecurityDatabase(), expanded_name.c_str());
 
 #ifdef WIN_NT
 			guardDbInit.enter();		// Required to correctly expand name of just created database
@@ -1655,8 +1666,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				jAtt->getStable()->manualUnlock(attachment->att_flags);
 				try
 				{
-					getUserInfo(userId, options, filename, expanded_name.c_str(),
-						&config, false, jAtt, cryptCallback);
+					mapping.setDb(filename, expanded_name.c_str(), jAtt);
+					getUserInfo(userId, options, filename, &config, false, mapping);
 				}
 				catch(const Exception&)
 				{
@@ -1950,6 +1961,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 					filename, options, false, user_status);
 			}
 
+			mapping.clearMainHandle();
 			unwindAttach(tdbb, ex, user_status, attachment, dbb, existingId);
 		}
 	}
@@ -2444,12 +2456,14 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 		PathName org_filename, expanded_name;
 		bool is_alias = false;
 		Firebird::RefPtr<const Config> config;
+		Mapping mapping(Mapping::MAP_THROW_NOT_FOUND, cryptCallback);
 
 		try
 		{
 			// Process database parameter block
 			bool invalid_client_SQL_dialect = false;
 			options.get(dpb, dpb_length, invalid_client_SQL_dialect);
+			mapping.setAuthBlock(options.dpb_auth_block);
 			if (!invalid_client_SQL_dialect && options.dpb_sql_dialect == 99) {
 				options.dpb_sql_dialect = 0;
 			}
@@ -2487,7 +2501,9 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				ERR_post(Arg::Gds(isc_unavailable));
 
 			// Check for correct credentials supplied
-			getUserInfo(userId, options, filename, NULL, &config, true, nullptr, cryptCallback);
+			mapping.setSecurityDbAlias(config->getSecurityDatabase(), expanded_name.c_str());
+			mapping.setDb(filename, expanded_name.c_str(), nullptr);
+			getUserInfo(userId, options, filename, &config, true, mapping);
 
 #ifdef WIN_NT
 			guardDbInit.enter();		// Required to correctly expand name of just created database
@@ -2812,6 +2828,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			trace_failed_attach(attachment ? attachment->att_trace_manager : NULL,
 				filename, options, true, user_status);
 
+			mapping.clearMainHandle();
 			unwindAttach(tdbb, ex, user_status, attachment, dbb, false);
 		}
 	}
@@ -4183,7 +4200,7 @@ void JProvider::shutdown(CheckStatusWrapper* status, unsigned int timeout, const
 		// Do not put it into separate shutdown thread - during shutdown of TraceManager
 		// PluginManager wants to lock a mutex, which is sometimes already locked in current thread
 		TraceManager::shutdown();
-		shutdownMappingIpc();
+		Mapping::shutdownIpc();
 	}
 	catch (const Exception& ex)
 	{
@@ -4230,9 +4247,17 @@ JTransaction* JAttachment::startTransaction(CheckStatusWrapper* user_status,
 
 	successful_completion(user_status);
 
-	JTransaction* jt = FB_NEW JTransaction(tra, getStable());
-	tra->setInterface(jt);
-	jt->addRef();
+	JTransaction* jt = tra->getInterface(false);
+
+	if (jt)
+		tra->tra_flags &= ~TRA_own_interface;
+	else
+	{
+		jt = FB_NEW JTransaction(tra, getStable());
+		tra->setInterface(jt);
+		jt->addRef();
+	}
+
 	return jt;
 }
 
@@ -7330,9 +7355,8 @@ static VdnResult verifyDatabaseName(const PathName& name, FbStatusVector* status
     @param cryptCb
 
  **/
-static void getUserInfo(UserId& user, const DatabaseOptions& options,
-	const char* aliasName, const char* dbName, const RefPtr<const Config>* config, bool creating,
-	IAttachment* iAtt, ICryptKeyCallback* cryptCb)
+static void getUserInfo(UserId& user, const DatabaseOptions& options, const char* aliasName,
+	const RefPtr<const Config>* config, bool creating, Mapping& mapping)
 {
 	bool wheel = false;
 	int id = -1, group = -1;	// CVC: This var contained trash
@@ -7358,9 +7382,10 @@ static void getUserInfo(UserId& user, const DatabaseOptions& options,
 		}
 		else if (options.dpb_auth_block.hasData())
 		{
-			if (mapUser(true, name, trusted_role, &auth_method, &user.usr_auth_block, NULL,
-				options.dpb_auth_block, aliasName, dbName,
-				(config ? (*config)->getSecurityDatabase() : NULL), "", cryptCb, iAtt) & MAPUSER_MAP_DOWN)
+			mapping.needAuthMethod(auth_method);
+			mapping.needAuthBlock(user.usr_auth_block);
+
+			if (mapping.mapUser(name, trusted_role) & Mapping::MAP_DOWN)
 			{
 				user.setFlag(USR_mapdown);
 			}

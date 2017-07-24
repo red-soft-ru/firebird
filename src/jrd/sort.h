@@ -164,6 +164,7 @@ public:
 	ULONG	skd_vary_offset;	// Offset to varying/cstring length
 
 	USHORT getSkdLength() const { return skd_length; }
+
 	void setSkdLength(UCHAR dtype, USHORT v)
 	{
 		skd_dtype = dtype;
@@ -178,6 +179,7 @@ public:
 	}
 
 	ULONG getSkdOffset() const { return skd_offset; }
+
 	void setSkdOffset(const sort_key_def* prev = nullptr, dsc* desc = nullptr)
 	{
 		skd_offset = 0;

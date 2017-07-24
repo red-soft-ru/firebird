@@ -285,7 +285,7 @@ void InternalTransaction::doStart(FbStatusVector* status, thread_db* tdbb, Clump
 	fb_assert(localTran);
 
 	if (m_scope == traCommon && m_IntConnection.isCurrent())
-		m_transaction = localTran->getInterface();
+		m_transaction = localTran->getInterface(true);
 	else
 	{
 		JAttachment* att = m_IntConnection.getJrdAtt();

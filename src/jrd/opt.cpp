@@ -1117,8 +1117,8 @@ static void check_sorts(RseNode* rse)
 
 			for (; project_ptr != project_end; ++project_ptr)
 			{
-				const FieldNode* sortField = (*sort_ptr)->as<FieldNode>();
-				const FieldNode* projectField = (*project_ptr)->as<FieldNode>();
+				const FieldNode* sortField = nodeAs<FieldNode>(*sort_ptr);
+				const FieldNode* projectField = nodeAs<FieldNode>(*project_ptr);
 
 				if (sortField && projectField &&
 					sortField->fieldStream == projectField->fieldStream &&
@@ -1157,7 +1157,7 @@ static void check_sorts(RseNode* rse)
 		{
 			const FieldNode* sortField;
 
-			if ((sortField = (*sort_ptr)->as<FieldNode>()))
+			if ((sortField = nodeAs<FieldNode>(*sort_ptr)))
 			{
 				// Get stream for this field at this position.
 				const StreamType current_stream = sortField->fieldStream;
@@ -1329,8 +1329,8 @@ static SLONG decompose(thread_db* tdbb, BoolExprNode* boolNode, BoolExprNodeStac
  **************************************/
 	DEV_BLKCHK(csb, type_csb);
 
-	BinaryBoolNode* binaryNode = boolNode->as<BinaryBoolNode>();
-	ComparativeBoolNode* cmpNode = boolNode->as<ComparativeBoolNode>();
+	BinaryBoolNode* binaryNode = nodeAs<BinaryBoolNode>(boolNode);
+	ComparativeBoolNode* cmpNode = nodeAs<ComparativeBoolNode>(boolNode);
 
 	if (binaryNode)
 	{
@@ -1469,17 +1469,17 @@ static USHORT distribute_equalities(BoolExprNodeStack& org_stack, CompilerScratc
 		if (boolean->nodFlags & ExprNode::FLAG_DEOPTIMIZE)
 			continue;
 
-		ComparativeBoolNode* const cmpNode = boolean->as<ComparativeBoolNode>();
+		ComparativeBoolNode* const cmpNode = nodeAs<ComparativeBoolNode>(boolean);
 
 		if (!cmpNode || cmpNode->blrOp != blr_eql)
 			continue;
 
 		ValueExprNode* const node1 = cmpNode->arg1;
-		if (!node1->is<FieldNode>())
+		if (!nodeIs<FieldNode>(node1))
 			continue;
 
 		ValueExprNode* const node2 = cmpNode->arg2;
-		if (!node2->is<FieldNode>())
+		if (!nodeIs<FieldNode>(node2))
 			continue;
 
 		for (eq_class = classes.begin(); eq_class != classes.end(); ++eq_class)
@@ -1562,7 +1562,7 @@ static USHORT distribute_equalities(BoolExprNodeStack& org_stack, CompilerScratc
 	for (BoolExprNodeStack::iterator iter(org_stack); iter.hasData(); ++iter)
 	{
 		BoolExprNode* const boolean = iter.object();
-		ComparativeBoolNode* const cmpNode = boolean->as<ComparativeBoolNode>();
+		ComparativeBoolNode* const cmpNode = nodeAs<ComparativeBoolNode>(boolean);
 		ValueExprNode* node1;
 		ValueExprNode* node2;
 
@@ -1580,7 +1580,7 @@ static USHORT distribute_equalities(BoolExprNodeStack& org_stack, CompilerScratc
 
 		bool reverse = false;
 
-		if (!node1->is<FieldNode>())
+		if (!nodeIs<FieldNode>(node1))
 		{
 			ValueExprNode* swap_node = node1;
 			node1 = node2;
@@ -1588,10 +1588,10 @@ static USHORT distribute_equalities(BoolExprNodeStack& org_stack, CompilerScratc
 			reverse = true;
 		}
 
-		if (!node1->is<FieldNode>())
+		if (!nodeIs<FieldNode>(node1))
 			continue;
 
-		if (!node2->is<LiteralNode>() && !node2->is<ParameterNode>() && !node2->is<VariableNode>())
+		if (!nodeIs<LiteralNode>(node2) && !nodeIs<ParameterNode>(node2) && !nodeIs<VariableNode>(node2))
 			continue;
 
 		for (eq_class = classes.begin(); eq_class != classes.end(); ++eq_class)
@@ -1883,7 +1883,7 @@ void OPT_gen_aggregate_distincts(thread_db* tdbb, CompilerScratch* csb, MapNode*
 	for (const NestConst<ValueExprNode>* const end = map->sourceList.end(); ptr != end; ++ptr)
 	{
 		ValueExprNode* from = *ptr;
-		AggNode* aggNode = from->as<AggNode>();
+		AggNode* aggNode = nodeAs<AggNode>(from);
 
 		if (aggNode && aggNode->distinct)
 		{
@@ -2445,7 +2445,7 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 					 node_ptr != end_node;
 					 ++node_ptr)
 				{
-					FieldNode* fieldNode = (*node_ptr)->as<FieldNode>();
+					FieldNode* fieldNode = nodeAs<FieldNode>(*node_ptr);
 
 					if (fieldNode && fieldNode->fieldStream == *ptr && fieldNode->fieldId == id)
 					{
@@ -2558,7 +2558,7 @@ SortedStream* OPT_gen_sort(thread_db* tdbb, CompilerScratch* csb, const StreamLi
 
 		FieldNode* fieldNode;
 
-		if ((fieldNode = node->as<FieldNode>()))
+		if ((fieldNode = nodeAs<FieldNode>(node)))
 		{
 			map_item->stream = fieldNode->fieldStream;
 			map_item->fieldId = fieldNode->fieldId;
@@ -2748,7 +2748,7 @@ static bool gen_equi_join(thread_db* tdbb, OptimizerBlk* opt, RiverList& org_riv
 			continue;
 
 		BoolExprNode* const node = tail->opt_conjunct_node;
-		ComparativeBoolNode* cmpNode = node->as<ComparativeBoolNode>();
+		ComparativeBoolNode* cmpNode = nodeAs<ComparativeBoolNode>(node);
 
 		if (!cmpNode || (cmpNode->blrOp != blr_eql && cmpNode->blrOp != blr_equiv))
 			continue;
@@ -3077,7 +3077,7 @@ static BoolExprNode* make_inference_node(CompilerScratch* csb, BoolExprNode* boo
 	thread_db* tdbb = JRD_get_thread_data();
 	DEV_BLKCHK(csb, type_csb);
 
-	ComparativeBoolNode* cmpNode = boolean->as<ComparativeBoolNode>();
+	ComparativeBoolNode* cmpNode = nodeAs<ComparativeBoolNode>(boolean);
 	fb_assert(cmpNode);	// see our caller
 
 	// Clone the input predicate
@@ -3125,8 +3125,8 @@ static bool map_equal(const ValueExprNode* field1, const ValueExprNode* field2, 
  *	Order of the input fields is important.
  *
  **************************************/
-	const FieldNode* fieldNode1 = field1->as<FieldNode>();
-	const FieldNode* fieldNode2 = field2->as<FieldNode>();
+	const FieldNode* fieldNode1 = nodeAs<FieldNode>(field1);
+	const FieldNode* fieldNode2 = nodeAs<FieldNode>(field2);
 
 	if (!fieldNode1 || !fieldNode2)
 		return false;
@@ -3139,8 +3139,8 @@ static bool map_equal(const ValueExprNode* field1, const ValueExprNode* field2, 
 		 sourcePtr != sourceEnd;
 		 ++sourcePtr, ++targetPtr)
 	{
-		const FieldNode* mapFrom = (*sourcePtr)->as<FieldNode>();
-		const FieldNode* mapTo = (*targetPtr)->as<FieldNode>();
+		const FieldNode* mapFrom = nodeAs<FieldNode>(*sourcePtr);
+		const FieldNode* mapTo = nodeAs<FieldNode>(*targetPtr);
 
 		if (!mapFrom || !mapTo)
 			continue;
@@ -3230,8 +3230,8 @@ static bool node_equality(const ValueExprNode* node1, const ValueExprNode* node2
 	if (node1 == node2)
 		return true;
 
-	const FieldNode* fieldNode1 = node1->as<FieldNode>();
-	const FieldNode* fieldNode2 = node2->as<FieldNode>();
+	const FieldNode* fieldNode1 = nodeAs<FieldNode>(node1);
+	const FieldNode* fieldNode2 = nodeAs<FieldNode>(node2);
 
 	if (fieldNode1 && fieldNode2)
 	{
@@ -3256,8 +3256,8 @@ static bool node_equality(const BoolExprNode* node1, const BoolExprNode* node2)
 	if (node1 == node2)
 		return true;
 
-	const ComparativeBoolNode* cmpNode = node1->as<ComparativeBoolNode>();
-	const ComparativeBoolNode* cmpNode2 = node2->as<ComparativeBoolNode>();
+	const ComparativeBoolNode* cmpNode = nodeAs<ComparativeBoolNode>(node1);
+	const ComparativeBoolNode* cmpNode2 = nodeAs<ComparativeBoolNode>(node2);
 
 	if (cmpNode && cmpNode2 && cmpNode->blrOp == cmpNode2->blrOp &&
 		(cmpNode->blrOp == blr_eql || cmpNode->blrOp == blr_equiv))
@@ -3307,17 +3307,17 @@ static ValueExprNode* optimize_like(thread_db* tdbb, CompilerScratch* csb, Compa
 
 	// if the pattern string or the escape string can't be
 	// evaluated at compile time, forget it
-	if (!pattern_node->is<LiteralNode>() || (escape_node && !escape_node->is<LiteralNode>()))
+	if (!nodeIs<LiteralNode>(pattern_node) || (escape_node && !nodeIs<LiteralNode>(escape_node)))
 		return NULL;
 
 	dsc match_desc;
 	match_node->getDesc(tdbb, csb, &match_desc);
 
-	dsc* pattern_desc = &pattern_node->as<LiteralNode>()->litDesc;
+	dsc* pattern_desc = &nodeAs<LiteralNode>(pattern_node)->litDesc;
 	dsc* escape_desc = NULL;
 
 	if (escape_node)
-		escape_desc = &escape_node->as<LiteralNode>()->litDesc;
+		escape_desc = &nodeAs<LiteralNode>(escape_node)->litDesc;
 
 	// if either is not a character expression, forget it
 	if ((match_desc.dsc_dtype > dtype_any_text) ||
@@ -3544,8 +3544,8 @@ static void set_position(const SortNode* from_clause, SortNode* to_clause, const
 		for (const NestConst<ValueExprNode>* const to_end = to_ptr + count;
 			 to_ptr != to_end; ++to_ptr)
 		{
-			const FieldNode* fromField = (*from_ptr)->as<FieldNode>();
-			const FieldNode* toField = (*to_ptr)->as<FieldNode>();
+			const FieldNode* fromField = nodeAs<FieldNode>(*from_ptr);
+			const FieldNode* toField = nodeAs<FieldNode>(*to_ptr);
 
 			if ((map && map_equal(*to_ptr, *from_ptr, map)) ||
 				(!map &&

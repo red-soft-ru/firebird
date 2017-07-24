@@ -3684,7 +3684,10 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 		case PREPARE_LOCKERR:
 			// We got some kind of locking error (deadlock, timeout or lock_conflict)
 			// Error details should be stuffed into status vector at this point
-			ERR_post(Arg::Gds(isc_concurrent_transaction) << Arg::Num(org_rpb->rpb_transaction_nr));
+			// hvlad: we have no details as TRA_wait has already cleared the status vector
+			ERR_post(Arg::Gds(isc_deadlock) <<
+					 Arg::Gds(isc_update_conflict) <<
+					 Arg::Gds(isc_concurrent_transaction) << Arg::Num(org_rpb->rpb_transaction_nr));
 	}
 
 	// Old record was restored and re-fetched for write.  Now replace it.
@@ -3695,7 +3698,8 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 	org_rpb->rpb_b_line = temp.rpb_line;
 	org_rpb->rpb_address = new_rpb.rpb_address;
 	org_rpb->rpb_length = new_rpb.rpb_length;
-	org_rpb->rpb_flags |= rpb_delta;
+	org_rpb->rpb_flags &= ~(rpb_delta | rpb_uk_modified);
+	org_rpb->rpb_flags |= new_rpb.rpb_flags & rpb_delta;
 
 	replace_record(tdbb, org_rpb, &stack, transaction);
 

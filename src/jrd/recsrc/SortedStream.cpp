@@ -329,7 +329,7 @@ void SortedStream::mapData(thread_db* tdbb, jrd_req* request, UCHAR* data) const
 		from = item->desc;
 		from.dsc_address = data + (IPTR) from.dsc_address;
 
-		if (item->node && !item->node->is<FieldNode>())
+		if (item->node && !nodeIs<FieldNode>(item->node))
 			continue;
 
 		// if moving a TEXT item into the key portion of the sort record,

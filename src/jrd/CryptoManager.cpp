@@ -395,6 +395,18 @@ namespace Jrd {
 			checkDigitalSignature(tdbb, hdr);
 	}
 
+	void CryptoManager::setDbInfo(IDbCryptPlugin* cp)
+	{
+		FbLocalStatus status;
+		cp->setInfo(&status, dbInfo);
+		if (status->getState() & IStatus::STATE_ERRORS)
+		{
+			const ISC_STATUS* v = status->getErrors();
+			if (v[0] == isc_arg_gds && v[1] != isc_arg_end && v[1] != isc_interface_version_too_old)
+				status_exception::raise(&status);
+		}
+	}
+
 	void CryptoManager::loadPlugin(thread_db* tdbb, const char* pluginName)
 	{
 		if (cryptPlugin)
@@ -416,15 +428,7 @@ namespace Jrd {
 
 		// do not assign cryptPlugin directly before key init complete
 		IDbCryptPlugin* p = cryptControl->plugin();
-
-		FbLocalStatus status;
-		p->setInfo(&status, dbInfo);
-		if (status->getState() & IStatus::STATE_ERRORS)
-		{
-			const ISC_STATUS* v = status->getErrors();
-			if (v[0] == isc_arg_gds && v[1] != isc_arg_end && v[1] != isc_interface_version_too_old)
-				status_exception::raise(&status);
-		}
+		setDbInfo(p);
 
 		keyHolderPlugins.init(p, keyName);
 		cryptPlugin = p;
@@ -812,7 +816,7 @@ namespace Jrd {
 				if (!down)
 				{
 					RefPtr<JAttachment> jAtt(REF_NO_INCR, dbb.dbb_provider->attachDatabase(&status_vector,
-						dbb.dbb_filename.c_str(), writer.getBufferLength(), writer.getBuffer()));
+						dbb.dbb_database_name.c_str(), writer.getBufferLength(), writer.getBuffer()));
 					check(&status_vector);
 
 					MutexLockGuard attGuard(*(jAtt->getStable()->getMutex()), FB_FUNCTION);
@@ -1321,6 +1325,7 @@ namespace Jrd {
 		FbLocalStatus st;
 
 		AutoPtr<IDbCryptPlugin, ReleasePlugin> crypt(mgr->checkFactory->makeInstance());
+		mgr->setDbInfo(crypt);
 		crypt->setKey(&st, keyHolder ? 1 : 0, &keyHolder, keyName.c_str());
 
 		if (st.isSuccess())

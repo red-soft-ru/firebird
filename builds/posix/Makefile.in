@@ -729,7 +729,7 @@ clean_dependancies:
 # leave the directories to make dependacies work still
 
 clean_build:
-	$(RM) `find $(GEN_ROOT)/*/firebird \( -type f -o -type l \) -print`
+	$(RM) `find $(GEN_ROOT)/*/firebird \( -type f -o -type l \) \( \! -name '*.conf' -o -name 'udr_engine.conf' \) \! -name 'fb_config' \! -name '*.sh' -print`
 
 clean_makefiles:
 	$(RM) $(GEN_ROOT)/Make*

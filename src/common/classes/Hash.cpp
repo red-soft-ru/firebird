@@ -43,12 +43,11 @@ namespace
 	{
 		unsigned int hash_value = 0;
 
-		UCHAR* p;
+		UCHAR* const p = (UCHAR*) &hash_value;
 		const UCHAR* q = value;
 
 		while (length >= 4)
 		{
-			p = (UCHAR*) &hash_value;
 			p[0] += q[0];
 			p[1] += q[1];
 			p[2] += q[2];
@@ -57,18 +56,16 @@ namespace
 			q += 4;
 		}
 
-		p = (UCHAR*) &hash_value;
-
 		if (length >= 2)
 		{
 			p[0] += q[0];
 			p[1] += q[1];
 			length -= 2;
+			q += 2;
 		}
 
 		if (length)
 		{
-			q += 2;
 			*p += *q;
 		}
 

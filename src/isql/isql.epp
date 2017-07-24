@@ -395,8 +395,7 @@ static processing_state print_performance(const SINT64* perf_before);
 static void print_message(Firebird::IMessageMetadata* msg, const char* dir);
 static void process_header(Firebird::IMessageMetadata*, const unsigned pad[], TEXT header[], TEXT header2[]);
 static void process_plan();
-static SINT64 process_record_count(const int statement_type);
-static int process_request_type();
+static SINT64 process_record_count(const unsigned statement_type);
 static unsigned process_message_display(Firebird::IMessageMetadata* msg, unsigned pad[]);
 static processing_state process_statement(const TEXT*);
 #ifdef WIN_NT
@@ -1835,11 +1834,14 @@ bool ISQL_printNumericType(const char* fieldName, const int fieldType, const int
 	case SMALLINT:
 	case INTEGER:
 	case BIGINT:
+	case DOUBLE_PRECISION:
 		// Handle Integral subtypes NUMERIC and DECIMAL
 		// We are ODS >= 10 and could be any Dialect
 
 		// We are Dialect >=3 since FIELD_PRECISION is non-NULL
-		if (isqlGlob.major_ods >= ODS_VERSION10 && fieldPrecision != 0 &&
+		if (isqlGlob.major_ods >= ODS_VERSION10 &&
+			fieldPrecision != 0 &&
+			fieldType != DOUBLE_PRECISION &&
 			fieldSubType > 0 && fieldSubType <= MAX_INTSUBTYPES)
 		{
 			isqlGlob.printf("%s(%d, %d)",
@@ -2700,7 +2702,7 @@ static processing_state bulk_insert_hack(const char* command)
 	ISQL_warning(fbStatus);
 
 	// Find out what kind of statement this is
-	const int statement_type = process_request_type();
+	const unsigned statement_type = global_Stmt->getType(fbStatus);
 	if (!statement_type)
 		return ps_ERR;
 
@@ -5492,7 +5494,7 @@ void ISQL_get_version(bool call_by_create_db)
 		isc_info_ods_minor_version,
 		isc_info_db_sql_dialect,
 		frb_info_att_charset,
-		Version_info ? isc_info_firebird_version: isc_info_end,
+		UCHAR(Version_info ? isc_info_firebird_version: isc_info_end),
 		isc_info_end
 	};
 	/*
@@ -6979,7 +6981,7 @@ static bool checkSpecial(TEXT* const p, const int length, const double value)
 	if (isnan(value))
 		t = "NaN";
 	else if (isinf(value))
-		t = "Infinity";
+		t = Firebird::isNegativeInf(value) ? "-Infinity" : "Infinity";
 	else
 		return false;
 
@@ -7004,8 +7006,8 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
  *	Print an SQL data item as described.
  *
  **************************************/
+	const char* convErr = "Conversion error";
  	TEXT d[32];
-
 	TEXT* p = *s;
 	*p = '\0';
 
@@ -7236,9 +7238,13 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			{
 				char decStr[Firebird::IDecFloat16::STRING_SIZE];
 				if (isqlGlob.df16)
-					isqlGlob.df16->toString(var->value.asDec16, decStr);
+				{
+					isqlGlob.df16->toString(fbStatus, var->value.asDec16, sizeof(decStr), decStr);
+					if (ISQL_errmsg(fbStatus))
+						strcpy(decStr, convErr);
+				}
 				else
-					strcpy(decStr, "Conversion error");
+					strcpy(decStr, convErr);
 
 				if (setValues.List)
 					isqlGlob.printf("%*.*s%s", sizeof(decStr) - 1, sizeof(decStr) - 1, decStr, NEWLINE);
@@ -7251,9 +7257,13 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			{
 				char decStr[Firebird::IDecFloat34::STRING_SIZE];
 				if (isqlGlob.df34)
-					isqlGlob.df34->toString(var->value.asDec34, decStr);
+				{
+					isqlGlob.df34->toString(fbStatus, var->value.asDec34, sizeof(decStr), decStr);
+					if (ISQL_errmsg(fbStatus))
+						strcpy(decStr, convErr);
+				}
 				else
-					strcpy(decStr, "Conversion error");
+					strcpy(decStr, convErr);
 
 				if (setValues.List)
 					isqlGlob.printf("%*.*s%s", sizeof(decStr) - 1, sizeof(decStr) - 1, decStr, NEWLINE);
@@ -7694,7 +7704,7 @@ static processing_state print_performance(const SINT64* perf_before)
 	{
 		TEXT report_1[MSG_LENGTH];
 		IUTILS_msg_get(REPORT_NEW1, report_1);
-		// Current memory = !\nDelta memory = !\nMax memory = !\nElapsed time= ~ sec\n
+		// Current memory = !\nDelta memory = !\nMax memory = !\nElapsed time = ~ sec\n
 		diag->assign(report_1);
 
 #ifndef WIN_NT
@@ -7922,7 +7932,7 @@ static void process_plan()
 // Get number of records affected for updates, deletions and insertions.
 // Return -1 if the statement is not one of those or if there's an error
 // retrieving the information from the server.
-static SINT64 process_record_count(const int statement_type)
+static SINT64 process_record_count(const unsigned statement_type)
 {
 	if (!global_Stmt)
 		return -1;
@@ -7977,34 +7987,6 @@ static SINT64 process_record_count(const int statement_type)
 }
 
 
-// ***************************************
-// p r o c e s s _ r e q u e s t _ t y p e
-// ***************************************
-// Retrieve the statement type according to the DSQL layer.
-// A failure is indicated by returning zero.
-static int process_request_type()
-{
-	if (!global_Stmt)
-		return 0;
-	const UCHAR sqlda_info[] = { isc_info_sql_stmt_type };
-	UCHAR info_buffer[16];
-	global_Stmt->getInfo(fbStatus, sizeof(sqlda_info), sqlda_info, sizeof(info_buffer), info_buffer);
-	if (!ISQL_errmsg(fbStatus))
-	{
-		if (info_buffer[0] == isc_info_sql_stmt_type)
-		{
-		    const UCHAR* b = info_buffer;
-			const SSHORT len = gds__vax_integer(b + 1, 2);
-			return gds__vax_integer(b + 3, len);
-		}
-
-		//IUTILS_msg_get(UNKNOWN_STATEMENT_TYPE, errmsg);
-		STDERROUT("Cannot determine statement type");
-	}
-	return 0;
-}
-
-
 // *********************************************
 // p r o c e s s _ m e s s a g e _ d i s p l a y
 // *********************************************
@@ -8038,6 +8020,7 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 			namelength = NULL_DISP_LEN;
 
 		const unsigned type = var.type;
+		const SSHORT charSet = TTYPE_TO_CHARSET(var.charSet);
 
 		switch (type)
 		{
@@ -8066,31 +8049,31 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 			disp_length = DOUBLE_LEN;
 			break;
 		case SQL_DEC16:
-			disp_length = DECDOUBLE_String - 1;
+			disp_length = Firebird::IDecFloat16::STRING_SIZE - 1;
 			break;
 		case SQL_DEC34:
-			disp_length = DECQUAD_String - 1;
+			disp_length = Firebird::IDecFloat34::STRING_SIZE - 1;
 			break;
 		case SQL_TEXT:
 			alignment = 1;
 			data_length++;
 			// OCTETS data is displayed in hex
-			if (var.charSet == CS_BINARY)
+			if (charSet == CS_BINARY)
 				disp_length = 2 * var.length;
-			else if (var.charSet == CS_UNICODE_FSS)
+			else if (charSet == CS_UNICODE_FSS)
 				disp_length /= 3;
-			else if (var.charSet == CS_UTF8)
+			else if (charSet == CS_UTF8)
 				disp_length /= 4;
 			break;
 		case SQL_VARYING:
 			data_length += sizeof(USHORT) + 1;
 			alignment = sizeof(USHORT);
 			// OCTETS data is displayed in hex
-			if (var.charSet == CS_BINARY)
+			if (charSet == CS_BINARY)
 				disp_length = 2 * var.length;
-			else if (var.charSet == CS_UNICODE_FSS)
+			else if (charSet == CS_UNICODE_FSS)
 				disp_length /= 3;
-			else if (var.charSet == CS_UTF8)
+			else if (charSet == CS_UTF8)
 				disp_length /= 4;
 			break;
 		case SQL_SHORT:
@@ -8132,7 +8115,7 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 				pad[i] = setValues.global_Col_default;
 			disp_length = pad[i];
 
-			if (var.charSet == 4)
+			if (charSet == CS_UTF8)
 				disp_length *= 4;
 		}
 
@@ -8249,7 +8232,7 @@ static processing_state process_statement(const TEXT* str2)
 		setValues.StmtTimeout = 0;
 
 	// Find out what kind of statement this is
-	const int statement_type = process_request_type();
+	const unsigned statement_type = global_Stmt->getType(fbStatus);
 	if (!statement_type)
 		return ps_ERR;
 

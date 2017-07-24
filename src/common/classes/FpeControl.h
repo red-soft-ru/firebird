@@ -232,4 +232,15 @@ inline bool isinf(F x)
 #endif // isinf
 #endif // WIN_NT
 
+namespace Firebird {
+	inline bool isNegativeInf(double x)
+	{
+#ifdef WIN_NT
+		return _fpclass(x) == _FPCLASS_NINF;
+#else
+		return x == -INFINITY;
+#endif
+	}
+}
+
 #endif //CLASSES_FPE_CONTROL_H

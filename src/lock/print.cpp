@@ -360,7 +360,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 			exit(FINI_OK);
 		}
 		SCHAR c;
-		while (c = *p++)
+		while ((c = *p++))
 			switch (c)
 			{
 			case '?':

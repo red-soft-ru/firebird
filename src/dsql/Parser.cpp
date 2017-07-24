@@ -22,6 +22,7 @@
 
 #include "firebird.h"
 #include <ctype.h>
+#include <math.h>
 #include "../dsql/Parser.h"
 #include "../dsql/chars.h"
 #include "../jrd/jrd.h"
@@ -931,17 +932,19 @@ int Parser::yylexAux()
 	{
 		// The following variables are used to recognize kinds of numbers.
 
-		bool have_error = false;	// syntax error or value too large
-		bool have_digit = false;	// we've seen a digit
-		bool have_decimal = false;	// we've seen a '.'
-		bool have_exp = false;		// digit ... [eE]
-		bool have_exp_sign = false;	// digit ... [eE] {+-]
-		bool have_exp_digit = false; // digit ... [eE] ... digit
-		bool have_overflow = false;	// value of digits > MAX_SINT64
+		bool have_error = false;		// syntax error or value too large
+		bool have_digit = false;		// we've seen a digit
+		bool have_decimal = false;		// we've seen a '.'
+		bool have_exp = false;			// digit ... [eE]
+		bool have_exp_sign = false;		// digit ... [eE] {+-]
+		bool have_exp_digit = false;	// digit ... [eE] ... digit
+		bool have_overflow = false;		// value of digits > MAX_SINT64
+		bool positive_overflow = false;	// number is exactly (MAX_SINT64 + 1)
 		FB_UINT64 number = 0;
-		FB_UINT64 expVal = 0;
+		int expVal = 0;
 		FB_UINT64 limit_by_10 = MAX_SINT64 / 10;
-		SCHAR scale = 0;
+		int scale = 0;
+		int expSign = 1;
 
 		for (--lex.ptr; lex.ptr < lex.end; lex.ptr++)
 		{
@@ -961,7 +964,11 @@ int Parser::yylexAux()
 			{
 				// We've seen e or E, but nothing beyond that.
 				if ( ('-' == c) || ('+' == c) )
+				{
 					have_exp_sign = true;
+					if ('-' == c)
+						expSign = -1;
+				}
 				else if ( classes(c) & CHR_DIGIT )
 				{
 					// We have a digit: we haven't seen a sign yet, but it's too late now.
@@ -1001,20 +1008,22 @@ int Parser::yylexAux()
 					if (number >= limit_by_10)
 					{
 						// possibility of an overflow
-						if ((number > limit_by_10) || (c > '8'))
+						if ((number > limit_by_10) || (c >= '8'))
 						{
 							have_overflow = true;
+							if ((number == limit_by_10) && (c == '8'))
+								positive_overflow = true;
 						}
 					}
 				}
+				else
+					positive_overflow = false;
 
 				if (!have_overflow)
-				{
 					number = number * 10 + (c - '0');
 
-					if (have_decimal)
-						--scale;
-				}
+				if (have_decimal)
+					--scale;
 			}
 			else if ( (('E' == c) || ('e' == c)) && have_digit )
 				have_exp = true;
@@ -1030,15 +1039,48 @@ int Parser::yylexAux()
 		{
 			fb_assert(have_digit);
 
-			if (have_exp_digit || have_overflow)
+			if (positive_overflow)
+				have_overflow = false;
+
+			if (scale < MIN_SCHAR || scale > MAX_SCHAR)
 			{
+				have_overflow = true;
+				positive_overflow = false;
+			}
+
+			// check for a more complex overflow case
+			if ((!have_overflow) && (expSign > 0) && (expVal > -scale))
+			{
+				expVal += scale;
+				double maxNum = DBL_MAX / pow(10.0, expVal);
+				if (double(number) > maxNum)
+				{
+					have_overflow = true;
+					positive_overflow = false;
+				}
+			}
+
+			// Should we use floating point type?
+			if (have_exp_digit || have_overflow || positive_overflow)
+			{
+				if (positive_overflow && scale)
+				{
+					yylval.lim64ptr = newLim64String(
+						Firebird::string(lex.last_token, lex.ptr - lex.last_token), scale);
+					lex.last_token_bk = lex.last_token;
+					lex.line_start_bk = lex.line_start;
+					lex.lines_bk = lex.lines;
+
+					return TOK_LIMIT64_NUMBER;
+				}
+
 				yylval.stringPtr = newString(
 					Firebird::string(lex.last_token, lex.ptr - lex.last_token));
 				lex.last_token_bk = lex.last_token;
 				lex.line_start_bk = lex.line_start;
 				lex.lines_bk = lex.lines;
 
-				return have_overflow ? TOK_DECIMAL_NUMBER : TOK_FLOAT_NUMBER;
+				return positive_overflow ? TOK_LIMIT64_INT : have_overflow ? TOK_DECIMAL_NUMBER : TOK_FLOAT_NUMBER;
 			}
 
 			if (!have_exp)

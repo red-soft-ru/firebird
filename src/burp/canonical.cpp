@@ -136,34 +136,34 @@ ULONG CAN_encode_decode(burp_rel* relation, lstring* buffer, UCHAR* data, bool_t
 			break;
 
 		case dtype_short:
-			if (!xdr_short(xdrs, (SSHORT *) p))
+			if (!xdr_short(xdrs, (SSHORT*) p))
 				return FALSE;
 			break;
 
 		case dtype_long:
 		case dtype_sql_time:
 		case dtype_sql_date:
-			if (!xdr_long(xdrs, (SLONG *) p))
+			if (!xdr_long(xdrs, (SLONG*) p))
 				return FALSE;
 			break;
 
 		case dtype_real:
-			if (!xdr_float(xdrs, (float *) p))
+			if (!xdr_float(xdrs, (float*) p))
 				return FALSE;
 			break;
 
 		case dtype_double:
-			if (!xdr_double(xdrs, (double *) p))
+			if (!xdr_double(xdrs, (double*) p))
 				return FALSE;
 			break;
 
 		case dtype_dec64:
-			if (!xdr_dec64(xdrs, (Firebird::Decimal64 *) p))
+			if (!xdr_dec64(xdrs, (Firebird::Decimal64*) p))
 				return FALSE;
 			break;
 
 		case dtype_dec128:
-			if (!xdr_dec128(xdrs, (Firebird::Decimal128 *) p))
+			if (!xdr_dec128(xdrs, (Firebird::Decimal128*) p))
 				return FALSE;
 			break;
 

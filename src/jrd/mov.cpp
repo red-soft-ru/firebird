@@ -420,12 +420,7 @@ Decimal64 MOV_get_dec64(Jrd::thread_db* tdbb, const dsc* desc)
 {
 /**************************************
  *
- *	M O V _ g e t _ d o u b l e
- *
- **************************************
- *
- * Functional description
- *	Convert something arbitrary to a double precision number
+ *	M O V _ g e t _ d e c 6 4
  *
  **************************************/
 
@@ -437,12 +432,7 @@ Decimal128 MOV_get_dec128(Jrd::thread_db* tdbb, const dsc* desc)
 {
 /**************************************
  *
- *	M O V _ g e t _ d o u b l e
- *
- **************************************
- *
- * Functional description
- *	Convert something arbitrary to a double precision number
+ *	M O V _ g e t _ d e c 1 2 8
  *
  **************************************/
 

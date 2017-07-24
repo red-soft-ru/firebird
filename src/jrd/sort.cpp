@@ -809,7 +809,7 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 		case SKD_dec64:
 			if (direction)
 			{
-				((Decimal64*)p)->makeKey(lwp);
+				((Decimal64*) p)->makeKey(lwp);
 				*p ^= 1 << 7;
 			}
 			else
@@ -821,8 +821,9 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 						*pp++ ^= -1;
 					} while (--n);
 				}
+
 				*p ^= 1 << 7;
-				((Decimal64*)p)->grabKey(lwp);
+				((Decimal64*) p)->grabKey(lwp);
 			}
 			break;
 
@@ -830,7 +831,7 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 			fb_assert(false);		// diddleKey for Dec64/128 not tested on bigendians!
 			if (direction)
 			{
-				((Decimal128*)p)->makeKey(lwp);
+				((Decimal128*) p)->makeKey(lwp);
 				*p ^= 1 << 7;
 			}
 			else
@@ -842,8 +843,9 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 						*pp++ ^= -1;
 					} while (--n);
 				}
+
 				*p ^= 1 << 7;
-				((Decimal128*)p)->grabKey(lwp);
+				((Decimal128*) p)->grabKey(lwp);
 			}
 			break;
 
@@ -1083,7 +1085,7 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 		case SKD_dec64:
 			if (direction)
 			{
-				((Decimal64*)p)->makeKey(lwp);
+				((Decimal64*) p)->makeKey(lwp);
 				p[3] ^= 1 << 7;
 			}
 			else
@@ -1095,15 +1097,16 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 						*pp++ ^= -1;
 					} while (--n);
 				}
+
 				p[3] ^= 1 << 7;
-				((Decimal64*)p)->grabKey(lwp);
+				((Decimal64*) p)->grabKey(lwp);
 			}
 			break;
 
 		case SKD_dec128:
 			if (direction)
 			{
-				((Decimal128*)p)->makeKey(lwp);
+				((Decimal128*) p)->makeKey(lwp);
 				p[3] ^= 1 << 7;
 			}
 			else
@@ -1115,8 +1118,9 @@ void Sort::diddleKey(UCHAR* record, bool direction)
 						*pp++ ^= -1;
 					} while (--n);
 				}
+
 				p[3] ^= 1 << 7;
-				((Decimal128*)p)->grabKey(lwp);
+				((Decimal128*) p)->grabKey(lwp);
 			}
 			break;
 

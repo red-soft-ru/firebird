@@ -148,7 +148,7 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 	const VariableNode* varNode;
 	const FieldNode* fieldNode;
 
-	if ((paramNode = ExprNode::as<ParameterNode>(node)))
+	if ((paramNode = nodeAs<ParameterNode>(node)))
 	{
 		message = paramNode->message;
 		arg_number = paramNode->argNumber;
@@ -175,15 +175,15 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 
 		return &impure->vlu_desc;
 	}
-	else if (ExprNode::is<NullNode>(node))
+	else if (nodeIs<NullNode>(node))
 		return NULL;
-	else if ((varNode = ExprNode::as<VariableNode>(node)))
+	else if ((varNode = nodeAs<VariableNode>(node)))
 	{
 		// Calculate descriptor
 		impure = request->getImpure<impure_value>(varNode->varDecl->impureOffset);
 		return &impure->vlu_desc;
 	}
-	else if ((fieldNode = ExprNode::as<FieldNode>(node)))
+	else if ((fieldNode = nodeAs<FieldNode>(node)))
 	{
 		record = request->req_rpb[fieldNode->fieldStream].rpb_record;
 
@@ -202,7 +202,7 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 		return &impure->vlu_desc;
 	}
 
-	BUGCHECK(229);	// msg 229 EVL_assign_to: invalid operation
+	SOFT_BUGCHECK(229);	// msg 229 EVL_assign_to: invalid operation
 	return NULL;
 }
 
@@ -290,7 +290,7 @@ RecordBitmap** EVL_bitmap(thread_db* tdbb, const InversionNode* node, RecordBitm
 		}
 
 	default:
-		BUGCHECK(230);			// msg 230 EVL_bitmap: invalid operation
+		SOFT_BUGCHECK(230);			// msg 230 EVL_bitmap: invalid operation
 	}
 
 	return NULL;

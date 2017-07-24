@@ -332,8 +332,8 @@ using namespace Firebird;
 %token <metaNamePtr> WORK
 %token <metaNamePtr> WRITE
 
-%token <stringPtr> FLOAT_NUMBER
-%token <stringPtr> DECIMAL_NUMBER
+%token <stringPtr> FLOAT_NUMBER DECIMAL_NUMBER LIMIT64_INT
+%token <lim64ptr> LIMIT64_NUMBER
 %token <metaNamePtr> SYMBOL
 %token <int32Val> NUMBER
 
@@ -591,6 +591,7 @@ using namespace Firebird;
 %token <metaNamePtr> REGR_SYY
 
 // tokens added for Firebird 4.0
+
 %token <metaNamePtr> BINARY
 %token <metaNamePtr> BIND
 %token <metaNamePtr> COMPARE_DECFLOAT
@@ -680,6 +681,7 @@ using namespace Firebird;
 	Firebird::QualifiedName* qualifiedNamePtr;
 	Firebird::string* stringPtr;
 	Jrd::IntlString* intlStringPtr;
+	Jrd::Lim64String* lim64ptr;
 	Jrd::DbFileClause* dbFileClause;
 	Firebird::Array<NestConst<Jrd::DbFileClause> >* dbFilesClause;
 	Jrd::ExternalClause* externalClause;
@@ -1845,6 +1847,10 @@ sequence_value
 
 			$$ = -signedNumber;
 		}
+	| '-' LIMIT64_INT
+		{
+			$$ = MIN_SINT64;
+		}
 	;
 
 
@@ -2368,7 +2374,7 @@ column_constraint($addColumnClause)
 				const NestConst<ValueExprNode>* ptr = refColumns->items.begin();
 
 				for (const NestConst<ValueExprNode>* const end = refColumns->items.end(); ptr != end; ++ptr)
-					constraint.refColumns.add((*ptr)->as<FieldNode>()->dsqlName);
+					constraint.refColumns.add(nodeAs<FieldNode>(*ptr)->dsqlName);
 			}
 
 			constraint.index = $5;
@@ -2419,7 +2425,7 @@ table_constraint($relationNode)
 			const NestConst<ValueExprNode>* ptr = columns->items.begin();
 
 			for (const NestConst<ValueExprNode>* const end = columns->items.end(); ptr != end; ++ptr)
-				constraint.columns.add((*ptr)->as<FieldNode>()->dsqlName);
+				constraint.columns.add(nodeAs<FieldNode>(*ptr)->dsqlName);
 
 			constraint.index = $3;
 
@@ -2434,7 +2440,7 @@ table_constraint($relationNode)
 			const NestConst<ValueExprNode>* ptr = columns->items.begin();
 
 			for (const NestConst<ValueExprNode>* const end = columns->items.end(); ptr != end; ++ptr)
-				constraint.columns.add((*ptr)->as<FieldNode>()->dsqlName);
+				constraint.columns.add(nodeAs<FieldNode>(*ptr)->dsqlName);
 
 			constraint.index = $4;
 
@@ -2450,7 +2456,7 @@ table_constraint($relationNode)
 			const NestConst<ValueExprNode>* ptr = columns->items.begin();
 
 			for (const NestConst<ValueExprNode>* const end = columns->items.end(); ptr != end; ++ptr)
-				constraint.columns.add((*ptr)->as<FieldNode>()->dsqlName);
+				constraint.columns.add(nodeAs<FieldNode>(*ptr)->dsqlName);
 
 			constraint.refRelation = *$5;
 			constraint.refAction = $7;
@@ -2461,7 +2467,7 @@ table_constraint($relationNode)
 				const NestConst<ValueExprNode>* ptr = refColumns->items.begin();
 
 				for (const NestConst<ValueExprNode>* const end = refColumns->items.end(); ptr != end; ++ptr)
-					constraint.refColumns.add((*ptr)->as<FieldNode>()->dsqlName);
+					constraint.refColumns.add(nodeAs<FieldNode>(*ptr)->dsqlName);
 			}
 
 			constraint.index = $8;
@@ -2533,7 +2539,7 @@ procedure_clause
 
 %type <createAlterProcedureNode> psql_procedure_clause
 psql_procedure_clause
-	: procedure_clause_start sql_security_clause AS local_declaration_list full_proc_block
+	: procedure_clause_start sql_security_clause AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
 			$$->ssDefiner = $2;
@@ -2664,7 +2670,7 @@ function_clause
 
 %type <createAlterFunctionNode> psql_function_clause
 psql_function_clause
-	: function_clause_start sql_security_clause AS local_declaration_list full_proc_block
+	: function_clause_start sql_security_clause AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
 			$$->ssDefiner = $2;
@@ -2863,71 +2869,129 @@ package_body_item
 	;
 
 
-%type <compoundStmtNode> local_declaration_list
-local_declaration_list
-	: /* nothing */			{ $$ = NULL; }
-	| local_declarations
+%type <compoundStmtNode> local_declarations_opt
+local_declarations_opt
+	: local_forward_declarations_opt local_nonforward_declarations_opt
+		{
+			CompoundStmtNode* forward = $1;
+			CompoundStmtNode* nonForward = $2;
+
+			if (!forward)
+				$$ = nonForward;
+			else
+			{
+				if (nonForward)
+					forward->statements.add(nonForward->statements.begin(), nonForward->statements.getCount());
+
+				$$ = forward;
+			}
+		}
 	;
 
-%type <compoundStmtNode> local_declarations
-local_declarations
-	: local_declaration
+%type <compoundStmtNode> local_forward_declarations_opt
+local_forward_declarations_opt
+	: /* nothing */					{ $$ = NULL; }
+	| local_forward_declarations
+	;
+
+%type <compoundStmtNode> local_forward_declarations
+local_forward_declarations
+	: local_forward_declaration
 		{
 			$$ = newNode<CompoundStmtNode>();
 			$$->statements.add($1);
 		}
-	| local_declarations local_declaration
+	| local_forward_declarations local_forward_declaration
 		{
 			$1->statements.add($2);
 			$$ = $1;
 		}
 	;
 
-%type <stmtNode> local_declaration
-local_declaration
+%type <stmtNode> local_forward_declaration
+local_forward_declaration
+	: local_declaration_subproc_start ';'	{ $$ = $1; }
+	| local_declaration_subfunc_start ';'	{ $$ = $1; }
+	;
+
+%type <compoundStmtNode> local_nonforward_declarations_opt
+local_nonforward_declarations_opt
+	: /* nothing */						{ $$ = NULL; }
+	| local_nonforward_declarations
+	;
+
+%type <compoundStmtNode> local_nonforward_declarations
+local_nonforward_declarations
+	: local_nonforward_declaration
+		{
+			$$ = newNode<CompoundStmtNode>();
+			$$->statements.add($1);
+		}
+	| local_nonforward_declarations local_nonforward_declaration
+		{
+			$1->statements.add($2);
+			$$ = $1;
+		}
+	;
+
+%type <stmtNode> local_nonforward_declaration
+local_nonforward_declaration
 	: DECLARE var_decl_opt local_declaration_item ';'
 		{
 			$$ = $3;
 			$$->line = YYPOSNARG(1).firstLine;
 			$$->column = YYPOSNARG(1).firstColumn;
 		}
-	| DECLARE PROCEDURE symbol_procedure_name
-			{ $<execBlockNode>$ = newNode<ExecBlockNode>(); }
-			input_parameters(NOTRIAL(&$<execBlockNode>4->parameters))
-			output_parameters(NOTRIAL(&$<execBlockNode>4->returns)) AS
-			local_declaration_list
-			full_proc_block
+	| local_declaration_subproc_start AS local_declarations_opt full_proc_block
 		{
-			DeclareSubProcNode* node = newNode<DeclareSubProcNode>(*$3);
-			node->dsqlBlock = $<execBlockNode>4;
-			node->dsqlBlock->localDeclList = $8;
-			node->dsqlBlock->body = $9;
+			DeclareSubProcNode* node = $1;
+			node->dsqlBlock = newNode<ExecBlockNode>();
+			node->dsqlBlock->parameters = node->dsqlParameters;
+			node->dsqlBlock->returns = node->dsqlReturns;
+			node->dsqlBlock->localDeclList = $3;
+			node->dsqlBlock->body = $4;
 
 			for (FB_SIZE_T i = 0; i < node->dsqlBlock->parameters.getCount(); ++i)
 				node->dsqlBlock->parameters[i]->parameterExpr = make_parameter();
 
 			$$ = node;
 		}
-	| DECLARE FUNCTION symbol_UDF_name
-			{ $<execBlockNode>$ = newNode<ExecBlockNode>(); }
-			input_parameters(NOTRIAL(&$<execBlockNode>4->parameters))
-			RETURNS domain_or_non_array_type collate_clause deterministic_opt AS
-			local_declaration_list
-			full_proc_block
+	| local_declaration_subfunc_start AS local_declarations_opt full_proc_block
 		{
-			DeclareSubFuncNode* node = newNode<DeclareSubFuncNode>(*$3);
-			node->dsqlDeterministic = $9;
-			node->dsqlBlock = $<execBlockNode>4;
-			node->dsqlBlock->localDeclList = $11;
-			node->dsqlBlock->body = $12;
+			DeclareSubFuncNode* node = $1;
+			node->dsqlBlock = newNode<ExecBlockNode>();
+			node->dsqlBlock->parameters = node->dsqlParameters;
+			node->dsqlBlock->returns = node->dsqlReturns;
+			node->dsqlBlock->localDeclList = $3;
+			node->dsqlBlock->body = $4;
 
 			for (FB_SIZE_T i = 0; i < node->dsqlBlock->parameters.getCount(); ++i)
 				node->dsqlBlock->parameters[i]->parameterExpr = make_parameter();
 
-			node->dsqlBlock->returns.add(newNode<ParameterClause>($<legacyField>7, optName($8)));
-
 			$$ = node;
 		}
+	;
+
+%type <declareSubProcNode> local_declaration_subproc_start
+local_declaration_subproc_start
+	: DECLARE PROCEDURE symbol_procedure_name
+			{ $$ = newNode<DeclareSubProcNode>(NOTRIAL(*$3)); }
+		input_parameters(NOTRIAL(&$4->dsqlParameters))
+		output_parameters(NOTRIAL(&$4->dsqlReturns))
+			{ $$ = $4; }
+	;
+
+%type <declareSubFuncNode> local_declaration_subfunc_start
+local_declaration_subfunc_start
+	: DECLARE FUNCTION symbol_UDF_name
+			{ $$ = newNode<DeclareSubFuncNode>(NOTRIAL(*$3)); }
+		input_parameters(NOTRIAL(&$4->dsqlParameters))
+		RETURNS domain_or_non_array_type collate_clause deterministic_opt
+			{
+				$$ = $4;
+				$$->dsqlReturns.add(newNode<ParameterClause>($<legacyField>7, optName($8)));
+				$$->dsqlDeterministic = $9;
+			}
 	;
 
 %type <stmtNode> local_declaration_item
@@ -3520,7 +3584,7 @@ exec_block
 			{ $<execBlockNode>$ = newNode<ExecBlockNode>(); }
 			block_input_params(NOTRIAL(&$3->parameters))
 			output_parameters(NOTRIAL(&$3->returns)) AS
-			local_declaration_list
+			local_declarations_opt
 			full_proc_block
 		{
 			ExecBlockNode* node = $3;
@@ -3591,78 +3655,45 @@ check_opt
 
 %type <createAlterTriggerNode> trigger_clause
 trigger_clause
-	: symbol_trigger_name trigger_active trigger_type trigger_position trg_sql_security_clause
-			AS local_declaration_list full_proc_block
+	: create_trigger_start trg_sql_security_clause AS local_declarations_opt full_proc_block
 		{
-			$$ = newNode<CreateAlterTriggerNode>(*$1);
-			$$->active = $2;
-			$$->type = $3;
-			$$->position = $4;
-			$$->ssDefiner = $5;
-			$$->source = makeParseStr(YYPOSNARG(6), YYPOSNARG(8));
-			$$->localDeclList = $7;
-			$$->body = $8;
+			$$ = $1;
+			$$->ssDefiner = $2;
+			$$->source = makeParseStr(YYPOSNARG(3), YYPOSNARG(5));
+			$$->localDeclList = $4;
+			$$->body = $5;
 		}
-	| symbol_trigger_name trigger_active trigger_type trigger_position
-			external_clause external_body_clause_opt
+	| create_trigger_start external_clause external_body_clause_opt
 		{
-			$$ = newNode<CreateAlterTriggerNode>(*$1);
-			$$->active = $2;
-			$$->type = $3;
-			$$->position = $4;
-			$$->external = $5;
-			if ($6)
-				$$->source = *$6;
+			$$ = $1;
+			$$->external = $2;
+			if ($3)
+				$$->source = *$3;
 		}
-	| symbol_trigger_name trigger_active trigger_type trigger_position ON symbol_table_name trg_sql_security_clause
-			AS local_declaration_list full_proc_block
+	;
+
+%type <createAlterTriggerNode> create_trigger_start
+create_trigger_start
+	: symbol_trigger_name
+			{ $$ = newNode<CreateAlterTriggerNode>(*$1); }
+		create_trigger_common(NOTRIAL($2))
+			{ $$ = $2; }
+	;
+
+%type create_trigger_common(<createAlterTriggerNode>)
+create_trigger_common($trigger)
+	: trigger_active trigger_type(NOTRIAL($trigger)) trigger_position
 		{
-			$$ = newNode<CreateAlterTriggerNode>(*$1);
-			$$->active = $2;
-			$$->type = $3;
-			$$->position = $4;
-			$$->relationName = *$6;
-			$$->ssDefiner = $7;
-			$$->source = makeParseStr(YYPOSNARG(8), YYPOSNARG(10));
-			$$->localDeclList = $9;
-			$$->body = $10;
+			$trigger->active = $1;
+			$trigger->type = $2;
+			$trigger->position = $3;
 		}
-	| symbol_trigger_name trigger_active trigger_type trigger_position ON symbol_table_name
-			external_clause external_body_clause_opt
+	| FOR symbol_table_name trigger_active table_trigger_type trigger_position
 		{
-			$$ = newNode<CreateAlterTriggerNode>(*$1);
-			$$->active = $2;
-			$$->type = $3;
-			$$->position = $4;
-			$$->relationName = *$6;
-			$$->external = $7;
-			if ($8)
-				$$->source = *$8;
-		}
-	| symbol_trigger_name FOR symbol_table_name trigger_active trigger_type trigger_position trg_sql_security_clause
-			AS local_declaration_list full_proc_block
-		{
-			$$ = newNode<CreateAlterTriggerNode>(*$1);
-			$$->active = $4;
-			$$->type = $5;
-			$$->position = $6;
-			$$->relationName = *$3;
-			$$->ssDefiner = $7;
-			$$->source = makeParseStr(YYPOSNARG(8), YYPOSNARG(10));
-			$$->localDeclList = $9;
-			$$->body = $10;
-		}
-	| symbol_trigger_name FOR symbol_table_name trigger_active trigger_type trigger_position
-			external_clause external_body_clause_opt
-		{
-			$$ = newNode<CreateAlterTriggerNode>(*$1);
-			$$->active = $4;
-			$$->type = $5;
-			$$->position = $6;
-			$$->relationName = *$3;
-			$$->external = $7;
-			if ($8)
-				$$->source = *$8;
+			$trigger->relationName = *$2;
+			$trigger->active = $3;
+			$trigger->type = $4;
+			$trigger->position = $5;
 		}
 	;
 
@@ -3685,11 +3716,22 @@ trigger_active
 		{ $$ = Nullable<bool>::empty(); }
 	;
 
-%type <uint64Val> trigger_type
-trigger_type
+%type <uint64Val> trigger_type(<createAlterTriggerNode>)
+trigger_type($trigger)
+	: table_trigger_type ON symbol_table_name
+		{
+			$$ = $1;
+			$trigger->relationName = *$3;
+		}
+	| ON trigger_db_type
+		{ $$ = $2; }
+	| trigger_type_prefix trigger_ddl_type
+		{ $$ = $1 + $2; }
+	;
+
+%type <uint64Val> table_trigger_type
+table_trigger_type
 	: trigger_type_prefix trigger_type_suffix	{ $$ = $1 + $2 - 1; }
-	| ON trigger_db_type						{ $$ = $2; }
-	| trigger_type_prefix trigger_ddl_type		{ $$ = $1 + $2; }
 	;
 
 %type <uint64Val> trigger_db_type
@@ -4260,7 +4302,7 @@ crypt_key_clause($alterDatabaseNode)
 %type <createAlterTriggerNode> alter_trigger_clause
 alter_trigger_clause
 	: symbol_trigger_name trigger_active trigger_type_opt trigger_position trg_sql_security_clause
-			AS local_declaration_list full_proc_block
+			AS local_declarations_opt full_proc_block
 		{
 			$$ = newNode<CreateAlterTriggerNode>(*$1);
 			$$->alter = true;
@@ -5475,7 +5517,7 @@ select_expr_body
 		{ $$ = $1; }
 	| select_expr_body UNION distinct_noise query_term
 		{
-			UnionSourceNode* node = $1->as<UnionSourceNode>();
+			UnionSourceNode* node = nodeAs<UnionSourceNode>($1);
 			if (node && !node->dsqlAll)
 				node->dsqlClauses->add($4);
 			else
@@ -5487,7 +5529,7 @@ select_expr_body
 		}
 	| select_expr_body UNION ALL query_term
 		{
-			UnionSourceNode* node = $1->as<UnionSourceNode>();
+			UnionSourceNode* node = nodeAs<UnionSourceNode>($1);
 			if (node && node->dsqlAll)
 				node->dsqlClauses->add($4);
 			else
@@ -7139,12 +7181,24 @@ value_list
 %type <valueExprNode> constant
 constant
 	: u_constant
-	| '-' u_numeric_constant	{ $$ = newNode<NegateNode>($2); }
+	| '-' ul_numeric_constant	{ $$ = newNode<NegateNode>($2); }
+	| '-' LIMIT64_INT			{ $$ = MAKE_const_sint64(MIN_SINT64, 0); }
+	| '-' LIMIT64_NUMBER		{ $$ = MAKE_const_sint64(MIN_SINT64, $2->getScale()); }
 	| boolean_literal
 	;
 
 %type <valueExprNode> u_numeric_constant
 u_numeric_constant
+	: ul_numeric_constant
+		{ $$ = $1; }
+	| LIMIT64_NUMBER
+		{ $$ = MAKE_constant($1->c_str(), CONSTANT_DECIMAL); }
+	| LIMIT64_INT
+		{ $$ = MAKE_constant($1->c_str(), CONSTANT_DECIMAL); }
+	;
+
+%type <valueExprNode> ul_numeric_constant
+ul_numeric_constant
 	: NUMBER
 		{ $$ = MAKE_const_slong($1); }
 	| FLOAT_NUMBER
@@ -7909,10 +7963,10 @@ searched_case
 			ValueIfNode* last = $2;
 			ValueIfNode* next;
 
-			while ((next = last->falseValue->as<ValueIfNode>()))
+			while ((next = nodeAs<ValueIfNode>(last->falseValue)))
 				last = next;
 
-			fb_assert(last->falseValue->is<NullNode>());
+			fb_assert(nodeIs<NullNode>(last->falseValue));
 
 			last->falseValue = $4;
 			$$ = $2;
@@ -7929,10 +7983,10 @@ searched_when_clause
 			ValueIfNode* last = $1;
 			ValueIfNode* next;
 
-			while ((next = last->falseValue->as<ValueIfNode>()))
+			while ((next = nodeAs<ValueIfNode>(last->falseValue)))
 				last = next;
 
-			fb_assert(last->falseValue->is<NullNode>());
+			fb_assert(nodeIs<NullNode>(last->falseValue));
 
 			last->falseValue = cond;
 			$$ = $1;
