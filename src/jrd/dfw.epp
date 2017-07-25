@@ -1309,23 +1309,25 @@ void DFW_delete_deferred( jrd_tra* transaction, SavNumber sav_number)
 			Database* dbb = tdbb->getDatabase();
 			jrd_rel* relation = MET_lookup_relation_id(tdbb, w->dfw_id, false);
 
-			Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0) Lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
-			lock->setKey((relation->rel_id << 16) | id);
+			Lock lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
+			lock.setKey((relation->rel_id << 16) | id);
 
-			const SLONG data =
-				dbb->dbb_lock_mgr->readData2(lock->lck_type,
-											lock->getKeyPtr(), lock->lck_length,
-											lock->lck_owner_handle);
+			SINT64 data = LCK_read_data(tdbb, &lock);
 
-			if (data != 0)
+			if (data != 0 && data == (relation->rel_id << 16) | id)
 			{
-				SLONG data2 = dbb->dbb_lock_mgr->readData(data);
-
-				if (data == data2 && data != 0 && data2 != 0)
+				int idx = -1;
+				Firebird::Array<Lock*> *indexLocks = getIndexLocks();
+				for (Array<Jrd::Lock*>::iterator j = indexLocks->begin(); j != indexLocks->end(); ++j)
 				{
-					dbb->dbb_lock_mgr->dequeue(data);
-					LCK_release(tdbb, lock);
-					delete lock;
+					idx++;
+					if ((*j)->getKey() == lock.getKey())
+					{
+						LCK_release(tdbb, (*j));
+						delete (*j);
+						indexLocks->remove(idx);
+						break;
+					}
 				}
 			}
 		}
@@ -4621,23 +4623,25 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		}
 		// Unqueing lock for deleted index
 		Database* dbb = tdbb->getDatabase();
-		Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0) Lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
-		lock->setKey((relation->rel_id << 16) | id);
+		Lock lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
+		lock.setKey((relation->rel_id << 16) | id);
 
-		const SLONG data =
-			dbb->dbb_lock_mgr->readData2(lock->lck_type,
-										lock->getKeyPtr(), lock->lck_length,
-										lock->lck_owner_handle);
+		SINT64 data = LCK_read_data(tdbb, &lock);
 
-		if (data != 0)
+		if (data != 0 && data == (relation->rel_id << 16) | id)
 		{
-			SLONG data2 = dbb->dbb_lock_mgr->readData(data);
-
-			if (data == data2 && data != 0 && data2 != 0)
+			int idx = -1;
+			Firebird::Array<Lock*> *indexLocks = getIndexLocks();
+			for (Array<Jrd::Lock*>::iterator j = indexLocks->begin(); j != indexLocks->end(); ++j)
 			{
-				dbb->dbb_lock_mgr->dequeue(data);
-				LCK_release(tdbb, lock);
-				delete lock;
+				idx++;
+				if ((*j)->getKey() == lock.getKey())
+				{
+					LCK_release(tdbb, (*j));
+					delete (*j);
+					indexLocks->remove(idx);
+					break;
+				}
 			}
 		}
 		break;

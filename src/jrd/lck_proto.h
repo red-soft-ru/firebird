@@ -46,6 +46,7 @@ void	LCK_release(Jrd::thread_db*, Jrd::Lock*);
 void	LCK_re_post(Jrd::thread_db*, Jrd::Lock*);
 void	LCK_write_data(Jrd::thread_db*, Jrd::Lock*, SINT64);
 
+Firebird::Array<Jrd::Lock*> *getIndexLocks();
 
 class AutoLock
 {

@@ -382,18 +382,12 @@ USHORT BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescAlloc** csb_idx, Rel
 			// If the transaction rolled back, index name is restored in table
 			// and the index is used in the usual way.
 			bool skip = false;
-			Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0) Lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
-			lock->setKey((relation->rel_id << 16) | buffer[count].idx_id);
-			const SLONG data =
-				dbb->dbb_lock_mgr->readData2(lock->lck_type,
-											lock->getKeyPtr(), lock->lck_length,
-											lock->lck_owner_handle);
-			if (data != 0)
-			{
-				SLONG data2 = dbb->dbb_lock_mgr->readData(data);
-				if (data == data2 && data != 0 && data2 != 0)
-					skip = true;
-			}
+			Lock lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
+			lock.setKey((relation->rel_id << 16) | buffer[count].idx_id);
+
+			SINT64 data = LCK_read_data(tdbb, &lock);
+			if (data != 0 && data == (relation->rel_id << 16) | buffer[count].idx_id)
+				skip = true;
 			if (!skip)
 			  count++;
 		}
@@ -560,18 +554,12 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 		// because its information has been removed from system table
 		bool skip = false;
 		Database* dbb = tdbb->getDatabase();
-		Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0) Lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
-		lock->setKey((relation->rel_id << 16) | id);
-		const SLONG data =
-			dbb->dbb_lock_mgr->readData2(lock->lck_type,
-										lock->getKeyPtr(), lock->lck_length,
-										lock->lck_owner_handle);
-		if (data != 0)
-		{
-			SLONG data2 = dbb->dbb_lock_mgr->readData(data);
-			if (data == data2 && data != 0 && data2 != 0)
-				skip = true;
-		}
+		Lock lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
+		lock.setKey((relation->rel_id << 16) | id);
+
+		SINT64 data = LCK_read_data(tdbb, &lock);
+		if (data != 0 && data == (relation->rel_id << 16) | id)
+			skip = true;
 		if (!skip)
 		{
 			MET_lookup_index_expression(tdbb, relation, idx);
