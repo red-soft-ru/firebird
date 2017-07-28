@@ -372,25 +372,7 @@ USHORT BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescAlloc** csb_idx, Rel
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
 		if (BTR_description(tdbb, relation, root, &buffer[count], i))
-		{
-			// So, if someone started to delete index, but transaction is not committed
-			// DropIndexNode erased index record in RDB$INDICES, but btree
-			// holds the index in case of cancellation of transaction.
-			// To ensure that the index will not be selected on the next query,
-			// we check, that the index does not have a lock on the deletion. If index lock exists,
-			// it means that the index is deleted and no need to use it.
-			// If the transaction rolled back, index name is restored in table
-			// and the index is used in the usual way.
-			bool skip = false;
-			Lock lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
-			lock.setKey((relation->rel_id << 16) | buffer[count].idx_id);
-
-			SINT64 data = LCK_read_data(tdbb, &lock);
-			if (data != 0 && data == (relation->rel_id << 16) | buffer[count].idx_id)
-				skip = true;
-			if (!skip)
-			  count++;
-		}
+			count++;
 	}
 
 	CCH_RELEASE(tdbb, &window);
@@ -497,7 +479,6 @@ bool BTR_delete_index(thread_db* tdbb, WIN* window, USHORT id)
 	return tree_exists;
 }
 
-
 bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, index_desc* idx,
 					 USHORT id)
 {
@@ -521,6 +502,19 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 
 	if (irt_desc->getRoot() == 0)
 		return false;
+
+	IndexLock* index = CMP_get_index_lock(tdbb, relation, id);
+	if (index)
+	{
+		// try to get lock on the index, if it's unsuccessful, then
+		// the index already locked on deletion stage
+		if(!LCK_lock(tdbb, index->idl_lock, LCK_SR, LCK_NO_WAIT))
+		{
+			// clean status vector after trying lock
+			fb_utils::init_status(tdbb->tdbb_status_vector);
+			return false;
+		}
+	}
 
 	idx->idx_id = id;
 	idx->idx_root = irt_desc->getRoot();
@@ -550,21 +544,8 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 
 	if (idx->idx_flags & idx_expressn)
 	{
-		// No need to get information about an index if it is deleted,
-		// because its information has been removed from system table
-		bool skip = false;
-		Database* dbb = tdbb->getDatabase();
-		Lock lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
-		lock.setKey((relation->rel_id << 16) | id);
-
-		SINT64 data = LCK_read_data(tdbb, &lock);
-		if (data != 0 && data == (relation->rel_id << 16) | id)
-			skip = true;
-		if (!skip)
-		{
-			MET_lookup_index_expression(tdbb, relation, idx);
-			fb_assert(idx->idx_expression != NULL);
-		}
+		MET_lookup_index_expression(tdbb, relation, idx);
+		fb_assert(idx->idx_expression != NULL);
 	}
 
 	return true;

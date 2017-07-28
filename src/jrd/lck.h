@@ -70,8 +70,7 @@ enum lck_t {
 	LCK_rel_rescan,				// Relation forced rescan lock
 	LCK_crypt,					// Crypt lock for single crypt thread
 	LCK_crypt_status,			// Notifies about changed database encryption status
-	LCK_record_gc,				// Record-level GC lock
-	LCK_idx_deletion			// Index deletion lock
+	LCK_record_gc				// Record-level GC lock
 };
 
 // Lock owner types

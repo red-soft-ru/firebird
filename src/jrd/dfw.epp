@@ -1306,30 +1306,13 @@ void DFW_delete_deferred( jrd_tra* transaction, SavNumber sav_number)
 			const USHORT id = arg->dfw_id - 1;
 
 			Jrd::thread_db* tdbb = JRD_get_thread_data();
-			Database* dbb = tdbb->getDatabase();
 			jrd_rel* relation = MET_lookup_relation_id(tdbb, w->dfw_id, false);
 
-			Lock lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
-			lock.setKey((relation->rel_id << 16) | id);
+			IndexLock* index = CMP_get_index_lock(tdbb, relation, id);
 
-			SINT64 data = LCK_read_data(tdbb, &lock);
-
-			if (data != 0 && data == (relation->rel_id << 16) | id)
-			{
-				int idx = -1;
-				Firebird::Array<Lock*> *indexLocks = getIndexLocks();
-				for (Array<Jrd::Lock*>::iterator j = indexLocks->begin(); j != indexLocks->end(); ++j)
-				{
-					idx++;
-					if ((*j)->getKey() == lock.getKey())
-					{
-						LCK_release(tdbb, (*j));
-						delete (*j);
-						indexLocks->remove(idx);
-						break;
-					}
-				}
-			}
+			// mark index as non deleted and make it shared
+			index->idl_deletion = false;
+			LCK_lock(tdbb, index->idl_lock, LCK_SR, LCK_WAIT);
 		}
 		++i;
 		delete work;
@@ -4618,29 +4601,6 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 						delete index_block;
 						break;
 					}
-				}
-			}
-		}
-		// Unqueing lock for deleted index
-		Database* dbb = tdbb->getDatabase();
-		Lock lock(tdbb, sizeof(SLONG), LCK_idx_deletion);
-		lock.setKey((relation->rel_id << 16) | id);
-
-		SINT64 data = LCK_read_data(tdbb, &lock);
-
-		if (data != 0 && data == (relation->rel_id << 16) | id)
-		{
-			int idx = -1;
-			Firebird::Array<Lock*> *indexLocks = getIndexLocks();
-			for (Array<Jrd::Lock*>::iterator j = indexLocks->begin(); j != indexLocks->end(); ++j)
-			{
-				idx++;
-				if ((*j)->getKey() == lock.getKey())
-				{
-					LCK_release(tdbb, (*j));
-					delete (*j);
-					indexLocks->remove(idx);
-					break;
 				}
 			}
 		}

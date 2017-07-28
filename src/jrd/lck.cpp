@@ -559,7 +559,6 @@ static lck_owner_t get_owner_type(enum lck_t lock_type)
 	case LCK_rel_partners:
 	case LCK_rel_rescan:
 	case LCK_idx_exist:
-	case LCK_idx_deletion:
 	case LCK_expression:
 	case LCK_prc_exist:
 	case LCK_fun_exist:
@@ -1574,9 +1573,4 @@ Lock* Lock::detach()
 	lck_prior = NULL;
 
 	return next;
-}
-
-Firebird::Array<Jrd::Lock*> *getIndexLocks()
-{
-  return &index_locks;
 }
