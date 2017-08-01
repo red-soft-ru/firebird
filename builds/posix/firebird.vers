@@ -347,6 +347,7 @@ fb_get_database_handle
 fb_get_transaction_handle
 
 fb_database_crypt_callback
+fb_dsql_set_timeout
 
 # Other misc functions
 

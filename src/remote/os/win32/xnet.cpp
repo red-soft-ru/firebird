@@ -148,7 +148,7 @@ namespace Remote
 		{
 		}
 
-		rem_port* connect_client(PACKET*, const RefPtr<Config>*);
+		rem_port* connect_client(PACKET*, const RefPtr<const Config>*);
 		void server_shutdown(rem_port* port);
 
 	private:
@@ -238,7 +238,7 @@ static void xnet_log_error(const char* err_msg)
 rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 					   const PathName& file_name,
 					   bool uv_flag,
-					   RefPtr<Config>* config,
+					   RefPtr<const Config>* config,
 					   const Firebird::PathName* ref_db_name)
 {
 /**************************************
@@ -305,7 +305,9 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 		REMOTE_PROTOCOL(PROTOCOL_VERSION11, ptype_batch_send, 2),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION12, ptype_batch_send, 3),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION13, ptype_batch_send, 4),
-		REMOTE_PROTOCOL(PROTOCOL_VERSION14, ptype_batch_send, 5)
+		REMOTE_PROTOCOL(PROTOCOL_VERSION14, ptype_batch_send, 5),
+		REMOTE_PROTOCOL(PROTOCOL_VERSION15, ptype_batch_send, 6),
+		REMOTE_PROTOCOL(PROTOCOL_VERSION16, ptype_batch_send, 7)
 	};
 	fb_assert(FB_NELEM(protocols_to_try) <= FB_NELEM(cnct->p_cnct_versions));
 	cnct->p_cnct_count = FB_NELEM(protocols_to_try);
@@ -403,7 +405,7 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 
 rem_port* XNET_connect(PACKET* packet,
 					   USHORT flag,
-					   Firebird::RefPtr<Config>* config)
+					   Firebird::RefPtr<const Config>* config)
 {
 /**************************************
  *
@@ -1087,7 +1089,7 @@ static void raise_lostconn_or_syserror(const char* msg)
 }
 
 
-rem_port* XnetClientEndPoint::connect_client(PACKET* packet, const RefPtr<Config>* config)
+rem_port* XnetClientEndPoint::connect_client(PACKET* packet, const RefPtr<const Config>* config)
 {
 /**************************************
  *
@@ -1100,7 +1102,7 @@ rem_port* XnetClientEndPoint::connect_client(PACKET* packet, const RefPtr<Config
  *
  **************************************/
 
-	const Firebird::RefPtr<Config>& conf(config ? *config : Config::getDefaultConfig());
+	const Firebird::RefPtr<const Config>& conf(config ? *config : Config::getDefaultConfig());
 
 	if (!xnet_initialized)
 	{

@@ -399,7 +399,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			ISC_STATUS_ARRAY status;
 			isc_db_handle db_handle = 0L;
 
-			const Firebird::RefPtr<Config> defConf(Config::getDefaultConfig());
+			const Firebird::RefPtr<const Config> defConf(Config::getDefaultConfig());
 			const char* path = defConf->getSecurityDatabase();
 			const char dpb[] = {isc_dpb_version1, isc_dpb_sec_attach, 1, 1, isc_dpb_address_path, 0};
 

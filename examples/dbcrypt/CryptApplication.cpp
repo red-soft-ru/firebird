@@ -25,6 +25,7 @@
  */
 
 #include "../interfaces/ifaceExamples.h"
+#include <firebird/Message.h>
 
 using namespace Firebird;
 
@@ -79,7 +80,13 @@ public:
 		status->dispose();
 	}
 
-	enum Action {NONE, ENC, DEC};
+	enum Action {NONE, ENC, DEC, EX_LCL, EX_RMT};
+	// Switches/actions have the following meanings:
+	// ENC(-e) - encrypt database
+	// DEC(-d) - decrypt database
+	// EX_LCL(-l) - execute some predefined select command (demonstrates that database can respond to select request)
+	// EX_RMT(-r) - execute select using execute statement in remote datasource (demonstrates that dbcrypt key is
+	//				passed to target database when using execute statement)
 
 	void execute(const char* dbName, const Action a)
 	{
@@ -104,18 +111,55 @@ public:
 				throw "startTransaction";
 		}
 
-		if (a == ENC)
+		switch(a)
 		{
+		case ENC:
 			att->execute(status, tra, 0,
 				"ALTER DATABASE ENCRYPT WITH \"DbCrypt_example\"", 3, NULL, NULL, NULL, NULL);
 			if (status->getState() & IStatus::STATE_ERRORS)
 				throw "execute";
-		}
-		if (a == DEC)
-		{
+			break;
+
+		case DEC:
 			att->execute(status, tra, 0, "ALTER DATABASE DECRYPT", 3, NULL, NULL, NULL, NULL);
 			if (status->getState() & IStatus::STATE_ERRORS)
 				throw "execute";
+			break;
+
+		case EX_LCL:
+		case EX_RMT:
+		  {
+			FB_MESSAGE(Output, CheckStatusWrapper,
+				(FB_VARCHAR(31), logon)
+			) output(status, master);
+
+			const char* sqlL = "select current_user from rdb$database";
+			const char* sqlR = "execute block returns(logon varchar(31)) as begin "
+				"execute statement 'select current_user from rdb$database' "
+				"on external 'localhost:employee' as user 'test' password 'test' into :logon; "
+				"suspend; end";
+			const char* sql = a == EX_LCL ? sqlL : sqlR;
+
+			curs = att->openCursor(status, tra, 0, sql, 3, NULL, NULL, output.getMetadata(), NULL, 0);
+			if (status->getState() & IStatus::STATE_ERRORS)
+				throw "openCursor";
+
+			printf("\nExec SQL: %s\nReturns:\n", sql);
+			while (curs->fetchNext(status, output.getData()) == IStatus::RESULT_OK)
+			{
+				unsigned l = output->logonNull ? 0 : output->logon.length;
+				printf("%*.*s\n", l, l, output->logon.str);
+			}
+			printf("done.\n");
+			if (status->getState() & IStatus::STATE_ERRORS)
+				throw "fetchNext";
+
+			curs->close(status);
+			if (status->getState() & IStatus::STATE_ERRORS)
+				throw "close";
+			curs = NULL;
+			break;
+		  }
 		}
 
 		if (tra)
@@ -126,7 +170,7 @@ public:
 			tra = NULL;
 		}
 
-		printf("Providing key for crypt plugin - press enter to continue ...");
+		printf("\nProviding key for crypt plugin - press enter to continue ...");
 		getchar();
 
 		att->detach(status);
@@ -151,13 +195,14 @@ private:
 	IProvider* p;
 	IAttachment* att;
 	ITransaction* tra;
+	IResultSet* curs;
 
 	CryptKey key;
 };
 
 int usage()
 {
-	fprintf(stderr, "Usage: CryptApplication [ -e | -d ] { db-name }\n");
+	fprintf(stderr, "Usage: cryptAppSample [ -e | -d | -l | -r ] { db-name }\n");
 	return 2;
 }
 
@@ -180,6 +225,12 @@ int main(int ac, char** av)
 			break;
 		case 'd':
 			act = App::DEC;
+			break;
+		case 'l':
+			act = App::EX_LCL;
+			break;
+		case 'r':
+			act = App::EX_RMT;
 			break;
 		default:
 			return usage();

@@ -47,12 +47,12 @@ namespace
 		// ILogonInfo implementation
 		const char* name()
 		{
-			return att->att_user->getUserName().c_str();
+			return att->att_user ? att->att_user->getUserName().c_str() : "";
 		}
 
 		const char* role()
 		{
-			return att->att_user->getSqlRole().c_str();
+			return att->att_user ? att->att_user->getSqlRole().c_str() : "";
 		}
 
 		const char* networkProtocol()
@@ -67,6 +67,8 @@ namespace
 
 		const unsigned char* authBlock(unsigned* length)
 		{
+			if (!att->att_user)
+				return NULL;
 			const Auth::AuthenticationBlock& aBlock = att->att_user->usr_auth_block;
 			*length = aBlock.getCount();
 			return aBlock.getCount() ? aBlock.begin() : NULL;

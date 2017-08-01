@@ -45,6 +45,7 @@
 #include "../common/classes/MetaName.h"
 #include "../common/StatusArg.h"
 #include "../common/isc_proto.h"
+#include "../common/classes/RefMutex.h"
 
 
 using namespace Jrd;
@@ -202,9 +203,12 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb)
 	  att_functions(*pool),
 	  att_internal(*pool),
 	  att_dyn_req(*pool),
+	  att_dec_status(DEC_Errors),
 	  att_charsets(*pool),
 	  att_charset_ids(*pool),
-	  att_pools(*pool)
+	  att_pools(*pool),
+	  att_idle_timeout(0),
+	  att_stmt_timeout(0)
 {
 	att_internal.grow(irq_MAX);
 	att_dyn_req.grow(drq_MAX);
@@ -371,9 +375,11 @@ void Jrd::Attachment::signalCancel()
 }
 
 
-void Jrd::Attachment::signalShutdown()
+void Jrd::Attachment::signalShutdown(ISC_STATUS code)
 {
 	att_flags |= ATT_shutdown;
+	if (getStable())
+		getStable()->setShutError(code);
 
 	if (att_ext_connection && att_ext_connection->isConnected())
 		att_ext_connection->cancelExecution();
@@ -639,7 +645,7 @@ int Jrd::Attachment::blockingAstShutdown(void* ast_object)
 
 		AsyncContextHolder tdbb(dbb, FB_FUNCTION, attachment->att_id_lock);
 
-		attachment->signalShutdown();
+		attachment->signalShutdown(isc_att_shut_killed);
 
 		JRD_shutdown_attachment(attachment);
 	}
@@ -724,12 +730,21 @@ void AttachmentsRefHolder::debugHelper(const char* from)
 	RefDeb(DEB_RLS_JATT, from);
 }
 
-void StableAttachmentPart::manualLock(ULONG& flags)
+void StableAttachmentPart::manualLock(ULONG& flags, const ULONG whatLock)
 {
-	fb_assert(!(flags & ATT_manual_lock));
-	asyncMutex.enter(FB_FUNCTION);
-	mainMutex.enter(FB_FUNCTION);
-	flags |= (ATT_manual_lock | ATT_async_manual_lock);
+	fb_assert(!(flags & whatLock));
+
+	if (whatLock & ATT_async_manual_lock)
+	{
+		asyncMutex.enter(FB_FUNCTION);
+		flags |= ATT_async_manual_lock;
+	}
+
+	if (whatLock & ATT_manual_lock)
+	{
+		mainMutex.enter(FB_FUNCTION);
+		flags |= ATT_manual_lock;
+	}
 }
 
 void StableAttachmentPart::manualUnlock(ULONG& flags)
@@ -754,4 +769,124 @@ void StableAttachmentPart::manualAsyncUnlock(ULONG& flags)
 JAttachment* Attachment::getInterface() throw()
 {
 	return att_stable->getInterface();
+}
+
+unsigned int Attachment::getActualIdleTimeout() const
+{
+	unsigned int timeout = att_database->dbb_config->getConnIdleTimeout() * 60;
+	if (att_idle_timeout && (att_idle_timeout < timeout || !timeout))
+		timeout = att_idle_timeout;
+
+	return timeout;
+}
+
+void Attachment::setupIdleTimer(bool clear)
+{
+	unsigned int timeout = clear ? 0 : getActualIdleTimeout();
+	if (!timeout)
+	{
+		if (att_idle_timer)
+			att_idle_timer->reset(0);
+	}
+	else
+	{
+		if (!att_idle_timer)
+			att_idle_timer = FB_NEW IdleTimer(getInterface());
+
+		att_idle_timer->reset(timeout);
+	}
+}
+
+bool Attachment::getIdleTimerTimestamp(TimeStamp& ts) const
+{
+	if (!att_idle_timer)
+		return false;
+
+	time_t value = att_idle_timer->getExpiryTime();
+	if (!value)
+		return false;
+
+	struct tm* times = localtime(&value);
+	if (!times)
+		return false;
+
+	ts = TimeStamp::encode_timestamp(times);
+	return true;
+}
+
+/// Attachment::IdleTimer
+
+void Attachment::IdleTimer::handler()
+{
+	m_fireTime = 0;
+	if (!m_expTime)	// Timer was reset to zero, do nothing
+		return;
+
+	// Ensure attachment is still alive and idle
+
+	StableAttachmentPart* stable = m_attachment->getStable();
+	if (!stable)
+		return;
+
+	MutexEnsureUnlock guard(*stable->getMutex(), FB_FUNCTION);
+	if (!guard.tryEnter())
+		return;
+
+	if (!m_expTime)
+		return;
+
+	// If timer was reset to fire later, restart ITimer
+	time_t curTime = time(NULL);
+	if (curTime < m_expTime)
+	{
+		reset(m_expTime - curTime);
+		return;
+	}
+
+	Attachment* att = stable->getHandle();
+	att->signalShutdown(isc_att_shut_idle);
+	JRD_shutdown_attachment(att);
+}
+
+int Attachment::IdleTimer::release()
+{
+	if (--refCounter == 0)
+	{
+		delete this;
+		return 0;
+	}
+
+	return 1;
+}
+
+void Attachment::IdleTimer::reset(unsigned int timeout)
+{
+	// Start timer if necessary. If timer was already started, don't restart
+	// (or stop) it - handler() will take care about it.
+
+	if (!timeout)
+	{
+		m_expTime = 0;
+		return;
+	}
+
+	const time_t curTime = time(NULL);
+	m_expTime = curTime + timeout;
+
+	FbLocalStatus s;
+	ITimerControl* timerCtrl = Firebird::TimerInterfacePtr();
+
+	if (m_fireTime)
+	{
+		if (m_fireTime <= m_expTime)
+			return;
+
+		timerCtrl->stop(&s, this);
+		check(&s);
+		m_fireTime = 0;
+	}
+
+	timerCtrl->start(&s, this, (m_expTime - curTime) * 1000 * 1000);
+	check(&s);
+	m_fireTime = m_expTime;
 }

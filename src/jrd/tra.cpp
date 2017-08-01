@@ -89,7 +89,7 @@ typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, UCHAR> >
 #ifdef SUPERSERVER_V2
 static TraNumber bump_transaction_id(thread_db*, WIN*);
 #else
-static header_page* bump_transaction_id(thread_db*, WIN*);
+static header_page* bump_transaction_id(thread_db*, WIN*, bool);
 #endif
 static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, int state);
 static void expand_view_lock(thread_db* tdbb, jrd_tra*, jrd_rel*, UCHAR lock_type,
@@ -255,7 +255,7 @@ void TRA_cleanup(thread_db* tdbb)
 		window.win_page = inventory_page(tdbb, sequence);
 		tx_inv_page* tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
 		TraNumber max = ceiling - (TraNumber) sequence * trans_per_tip;
-		if (max > trans_per_tip)
+		if (max >= trans_per_tip)
 			max = trans_per_tip - 1;
 		for (; number <= max; number++)
 		{
@@ -392,7 +392,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 			status_exception::raise(&st);
 
 		secContext->tra = NULL;
-		clearMappingCache(tdbb->getDatabase()->dbb_config->getSecurityDatabase(), MAPPING_CACHE);
+		Mapping::clearCache(tdbb->getDatabase()->dbb_config->getSecurityDatabase(), Mapping::MAPPING_CACHE);
 
 		transaction->eraseSecDbContext();
 	}
@@ -826,20 +826,31 @@ void TRA_update_counters(thread_db* tdbb, Database* dbb)
 	WIN window(HEADER_PAGE_NUMBER);
 	header_page* header = (header_page*)CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
-	if (dbb->dbb_oldest_active > header->hdr_oldest_active ||
-		dbb->dbb_oldest_transaction > header->hdr_oldest_transaction ||
-		dbb->dbb_oldest_snapshot > header->hdr_oldest_snapshot)
+	const TraNumber next_transaction = Ods::getNT(header);
+	const TraNumber oldest_transaction = Ods::getOIT(header);
+	const TraNumber oldest_active = Ods::getOAT(header);
+	const TraNumber oldest_snapshot = Ods::getOST(header);
+
+	fb_assert(dbb->dbb_next_transaction <= next_transaction);
+
+	if (dbb->dbb_oldest_active > oldest_active ||
+		dbb->dbb_oldest_transaction > oldest_transaction ||
+		dbb->dbb_oldest_snapshot > oldest_snapshot ||
+		dbb->dbb_next_transaction > next_transaction)
 	{
 		CCH_MARK_MUST_WRITE(tdbb, &window);
 
 		if (dbb->dbb_oldest_active > header->hdr_oldest_active)
-			header->hdr_oldest_active = dbb->dbb_oldest_active;
+			Ods::writeOAT(header, dbb->dbb_oldest_active);
 
 		if (dbb->dbb_oldest_transaction > header->hdr_oldest_transaction)
-			header->hdr_oldest_transaction = dbb->dbb_oldest_transaction;
+			Ods::writeOIT(header, dbb->dbb_oldest_transaction);
 
 		if (dbb->dbb_oldest_snapshot > header->hdr_oldest_snapshot)
-			header->hdr_oldest_snapshot = dbb->dbb_oldest_snapshot;
+			Ods::writeOST(header, dbb->dbb_oldest_snapshot);
+
+		if (dbb->dbb_next_transaction > next_transaction)
+			Ods::writeNT(header, dbb->dbb_next_transaction);
 	}
 
 	CCH_RELEASE(tdbb, &window);
@@ -1289,7 +1300,7 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 	// Release the transaction and its pool
 
 	tdbb->setTransaction(NULL);
-	JTransaction* jTra = transaction->getInterface();
+	JTransaction* jTra = transaction->getInterface(true);	// ASF: maybe it's better to pass false?
 	if (jTra)
 	{
 		jTra->setHandle(NULL);
@@ -1445,16 +1456,25 @@ void TRA_set_state(thread_db* tdbb, jrd_tra* transaction, TraNumber number, int 
 	WIN window(DB_PAGE_SPACE, -1);
 	tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence, LCK_write);
 
+	UCHAR* address = tip->tip_transactions + byte;
+	const int old_state = ((*address) >> shift) & TRA_MASK;
+
 #ifdef SUPERSERVER_V2
 	CCH_MARK(tdbb, &window);
 	const ULONG generation = tip->tip_header.pag_generation;
 #else
-	CCH_MARK_MUST_WRITE(tdbb, &window);
+	if (!(dbb->dbb_flags & DBB_shared) || !transaction  ||
+		(transaction->tra_flags & TRA_write) ||
+		old_state != tra_active || state != tra_committed)
+	{
+		CCH_MARK_MUST_WRITE(tdbb, &window);
+	}
+	else
+		CCH_MARK(tdbb, &window);
 #endif
 
 	// set the state on the TIP page
 
-	UCHAR* address = tip->tip_transactions + byte;
 	*address &= ~(TRA_MASK << shift);
 	*address |= state << shift;
 
@@ -1944,7 +1964,7 @@ static TraNumber bump_transaction_id(thread_db* tdbb, WIN* window)
 #else
 
 
-static header_page* bump_transaction_id(thread_db* tdbb, WIN* window)
+static header_page* bump_transaction_id(thread_db* tdbb, WIN* window, bool dontWrite)
 {
 /**************************************
  *
@@ -1999,7 +2019,11 @@ static header_page* bump_transaction_id(thread_db* tdbb, WIN* window)
 
 	// Extend, if necessary, has apparently succeeded.  Next, update header page
 
-	CCH_MARK_MUST_WRITE(tdbb, window);
+	if (dontWrite && !new_tip)
+		CCH_MARK(tdbb, window);
+	else
+		CCH_MARK_MUST_WRITE(tdbb, window);
+
 	dbb->dbb_next_transaction = number;
 
 	Ods::writeNT(header, number);
@@ -2391,7 +2415,10 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 		new_number = dbb->dbb_next_transaction + dbb->generateTransactionId(tdbb);
 	else
 	{
-		const header_page* const header = bump_transaction_id(tdbb, &window);
+		const bool dontWrite = (dbb->dbb_flags & DBB_shared) &&
+			(transaction->tra_flags & TRA_readonly);
+
+		const header_page* const header = bump_transaction_id(tdbb, &window, dontWrite);
 		new_number = Ods::getNT(header);
 	}
 #endif
@@ -3077,7 +3104,10 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 	}
 	else
 	{
-		const header_page* header = bump_transaction_id(tdbb, &window);
+		const bool dontWrite = (dbb->dbb_flags & DBB_shared) &&
+			(trans->tra_flags & TRA_readonly);
+
+		const header_page* header = bump_transaction_id(tdbb, &window, dontWrite);
 		number = Ods::getNT(header);
 		oldest = Ods::getOIT(header);
 		oldest_active = Ods::getOAT(header);
@@ -3393,9 +3423,9 @@ jrd_tra::~jrd_tra()
 }
 
 
-JTransaction* jrd_tra::getInterface()
+JTransaction* jrd_tra::getInterface(bool create)
 {
-	if (!tra_interface)
+	if (!tra_interface && create)
 	{
 		tra_flags |= TRA_own_interface;
 		tra_interface = FB_NEW JTransaction(this, tra_attachment->getStable());
@@ -3632,7 +3662,8 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id)
 	USHORT rel_id = blob_id->bid_internal.bid_relation_id;
 
 	if (tra_attachment->isGbak() ||
-		tra_attachment->att_user->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE) ||
+		(tra_attachment->att_user &&
+		 tra_attachment->att_user->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE)) ||
 		rel_id == 0)
 	{
 		return;
@@ -3677,7 +3708,7 @@ TraceSweepEvent::TraceSweepEvent(thread_db* tdbb)
 	gds__log("Sweep is started by %s\n"
 		"\tDatabase \"%s\" \n"
 		"\tOIT %" SQUADFORMAT", OAT %" SQUADFORMAT", OST %" SQUADFORMAT", Next %" SQUADFORMAT,
-		att->att_user->getUserName().c_str(),
+		att->att_user ? att->att_user->getUserName().c_str() : "<Unknown user>",
 		att->att_filename.c_str(),
 		m_sweep_info.getOIT(),
 		m_sweep_info.getOAT(),

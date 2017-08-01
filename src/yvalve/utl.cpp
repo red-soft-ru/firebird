@@ -1057,6 +1057,128 @@ IXpbBuilder* UtilInterface::getXpbBuilder(CheckStatusWrapper* status,
 	}
 }
 
+class DecFloat16 FB_FINAL : public AutoIface<IDecFloat16Impl<DecFloat16, CheckStatusWrapper> >
+{
+public:
+	// IDecFloat16 implementation
+	void toBcd(const FB_DEC16* from, int* sign, unsigned char* bcd, int* exp)
+	{
+		*sign = decDoubleToBCD(reinterpret_cast<const decDouble*>(from), exp, bcd);
+	}
+
+	void toString(CheckStatusWrapper* status, const FB_DEC16* from, unsigned bufSize, char* buffer)
+	{
+		try
+		{
+			if (bufSize >= STRING_SIZE)
+				decDoubleToString(reinterpret_cast<const decDouble*>(from), buffer);
+			else
+			{
+				char temp[STRING_SIZE];
+				decDoubleToString(reinterpret_cast<const decDouble*>(from), temp);
+				int len = strlen(temp);
+				if (len < bufSize)
+					strncpy(buffer, temp, bufSize);
+				else
+				{
+					(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+					 Arg::Gds(isc_trunc_limits) << Arg::Num(bufSize) << Arg::Num(len));
+				}
+			}
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
+	}
+
+	void fromBcd(int sign, const unsigned char* bcd, int exp, FB_DEC16* to)
+	{
+		decDoubleFromBCD(reinterpret_cast<decDouble*>(to), exp, bcd, sign ? DECFLOAT_Sign : 0);
+	}
+
+	void fromString(CheckStatusWrapper* status, const char* from, FB_DEC16* to)
+	{
+		try
+		{
+			DecimalStatus decSt(DEC_Errors);
+			Decimal64* val = reinterpret_cast<Decimal64*>(to);
+			val->set(from, decSt);
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
+	}
+};
+
+IDecFloat16* UtilInterface::getDecFloat16(CheckStatusWrapper* status)
+{
+	static DecFloat16 decFloat16;
+	return &decFloat16;
+}
+
+class DecFloat34 FB_FINAL : public AutoIface<IDecFloat34Impl<DecFloat34, CheckStatusWrapper> >
+{
+public:
+	// IDecFloat34 implementation
+	void toBcd(const FB_DEC34* from, int* sign, unsigned char* bcd, int* exp)
+	{
+		*sign = decQuadToBCD(reinterpret_cast<const decQuad*>(from), exp, bcd);
+	}
+
+	void toString(CheckStatusWrapper* status, const FB_DEC34* from, unsigned bufSize, char* buffer)
+	{
+		try
+		{
+			if (bufSize >= STRING_SIZE)
+				decQuadToString(reinterpret_cast<const decQuad*>(from), buffer);
+			else
+			{
+				char temp[STRING_SIZE];
+				decQuadToString(reinterpret_cast<const decQuad*>(from), temp);
+				int len = strlen(temp);
+				if (len < bufSize)
+					strncpy(buffer, temp, bufSize);
+				else
+				{
+					(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+					 Arg::Gds(isc_trunc_limits) << Arg::Num(bufSize) << Arg::Num(len));
+				}
+			}
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
+	}
+
+	void fromBcd(int sign, const unsigned char* bcd, int exp, FB_DEC34* to)
+	{
+		decQuadFromBCD(reinterpret_cast<decQuad*>(to), exp, bcd, sign ? DECFLOAT_Sign : 0);
+	}
+
+	void fromString(CheckStatusWrapper* status, const char* from, FB_DEC34* to)
+	{
+		try
+		{
+			DecimalStatus decSt(DEC_Errors);
+			Decimal128* val = reinterpret_cast<Decimal128*>(to);
+			val->set(from, decSt);
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(status);
+		}
+	}
+};
+
+IDecFloat34* UtilInterface::getDecFloat34(CheckStatusWrapper* status)
+{
+	static DecFloat34 decFloat34;
+	return &decFloat34;
+}
+
 unsigned UtilInterface::setOffsets(CheckStatusWrapper* status, IMessageMetadata* metadata,
 	IOffsetsCallback* callback)
 {

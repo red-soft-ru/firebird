@@ -499,13 +499,13 @@ static bool formatsAreEqual(const Format*, const Format*);
 static bool	find_depend_in_dfw(thread_db*, TEXT*, USHORT, USHORT, jrd_tra*);
 static void get_array_desc(thread_db*, const TEXT*, Ods::InternalArrayDesc*);
 static void get_trigger_dependencies(DeferredWork*, bool, jrd_tra*);
-static void	load_trigs(thread_db*, jrd_rel*, trig_vec**);
+static void	load_trigs(thread_db*, jrd_rel*, TrigVector**);
 static Format*	make_format(thread_db*, jrd_rel*, USHORT *, TemporaryField*);
 static void put_summary_blob(thread_db* tdbb, blb*, enum rsr_t, bid*, jrd_tra*);
 static void put_summary_record(thread_db* tdbb, blb*, enum rsr_t, const UCHAR*, USHORT);
 static void	setup_array(thread_db*, blb*, const TEXT*, USHORT, TemporaryField*);
-static blb*	setup_triggers(thread_db*, jrd_rel*, bool, trig_vec**, blb*);
-static void	setup_trigger_details(thread_db*, jrd_rel*, blb*, trig_vec**, const TEXT*, bool);
+static blb*	setup_triggers(thread_db*, jrd_rel*, bool, TrigVector**, blb*);
+static void	setup_trigger_details(thread_db*, jrd_rel*, blb*, TrigVector**, const TEXT*, bool);
 static bool validate_text_type (thread_db*, const TemporaryField*);
 
 static void check_partners(thread_db*, const USHORT);
@@ -1241,6 +1241,9 @@ USHORT DFW_assign_index_type(thread_db* tdbb, const Firebird::MetaName& name, SS
 		return idx_numeric2;
 	case dtype_boolean:
 		return idx_boolean;
+	case dtype_dec64:
+	case dtype_dec128:
+		return idx_decimal;
 	default:
 		return idx_numeric;
 	}
@@ -1274,7 +1277,7 @@ void DFW_delete_deferred( jrd_tra* transaction, SavNumber sav_number)
 	if (sav_number == -1)
 	{
 		DeferredWork* work;
-		while (work = transaction->tra_deferred_job->work)
+		while ((work = transaction->tra_deferred_job->work))
 		{
 			delete work;
 		}
@@ -2264,7 +2267,7 @@ static bool clear_cache(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_t
 		return true;
 
 	case 3:
-		clearMappingCache(dbb->dbb_filename.c_str(), work->dfw_id);
+		Mapping::clearCache(dbb->dbb_filename.c_str(), work->dfw_id);
 		break;
 	}
 
@@ -3714,13 +3717,14 @@ static bool create_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 					// ASF: arg->dfw_id is RDB$TRIGGER_TYPE truncated to USHORT
 					if ((arg->dfw_id & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DB)
 					{
-						MET_load_trigger(tdbb, NULL, work->dfw_name,
-							&tdbb->getAttachment()->att_triggers[arg->dfw_id & ~TRIGGER_TYPE_DB]);
+						unsigned triggerKind = arg->dfw_id & ~TRIGGER_TYPE_DB;
+						MET_release_triggers(tdbb, &tdbb->getAttachment()->att_triggers[triggerKind]);
+						MET_load_db_triggers(tdbb, triggerKind);
 					}
 					else if ((arg->dfw_id & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DDL)
 					{
-						MET_load_trigger(tdbb, NULL, work->dfw_name,
-							&tdbb->getAttachment()->att_ddl_triggers);
+						MET_release_triggers(tdbb, &tdbb->getAttachment()->att_ddl_triggers);
+						MET_load_ddl_triggers(tdbb);
 					}
 				}
 			}
@@ -5327,7 +5331,7 @@ static void get_trigger_dependencies(DeferredWork* work, bool compile, jrd_tra* 
 }
 
 
-static void load_trigs(thread_db* tdbb, jrd_rel* relation, trig_vec** triggers)
+static void load_trigs(thread_db* tdbb, jrd_rel* relation, TrigVector** triggers)
 {
 /**************************************
  *
@@ -5341,7 +5345,7 @@ static void load_trigs(thread_db* tdbb, jrd_rel* relation, trig_vec** triggers)
  *      place ie the relation block.
  *
  **************************************/
-	trig_vec* tmp_vector;
+	TrigVector* tmp_vector;
 
 	tmp_vector = relation->rel_pre_store;
 	relation->rel_pre_store = triggers[TRIGGER_PRE_STORE];
@@ -5572,7 +5576,7 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 	int physical_fields = 0;
 	bool external_flag = false;
 	bool computed_field;
-	trig_vec* triggers[TRIGGER_MAX];
+	TrigVector* triggers[TRIGGER_MAX];
 
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
@@ -5754,6 +5758,10 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 										   (UCHAR*) RFR.RDB$GENERATOR_NAME, n);
 					}
 
+					n = RFR.RDB$IDENTITY_TYPE;
+					if (!RFR.RDB$IDENTITY_TYPE.NULL)
+						put_summary_record(tdbb, blob, RSR_field_identity_type, (UCHAR*) &n, sizeof(n));
+
 					// Make a temporary field block
 
 					TemporaryField* tfb = FB_NEW_POOL(*tdbb->getDefaultPool()) TemporaryField;
@@ -5827,7 +5835,7 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 											 FLD.RDB$FIELD_SUB_TYPE,
 											 FLD.RDB$CHARACTER_SET_ID, collation))
 					{
-						if (REL.RDB$FORMAT.NULL)
+						if (null_view && REL.RDB$FORMAT.NULL)
 							DPM_delete_relation(tdbb, relation);
 
 						ERR_post(Arg::Gds(isc_no_meta_update) <<
@@ -5837,7 +5845,7 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 					// Make sure the text type specified is implemented
 					if (!validate_text_type(tdbb, tfb))
 					{
-						if (REL.RDB$FORMAT.NULL)
+						if (null_view && REL.RDB$FORMAT.NULL)
 							DPM_delete_relation(tdbb, relation);
 
 						ERR_post_nothrow(Arg::Gds(isc_no_meta_update) <<
@@ -6013,12 +6021,14 @@ static bool modify_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 				// ASF: arg->dfw_id is RDB$TRIGGER_TYPE truncated to USHORT
 				if (arg && (arg->dfw_id & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DB)
 				{
-					MET_release_trigger(tdbb,
-						&tdbb->getAttachment()->att_triggers[arg->dfw_id & ~TRIGGER_TYPE_DB],
-						work->dfw_name);
-
-					MET_load_trigger(tdbb, NULL, work->dfw_name,
-						&tdbb->getAttachment()->att_triggers[arg->dfw_id & ~TRIGGER_TYPE_DB]);
+					unsigned triggerKind = arg->dfw_id & ~TRIGGER_TYPE_DB;
+					MET_release_triggers(tdbb, &tdbb->getAttachment()->att_triggers[triggerKind]);
+					MET_load_db_triggers(tdbb, triggerKind);
+				}
+				else if ((arg->dfw_id & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DDL)
+				{
+					MET_release_triggers(tdbb, &tdbb->getAttachment()->att_ddl_triggers);
+					MET_load_ddl_triggers(tdbb);
 				}
 			}
 		}
@@ -6040,7 +6050,7 @@ static bool modify_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 						relation->rel_flags &= ~REL_scanned;
 						MET_scan_relation(tdbb, relation);
 
-						trig_vec* triggers[TRIGGER_MAX];
+						TrigVector* triggers[TRIGGER_MAX];
 
 						for (int i = 0; i < TRIGGER_MAX; ++i)
 							triggers[i] = NULL;
@@ -6274,7 +6284,7 @@ static void setup_array(thread_db* tdbb, blb* blob, const TEXT* field_name, USHO
 
 
 static blb* setup_triggers(thread_db* tdbb, jrd_rel* relation, bool null_view,
-	trig_vec** triggers, blb* blob)
+	TrigVector** triggers, blb* blob)
 {
 /**************************************
  *
@@ -6372,7 +6382,7 @@ static blb* setup_triggers(thread_db* tdbb, jrd_rel* relation, bool null_view,
 static void setup_trigger_details(thread_db* tdbb,
 								  jrd_rel* relation,
 								  blb* blob,
-								  trig_vec** triggers,
+								  TrigVector** triggers,
 								  const TEXT* trigger_name,
 								  bool null_view)
 {
@@ -6448,7 +6458,7 @@ static string get_string(const dsc* desc)
 	// Find the actual length of the string, searching until the claimed
 	// end of the string, or the terminating \0, whichever comes first.
 
-	USHORT length = MOV_make_string(desc, ttype_metadata, &str, &temp, sizeof(temp));
+	USHORT length = MOV_make_string(JRD_get_thread_data(), desc, ttype_metadata, &str, &temp, sizeof(temp));
 
 	const char* p = str;
 	const char* const q = str + length;

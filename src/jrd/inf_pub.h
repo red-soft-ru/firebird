@@ -142,6 +142,13 @@ enum db_info_types
 
 	fb_info_crypt_state = 126,
 
+	fb_info_statement_timeout_db,
+	fb_info_statement_timeout_att,
+
+	fb_info_ses_idle_timeout_db,
+	fb_info_ses_idle_timeout_att,
+	fb_info_ses_idle_timeout_run,
+
 	isc_info_db_last_value   /* Leave this LAST! */
 };
 
@@ -419,6 +426,8 @@ enum info_db_provider
 #define isc_info_sql_relation_alias		25
 #define isc_info_sql_explain_plan		26
 #define isc_info_sql_stmt_flags         27
+#define isc_info_sql_stmt_timeout_user	28
+#define isc_info_sql_stmt_timeout_run	29
 
 /*********************************/
 /* SQL information return values */

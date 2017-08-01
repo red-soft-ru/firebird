@@ -56,7 +56,6 @@ LDFLAGS += --sysroot=$(CROSS_PLATFORM) -L$(NDK)/sources/cxx-stl/gnu-libstdc++/$(
 DroidLibs := -lm -ldl -lsupc++
 
 LINK_LIBS = $(DroidLibs)
-STATICLINK_LIBS = $(DroidLibs)
 SO_LINK_LIBS = $(DroidLibs)
 
 EXE_LINK_OPTIONS= $(LDFLAGS) $(UNDEF_FLAGS) $(LIB_PATH_OPTS) $(LINK_EMPTY_SYMBOLS)

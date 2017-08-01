@@ -227,7 +227,7 @@ namespace
 		}
 
 		PathName name;
-		RefPtr<Config> config;
+		RefPtr<const Config> config;
 #ifdef HAVE_ID_BY_NAME
 		Id* id;
 #endif
@@ -417,7 +417,7 @@ static inline bool hasSeparator(const PathName& name)
 
 // Search for 'alias' in databases.conf, return its value in 'file' if found. Else set file to alias.
 // Returns true if alias is found in databases.conf.
-static bool resolveAlias(const PathName& alias, PathName& file, RefPtr<Config>* config)
+static bool resolveAlias(const PathName& alias, PathName& file, RefPtr<const Config>* config)
 {
 	PathName correctedAlias = alias;
 	replace_dir_sep(correctedAlias);
@@ -492,7 +492,7 @@ static bool setPath(const PathName& filename, PathName& expandedName)
 // Returns true if alias was found in databases.conf
 bool expandDatabaseName(Firebird::PathName alias,
 						Firebird::PathName& file,
-						Firebird::RefPtr<Config>* config)
+						Firebird::RefPtr<const Config>* config)
 {
 	try
 	{

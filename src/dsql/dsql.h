@@ -80,6 +80,7 @@ namespace Jrd
 	class RseNode;
 	class StmtNode;
 	class TransactionNode;
+	class SessionManagementNode;
 	class ValueExprNode;
 	class ValueListNode;
 	class WindowClause;
@@ -93,6 +94,7 @@ namespace Jrd
 	class dsql_par;
 	class dsql_map;
 	class dsql_intlsym;
+	class TimeoutTimer;
 
 	typedef Firebird::Stack<dsql_ctx*> DsqlContextStack;
 
@@ -233,6 +235,31 @@ public:
 
 	virtual ~TypeClause()
 	{
+	}
+
+public:
+	void setExactPrecision()
+	{
+		if (precision != 0)
+			return;
+
+		switch (dtype)
+		{
+			case dtype_short:
+				precision = 4;
+				break;
+
+			case dtype_long:
+				precision = 9;
+				break;
+
+			case dtype_int64:
+				precision = 18;
+				break;
+
+			default:
+				fb_assert(!DTYPE_IS_EXACT(dtype));
+		}
 	}
 
 public:
@@ -431,7 +458,7 @@ public:
 		TYPE_SELECT, TYPE_SELECT_UPD, TYPE_INSERT, TYPE_DELETE, TYPE_UPDATE, TYPE_UPDATE_CURSOR,
 		TYPE_DELETE_CURSOR, TYPE_COMMIT, TYPE_ROLLBACK, TYPE_CREATE_DB, TYPE_DDL, TYPE_START_TRANS,
 		TYPE_EXEC_PROCEDURE, TYPE_COMMIT_RETAIN, TYPE_ROLLBACK_RETAIN, TYPE_SET_GENERATOR,
-		TYPE_SAVEPOINT, TYPE_EXEC_BLOCK, TYPE_SELECT_BLOCK, TYPE_SET_ROLE
+		TYPE_SAVEPOINT, TYPE_EXEC_BLOCK, TYPE_SELECT_BLOCK, TYPE_SESSION_MANAGEMENT
 	};
 
 	// Statement flags.
@@ -556,6 +583,19 @@ public:
 
 	virtual void setDelayedFormat(thread_db* tdbb, Firebird::IMessageMetadata* metadata);
 
+	// Get session-level timeout, milliseconds
+	unsigned int getTimeout();
+
+	// Set session-level timeout, milliseconds
+	void setTimeout(unsigned int timeOut);
+
+	// Get actual timeout, milliseconds
+	unsigned int getActualTimeout();
+
+	// Evaluate actual timeout value, consider config- and session-level timeout values,
+	// setup and start timer
+	void setupTimer(thread_db* tdbb);
+
 	static void destroy(thread_db* tdbb, dsql_req* request, bool drop);
 
 private:
@@ -580,11 +620,12 @@ public:
 	bool req_traced;				// request is traced via TraceAPI
 
 protected:
+	unsigned int req_timeout;					// query timeout in milliseconds, set by the user
+	Firebird::RefPtr<TimeoutTimer> req_timer;	// timeout timer
+
 	// Request should never be destroyed using delete.
 	// It dies together with it's pool in release_request().
-	~dsql_req()
-	{
-	}
+	~dsql_req();
 
 	// To avoid posix warning about missing public destructor declare
 	// MemoryPool as friend class. In fact IT releases request memory!
@@ -668,6 +709,28 @@ public:
 
 private:
 	NestConst<TransactionNode> node;
+};
+
+class DsqlSessionManagementRequest : public dsql_req
+{
+public:
+	explicit DsqlSessionManagementRequest(MemoryPool& pool, SessionManagementNode* aNode)
+		: dsql_req(pool),
+		  node(aNode)
+	{
+		req_traced = false;
+	}
+
+	virtual void dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch,
+		ntrace_result_t* traceResult);
+
+	virtual void execute(thread_db* tdbb, jrd_tra** traHandle,
+		Firebird::IMessageMetadata* inMetadata, const UCHAR* inMsg,
+		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+		bool singleton);
+
+private:
+	NestConst<SessionManagementNode> node;
 };
 
 //! Implicit (NATURAL and USING) joins
@@ -919,6 +982,213 @@ private:
 	Firebird::MetaName charset;
 	Firebird::string s;
 };
+
+class Lim64String : public Firebird::string
+{
+public:
+	Lim64String(Firebird::MemoryPool& p, const Firebird::string& str, int sc)
+		: Firebird::string(p, str),
+		  scale(sc)
+	{ }
+
+	int getScale()
+	{
+		return scale;
+	}
+
+private:
+	int scale;
+};
+
+struct SignatureParameter
+{
+	explicit SignatureParameter(MemoryPool& p)
+		: type(0),
+		  number(0),
+		  name(p),
+		  fieldSource(p),
+		  fieldName(p),
+		  relationName(p),
+		  charSetName(p),
+		  collationName(p),
+		  subTypeName(p),
+		  mechanism(0)
+	{
+	}
+
+	SignatureParameter(MemoryPool& p, const SignatureParameter& o)
+		: type(o.type),
+		  number(o.number),
+		  name(p, o.name),
+		  fieldSource(p, o.fieldSource),
+		  fieldName(p, o.fieldName),
+		  relationName(p, o.relationName),
+		  charSetName(p, o.charSetName),
+		  collationName(p, o.collationName),
+		  subTypeName(p, o.subTypeName),
+		  collationId(o.collationId),
+		  nullFlag(o.nullFlag),
+		  mechanism(o.mechanism),
+		  fieldLength(o.fieldLength),
+		  fieldScale(o.fieldScale),
+		  fieldType(o.fieldType),
+		  fieldSubType(o.fieldSubType),
+		  fieldSegmentLength(o.fieldSegmentLength),
+		  fieldNullFlag(o.fieldNullFlag),
+		  fieldCharLength(o.fieldCharLength),
+		  fieldCollationId(o.fieldCollationId),
+		  fieldCharSetId(o.fieldCharSetId),
+		  fieldPrecision(o.fieldPrecision)
+	{
+	}
+
+	void fromType(const TypeClause* type)
+	{
+		fieldType = type->dtype;
+		fieldScale = type->scale;
+		subTypeName = type->subTypeName;
+		fieldSubType = type->subType;
+		fieldLength = type->length;
+		fieldCharLength = type->charLength;
+		charSetName = type->charSet;
+		fieldCharSetId = type->charSetId;
+		collationName = type->collate;
+		fieldCollationId = type->collationId;
+		fieldSource = type->fieldSource;
+		fieldName = type->typeOfName;
+		relationName = type->typeOfTable;
+		fieldSegmentLength = type->segLength;
+		fieldPrecision = type->precision;
+		nullFlag = (SSHORT) type->notNull;
+		mechanism = (SSHORT) type->fullDomain;
+	}
+
+	SSHORT type;
+	SSHORT number;
+	Firebird::MetaName name;
+	Firebird::MetaName fieldSource;
+	Firebird::MetaName fieldName;
+	Firebird::MetaName relationName;
+	Firebird::MetaName charSetName;
+	Firebird::MetaName collationName;
+	Firebird::MetaName subTypeName;
+	Nullable<SSHORT> collationId;
+	Nullable<SSHORT> nullFlag;
+	SSHORT mechanism;
+	Nullable<SSHORT> fieldLength;
+	Nullable<SSHORT> fieldScale;
+	Nullable<SSHORT> fieldType;
+	Nullable<SSHORT> fieldSubType;
+	Nullable<SSHORT> fieldSegmentLength;
+	Nullable<SSHORT> fieldNullFlag;
+	Nullable<SSHORT> fieldCharLength;
+	Nullable<SSHORT> fieldCollationId;
+	Nullable<SSHORT> fieldCharSetId;
+	Nullable<SSHORT> fieldPrecision;
+
+	bool operator >(const SignatureParameter& o) const
+	{
+		return type > o.type || (type == o.type && number > o.number);
+	}
+
+	bool operator ==(const SignatureParameter& o) const
+	{
+		return type == o.type && number == o.number && name == o.name &&
+			(fieldSource == o.fieldSource ||
+				(fb_utils::implicit_domain(fieldSource.c_str()) &&
+					fb_utils::implicit_domain(o.fieldSource.c_str()))) &&
+			fieldName == o.fieldName && relationName == o.relationName &&
+			collationId == o.collationId && nullFlag == o.nullFlag &&
+			mechanism == o.mechanism && fieldLength == o.fieldLength &&
+			fieldScale == o.fieldScale && fieldType == o.fieldType &&
+			fieldSubType == o.fieldSubType && fieldSegmentLength == o.fieldSegmentLength &&
+			fieldNullFlag == o.fieldNullFlag && fieldCharLength == o.fieldCharLength &&
+			charSetName == o.charSetName && collationName == o.collationName && subTypeName == o.subTypeName &&
+			fieldCollationId == o.fieldCollationId && fieldCharSetId == o.fieldCharSetId &&
+			fieldPrecision == o.fieldPrecision;
+	}
+
+	bool operator !=(const SignatureParameter& o) const
+	{
+		return !(*this == o);
+	}
+};
+
+struct Signature
+{
+	const static unsigned FLAG_DETERMINISTIC = 0x01;
+
+	Signature(MemoryPool& p, const Firebird::MetaName& aName)
+		: name(p, aName),
+		  parameters(p),
+		  flags(0),
+		  defined(false)
+	{
+	}
+
+	explicit Signature(const Firebird::MetaName& aName)
+		: name(aName),
+		  parameters(*getDefaultMemoryPool()),
+		  flags(0),
+		  defined(false)
+	{
+	}
+
+	explicit Signature(MemoryPool& p)
+		: name(p),
+		  parameters(p),
+		  flags(0),
+		  defined(false)
+	{
+	}
+
+	Signature(MemoryPool& p, const Signature& o)
+		: name(p, o.name),
+		  parameters(p),
+		  flags(o.flags),
+		  defined(o.defined)
+	{
+		for (Firebird::SortedObjectsArray<SignatureParameter>::const_iterator i = o.parameters.begin();
+			 i != o.parameters.end();
+			 ++i)
+		{
+			parameters.add(*i);
+		}
+	}
+
+	bool operator >(const Signature& o) const
+	{
+		return name > o.name;
+	}
+
+	bool operator ==(const Signature& o) const
+	{
+		if (name != o.name || flags != o.flags || parameters.getCount() != o.parameters.getCount())
+			return false;
+
+		for (Firebird::SortedObjectsArray<SignatureParameter>::const_iterator i = parameters.begin(),
+				j = o.parameters.begin();
+			i != parameters.end();
+			++i, ++j)
+		{
+			if (*i != *j)
+				return false;
+		}
+
+		return true;
+	}
+
+	bool operator !=(const Signature& o) const
+	{
+		return !(*this == o);
+	}
+
+	Firebird::MetaName name;
+	Firebird::SortedObjectsArray<SignatureParameter> parameters;
+	unsigned flags;
+	bool defined;
+};
+
 
 } // namespace
 

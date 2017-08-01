@@ -147,7 +147,8 @@ void InternalConnection::attach(thread_db* tdbb, const PathName& dbName,
 	setWrapErrors(false);
 
 	Jrd::Attachment* attachment = tdbb->getAttachment();
-	if ((user.isEmpty() || user == attachment->att_user->getUserName()) &&
+	if (attachment->att_user &&
+		(user.isEmpty() || user == attachment->att_user->getUserName()) &&
 		pwd.isEmpty() &&
 		(role.isEmpty() || role == attachment->att_user->getSqlRole()))
 	{
@@ -249,7 +250,8 @@ bool InternalConnection::isSameDatabase(thread_db* tdbb, const PathName& dbName,
 	if (m_isCurrent)
 	{
 		const UserId* attUser = m_attachment->getHandle()->att_user;
-		return ((user.isEmpty() || user == attUser->getUserName()) &&
+		return (attUser &&
+				(user.isEmpty() || user == attUser->getUserName()) &&
 				pwd.isEmpty() &&
 				(role.isEmpty() || role == attUser->getSqlRole()));
 	}
@@ -283,7 +285,7 @@ void InternalTransaction::doStart(FbStatusVector* status, thread_db* tdbb, Clump
 	fb_assert(localTran);
 
 	if (m_scope == traCommon && m_IntConnection.isCurrent())
-		m_transaction = localTran->getInterface();
+		m_transaction = localTran->getInterface(true);
 	else
 	{
 		JAttachment* att = m_IntConnection.getJrdAtt();
@@ -502,6 +504,21 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 	case DsqlCompiledStatement::TYPE_EXEC_BLOCK:
 		break;
 	}
+}
+
+
+void InternalStatement::doSetTimeout(thread_db* tdbb, unsigned int timeout)
+{
+	FbLocalStatus status;
+
+	{
+		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
+
+		m_request->setTimeout(&status, timeout);
+	}
+
+	if (status->getState() & IStatus::STATE_ERRORS)
+		raise(&status, tdbb, "JStatement::setTimeout");
 }
 
 

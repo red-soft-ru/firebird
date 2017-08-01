@@ -106,7 +106,8 @@ IMPLEMENT_TRACE_ROUTINE(cmp_trace, "CMP")
 // Clone a node.
 ValueExprNode* CMP_clone_node(thread_db* tdbb, CompilerScratch* csb, ValueExprNode* node)
 {
-	return NodeCopier::copy(tdbb, csb, node, NULL);
+	SubExprNodeCopier copier(csb);
+	return copier.copy(tdbb, node);
 }
 
 
@@ -119,10 +120,11 @@ ValueExprNode* CMP_clone_node_opt(thread_db* tdbb, CompilerScratch* csb, ValueEx
 
 	DEV_BLKCHK(csb, type_csb);
 
-	if (node->is<ParameterNode>())
+	if (nodeIs<ParameterNode>(node))
 		return node;
 
-	ValueExprNode* clone = NodeCopier::copy(tdbb, csb, node, NULL);
+	SubExprNodeCopier copier(csb);
+	ValueExprNode* clone = copier.copy(tdbb, node);
 	ExprNode::doPass2(tdbb, csb, &clone);
 
 	return clone;
@@ -134,9 +136,8 @@ BoolExprNode* CMP_clone_node_opt(thread_db* tdbb, CompilerScratch* csb, BoolExpr
 
 	DEV_BLKCHK(csb, type_csb);
 
-	NodeCopier copier(csb, NULL);
+	SubExprNodeCopier copier(csb);
 	BoolExprNode* clone = copier.copy(tdbb, node);
-
 	ExprNode::doPass2(tdbb, csb, &clone);
 
 	return clone;

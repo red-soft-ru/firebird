@@ -109,7 +109,7 @@ namespace Jrd
 		}
 
 	private:
-		RefPtr<Config> config;
+		RefPtr<const Config> config;
 	};
 }
 
@@ -346,7 +346,7 @@ void EXT_fini(jrd_rel* relation, bool close_only)
 }
 
 
-bool EXT_get(thread_db* /*tdbb*/, record_param* rpb, FB_UINT64& position)
+bool EXT_get(thread_db* tdbb, record_param* rpb, FB_UINT64& position)
 {
 /**************************************
  *
@@ -432,14 +432,14 @@ bool EXT_get(thread_db* /*tdbb*/, record_param* rpb, FB_UINT64& position)
 		if (!desc_ptr->dsc_length || !field)
 			continue;
 
-		const LiteralNode* literal = ExprNode::as<LiteralNode>(field->fld_missing_value);
+		const LiteralNode* literal = nodeAs<LiteralNode>(field->fld_missing_value);
 
 		if (literal)
 		{
 			desc = *desc_ptr;
 			desc.dsc_address = record->getData() + (IPTR) desc.dsc_address;
 
-			if (!MOV_compare(&literal->litDesc, &desc))
+			if (!MOV_compare(tdbb, &literal->litDesc, &desc))
 				continue;
 		}
 
@@ -534,7 +534,7 @@ void EXT_store(thread_db* tdbb, record_param* rpb)
 		if (field && !field->fld_computation && desc_ptr->dsc_length && record->isNull(i))
 		{
 			UCHAR* p = record->getData() + (IPTR) desc_ptr->dsc_address;
-			LiteralNode* literal = ExprNode::as<LiteralNode>(field->fld_missing_value);
+			LiteralNode* literal = nodeAs<LiteralNode>(field->fld_missing_value);
 
 			if (literal)
 			{

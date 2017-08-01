@@ -480,7 +480,6 @@ struct qli_fun
 };
 
 // Program wide globals
-//#include <setjmp.h>
 
 #ifdef QLI_MAIN
 #define EXTERN

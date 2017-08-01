@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/FirebirdSQL/firebird.svg?branch=master)](https://travis-ci.org/FirebirdSQL/firebird)
+
 # Firebird README
 
 Firebird is a relational database offering many ANSI SQL standard features that runs on Linux, Windows, MacOS and a variety of Unix platforms. Firebird offers excellent concurrency, high performance, and powerful language support for stored procedures and triggers. It has been used in production systems, under a variety of names, since 1981.

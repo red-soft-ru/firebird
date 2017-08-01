@@ -75,11 +75,11 @@ enum lck_t {
 	LCK_btr_dont_gc,			// Prevent removal of b-tree page from index
 	LCK_shared_counter,			// Database-wide shared counter
 	LCK_tra_pc,					// Precommitted transaction lock
+	LCK_rel_gc,					// Allow garbage collection for relation
 	LCK_fun_exist,				// Function existence lock
 	LCK_rel_rescan,				// Relation forced rescan lock
 	LCK_crypt,					// Crypt lock for single crypt thread
 	LCK_crypt_status,			// Notifies about changed database encryption status
-	LCK_idx_reserve,			// Index reservation lock
 	LCK_record_gc				// Record-level GC lock
 };
 
@@ -360,7 +360,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 			exit(FINI_OK);
 		}
 		SCHAR c;
-		while (c = *p++)
+		while ((c = *p++))
 			switch (c)
 			{
 			case '?':
@@ -1240,21 +1240,73 @@ static void prt_lock(OUTFILE outfile, const lhb* LOCK_header, const lbl* lock, U
 		// in <page_space>:<page_number> format
 		const UCHAR* q = lock->lbl_key;
 
-		SLONG key;
-		memcpy(&key, q, sizeof(SLONG));
-		q += sizeof(SLONG);
+		ULONG pageno;
+		memcpy(&pageno, q, sizeof(ULONG));
+		q += sizeof(ULONG);
 
 		ULONG pg_space;
-		memcpy(&pg_space, q, sizeof(SLONG));
+		memcpy(&pg_space, q, sizeof(ULONG));
 
-		FPRINTF(outfile, "\tKey: %04" ULONGFORMAT":%06" SLONGFORMAT",", pg_space, key);
+		FPRINTF(outfile, "\tKey: %04" ULONGFORMAT":%06" ULONGFORMAT",", pg_space, pageno);
 	}
-	else if (lock->lbl_length == 4)
+	else if ((lock->lbl_series == Jrd::LCK_relation || lock->lbl_series == Jrd::LCK_rel_gc) &&
+		lock->lbl_length == sizeof(ULONG) + sizeof(SINT64)) // Jrd::jrd_rel::getRelLockKeyLength()
+	{
+		const UCHAR* q = lock->lbl_key;
+
+		ULONG rel_id;
+		memcpy(&rel_id, q, sizeof(ULONG));
+		q += sizeof(ULONG);
+
+		SINT64 instance_id;
+		memcpy(&instance_id, q, sizeof(SINT64));
+
+		FPRINTF(outfile, "\tKey: %04" ULONGFORMAT":%09" SQUADFORMAT",", rel_id, instance_id);
+	}
+	else if ((lock->lbl_series == Jrd::LCK_tra ||
+			  lock->lbl_series == Jrd::LCK_tra_pc ||
+			  lock->lbl_series == Jrd::LCK_attachment ||
+			  lock->lbl_series == Jrd::LCK_monitor ||
+			  lock->lbl_series == Jrd::LCK_cancel) &&
+			 lock->lbl_length == sizeof(SINT64))
+	{
+		SINT64 key;
+		memcpy(&key, lock->lbl_key, lock->lbl_length);
+
+		FPRINTF(outfile, "\tKey: %09" SQUADFORMAT",", key);
+	}
+	else if (lock->lbl_series == Jrd::LCK_record_gc &&
+		lock->lbl_length == sizeof(SINT64))
+	{
+		SINT64 key;
+		memcpy(&key, lock->lbl_key, lock->lbl_length);
+
+		const ULONG pageno = key >> 16;
+		const ULONG line = (ULONG) (key & MAX_USHORT);
+
+		FPRINTF(outfile, "\tKey: %06" ULONGFORMAT":%04" ULONGFORMAT",", pageno, line);
+	}
+	else if ((lock->lbl_series == Jrd::LCK_idx_exist || lock->lbl_series == Jrd::LCK_expression) &&
+		lock->lbl_length == sizeof(SLONG))
 	{
 		SLONG key;
-		memcpy(&key, lock->lbl_key, 4);
+		memcpy(&key, lock->lbl_key, lock->lbl_length);
+
+		const ULONG rel_id = key >> 16;
+		const ULONG idx_id = (ULONG) (key & MAX_USHORT);
+
+		FPRINTF(outfile, "\tKey: %04" ULONGFORMAT":%04" ULONGFORMAT",", rel_id, idx_id);
+	}
+	else if (lock->lbl_length == sizeof(SLONG))
+	{
+		SLONG key;
+		memcpy(&key, lock->lbl_key, lock->lbl_length);
 
 		FPRINTF(outfile, "\tKey: %06" SLONGFORMAT",", key);
+	}
+	else if (lock->lbl_length == 0)
+	{
+		FPRINTF(outfile, "\tKey: <none>");
 	}
 	else
 	{

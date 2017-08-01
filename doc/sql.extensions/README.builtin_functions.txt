@@ -473,13 +473,21 @@ HASH
 ----
 
 Function:
-    Returns a HASH of a string.
+    Returns a HASH of a string using a specified algorithm.
 
 Format:
-    HASH( <string> )
+    HASH( <string> [ USING <algorithm> ] )
+
+    algorithm ::= { MD5 | SHA1 | SHA256 | SHA512 }
+
+Important:
+    - The syntax without USING is very discouraged and maintained for backward compatibility.
+    It returns a 64 bit integer and produces very bad hashes that easily result in collisions.
+    - The syntax with USING is introduced in FB 4.0 and returns VARCHAR strings with OCTETS charset.
 
 Example:
     select hash(x) from y;
+    select hash(x using sha256) from y;
 
 
 ----

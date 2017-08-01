@@ -58,6 +58,7 @@
 #include "../common/classes/init.h"
 #include "../common/classes/TempFile.h"
 #include "../common/utils_proto.h"
+#include "../common/ThreadStart.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -341,7 +342,10 @@ static const UCHAR
 				 op_line, op_args, 0},
 	subproc_decl[] = { op_subproc_decl, 0},
 	subfunc_decl[] = { op_subfunc_decl, 0},
-	window_win[] = { op_byte, op_window_win, 0};
+	window_win[] = { op_byte, op_window_win, 0},
+	relation_field[] = { op_line, op_indent, op_byte, op_literal,
+						 op_line, op_indent, op_byte, op_literal, op_pad, op_line, 0},
+	store3[] = { op_line, op_byte, op_line, op_verb, op_verb, op_verb, 0};
 
 
 #include "../jrd/blp.h"
@@ -3869,35 +3873,6 @@ public:
 #ifndef WIN_NT
 			PathUtils::concatPath(lockPrefix, WORKFILE, LOCKDIR);
 #else
-#ifdef WIN9X_SUPPORT
-			// shell32.dll version 5.0 and later supports SHGetFolderPath entry point
-			HMODULE hShFolder = LoadLibrary("shell32.dll");
-			PFNSHGETFOLDERPATHA pfnSHGetFolderPath =
-				(PFNSHGETFOLDERPATHA) GetProcAddress(hShFolder, "SHGetFolderPathA");
-
-			if (!pfnSHGetFolderPath)
-			{
-				// For old OS versions fall back to shfolder.dll
-				FreeLibrary(hShFolder);
-				hShFolder = LoadLibrary("shfolder.dll");
-				pfnSHGetFolderPath =
-					(PFNSHGETFOLDERPATHA) GetProcAddress(hShFolder, "SHGetFolderPathA");
-			}
-
-			char cmnData[MAXPATHLEN];
-			if (pfnSHGetFolderPath &&
-				pfnSHGetFolderPath(NULL, CSIDL_COMMON_APPDATA | CSIDL_FLAG_CREATE, NULL,
-					SHGFP_TYPE_CURRENT, cmnData) == S_OK)
-			{
-				PathUtils::concatPath(lockPrefix, cmnData, LOCKDIR);
-			}
-			else
-			{
-				// If shfolder.dll is missing or API fails fall back to using old style location for locks
-				lockPrefix = prefix;
-			}
-			FreeLibrary(hShFolder);
-#else
 			char cmnData[MAXPATHLEN];
 			if (SHGetSpecialFolderPath(NULL, cmnData, CSIDL_COMMON_APPDATA, TRUE))
 			{
@@ -3907,7 +3882,6 @@ public:
 			{
 				lockPrefix = prefix;	// emergency default
 			}
-#endif  // WIN9X_SUPPORT
 #endif  // WIN_NT
 		}
 		lockPrefix.copyTo(fb_prefix_lock_val, sizeof(fb_prefix_lock_val));

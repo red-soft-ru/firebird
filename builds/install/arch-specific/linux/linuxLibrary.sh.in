@@ -370,7 +370,7 @@ EOF
 	    chown root:root $initScript
     	chmod u=rwx,g=rx,o=r $initScript
 
-		if [ "${fb_install_prefix}" == "${default_prefix}" ]
+		if [ "${fb_install_prefix}" = "${default_prefix}" ]
 		then
 		    # RedHat and Mandrake specific 
     		if [ -x /sbin/chkconfig ]

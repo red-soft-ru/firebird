@@ -170,4 +170,15 @@ typedef struct GDS_QUAD_t ISC_QUAD;
 
 typedef int (*FB_SHUTDOWN_CALLBACK)(const int reason, const int mask, void* arg);
 
+struct FB_DEC16_t {
+	ISC_UINT64 fb_data[1];
+};
+
+struct FB_DEC34_t {
+	ISC_UINT64 fb_data[2];
+};
+
+typedef struct FB_DEC16_t FB_DEC16;
+typedef struct FB_DEC34_t FB_DEC34;
+
 #endif /* INCLUDE_TYPES_PUB_H */

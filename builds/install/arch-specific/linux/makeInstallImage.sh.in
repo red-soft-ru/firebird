@@ -206,7 +206,7 @@ copyFiles() {
 		cp $BuiltFBDir/examples/empbuild/*.fdb ${TargetDir}@FB_SAMPLEDBDIR@
 
 		ReadOnlyTree ${TargetDir}@FB_SAMPLEDIR@
-		chmod 0444 ${TargetDir}@FB_SAMPLEDBDIR@/*.fdb
+		chmod 0664 ${TargetDir}@FB_SAMPLEDBDIR@/*.fdb
     fi
 
 	#QLI help

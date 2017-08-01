@@ -827,6 +827,32 @@ static const struct {
 	{335545124, "42000"}, // 804 dsql_window_cant_overr_frame
 	{335545125, "42000"}, // 805 dsql_window_duplicate
 	{335545126, "54001"}, // 806 sql_too_long
+	{335545127, "HY008"}, // 807 cfg_stmt_timeout
+	{335545128, "HY008"}, // 808 att_stmt_timeout
+	{335545129, "HY008"}, // 809 req_stmt_timeout
+	{335545130, "08003"}, // 810 att_shut_killed
+	{335545131, "08003"}, // 811 att_shut_idle
+	{335545132, "08003"}, // 812 att_shut_db_down
+	{335545133, "08003"}, // 813 att_shut_engine
+	{335545134, "42000"}, // 814 overriding_without_identity
+	{335545135, "42000"}, // 815 overriding_system_invalid
+	{335545136, "42000"}, // 816 overriding_user_invalid
+	{335545137, "42000"}, // 817 overriding_system_missing
+	{335545138, "HY104"}, // 818 decprecision_err
+	{335545139, "22012"}, // 819 decfloat_divide_by_zero
+	{335545140, "22000"}, // 820 decfloat_inexact_result
+	{335545141, "22000"}, // 821 decfloat_invalid_operation
+	{335545142, "22003"}, // 822 decfloat_overflow
+	{335545143, "22003"}, // 823 decfloat_underflow
+	{335545144, "42000"}, // 824 subfunc_notdef
+	{335545145, "42000"}, // 825 subproc_notdef
+	{335545146, "42000"}, // 826 subfunc_signat
+	{335545147, "42000"}, // 827 subproc_signat
+	{335545148, "42000"}, // 828 subfunc_defvaldecl
+	{335545149, "42000"}, // 829 subproc_defvaldecl
+	{335545150, "42000"}, // 830 subfunc_not_impl
+	{335545151, "42000"}, // 831 subproc_not_impl
+	{335545152, "42000"}, // 832 sysf_invalid_hash_algorithm
 	{335740929, "00000"}, //   1 gfix_db_name
 	{335740930, "00000"}, //   2 gfix_invalid_sw
 	{335740932, "00000"}, //   4 gfix_incmp_sw
@@ -893,6 +919,7 @@ static const struct {
 	{336003110, "07002"}, //  38 dsql_no_output_sqlda
 	{336003111, "07001"}, //  39 dsql_wrong_param_num
 	{336003112, "42000"}, //  40 dsql_invalid_drop_ss_clause
+	{336003113, "42000"}, //  41 upd_ins_cannot_default
 	{336068645, "42000"}, //  37 dyn_filter_not_found
 	{336068649, "42000"}, //  41 dyn_func_not_found
 	{336068656, "42000"}, //  48 dyn_index_not_found
@@ -969,6 +996,7 @@ static const struct {
 	{336068896, "42000"}, // 288 dyn_cant_use_zero_increment
 	{336068897, "42000"}, // 289 dyn_cant_use_in_foreignkey
 	{336068898, "42000"}, // 290 dyn_defvaldecl_package_func
+	{336068904, "42000"}, // 296 dyn_cant_use_zero_inc_ident
 	{336330753, "00000"}, //   1 gbak_unknown_switch
 	{336330754, "00000"}, //   2 gbak_page_size_missing
 	{336330755, "00000"}, //   3 gbak_page_size_toobig

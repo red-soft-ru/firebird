@@ -59,16 +59,15 @@ using namespace Jrd;
 
 namespace
 {
-	// External message node.
-	class ExtMessageNode : public MessageNode
+	// Internal message node.
+	class IntMessageNode : public MessageNode
 	{
 	public:
-		ExtMessageNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, USHORT message,
+		IntMessageNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, USHORT message,
 				Array<NestConst<Parameter> >& aParameters, const Format* aFormat)
 			: MessageNode(pool),
 			  parameters(aParameters),
-			  format(aFormat),
-			  isSpecial(pool)
+			  format(aFormat)
 		{
 			setup(tdbb, csb, message, format->fmt_count);
 		}
@@ -104,10 +103,31 @@ namespace
 
 				if (!param->prm_nullable)
 					itemInfo->nullable = false;
-
-				isSpecial.getBuffer(index / 2 + 1)[index / 2] = itemInfo->isSpecial();
 			}
 
+			return type_alignments[desc->dsc_dtype];
+		}
+
+	public:
+		Array<NestConst<Parameter> >& parameters;
+		const Format* format;
+	};
+
+	// External message node.
+	class ExtMessageNode : public MessageNode
+	{
+	public:
+		ExtMessageNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, USHORT message, const Format* aFormat)
+			: MessageNode(pool),
+			  format(aFormat)
+		{
+			setup(tdbb, csb, message, format->fmt_count);
+		}
+
+		virtual USHORT setupDesc(thread_db* tdbb, CompilerScratch* csb, USHORT index,
+			dsc* desc, ItemInfo* itemInfo)
+		{
+			*desc = format->fmt_desc[index];
 			return type_alignments[desc->dsc_dtype];
 		}
 
@@ -124,32 +144,34 @@ namespace
 		}
 
 	public:
-		Array<NestConst<Parameter> >& parameters;
 		const Format* format;
-		Array<bool> isSpecial;
 	};
 
 	// Initialize output parameters with their domains default value or NULL.
 	// Kind of blr_init_variable, but for parameters.
-	class ExtInitParameterNode : public TypedNode<StmtNode, StmtNode::TYPE_EXT_INIT_PARAMETER>
+	class InitParameterNode : public TypedNode<StmtNode, StmtNode::TYPE_EXT_INIT_PARAMETER>
 	{
 	public:
-		ExtInitParameterNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
-				ExtMessageNode* aMessage, USHORT aArgNumber)
+		InitParameterNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
+				Array<NestConst<Parameter> >& parameters, MessageNode* aMessage, USHORT aArgNumber)
 			: TypedNode<StmtNode, StmtNode::TYPE_EXT_INIT_PARAMETER>(pool),
 			  message(aMessage),
 			  argNumber(aArgNumber)
 		{
-			Parameter* parameter = message->parameters[argNumber / 2];
+			Parameter* parameter = parameters[argNumber / 2];
+			defaultValueNode = NULL;
 
-			if (parameter->prm_mechanism == prm_mech_type_of ||
-				fb_utils::implicit_domain(parameter->prm_field_source.c_str()) ||
-				!parameter->prm_default_value)
+			if (parameter->prm_mechanism != prm_mech_type_of &&
+				!fb_utils::implicit_domain(parameter->prm_field_source.c_str()))
 			{
-				defaultValueNode = NULL;
+				MetaNamePair namePair(parameter->prm_field_source, "");
+
+				FieldInfo fieldInfo;
+				bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
+
+				if (exist && fieldInfo.defaultValue)
+					defaultValueNode = CMP_clone_node(tdbb, csb, fieldInfo.defaultValue);
 			}
-			else
-				defaultValueNode = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
 		}
 
 		string internalPrint(NodePrinter& printer) const
@@ -160,20 +182,20 @@ namespace
 			NODE_PRINT(printer, argNumber);
 			NODE_PRINT(printer, defaultValueNode);
 
-			return "ExtInitParameterNode";
+			return "InitParameterNode";
 		}
 
 		void genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
 		{
 		}
 
-		ExtInitParameterNode* pass1(thread_db* tdbb, CompilerScratch* csb)
+		InitParameterNode* pass1(thread_db* tdbb, CompilerScratch* csb)
 		{
 			doPass1(tdbb, csb, &defaultValueNode);
 			return this;
 		}
 
-		ExtInitParameterNode* pass2(thread_db* tdbb, CompilerScratch* csb)
+		InitParameterNode* pass2(thread_db* tdbb, CompilerScratch* csb)
 		{
 			ExprNode::doPass2(tdbb, csb, &defaultValueNode);
 			return this;
@@ -224,48 +246,45 @@ namespace
 		}
 
 		private:
-			ExtMessageNode* message;
+			MessageNode* message;
 			USHORT argNumber;
 			ValueExprNode* defaultValueNode;
 	};
 
-	// External output parameters initialization.
-	class ExtInitOutputNode : public CompoundStmtNode
+	// Output parameters initialization.
+	class InitOutputNode : public CompoundStmtNode
 	{
 	public:
-		ExtInitOutputNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
-				ExtMessageNode* message)
+		InitOutputNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
+				Array<NestConst<Parameter> >& parameters, MessageNode* message)
 			: CompoundStmtNode(pool)
 		{
 			// Iterate over the format items, except the EOF item.
 			for (USHORT i = 0; i < (message->format->fmt_count / 2) * 2; i += 2)
 			{
-				ExtInitParameterNode* init = FB_NEW_POOL(pool) ExtInitParameterNode(
-					tdbb, pool, csb, message, i);
+				InitParameterNode* init = FB_NEW_POOL(pool) InitParameterNode(
+					tdbb, pool, csb, parameters, message, i);
 				statements.add(init);
 			}
 		}
 	};
 
-	// External parameters validation.
-	class ExtValidationNode : public CompoundStmtNode
+	// Move parameters from a message to another, validating theirs values.
+	class MessageMoverNode : public CompoundStmtNode
 	{
 	public:
-		ExtValidationNode(MemoryPool& pool, ExtMessageNode* message, bool procedure, bool input)
+		MessageMoverNode(MemoryPool& pool, MessageNode* fromMessage, MessageNode* toMessage)
 			: CompoundStmtNode(pool)
 		{
 			// Iterate over the format items, except the EOF item.
-			for (USHORT i = 0; i < (message->format->fmt_count / 2) * 2; i += 2)
+			for (USHORT i = 0; i < (fromMessage->format->fmt_count / 2) * 2; i += 2)
 			{
-				if (!message->isSpecial[i / 2])
-					continue;
-
 				ParameterNode* flag = FB_NEW_POOL(pool) ParameterNode(pool);
-				flag->message = message;
+				flag->message = fromMessage;
 				flag->argNumber = i + 1;
 
 				ParameterNode* param = FB_NEW_POOL(pool) ParameterNode(pool);
-				param->message = message;
+				param->message = fromMessage;
 				param->argNumber = i;
 				param->argFlag = flag;
 
@@ -273,28 +292,17 @@ namespace
 				assign->asgnFrom = param;
 				statements.add(assign);
 
-				// It's sufficient to assign input parameters to NULL, but output parameters
-				// need to be assigned to themselves to validate correctly.
-				if (input)
-					assign->asgnTo = FB_NEW_POOL(pool) NullNode(pool);
-				else
-				{
-					flag = FB_NEW_POOL(pool) ParameterNode(pool);
-					flag->message = message;
-					flag->argNumber = i + 1;
+				flag = FB_NEW_POOL(pool) ParameterNode(pool);
+				flag->message = toMessage;
+				flag->argNumber = i + 1;
 
-					param = FB_NEW_POOL(pool) ParameterNode(pool);
-					param->message = message;
-					param->argNumber = i;
-					param->argFlag = flag;
+				param = FB_NEW_POOL(pool) ParameterNode(pool);
+				param->message = toMessage;
+				param->argNumber = i;
+				param->argFlag = flag;
 
-					assign->asgnTo = param;
-				}
+				assign->asgnTo = param;
 			}
-
-			// A stall is required to read req_proc_fetch state correctly.
-			if (procedure)
-				statements.add(FB_NEW_POOL(pool) StallNode(pool));
 		}
 	};
 
@@ -302,10 +310,11 @@ namespace
 	class ExtFunctionNode : public SuspendNode
 	{
 	public:
-		ExtFunctionNode(MemoryPool& pool, const ReceiveNode* aReceiveNode,
+		ExtFunctionNode(MemoryPool& pool, const MessageNode* aExtInMessageNode, const MessageNode* aExtOutMessageNode,
 				const ExtEngineManager::Function* aFunction)
 			: SuspendNode(pool),
-			  receiveNode(aReceiveNode),
+			  extInMessageNode(aExtInMessageNode),
+			  extOutMessageNode(aExtOutMessageNode),
 			  function(aFunction)
 		{
 		}
@@ -314,9 +323,8 @@ namespace
 		{
 			if (request->req_operation == jrd_req::req_evaluate)
 			{
-				UCHAR* inMsg = receiveNode ?
-					request->getImpure<UCHAR>(receiveNode->message->impureOffset) : NULL;
-				UCHAR* outMsg = request->getImpure<UCHAR>(message->impureOffset);
+				UCHAR* inMsg = extInMessageNode ? request->getImpure<UCHAR>(extInMessageNode->impureOffset) : NULL;
+				UCHAR* outMsg = request->getImpure<UCHAR>(extOutMessageNode->impureOffset);
 
 				function->execute(tdbb, inMsg, outMsg);
 			}
@@ -325,71 +333,73 @@ namespace
 		}
 
 	private:
-		const ReceiveNode* receiveNode;
+		const MessageNode* extInMessageNode;
+		const MessageNode* extOutMessageNode;
 		const ExtEngineManager::Function* function;
 	};
 
 	// External procedure node.
-	class ExtProcedureNode : public SuspendNode
+	class ExtProcedureNode : public CompoundStmtNode
 	{
 	public:
-		ExtProcedureNode(MemoryPool& pool, const ReceiveNode* aReceiveNode,
-				const ExtEngineManager::Procedure* aProcedure)
-			: SuspendNode(pool),
-			  receiveNode(aReceiveNode),
+		ExtProcedureNode(MemoryPool& pool, MessageNode* aExtInMessageNode, MessageNode* aExtOutMessageNode,
+				MessageNode* aIntOutMessageNode, const ExtEngineManager::Procedure* aProcedure)
+			: CompoundStmtNode(pool),
+			  extInMessageNode(aExtInMessageNode),
+			  extOutMessageNode(aExtOutMessageNode),
+			  intOutMessageNode(aIntOutMessageNode),
 			  procedure(aProcedure)
 		{
+			SuspendNode* suspend = FB_NEW_POOL(pool) SuspendNode(pool);
+			suspend->message = intOutMessageNode;
+			suspend->statement = FB_NEW_POOL(getPool()) MessageMoverNode(pool, extOutMessageNode, intOutMessageNode);
+
+			statements.add(suspend);
+			statements.add(FB_NEW_POOL(getPool()) StallNode(pool));
 		}
 
 		virtual const StmtNode* execute(thread_db* tdbb, jrd_req* request, ExeState* exeState) const
 		{
+			impure_state* const impure = request->getImpure<impure_state>(impureOffset);
 			ExtEngineManager::ResultSet*& resultSet = request->req_ext_resultset;
-			UCHAR* inMsg = receiveNode ?
-				request->getImpure<UCHAR>(receiveNode->message->impureOffset) : NULL;
-			UCHAR* outMsg = request->getImpure<UCHAR>(message->impureOffset);
-			USHORT* eof = (USHORT*) (outMsg + (IPTR) message->format->fmt_desc.back().dsc_address);
+			UCHAR* extInMsg = extInMessageNode ? request->getImpure<UCHAR>(extInMessageNode->impureOffset) : NULL;
+			UCHAR* extOutMsg = extOutMessageNode ? request->getImpure<UCHAR>(extOutMessageNode->impureOffset) : NULL;
+			UCHAR* intOutMsg = intOutMessageNode ? request->getImpure<UCHAR>(intOutMessageNode->impureOffset) : NULL;
+			SSHORT* eof = intOutMsg ?
+				(SSHORT*) (intOutMsg + (IPTR) intOutMessageNode->format->fmt_desc.back().dsc_address) : NULL;
 
 			switch (request->req_operation)
 			{
 				case jrd_req::req_evaluate:
-					fb_assert(!resultSet && *eof == 0);
-					resultSet = procedure->open(tdbb, inMsg, outMsg);
+					fb_assert(!resultSet);
+					resultSet = procedure->open(tdbb, extInMsg, extOutMsg);
 
-					if (resultSet)
-						*eof = -1;
-					else
+					if (!resultSet)
 					{
-						if (!(request->req_flags & req_proc_fetch))
+						*eof = 0;
+						break;
+					}
+					else
+						*eof = -1;
+					// fall into
+
+				case jrd_req::req_proceed:
+				case jrd_req::req_sync:
+					if (resultSet)
+					{
+						if (resultSet->fetch(tdbb) && (request->req_flags & req_proc_fetch))
+							*eof = -1;
+						else
 						{
-							request->req_operation = jrd_req::req_evaluate;
-							return statement;
+							*eof = 0;
+							delete resultSet;
+							resultSet = NULL;
 						}
 					}
 
-					request->req_operation = jrd_req::req_return;
-					// fall into
-
-				case jrd_req::req_return:
-					if (*eof == 0)
-					{
-						fb_assert(!resultSet);
-						return parentStmt;
-					}
-
-					fb_assert(resultSet);
-
-					if (!resultSet->fetch(tdbb) || !(request->req_flags & req_proc_fetch))
-					{
-						*eof = 0;
-						delete resultSet;
-						resultSet = NULL;
-					}
-
+					impure->sta_state = 0;	// suspend node
+					request->req_operation = jrd_req::req_sync;
 					break;
-
-				case jrd_req::req_proceed:
-					request->req_operation = jrd_req::req_evaluate;
-					return statement;
 
 				case jrd_req::req_unwind:
 					delete resultSet;
@@ -397,11 +407,13 @@ namespace
 					break;
 			}
 
-			return SuspendNode::execute(tdbb, request, exeState);
+			return CompoundStmtNode::execute(tdbb, request, exeState);
 		}
 
 	private:
-		const ReceiveNode* receiveNode;
+		MessageNode* extInMessageNode;
+		MessageNode* extOutMessageNode;
+		MessageNode* intOutMessageNode;
 		const ExtEngineManager::Procedure* procedure;
 	};
 
@@ -628,10 +640,10 @@ void ExtEngineManager::ExternalContextImpl::setTransaction(thread_db* tdbb)
 
 	if ((internalTransaction = newTransaction))
 	{
-		internalTransaction->getInterface()->addRef();
+		internalTransaction->getInterface(true)->addRef();
 
 		externalTransaction = MasterInterfacePtr()->registerTransaction(externalAttachment,
-			internalTransaction->getInterface());
+			internalTransaction->getInterface(true));
 	}
 }
 
@@ -662,7 +674,7 @@ Firebird::ITransaction* ExtEngineManager::ExternalContextImpl::getTransaction(
 
 const char* ExtEngineManager::ExternalContextImpl::getUserName()
 {
-	return internalAttachment->att_user->getUserName().c_str();
+	return internalAttachment->att_user ? internalAttachment->att_user->getUserName().c_str() : "";
 }
 
 const char* ExtEngineManager::ExternalContextImpl::getDatabaseName()
@@ -776,7 +788,8 @@ ExtEngineManager::ResultSet::ResultSet(thread_db* tdbb, UCHAR* inMsg, UCHAR* out
 	  firstFetch(true)
 {
 	attInfo = procedure->extManager->getEngineAttachment(tdbb, procedure->engine);
-	const MetaName& userName = procedure->prc->ssDefiner.specified && procedure->prc->ssDefiner.value ? procedure->prc->owner : "";
+	const MetaName& userName = procedure->prc->ssDefiner.specified && procedure->prc->ssDefiner.value ?
+		procedure->prc->owner : "";
 	ContextManager<IExternalProcedure> ctxManager(tdbb, attInfo, procedure->procedure,
 		(procedure->prc->getName().package.isEmpty() ?
 			CallerName(obj_procedure, procedure->prc->getName().identifier, userName) :
@@ -810,7 +823,8 @@ bool ExtEngineManager::ResultSet::fetch(thread_db* tdbb)
 	if (!resultSet)
 		return wasFirstFetch;
 
-	const MetaName& userName = procedure->prc->ssDefiner.specified && procedure->prc->ssDefiner.value ? procedure->prc->owner : "";
+	const MetaName& userName = procedure->prc->ssDefiner.specified && procedure->prc->ssDefiner.value ?
+		procedure->prc->owner : "";
 	ContextManager<IExternalProcedure> ctxManager(tdbb, attInfo, charSet,
 		(procedure->prc->getName().package.isEmpty() ?
 			CallerName(obj_procedure, procedure->prc->getName().identifier, userName) :
@@ -1078,6 +1092,7 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 	status.check();
 
 	IExternalFunction* externalFunction;
+	RefPtr<IMessageMetadata> extInputParameters, extOutputParameters;
 
 	{	// scope
 		EngineCheckout cout(tdbb, FB_FUNCTION);
@@ -1092,15 +1107,18 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 				Arg::Gds(isc_eem_func_not_returned) << udf->getName().toString() << engine);
 		}
 
-		metadata->inputParameters = inBuilder->getMetadata(&status);
+		extInputParameters = inBuilder->getMetadata(&status);
 		status.check();
 
-		metadata->outputParameters = outBuilder->getMetadata(&status);
+		extOutputParameters = outBuilder->getMetadata(&status);
 		status.check();
 	}
 
 	udf->setInputFormat(Routine::createFormat(pool, metadata->inputParameters, false));
 	udf->setOutputFormat(Routine::createFormat(pool, metadata->outputParameters, true));
+
+	const Format* extInputFormat = Routine::createFormat(pool, extInputParameters, false);
+	const Format* extOutputFormat = Routine::createFormat(pool, extOutputParameters, true);
 
 	try
 	{
@@ -1109,38 +1127,48 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 
 		CompoundStmtNode* mainNode = FB_NEW_POOL(getPool()) CompoundStmtNode(getPool());
 
-		ExtMessageNode* inMessageNode = udf->getInputFields().hasData() ?
-			FB_NEW_POOL(getPool()) ExtMessageNode(tdbb, getPool(), csb, 0,
+		IntMessageNode* intInMessageNode = udf->getInputFields().hasData() ?
+			FB_NEW_POOL(getPool()) IntMessageNode(tdbb, getPool(), csb, 0,
 				udf->getInputFields(), udf->getInputFormat()) :
 			NULL;
-		if (inMessageNode)
-			mainNode->statements.add(inMessageNode);
+		ExtMessageNode* extInMessageNode = NULL;
 
-		ExtMessageNode* outMessageNode = FB_NEW_POOL(getPool()) ExtMessageNode(tdbb, getPool(), csb, 1,
+		if (intInMessageNode)
+		{
+			mainNode->statements.add(intInMessageNode);
+
+			extInMessageNode = FB_NEW_POOL(getPool()) ExtMessageNode(tdbb, getPool(), csb, 2, extInputFormat);
+			mainNode->statements.add(extInMessageNode);
+		}
+
+		IntMessageNode* intOutMessageNode = FB_NEW_POOL(getPool()) IntMessageNode(tdbb, getPool(), csb, 1,
 			udf->getOutputFields(), udf->getOutputFormat());
-		mainNode->statements.add(outMessageNode);
+		mainNode->statements.add(intOutMessageNode);
 
-		ExtInitOutputNode* initOutputNode = FB_NEW_POOL(getPool()) ExtInitOutputNode(
-			tdbb, getPool(), csb, outMessageNode);
+		ExtMessageNode* extOutMessageNode = FB_NEW_POOL(getPool()) ExtMessageNode(tdbb, getPool(), csb, 3,
+			extOutputFormat);
+		mainNode->statements.add(extOutMessageNode);
+
+		// Initialize the output fields into the external message.
+		InitOutputNode* initOutputNode = FB_NEW_POOL(getPool()) InitOutputNode(
+			tdbb, getPool(), csb, udf->getOutputFields(), extOutMessageNode);
 		mainNode->statements.add(initOutputNode);
 
-		ReceiveNode* receiveNode = inMessageNode ?
-			FB_NEW_POOL(getPool()) ReceiveNode(getPool()) : NULL;
-
-		if (inMessageNode)
+		if (intInMessageNode)
 		{
-			receiveNode->message = inMessageNode;
-			receiveNode->statement = FB_NEW_POOL(getPool()) ExtValidationNode(
-				getPool(), inMessageNode, false, true);
+			ReceiveNode* receiveNode = intInMessageNode ? FB_NEW_POOL(getPool()) ReceiveNode(getPool()) : NULL;
+			receiveNode->message = intInMessageNode;
+			receiveNode->statement = FB_NEW_POOL(getPool()) MessageMoverNode(
+				getPool(), intInMessageNode, extInMessageNode);
 			mainNode->statements.add(receiveNode);
 		}
 
 		ExtFunctionNode* extFunctionNode = FB_NEW_POOL(getPool()) ExtFunctionNode(getPool(),
-			receiveNode, udf->fun_external);
+			extInMessageNode, extOutMessageNode, udf->fun_external);
 		mainNode->statements.add(extFunctionNode);
-		extFunctionNode->message = outMessageNode;
-		extFunctionNode->statement = FB_NEW_POOL(getPool()) ExtValidationNode(
-			getPool(), outMessageNode, false, false);
+		extFunctionNode->message = intOutMessageNode;
+		extFunctionNode->statement = FB_NEW_POOL(getPool()) MessageMoverNode(
+			getPool(), extOutMessageNode, intOutMessageNode);
 
 		JrdStatement* statement = udf->getStatement();
 		PAR_preparsed_node(tdbb, NULL, mainNode, NULL, &csb, &statement, false, 0);
@@ -1188,6 +1216,7 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 	status.check();
 
 	IExternalProcedure* externalProcedure;
+	RefPtr<IMessageMetadata> extInputParameters, extOutputParameters;
 
 	{	// scope
 		EngineCheckout cout(tdbb, FB_FUNCTION);
@@ -1203,15 +1232,18 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 					prc->getName().toString() << engine);
 		}
 
-		metadata->inputParameters = inBuilder->getMetadata(&status);
+		extInputParameters = inBuilder->getMetadata(&status);
 		status.check();
 
-		metadata->outputParameters = outBuilder->getMetadata(&status);
+		extOutputParameters = outBuilder->getMetadata(&status);
 		status.check();
 	}
 
 	prc->setInputFormat(Routine::createFormat(pool, metadata->inputParameters, false));
 	prc->setOutputFormat(Routine::createFormat(pool, metadata->outputParameters, true));
+
+	const Format* extInputFormat = Routine::createFormat(pool, extInputParameters, false);
+	const Format* extOutputFormat = Routine::createFormat(pool, extOutputParameters, true);
 
 	try
 	{
@@ -1220,38 +1252,54 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 
 		CompoundStmtNode* mainNode = FB_NEW_POOL(getPool()) CompoundStmtNode(getPool());
 
-		ExtMessageNode* inMessageNode = prc->getInputFields().hasData() ?
-			FB_NEW_POOL(getPool()) ExtMessageNode(tdbb, getPool(), csb, 0,
+		IntMessageNode* intInMessageNode = prc->getInputFields().hasData() ?
+			FB_NEW_POOL(getPool()) IntMessageNode(tdbb, getPool(), csb, 0,
 				prc->getInputFields(), prc->getInputFormat()) :
 			NULL;
-		if (inMessageNode)
-			mainNode->statements.add(inMessageNode);
+		ExtMessageNode* extInMessageNode = NULL;
 
-		ExtMessageNode* outMessageNode = FB_NEW_POOL(getPool()) ExtMessageNode(tdbb, getPool(), csb, 1,
-			prc->getOutputFields(), prc->getOutputFormat());
-		mainNode->statements.add(outMessageNode);
-
-		ExtInitOutputNode* initOutputNode = FB_NEW_POOL(getPool()) ExtInitOutputNode(
-			tdbb, getPool(), csb, outMessageNode);
-		mainNode->statements.add(initOutputNode);
-
-		ReceiveNode* receiveNode = inMessageNode ?
-			FB_NEW_POOL(getPool()) ReceiveNode(getPool()) : NULL;
-
-		if (inMessageNode)
+		if (intInMessageNode)
 		{
-			receiveNode->message = inMessageNode;
-			receiveNode->statement = FB_NEW_POOL(getPool()) ExtValidationNode(
-				getPool(), inMessageNode, true, true);
-			mainNode->statements.add(receiveNode);
+			mainNode->statements.add(intInMessageNode);
+
+			extInMessageNode = FB_NEW_POOL(getPool()) ExtMessageNode(tdbb, getPool(), csb, 2, extInputFormat);
+			mainNode->statements.add(extInMessageNode);
 		}
 
+		IntMessageNode* intOutMessageNode = FB_NEW_POOL(getPool()) IntMessageNode(tdbb, getPool(), csb, 1,
+			prc->getOutputFields(), prc->getOutputFormat());
+		mainNode->statements.add(intOutMessageNode);
+
+		ExtMessageNode* extOutMessageNode = FB_NEW_POOL(getPool()) ExtMessageNode(tdbb, getPool(),
+			csb, 3, extOutputFormat);
+		mainNode->statements.add(extOutMessageNode);
+
+		// Initialize the output fields into the external message.
+		InitOutputNode* initOutputNode = FB_NEW_POOL(getPool()) InitOutputNode(
+			tdbb, getPool(), csb, prc->getOutputFields(), extOutMessageNode);
+		mainNode->statements.add(initOutputNode);
+
+		ReceiveNode* receiveNode = intInMessageNode ?
+			FB_NEW_POOL(getPool()) ReceiveNode(getPool()) : NULL;
+
+		if (intInMessageNode)
+		{
+			CompoundStmtNode* receiveSubStatement = FB_NEW_POOL(getPool()) CompoundStmtNode(getPool());
+			receiveSubStatement->statements.add(FB_NEW_POOL(getPool()) MessageMoverNode(
+				getPool(), intInMessageNode, extInMessageNode));
+			receiveSubStatement->statements.add(FB_NEW_POOL(getPool()) StallNode(getPool()));
+
+			receiveNode->statement = receiveSubStatement;
+			receiveNode->message = intInMessageNode;
+
+			mainNode->statements.add(receiveNode);
+		}
+		else
+			mainNode->statements.add(FB_NEW_POOL(getPool()) StallNode(getPool()));
+
 		ExtProcedureNode* extProcedureNode = FB_NEW_POOL(getPool()) ExtProcedureNode(getPool(),
-			receiveNode, prc->getExternal());
+			extInMessageNode, extOutMessageNode, intOutMessageNode, prc->getExternal());
 		mainNode->statements.add(extProcedureNode);
-		extProcedureNode->message = outMessageNode;
-		extProcedureNode->statement = FB_NEW_POOL(getPool()) ExtValidationNode(
-			getPool(), outMessageNode, true, false);
 
 		JrdStatement* statement = prc->getStatement();
 		PAR_preparsed_node(tdbb, NULL, mainNode, NULL, &csb, &statement, false, 0);

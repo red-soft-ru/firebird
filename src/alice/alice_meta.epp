@@ -30,7 +30,6 @@
 #include "firebird.h"
 #include <stdio.h>
 #include "../jrd/ibase.h"
-//#include "../jrd/license.h"
 #include "../alice/alice.h"
 #include "../alice/alice_meta.h"
 #include "../yvalve/gds_proto.h"

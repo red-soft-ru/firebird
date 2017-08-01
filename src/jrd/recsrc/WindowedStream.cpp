@@ -205,7 +205,7 @@ WindowedStream::WindowedStream(thread_db* tdbb, CompilerScratch* csb,
 				 source != end;
 				 ++source)
 			{
-				const AggNode* aggNode = (*source)->as<AggNode>();
+				const AggNode* aggNode = nodeAs<AggNode>(*source);
 
 				if (aggNode)
 				{
@@ -443,7 +443,7 @@ WindowedStream::WindowStream::WindowStream(thread_db* tdbb, CompilerScratch* csb
 		 source != sourceEnd;
 		 ++source, ++target)
 	{
-		const AggNode* aggNode = (*source)->as<AggNode>();
+		const AggNode* aggNode = nodeAs<AggNode>(*source);
 
 		if (aggNode)
 		{
@@ -494,9 +494,9 @@ WindowedStream::WindowStream::WindowStream(thread_db* tdbb, CompilerScratch* csb
 			//// TODO: Better check for invariants.
 
 			if (frame->value &&
-				(frame->value->is<LiteralNode>() ||
-				 frame->value->is<VariableNode>() ||
-				 frame->value->is<ParameterNode>()))
+				(nodeIs<LiteralNode>(frame->value) ||
+				 nodeIs<VariableNode>(frame->value) ||
+				 nodeIs<ParameterNode>(frame->value)))
 			{
 				m_invariantOffsets |= i == 0 ? 0x1 : 0x2;
 			}
@@ -839,9 +839,9 @@ bool WindowedStream::WindowStream::getRecord(thread_db* tdbb) const
 			 source != sourceEnd;
 			 ++source, ++target)
 		{
-			const AggNode* aggNode = (*source)->as<AggNode>();
+			const AggNode* aggNode = nodeAs<AggNode>(*source);
 
-			const FieldNode* field = (*target)->as<FieldNode>();
+			const FieldNode* field = nodeAs<FieldNode>(*target);
 			const USHORT id = field->fieldId;
 			Record* record = request->req_rpb[field->fieldStream].rpb_record;
 
@@ -869,7 +869,7 @@ bool WindowedStream::WindowStream::getRecord(thread_db* tdbb) const
 			 source != sourceEnd;
 			 ++source, ++target)
 		{
-			const AggNode* aggNode = (*source)->as<AggNode>();
+			const AggNode* aggNode = nodeAs<AggNode>(*source);
 
 			if (!aggNode)
 				EXE_assignment(tdbb, *source, *target);
@@ -916,7 +916,7 @@ const void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, jrd_req*
 		if (m_frameExtent->unit == WindowClause::FrameExtent::Unit::ROWS)
 		{
 			// Purposedly used 32-bit here. So long distance will complicate things for no gain.
-			impureValue->vlux_count = MOV_get_long(desc, 0);
+			impureValue->vlux_count = MOV_get_long(tdbb, desc, 0);
 
 			if (impureValue->vlux_count < 0)
 				error = true;
@@ -924,7 +924,7 @@ const void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, jrd_req*
 			if (frame->bound == WindowClause::Frame::Bound::PRECEDING)
 				impureValue->vlux_count = -impureValue->vlux_count;
 		}
-		else if (MOV_compare(desc, &zeroDsc) < 0)
+		else if (MOV_compare(tdbb, desc, &zeroDsc) < 0)
 			error = true;
 
 		if (!error)

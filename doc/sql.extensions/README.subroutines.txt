@@ -7,7 +7,7 @@ Author:
 
 Description:
     Support for PSQL subroutines (functions and procedures) inside functions, procedures, triggers
-    and EXECUTE BLOCK. Subroutines are declared in the main routine and may be used from there.
+    and EXECUTE BLOCK. Subroutines are declared in the main routine and may be used from there or others subroutines.
 
 Syntax:
     <declaration item> ::=
@@ -15,7 +15,21 @@ Syntax:
         |
         DECLARE [VARIABLE] CURSOR <cursor name> FOR (<query>);
         |
-        DECLARE FUNCTION <function name> RETURNS <data type>
+        <subroutine declaration>
+        |
+        <subroutine implementation>
+
+    <subroutine declaration> ::=
+        DECLARE FUNCTION <function name> [ (<input parameters>) ]
+            RETURNS <data type>
+            [ [ NOT ] DETERMINISTIC ] ;
+        |
+        DECLARE PROCEDURE <procedure name> [ (<input parameters>) ] [ RETURNS (<output parameters>) ] ;
+
+    <subroutine implementation> ::=
+        DECLARE FUNCTION <function name> [ (<input parameters>) ]
+            RETURNS <data type>
+            [ [ NOT ] DETERMINISTIC ]
         AS
             ...
         BEGIN
@@ -32,8 +46,11 @@ Syntax:
 Limitations:
     1) Subroutines may not be nested in another subroutine. They are only supported in the main
        routine.
-    2) Currently, a subroutine may not directly access or use variables, cursors or another
-       subroutines of the main statements. This may be allowed in the future.
+    2) Currently, a subroutine may not directly access or use variables or cursors of the
+       main statements. This may be allowed in the future.
+
+Notes:
+    1) Starting in FB 4, subroutines may be recursive or call others subroutines.
 
 Examples:
     set term !;
@@ -89,3 +106,57 @@ Examples:
     end!
 
     select func1(5, 6) from rdb$database!
+
+
+    -- 3) Recursive sub-function in EXECUTE BLOCK.
+
+    execute block returns (i integer, o integer)
+    as
+        -- Recursive function without forward declaration.
+        declare function fibonacci(n integer) returns integer
+        as
+        begin
+            if (n = 0 or n = 1) then
+                return n;
+            else
+                return fibonacci(n - 1) + fibonacci(n - 2);
+        end
+    begin
+        i = 0;
+
+        while (i < 10)
+        do
+        begin
+            o = fibonacci(i);
+            suspend;
+            i = i + 1;
+        end
+    end!
+
+
+    -- 4) Example with forward declaration and parameter with default values.
+
+    execute block returns (o integer)
+    as
+        -- Forward declaration of P1.
+        declare procedure p1(i integer = 1) returns (o integer);
+
+        -- Forward declaration of P2.
+        declare procedure p2(i integer) returns (o integer);
+
+        -- Implementation of P1 should not re-declare parameter default value.
+        declare procedure p1(i integer) returns (o integer)
+        as
+        begin
+            execute procedure p2(i) returning_values o;
+        end
+
+        declare procedure p2(i integer) returns (o integer)
+        as
+        begin
+            o = i;
+        end
+    begin
+        execute procedure p1 returning_values o;
+        suspend;
+    end!

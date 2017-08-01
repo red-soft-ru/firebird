@@ -89,6 +89,7 @@ ISC_STATUS API_ROUTINE isc_dsql_prepare_m(ISC_STATUS*, FB_API_HANDLE*,
 											 SCHAR*);
 ISC_STATUS API_ROUTINE isc_dsql_set_cursor_name(ISC_STATUS*, FB_API_HANDLE*,
 												   const SCHAR*, USHORT);
+ISC_STATUS API_ROUTINE fb_dsql_set_timeout(ISC_STATUS*, FB_API_HANDLE*, ULONG timeout);
 ISC_STATUS API_ROUTINE isc_dsql_sql_info(ISC_STATUS*, FB_API_HANDLE*, SSHORT,
 											const SCHAR*, SSHORT, SCHAR*);
 //ISC_STATUS API_ROUTINE isc_prepare_transaction2(ISC_STATUS*, FB_API_HANDLE*, USHORT,

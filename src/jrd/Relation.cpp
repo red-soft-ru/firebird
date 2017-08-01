@@ -273,7 +273,7 @@ void jrd_rel::RelPagesSnapshot::clear()
 
 bool jrd_rel::hasTriggers() const
 {
-	typedef const trig_vec* ctv;
+	typedef const TrigVector* ctv;
 	ctv trigs[6] = // non-const array, don't want optimization tricks by the compiler.
 	{
 		rel_pre_erase,

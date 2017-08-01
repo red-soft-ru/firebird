@@ -268,11 +268,20 @@ namespace Jrd
 		return Module();
 	}
 
+	Module::~Module()
+	{
+		if (interMod)
+		{
+			Firebird::MutexLockGuard lg(modulesMutex, FB_FUNCTION);
+			interMod = NULL;	// This makes RefPtr call release()
+		}
+	}
+
 	Module::InternalModule::~InternalModule()
 	{
-		delete handle;
+		fb_assert(modulesMutex->locked());
 
-		Firebird::MutexLockGuard lg(modulesMutex, FB_FUNCTION);
+		delete handle;
 
 		for (FB_SIZE_T m = 0; m < loadedModules().getCount(); m++)
 		{

@@ -32,10 +32,7 @@
 #include "gen/iberror.h"
 
 #include "../jrd/constants.h"
-#include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/init.h"
-#include "../common/classes/Hash.h"
-#include "../common/classes/GenericMap.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/classes/SyncObject.h"
 #include "../common/classes/MetaName.h"
@@ -62,11 +59,15 @@ using namespace Jrd;
 
 namespace {
 
-const unsigned FLAG_DB = 1;
-const unsigned FLAG_SEC = 2;
+// internalFlags bits
+const ULONG FLAG_DB =		1;
+const ULONG FLAG_SEC =		2;
+const ULONG FLAG_DOWN_DB =	4;
+const ULONG FLAG_DOWN_SEC =	8;
 
-const unsigned FLAG_USER = 1;
-const unsigned FLAG_ROLE = 2;
+// flagRolUsr values
+const ULONG FLAG_USER = 1;
+const ULONG FLAG_ROLE = 2;
 
 const char* NM_ROLE = "Role";
 const char* NM_USER = "User";
@@ -81,6 +82,10 @@ void check(const char* s, IStatus* st)
 	newStatus << Arg::Gds(isc_map_load) << s;
 	newStatus.raise();
 }
+
+} // anonymous namespace
+
+namespace Jrd {
 
 class AuthWriter : public ClumpletWriter
 {
@@ -145,364 +150,415 @@ private:
 	unsigned char sequence;
 };
 
-class Map;
-typedef HashTable<Map, DEFAULT_HASH_SIZE, Map, DefaultKeyValue<Map>, Map> MapHash;
+} // namespace Jrd
 
-class Map : public MapHash::Entry, public GlobalStorage
+
+Mapping::DbHandle::DbHandle()
+{ }
+
+void Mapping::DbHandle::setAttachment(IAttachment* att)
 {
-public:
-	static FB_SIZE_T hash(const Map& value, FB_SIZE_T hashSize)
+	if (att)
 	{
-		NoCaseString key = value.makeHashKey();
-		return DefaultHash<Map>::hash(key.c_str(), key.length(), hashSize);
+		MAP_DEBUG(fprintf(stderr, "Using existing db handle %p\n", att));
+		assign(att);
 	}
+}
 
-	NoCaseString makeHashKey() const
-	{
-		NoCaseString key;
-		key += usng;
-		MAP_DEBUG(key += ':');
-		key += plugin;
-		MAP_DEBUG(key += ':');
-		key += db;
-		MAP_DEBUG(key += ':');
-		key += fromType;
-		MAP_DEBUG(key += ':');
-		key += from;
-
-		key.upper();
-		return key;
-	}
-
-	NoCaseString plugin, db, fromType, from, to;
-	bool toRole;
-	char usng;
-
-	Map(const char* aUsing, const char* aPlugin, const char* aDb,
-		const char* aFromType, const char* aFrom,
-		SSHORT aRole, const char* aTo)
-		: plugin(getPool()), db(getPool()), fromType(getPool()),
-		  from(getPool()), to(getPool()), toRole(aRole ? true : false), usng(aUsing[0])
-	{
-		plugin = aPlugin;
-		db = aDb;
-		fromType = aFromType;
-		from = aFrom;
-		to = aTo;
-
-		trimAll();
-	}
-
-	explicit Map(AuthReader::Info& info)   //type, name, plugin, secDb
-		: plugin(getPool()), db(getPool()),
-		  fromType(getPool()), from(getPool()), to(getPool()),
-		  toRole(false), usng(info.plugin.hasData() ? 'P' : 'M')
-	{
-		plugin = info.plugin.hasData() ? info.plugin.c_str() : "*";
-		db = info.secDb.hasData() ? info.secDb.c_str() : "*";
-		fromType = info.type;
-		from = info.name.hasData() ? info.name.c_str() : "*";
-
-		trimAll();
-	}
-
-	void trimAll()
-	{
-		plugin.rtrim();
-		db.rtrim();
-		fromType.rtrim();
-		from.rtrim();
-		to.rtrim();
-	}
-
-	virtual bool isEqual(const Map& k) const
-	{
-		return usng == k.usng &&
-			plugin == k.plugin &&
-			db == k.db &&
-			fromType == k.fromType &&
-			from == k.from ;
-	}
-
-	virtual Map* get()
-	{
-		return this;
-	}
-};
-
-class Cache : public MapHash, public GlobalStorage
+void Mapping::DbHandle::clear()
 {
-public:
-	Cache(const NoCaseString& aliasDb, const NoCaseString& db)
-		: alias(getPool(), aliasDb), name(getPool(), db),
-		  dataFlag(false), downFlag(false)
+	assign(nullptr);
+}
+
+bool Mapping::DbHandle::attach(const char* aliasDb, ICryptKeyCallback* cryptCb)
+{
+	FbLocalStatus st;
+	bool down = false;		// true if on attach db is shutdown
+
+	if (hasData())
 	{
-		enableDuplicates();
+		MAP_DEBUG(fprintf(stderr, "Already attached %s\n", aliasDb));
+		return down;
 	}
 
-	void populate(IAttachment *att, bool isDown)
+	DispatcherPtr prov;
+	if (cryptCb)
 	{
-		FbLocalStatus st;
+		prov->setDbCryptCallback(&st, cryptCb);
+		check("IProvider::setDbCryptCallback", &st);
+	}
 
-		if (dataFlag)
+	ClumpletWriter embeddedSysdba(ClumpletWriter::Tagged, 1024, isc_dpb_version1);
+	embeddedSysdba.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
+	embeddedSysdba.insertByte(isc_dpb_sec_attach, TRUE);
+	embeddedSysdba.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
+	embeddedSysdba.insertByte(isc_dpb_map_attach, TRUE);
+	embeddedSysdba.insertByte(isc_dpb_no_db_triggers, TRUE);
+
+	MAP_DEBUG(fprintf(stderr, "Attach %s\n", aliasDb));
+	IAttachment* att = prov->attachDatabase(&st, aliasDb,
+		embeddedSysdba.getBufferLength(), embeddedSysdba.getBuffer());
+
+	if (st->getState() & IStatus::STATE_ERRORS)
+	{
+		const ISC_STATUS* s = st->getErrors();
+		MAP_DEBUG(isc_print_status(s));
+		bool missing = fb_utils::containsErrorCode(s, isc_io_error);
+		down = fb_utils::containsErrorCode(s, isc_shutdown);
+		if (!(missing || down))
+			check("IProvider::attachDatabase", &st);
+
+		// down/missing security DB is not a reason to fail mapping
+	}
+	else
+		assignRefNoIncr(att);
+
+	MAP_DEBUG(fprintf(stderr, "Att=%p\n", att));
+
+	return down;
+}
+
+
+FB_SIZE_T Mapping::Map::hash(const Map& value, FB_SIZE_T hashSize)
+{
+	NoCaseString key = value.makeHashKey();
+	return DefaultHash<Map>::hash(key.c_str(), key.length(), hashSize);
+}
+
+NoCaseString Mapping::Map::makeHashKey() const
+{
+	NoCaseString key;
+	key += usng;
+	MAP_DEBUG(key += ':');
+	key += plugin;
+	MAP_DEBUG(key += ':');
+	key += db;
+	MAP_DEBUG(key += ':');
+	key += fromType;
+	MAP_DEBUG(key += ':');
+	key += from;
+
+	key.upper();
+	return key;
+}
+
+Mapping::Map::Map(const char* aUsing, const char* aPlugin, const char* aDb,
+	const char* aFromType, const char* aFrom,
+	SSHORT aRole, const char* aTo)
+	: plugin(getPool()), db(getPool()), fromType(getPool()),
+	  from(getPool()), to(getPool()), toRole(aRole ? true : false), usng(aUsing[0])
+{
+	plugin = aPlugin;
+	db = aDb;
+	fromType = aFromType;
+	from = aFrom;
+	to = aTo;
+
+	trimAll();
+}
+
+Mapping::Map::Map(AuthReader::Info& info)   //type, name, plugin, secDb
+	: plugin(getPool()), db(getPool()),
+	  fromType(getPool()), from(getPool()), to(getPool()),
+	  toRole(false), usng(info.plugin.hasData() ? 'P' : 'M')
+{
+	plugin = info.plugin.hasData() ? info.plugin.c_str() : "*";
+	db = info.secDb.hasData() ? info.secDb.c_str() : "*";
+	fromType = info.type;
+	from = info.name.hasData() ? info.name.c_str() : "*";
+
+	trimAll();
+}
+
+void Mapping::Map::trimAll()
+{
+	plugin.rtrim();
+	db.rtrim();
+	fromType.rtrim();
+	from.rtrim();
+	to.rtrim();
+}
+
+bool Mapping::Map::isEqual(const Map& k) const
+{
+	return usng == k.usng &&
+		plugin == k.plugin &&
+		db == k.db &&
+		fromType == k.fromType &&
+		from == k.from ;
+}
+
+Mapping::Map* Mapping::Map::get()
+{
+	return this;
+}
+
+
+Mapping::Cache::Cache(const NoCaseString& aliasDb, const NoCaseString& db)
+	: alias(getPool(), aliasDb), name(getPool(), db),
+	  dataFlag(false)
+{
+	enableDuplicates();
+}
+
+Mapping::Cache::~Cache()
+{
+	cleanup(eraseEntry);
+}
+
+bool Mapping::Cache::populate(IAttachment *att)
+{
+	FbLocalStatus st;
+
+	if (dataFlag)
+	{
+		return false;
+	}
+
+	if (!att)
+	{
+		dataFlag = true;
+		return false;
+	}
+
+	MAP_DEBUG(fprintf(stderr, "Populate cache for %s\n", name.c_str()));
+
+	ITransaction* tra = nullptr;
+	IResultSet* curs = nullptr;
+
+	try
+	{
+		ClumpletWriter readOnly(ClumpletWriter::Tpb, MAX_DPB_SIZE, isc_tpb_version1);
+		readOnly.insertTag(isc_tpb_read);
+		readOnly.insertTag(isc_tpb_wait);
+		tra = att->startTransaction(&st, readOnly.getBufferLength(), readOnly.getBuffer());
+		check("IAttachment::startTransaction", &st);
+
+		Message mMap;
+		Field<Text> usng(mMap, 1);
+		Field<Varying> plugin(mMap, MAX_SQL_IDENTIFIER_SIZE);
+		Field<Varying> db(mMap, MAX_SQL_IDENTIFIER_SIZE);
+		Field<Varying> fromType(mMap, MAX_SQL_IDENTIFIER_SIZE);
+		Field<Varying> from(mMap, 255);
+		Field<SSHORT> role(mMap);
+		Field<Varying> to(mMap, MAX_SQL_IDENTIFIER_SIZE);
+
+		curs = att->openCursor(&st, tra, 0,
+			"SELECT RDB$MAP_USING, RDB$MAP_PLUGIN, RDB$MAP_DB, RDB$MAP_FROM_TYPE, "
+			"	RDB$MAP_FROM, RDB$MAP_TO_TYPE, RDB$MAP_TO "
+			"FROM RDB$AUTH_MAPPING",
+			3, nullptr, nullptr, mMap.getMetadata(), nullptr, 0);
+		if (st->getState() & IStatus::STATE_ERRORS)
 		{
-			return;
-		}
-
-		if (!att)
-		{
-			dataFlag = true;
-			downFlag = isDown;
-			return;
-		}
-
-		MAP_DEBUG(fprintf(stderr, "Populate cache for %s\n", name.c_str()));
-
-		ITransaction* tra = NULL;
-		IResultSet* curs = NULL;
-
-		try
-		{
-			cleanup(eraseEntry);
-
-			ClumpletWriter readOnly(ClumpletWriter::Tpb, MAX_DPB_SIZE, isc_tpb_version1);
-			readOnly.insertTag(isc_tpb_read);
-			readOnly.insertTag(isc_tpb_wait);
-			tra = att->startTransaction(&st, readOnly.getBufferLength(), readOnly.getBuffer());
-			check("IAttachment::startTransaction", &st);
-
-			Message mMap;
-			Field<Text> usng(mMap, 1);
-			Field<Varying> plugin(mMap, MAX_SQL_IDENTIFIER_SIZE);
-			Field<Varying> db(mMap, MAX_SQL_IDENTIFIER_SIZE);
-			Field<Varying> fromType(mMap, MAX_SQL_IDENTIFIER_SIZE);
-			Field<Varying> from(mMap, 255);
-			Field<SSHORT> role(mMap);
-			Field<Varying> to(mMap, MAX_SQL_IDENTIFIER_SIZE);
-
-			curs = att->openCursor(&st, tra, 0,
-				"SELECT RDB$MAP_USING, RDB$MAP_PLUGIN, RDB$MAP_DB, RDB$MAP_FROM_TYPE, "
-				"	RDB$MAP_FROM, RDB$MAP_TO_TYPE, RDB$MAP_TO "
-				"FROM RDB$AUTH_MAPPING",
-				3, NULL, NULL, mMap.getMetadata(), NULL, 0);
-			if (st->getState() & IStatus::STATE_ERRORS)
+			if (fb_utils::containsErrorCode(st->getErrors(), isc_dsql_relation_err))
 			{
-				if (fb_utils::containsErrorCode(st->getErrors(), isc_dsql_relation_err))
-				{
-					// isc_dsql_relation_err when opening cursor - i.e. table RDB$AUTH_MAPPING
-					// is missing due to non-FB3 security DB
-					tra->release();
-					dataFlag = true;
-					return;
-				}
-				check("IAttachment::openCursor", &st);
-			}
-
-			while (curs->fetchNext(&st, mMap.getBuffer()) == IStatus::RESULT_OK)
-			{
-				const char* expandedDb = "*";
-				PathName target;
-				if (!db.null)
-				{
-					expandedDb = db;
-					MAP_DEBUG(fprintf(stderr, "non-expandedDb '%s'\n", expandedDb));
-					expandDatabaseName(expandedDb, target, NULL);
-					expandedDb = target.c_str();
-					MAP_DEBUG(fprintf(stderr, "expandedDb '%s'\n", expandedDb));
-				}
-
-				Map* map = FB_NEW Map(usng, plugin.null ? "*" : plugin, expandedDb,
-					fromType, from, role, to.null ? "*" : to);
-				MAP_DEBUG(fprintf(stderr, "Add = %s\n", map->makeHashKey().c_str()));
-				add(map);
-			}
-			check("IResultSet::fetchNext", &st);
-
-			curs->close(&st);
-			check("IResultSet::close", &st);
-			curs = NULL;
-
-			tra->rollback(&st);
-			check("ITransaction::rollback", &st);
-			tra = NULL;
-
-			dataFlag = true;
-			downFlag = false;
-		}
-		catch (const Exception&)
-		{
-			if (curs)
-				curs->release();
-			if (tra)
+				// isc_dsql_relation_err when opening cursor - i.e. table RDB$AUTH_MAPPING
+				// is missing due to non-FB3 security DB
 				tra->release();
-			throw;
+				dataFlag = true;
+				return false;
+			}
+			check("IAttachment::openCursor", &st);
 		}
-	}
 
-	void map(bool flagWild, AuthReader::Info& info, AuthWriter& newBlock)
-	{
-		if (info.type == TYPE_SEEN)
-			return;
-
-		Map from(info);
-
-		if (from.from == "*")
-			Arg::Gds(isc_map_aster).raise();
-
-		if (!flagWild)
-			search(info, from, newBlock, from.from);
-		else
-			varUsing(info, from, newBlock);
-	}
-
-	void search(AuthReader::Info& info, const Map& from, AuthWriter& newBlock,
-		const NoCaseString& originalUserName)
-	{
-		MAP_DEBUG(fprintf(stderr, "Key = %s\n", from.makeHashKey().c_str()));
-		if (!dataFlag)
-			return;
-
-		for (Map* to = lookup(from); to; to = to->next(from))
+		while (curs->fetchNext(&st, mMap.getBuffer()) == IStatus::RESULT_OK)
 		{
-			MAP_DEBUG(fprintf(stderr, "Match!!\n"));
-			unsigned flagRolUsr = to->toRole ? FLAG_ROLE : FLAG_USER;
-			if (info.found & flagRolUsr)
-				continue;
-			if (info.current & flagRolUsr)
-				(Arg::Gds(isc_map_multi) << originalUserName).raise();
+			const char* expandedDb = "*";
+			PathName target;
+			if (!db.null)
+			{
+				expandedDb = db;
+				MAP_DEBUG(fprintf(stderr, "non-expandedDb '%s'\n", expandedDb));
+				expandDatabaseName(expandedDb, target, nullptr);
+				expandedDb = target.c_str();
+				MAP_DEBUG(fprintf(stderr, "expandedDb '%s'\n", expandedDb));
+			}
 
-			info.current |= flagRolUsr;
-
-			AuthReader::Info newInfo;
-			newInfo.type = to->toRole ? NM_ROLE : NM_USER;
-			newInfo.name = to->to == "*" ? originalUserName : to->to;
-	        newInfo.secDb = this->name;
-	        newInfo.origPlug = info.origPlug.hasData() ? info.origPlug : info.plugin;
-			newBlock.add(newInfo);
+			Map* map = FB_NEW Map(usng, plugin.null ? "*" : plugin, expandedDb,
+				fromType, from, role, to.null ? "*" : to);
+			MAP_DEBUG(fprintf(stderr, "Add = %s\n", map->makeHashKey().c_str()));
+			add(map);
 		}
+		check("IResultSet::fetchNext", &st);
+
+		curs->close(&st);
+		check("IResultSet::close", &st);
+		curs = nullptr;
+
+		tra->rollback(&st);
+		check("ITransaction::rollback", &st);
+		tra = nullptr;
+
+		dataFlag = true;
+	}
+	catch (const Exception& ex)
+	{
+		if (curs)
+			curs->release();
+		if (tra)
+			tra->release();
+
+		// If database is shutdown it's not a reason to fail mapping
+		StaticStatusVector status;
+		ex.stuffException(status);
+
+		const ISC_STATUS* s = status.begin();
+
+		if (fb_utils::containsErrorCode(s, isc_shutdown))
+			return true;
+
+		throw;
 	}
 
-	void varPlugin(AuthReader::Info& info, Map from, AuthWriter& newBlock)
+	return false;
+}
+
+void Mapping::Cache::map(bool flagWild, AuthReader::Info& info, AuthWriter& newBlock)
+{
+	if (info.type == TYPE_SEEN)
+		return;
+
+	Map from(info);
+
+	if (from.from == "*")
+		Arg::Gds(isc_map_aster).raise();
+
+	if (!flagWild)
+		search(info, from, newBlock, from.from);
+	else
+		varUsing(info, from, newBlock);
+}
+
+void Mapping::Cache::search(AuthReader::Info& info, const Map& from, AuthWriter& newBlock,
+	const NoCaseString& originalUserName)
+{
+	MAP_DEBUG(fprintf(stderr, "Key = %s\n", from.makeHashKey().c_str()));
+	if (!dataFlag)
+		return;
+
+	for (Map* to = lookup(from); to; to = to->next(from))
 	{
+		MAP_DEBUG(fprintf(stderr, "Match!!\n"));
+		unsigned flagRolUsr = to->toRole ? FLAG_ROLE : FLAG_USER;
+		if (info.found & flagRolUsr)
+			continue;
+		if (info.current & flagRolUsr)
+			(Arg::Gds(isc_map_multi) << originalUserName).raise();
+
+		info.current |= flagRolUsr;
+
+		AuthReader::Info newInfo;
+		newInfo.type = to->toRole ? NM_ROLE : NM_USER;
+		newInfo.name = to->to == "*" ? originalUserName : to->to;
+        newInfo.secDb = this->name;
+        newInfo.origPlug = info.origPlug.hasData() ? info.origPlug : info.plugin;
+		newBlock.add(newInfo);
+	}
+}
+
+void Mapping::Cache::varPlugin(AuthReader::Info& info, Map from, AuthWriter& newBlock)
+{
+	varDb(info, from, newBlock);
+	if (from.plugin != "*")
+	{
+		from.plugin = "*";
 		varDb(info, from, newBlock);
-		if (from.plugin != "*")
+	}
+}
+
+void Mapping::Cache::varDb(AuthReader::Info& info, Map from, AuthWriter& newBlock)
+{
+	varFrom(info, from, newBlock);
+	if (from.db != "*")
+	{
+		from.db = "*";
+		varFrom(info, from, newBlock);
+	}
+}
+
+void Mapping::Cache::varFrom(AuthReader::Info& info, Map from, AuthWriter& newBlock)
+{
+	NoCaseString originalUserName = from.from;
+	search(info, from, newBlock, originalUserName);
+	from.from = "*";
+	search(info, from, newBlock, originalUserName);
+}
+
+void Mapping::Cache::varUsing(AuthReader::Info& info, Map from, AuthWriter& newBlock)
+{
+	if (from.usng == 'P')
+	{
+		varPlugin(info, from, newBlock);
+
+		from.usng = '*';
+		varPlugin(info, from, newBlock);
+
+		if (!info.secDb.hasData())
 		{
+			from.usng = 'S';
 			from.plugin = "*";
 			varDb(info, from, newBlock);
 		}
 	}
-
-	void varDb(AuthReader::Info& info, Map from, AuthWriter& newBlock)
+	else if (from.usng == 'M')
 	{
-		varFrom(info, from, newBlock);
-		if (from.db != "*")
-		{
-			from.db = "*";
-			varFrom(info, from, newBlock);
-		}
+		varDb(info, from, newBlock);
+
+		from.usng = '*';
+		varDb(info, from, newBlock);
 	}
+	else
+		fb_assert(false);
+}
 
-	void varFrom(AuthReader::Info& info, Map from, AuthWriter& newBlock)
+bool Mapping::Cache::map4(bool flagWild, unsigned flagSet, AuthReader& rdr, AuthReader::Info& info, AuthWriter& newBlock)
+{
+	if (!flagSet)
 	{
-		NoCaseString originalUserName = from.from;
-		search(info, from, newBlock, originalUserName);
-		from.from = "*";
-		search(info, from, newBlock, originalUserName);
-	}
+		AuthWriter workBlock;
 
-	void varUsing(AuthReader::Info& info, Map from, AuthWriter& newBlock)
-	{
-		if (from.usng == 'P')
+		for (rdr.rewind(); rdr.getInfo(info); rdr.moveNext())
 		{
-			varPlugin(info, from, newBlock);
-
-			from.usng = '*';
-			varPlugin(info, from, newBlock);
-
-			if (!info.secDb.hasData())
-			{
-				from.usng = 'S';
-				from.plugin = "*";
-				varDb(info, from, newBlock);
-			}
-		}
-		else if (from.usng == 'M')
-		{
-			varDb(info, from, newBlock);
-
-			from.usng = '*';
-			varDb(info, from, newBlock);
-		}
-		else
-			fb_assert(false);
-	}
-
-	bool map4(bool flagWild, unsigned flagSet, AuthReader& rdr, AuthReader::Info& info, AuthWriter& newBlock)
-	{
-		if (!flagSet)
-		{
-			AuthWriter workBlock;
-
-			for (rdr.rewind(); rdr.getInfo(info); rdr.moveNext())
-			{
-				map(flagWild, info, workBlock);
-			}
-
-			info.found |= info.current;
-			info.current = 0;
-			newBlock.append(workBlock);
+			map(flagWild, info, workBlock);
 		}
 
-		unsigned mapMask = FLAG_USER | FLAG_ROLE;
-		return (info.found & mapMask) == mapMask;
+		info.found |= info.current;
+		info.current = 0;
+		newBlock.append(workBlock);
 	}
 
-	static void eraseEntry(Map* m)
-	{
-		delete m;
-	}
+	unsigned mapMask = FLAG_USER | FLAG_ROLE;
+	return (info.found & mapMask) == mapMask;
+}
 
-	void makeEmpty()
-	{
-		if (!dataFlag)
-			return;
+void Mapping::Cache::eraseEntry(Map* m)
+{
+	delete m;
+}
 
-		dataFlag = false;
-		cleanup(eraseEntry);
-	}
 
-public:
-	SyncObject syncObject;
-	NoCaseString alias, name;
-	bool dataFlag, downFlag;
-};
+namespace
+{
 
-typedef GenericMap<Pair<Left<NoCaseString, Cache*> > > CacheTree;
+typedef GenericMap<Pair<Left<NoCaseString, RefPtr<Mapping::Cache> > > > CacheTree;
 
 InitInstance<CacheTree> tree;
 GlobalPtr<Mutex> treeMutex;
 
 void setupIpc();
 
-Cache* locate(const NoCaseString& target)
+void locate(RefPtr<Mapping::Cache>& cache, const NoCaseString& alias, const NoCaseString& target)
 {
 	fb_assert(treeMutex->locked());
-	Cache* c;
-	return tree().get(target, c) ? c : NULL;
-}
-
-Cache* locate(const NoCaseString& alias, const NoCaseString& target)
-{
-	fb_assert(treeMutex->locked());
-	Cache* c = locate(target);
-	if (!c)
+	fb_assert(!cache);
+	tree().get(target, cache);
+	if (!cache)
 	{
-		c = FB_NEW Cache(alias, target);
-		*(tree().put(target)) = c;
+		cache = FB_NEW Mapping::Cache(alias, target);
+		*(tree().put(target)) = cache;
 
 		setupIpc();
 	}
-	return c;
 }
 
 class Found
@@ -537,18 +593,7 @@ public:
 void resetMap(const char* securityDb)
 {
 	MutexLockGuard g(treeMutex, FB_FUNCTION);
-
-	Cache* cache = locate(securityDb);
-	if (!cache)
-	{
-		MAP_DEBUG(fprintf(stderr, "Cache not found for %s\n", securityDb));
-		return;
-	}
-
-	Sync sync(&cache->syncObject, FB_FUNCTION);
-	sync.lock(SYNC_EXCLUSIVE);
-	cache->makeEmpty();
-	MAP_DEBUG(fprintf(stderr, "Empty cache for %s\n", securityDb));
+	tree().remove(securityDb);
 }
 
 void resetMap(const char* securityDb, ULONG index);
@@ -584,7 +629,8 @@ class MappingIpc FB_FINAL : public Firebird::IpcObject
 
 public:
 	explicit MappingIpc(MemoryPool&)
-		: processId(getpid())
+		: processId(getpid()),
+		  cleanupSync(*getDefaultMemoryPool(), clearDelivery, THREAD_high)
 	{ }
 
 	~MappingIpc()
@@ -597,21 +643,24 @@ public:
 		if (!sharedMemory)
 			return;
 
-		{
+		{	// scope
 			Guard gShared(this);
 			MappingHeader* sMem = sharedMemory->getHeader();
 
 			startupSemaphore.tryEnter(5);
 			sMem->process[process].flags &= ~MappingHeader::FLAG_ACTIVE;
+
 			(void)  // Ignore errors in cleanup
 				sharedMemory->eventPost(&sMem->process[process].notifyEvent);
-			cleanupSemaphore.tryEnter(5);
+
+			cleanupSync.waitForCompletion();
 
 			// Ignore errors in cleanup
 			sharedMemory->eventFini(&sMem->process[process].notifyEvent);
 			sharedMemory->eventFini(&sMem->process[process].callbackEvent);
 
 			bool found = false;
+
 			for (unsigned n = 0; n < sMem->processes; ++n)
 			{
 				if (sMem->process[n].flags & MappingHeader::FLAG_ACTIVE)
@@ -624,13 +673,14 @@ public:
 			if (!found)
 				sharedMemory->removeMapFile();
 		}
-		sharedMemory = NULL;
+
+		sharedMemory = nullptr;
 	}
 
 	void clearCache(const char* dbName, USHORT index)
 	{
 		PathName target;
-		expandDatabaseName(dbName, target, NULL);
+		expandDatabaseName(dbName, target, nullptr);
 
 		setup();
 
@@ -710,7 +760,7 @@ public:
 		try
 		{
 			sharedMemory.reset(FB_NEW_POOL(*getDefaultMemoryPool())
-				SharedMemory<MappingHeader>("fb_user_mapping", DEFAULT_SIZE, this));
+				SharedMemory<MappingHeader>(USER_MAP_FILE, DEFAULT_SIZE, this));
 		}
 		catch (const Exception& ex)
 		{
@@ -728,7 +778,7 @@ public:
 		{
 			if (!(sMem->process[process].flags & MappingHeader::FLAG_ACTIVE))
 				break;
-			if (!ISC_check_process_existence(processId))
+			if (!ISC_check_process_existence(sMem->process[process].id))
 			{
 				sharedMemory->eventFini(&sMem->process[process].notifyEvent);
 				sharedMemory->eventFini(&sMem->process[process].callbackEvent);
@@ -759,13 +809,19 @@ public:
 
 		try
 		{
-			Thread::start(clearDelivery, this, THREAD_high);
+			cleanupSync.run(this);
 		}
 		catch (const Exception&)
 		{
 			sMem->process[process].flags &= ~MappingHeader::FLAG_ACTIVE;
 			throw;
 		}
+	}
+
+	void exceptionHandler(const Exception& ex, ThreadFinishSync<MappingIpc*>::ThreadRoutine*)
+	{
+		iscLogException("Fatal error in clearDeliveryThread", ex);
+		fb_utils::logAndDie("Fatal error in clearDeliveryThread");
 	}
 
 private:
@@ -805,13 +861,10 @@ private:
 			}
 			if (startup)
 				startupSemaphore.release();
-
-			cleanupSemaphore.release();
 		}
 		catch (const Exception& ex)
 		{
-			iscLogException("Fatal error in clearDeliveryThread", ex);
-			fb_utils::logAndDie("Fatal error in clearDeliveryThread");
+			exceptionHandler(ex, nullptr);
 		}
 	}
 
@@ -866,11 +919,9 @@ private:
 		MappingIpc* const data;
 	};
 
-	static THREAD_ENTRY_DECLARE clearDelivery(THREAD_ENTRY_PARAM par)
+	static void clearDelivery(MappingIpc* mapping)
 	{
-		MappingIpc* m = (MappingIpc*)par;
-		m->clearDeliveryThread();
-		return 0;
+		mapping->clearDeliveryThread();
 	}
 
 	AutoPtr<SharedMemory<MappingHeader> > sharedMemory;
@@ -878,7 +929,7 @@ private:
 	const SLONG processId;
 	unsigned process;
 	Semaphore startupSemaphore;
-	Semaphore cleanupSemaphore;
+	ThreadFinishSync<MappingIpc*> cleanupSync;
 };
 
 GlobalPtr<MappingIpc, InstanceControl::PRIORITY_DELETE_FIRST> mappingIpc;
@@ -887,61 +938,6 @@ void setupIpc()
 {
 	mappingIpc->setup();
 }
-
-class DbHandle : public AutoPtr<IAttachment, SimpleRelease<IAttachment> >
-{
-public:
-	DbHandle()
-		: AutoPtr()
-	{ }
-
-	DbHandle(IAttachment* att)
-		: AutoPtr(att)
-	{
-		if (att)
-			att->addRef();
-	}
-
-	bool attach(FbLocalStatus& st, const char* aliasDb, ICryptKeyCallback* cryptCb)
-	{
-		bool down = false;		// true if on attach db is shutdown
-
-		if (hasData())
-			return down;
-
-		DispatcherPtr prov;
-		if (cryptCb)
-		{
-			prov->setDbCryptCallback(&st, cryptCb);
-			check("IProvider::setDbCryptCallback", &st);
-		}
-
-		ClumpletWriter embeddedSysdba(ClumpletWriter::Tagged, 1024, isc_dpb_version1);
-		embeddedSysdba.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
-		embeddedSysdba.insertByte(isc_dpb_sec_attach, TRUE);
-		embeddedSysdba.insertByte(isc_dpb_map_attach, TRUE);
-		embeddedSysdba.insertByte(isc_dpb_no_db_triggers, TRUE);
-
-		IAttachment* att = prov->attachDatabase(&st, aliasDb,
-			embeddedSysdba.getBufferLength(), embeddedSysdba.getBuffer());
-
-		if (st->getState() & IStatus::STATE_ERRORS)
-		{
-			const ISC_STATUS* s = st->getErrors();
-			bool missing = fb_utils::containsErrorCode(s, isc_io_error);
-			down = fb_utils::containsErrorCode(s, isc_shutdown);
-			if (!(missing || down))
-				check("IProvider::attachDatabase", &st);
-
-			// down/missing security DB is not a reason to fail mapping
-		}
-		else
-			reset(att);
-
-		return down;
-	}
-};
-
 
 const char* roleSql =
 "with recursive role_tree as ( "
@@ -980,14 +976,14 @@ public:
 		return &sync;
 	}
 
-	bool getPrivileges(const PathName& db, const string& name, const string& sql_role,
+	bool getPrivileges(const PathName& db, const string& name, const string* sqlRole,
 		const string& trusted_role, UserId::Privileges& system_privileges)
 	{
 		DbCache* c;
-		return databases.get(db, c) && c->getPrivileges(name, sql_role, trusted_role, system_privileges);
+		return databases.get(db, c) && c->getPrivileges(name, sqlRole, trusted_role, system_privileges);
 	}
 
-	void populate(const PathName& db, DbHandle& iDb, const string& name, const string& sql_role,
+	void populate(const PathName& db, Mapping::DbHandle& iDb, const string& name, const string* sqlRole,
 		const string& trusted_role)
 	{
 		DbCache* c;
@@ -996,7 +992,7 @@ public:
 			c = FB_NEW_POOL(getPool()) DbCache(getPool());
 			*(databases.put(db)) = c;
 		}
-		c->populate(iDb, name, sql_role, trusted_role);
+		c->populate(iDb, name, sqlRole, trusted_role);
 
 		setupIpc();
 	}
@@ -1018,7 +1014,7 @@ private:
 			  pairs(p)
 		{ }
 
-		bool getPrivileges(const string& name, const string& sql_role, const string& trusted_role,
+		bool getPrivileges(const string& name, const string* sqlRole, const string& trusted_role,
 			UserId::Privileges& system_privileges)
 		{
 			system_privileges.clearAll();
@@ -1028,20 +1024,21 @@ private:
 			MAP_DEBUG(fprintf(stderr, "name=%s\n", name.c_str()));
 
 			bool granted = false;
-			if (!pairs.isRoleGranted(name, sql_role, granted))
+			if (!pairs.isRoleGranted(name, sqlRole, granted))
 				return false;
 
 			MAP_DEBUG(fprintf(stderr, "granted=%d\n", granted));
-			return roles.getPrivileges((granted ? sql_role : trusted_role), system_privileges);
+			return roles.getPrivileges((granted ? *sqlRole : trusted_role), system_privileges);
 		}
 
-		void populate(DbHandle& iDb, const string& name, const string& sql_role,
+		void populate(Mapping::DbHandle& iDb, const string& name, const string* sqlRole,
 			const string& trusted_role)
 		{
 			logins.populate(name, iDb);
 			roles.populate(trusted_role, iDb);
-			roles.populate(sql_role, iDb);
-			pairs.populate(name, sql_role, iDb);
+			if (sqlRole)
+				roles.populate(*sqlRole, iDb);
+			pairs.populate(name, sqlRole, iDb);
 		}
 
 		void invalidate()
@@ -1073,7 +1070,7 @@ private:
 				return true;
 			}
 
-			void populate(const string& key, DbHandle& iDb)
+			void populate(const string& key, Mapping::DbHandle& iDb)
 			{
 				if (!key.hasData())
 					return;
@@ -1082,14 +1079,14 @@ private:
 					return;
 
 				ThrowLocalStatus st;
-				RefPtr<ITransaction> tra(REF_NO_INCR, iDb->startTransaction(&st, 0, NULL));
+				RefPtr<ITransaction> tra(REF_NO_INCR, iDb->startTransaction(&st, 0, nullptr));
 
 				Message par;
 				Field<Varying> user(par, MAX_SQL_IDENTIFIER_SIZE);
 				user = key.c_str();
 
 				RefPtr<IResultSet> curs(REF_NO_INCR, iDb->openCursor(&st, tra, 0, sql, 3,
-					par.getMetadata(), par.getBuffer(), NULL, NULL, 0));
+					par.getMetadata(), par.getBuffer(), nullptr, nullptr, 0));
 
 				RefPtr<IMessageMetadata> meta(curs->getMetadata(&st));
 				AutoPtr<UCHAR, ArrayDelete<UCHAR> > buffer(FB_NEW UCHAR[meta->getMessageLength(&st)]);
@@ -1125,9 +1122,9 @@ private:
 				: GenericMap(p)
 			{ }
 
-			bool isRoleGranted(const string& name, const string& role, bool& granted)
+			bool isRoleGranted(const string& name, const string* role, bool& granted)
 			{
-				if (!(name.hasData() && role.hasData()))
+				if (!(name.hasData() && role))
 				{
 					granted = false;
 					return true;
@@ -1139,23 +1136,23 @@ private:
 
 				string zRole;
 				zRole += ROLESEP;
-				zRole += role;
+				zRole += *role;
 				zRole += ROLESEP;
 
-				MAP_DEBUG(fprintf(stderr, "isRoleGranted '%s' '%s'\n", r->c_str(), role.c_str()));
+				MAP_DEBUG(fprintf(stderr, "isRoleGranted '%s' '%s'\n", r->c_str(), role->c_str()));
 
 				granted = r->find(zRole) != string::npos;
 				return true;
 			}
 
-			void populate(const string& name, const string& /*role*/, DbHandle& iDb)
+			void populate(const string& name, const string* /*role*/, Mapping::DbHandle& iDb)
 			{
 				MAP_DEBUG(fprintf(stderr, "populate %s\n", name.c_str()));
 				if (!name.hasData())
 					return;
 
 				ThrowLocalStatus st;
-				RefPtr<ITransaction> tra(REF_NO_INCR, iDb->startTransaction(&st, 0, NULL));
+				RefPtr<ITransaction> tra(REF_NO_INCR, iDb->startTransaction(&st, 0, nullptr));
 
 				Message par;
 				Field<Varying> user(par, MAX_SQL_IDENTIFIER_SIZE);
@@ -1168,7 +1165,7 @@ private:
 					"where RDB$USER = ? and RDB$PRIVILEGE = 'M' and RDB$USER_TYPE = 8 and RDB$OBJECT_TYPE = 13";
 
 				RefPtr<IResultSet> curs(REF_NO_INCR, iDb->openCursor(&st, tra, 0, sql, 3,
-					par.getMetadata(), par.getBuffer(), cols.getMetadata(), NULL, 0));
+					par.getMetadata(), par.getBuffer(), cols.getMetadata(), nullptr, 0));
 
 				void* buffer = cols.getBuffer();
 				string z;
@@ -1206,11 +1203,11 @@ void resetMap(const char* db, ULONG index)
 {
 	switch(index)
 	{
-	case MAPPING_CACHE:
+	case Mapping::MAPPING_CACHE:
 		resetMap(db);
 		break;
 
-	case SYSTEM_PRIVILEGES_CACHE:
+	case Mapping::SYSTEM_PRIVILEGES_CACHE:
 		spCache().invalidate(db);
 		break;
 
@@ -1224,171 +1221,249 @@ void resetMap(const char* db, ULONG index)
 
 namespace Jrd {
 
-ULONG mapUser(const bool throwNotFoundError,
-	string& name, string& trusted_role, Firebird::string* auth_method,
-	AuthReader::AuthBlock* newAuthBlock, UserId::Privileges* system_privileges,
-	const AuthReader::AuthBlock& authBlock,	const char* alias, const char* db,
-	const char* securityAlias, const string& sql_role,
-	ICryptKeyCallback* cryptCb, Firebird::IAttachment* att)
+Mapping::Mapping(const ULONG f, Firebird::ICryptKeyCallback* cryptCb)
+	: flags(f),
+	  internalFlags(0),
+	  cryptCallback(cryptCb),
+	  authMethod(nullptr),
+	  newAuthBlock(nullptr),
+	  systemPrivileges(nullptr),
+	  authBlock(nullptr),
+	  mainAlias(nullptr),
+	  mainDb(nullptr),
+	  securityAlias(nullptr),
+	  errorMessagesContext(nullptr),
+	  sqlRole(nullptr)
+{ }
+
+bool Mapping::ensureCachePresence(RefPtr<Mapping::Cache>& cache, const char* alias, const char* target,
+	Mapping::DbHandle& hdb, ICryptKeyCallback* cryptCb, Mapping::Cache* c2)
+{
+	fb_assert(!cache);
+	fb_assert(authBlock);
+
+	if (!(authBlock && authBlock->hasData()))
+		return false;
+
+	MutexEnsureUnlock g(treeMutex, FB_FUNCTION);
+	g.enter();
+
+	// Find cache in the tree or create new one
+	locate(cache, alias, target);
+	fb_assert(cache);
+
+	// If we use self security database no sense performing checks on it twice
+	if (cache == c2)
+	{
+		cache = nullptr;
+		return false;
+	}
+
+	// Required cache(s) are locked somehow - release treeMutex
+	g.leave();
+
+	// Std safe check for data presence in cache
+	if (cache->dataFlag)
+		return false;
+	MutexLockGuard g2(cache->populateMutex, FB_FUNCTION);
+	if (cache->dataFlag)
+		return false;
+
+	// Create db attachment if missing it and populate cache from it
+	bool down = hdb.attach(alias, cryptCb) || cache->populate(hdb);
+	if (down)
+		cache = nullptr;
+	return down;
+}
+
+
+void Mapping::needAuthMethod(Firebird::string& method)
+{
+	fb_assert(!authMethod);
+	authMethod = &method;
+}
+
+void Mapping::needAuthBlock(Firebird::AuthReader::AuthBlock& block)
+{
+	fb_assert(!newAuthBlock);
+	newAuthBlock = &block;
+}
+
+void Mapping::needSystemPrivileges(UserId::Privileges& privileges)
+{
+	fb_assert(!systemPrivileges);
+	systemPrivileges = &privileges;
+}
+
+void Mapping::setAuthBlock(const Firebird::AuthReader::AuthBlock& block)
+{
+	fb_assert(!authBlock);
+	authBlock = &block;
+}
+
+void Mapping::setInternalFlags()
+{
+	internalFlags &= ~(FLAG_DB | FLAG_SEC);
+
+	if (!mainDb)
+		internalFlags |= FLAG_DB;
+	if (!securityAlias)
+		internalFlags |= FLAG_SEC;
+
+	// detect presence of this databases mapping in authBlock
+	// in that case mapUser was already invoked for it
+	if (authBlock)
+	{
+		AuthReader::Info info;
+		for (AuthReader rdr(*authBlock); rdr.getInfo(info); rdr.moveNext())
+		{
+			if (mainDb && info.secDb == mainDb)
+				internalFlags |= FLAG_DB;
+			if (securityAlias && info.secDb == secExpanded.c_str())
+				internalFlags |= FLAG_SEC;
+		}
+	}
+}
+
+void Mapping::setSqlRole(const Firebird::string& role)
+{
+	fb_assert(!sqlRole);
+	sqlRole = &role;
+}
+
+void Mapping::setDb(const char* a, const char* d, Firebird::IAttachment* attachment)
+{
+	fb_assert(!mainAlias);
+	fb_assert(!mainDb);
+	fb_assert(!mainHandle);
+	fb_assert(authBlock);
+
+	mainAlias = a;
+	mainDb = d;
+	mainHandle.setAttachment(attachment);
+	setInternalFlags();
+
+	if ((!(internalFlags & FLAG_DB)) &&
+		ensureCachePresence(dbCache, mainAlias, mainDb, mainHandle, cryptCallback, secCache))
+	{
+		internalFlags |= FLAG_DOWN_DB;
+	}
+}
+
+void Mapping::clearMainHandle()
+{
+	mainHandle.clear();
+}
+
+Mapping::~Mapping()
+{
+	MAP_DEBUG(if (mainHandle) {mainHandle->addRef(); int r = mainHandle->release();)
+	MAP_DEBUG(fprintf(stderr, "~M:Drop MH with refcount %d\n", r);} else fprintf(stderr, "~M:No MH\n");)
+}
+
+void Mapping::setSecurityDbAlias(const char* a, const char* mainExpandedName)
+{
+	fb_assert(!securityAlias);
+	fb_assert(authBlock);
+
+	securityAlias = a;
+	expandDatabaseName(securityAlias, secExpanded, nullptr);
+	setInternalFlags();
+
+	if (mainExpandedName && secExpanded == mainExpandedName)
+		return;
+
+	Mapping::DbHandle secHandle;
+	if ((!(internalFlags & FLAG_SEC)) &&
+		ensureCachePresence(secCache, securityAlias, secExpanded.c_str(), secHandle, cryptCallback, dbCache))
+	{
+		internalFlags |= FLAG_DOWN_SEC;
+	}
+}
+
+void Mapping::setErrorMessagesContextName(const char* context)
+{
+	errorMessagesContext = context;
+}
+
+
+ULONG Mapping::mapUser(string& name, string& trustedRole)
 {
 	AuthReader::Info info;
 
-	if (!securityAlias)
+	if (flags & MAP_ERROR_HANDLER)
 	{
 		// We are in the error handler - perform minimum processing
-		trusted_role = "";
+		trustedRole = "";
 		name = "<Unknown>";
 
-		for (AuthReader rdr(authBlock); rdr.getInfo(info); rdr.moveNext())
+		if (authBlock)
 		{
-			if (info.type == NM_USER && info.name.hasData())
+			for (AuthReader rdr(*authBlock); rdr.getInfo(info); rdr.moveNext())
 			{
-				name = info.name.ToString();
-				break;
+				if (info.type == NM_USER && info.name.hasData())
+				{
+					name = info.name.ToString();
+					break;
+				}
 			}
 		}
 
 		return 0;
 	}
 
-	// expand security database name (db is expected to be expanded, alias - original)
-	PathName secExpanded;
-	expandDatabaseName(securityAlias, secExpanded, NULL);
-	const char* securityDb = secExpanded.c_str();
-	bool secDown = false;
-	bool dbDown = false;
-	DbHandle iDb(att);
-	FbLocalStatus st;
-
 	// Create new writer
 	AuthWriter newBlock;
 
-	// detect presence of this databases mapping in authBlock
-	// in that case mapUser was already invoked for it
-	unsigned flags = db ? 0 : FLAG_DB;
-	for (AuthReader rdr(authBlock); rdr.getInfo(info); rdr.moveNext())
-	{
-		if (db && info.secDb == db)
-			flags |= FLAG_DB;
-		if (info.secDb == securityDb)
-			flags |= FLAG_SEC;
-	}
-
-	// Perform lock & map only when needed
-	if ((flags != (FLAG_DB | FLAG_SEC)) && authBlock.hasData())
+	// Map it only when needed
+	if (authBlock && authBlock->hasData() && (dbCache || secCache))
 	{
 		AuthReader::Info info;
-		SyncType syncType = SYNC_SHARED;
-		DbHandle iSec;
 
-		for (;;)
+		// Caches are ready somehow - proceed with analysis
+		AuthReader auth(*authBlock);
+
+		// Map in simple mode first main, next security db
+		if (!(dbCache && dbCache->map4(false, internalFlags & FLAG_DB, auth, info, newBlock)))
 		{
-			if (syncType == SYNC_EXCLUSIVE)
+			if (!(secCache && secCache->map4(false, internalFlags & FLAG_SEC, auth, info, newBlock)))
 			{
-				if (!iSec)
-					iSec.attach(st, securityAlias, cryptCb);
-
-				if (db && !iDb)
-					iDb.attach(st, alias, cryptCb);
-			}
-
-			MutexEnsureUnlock g(treeMutex, FB_FUNCTION);
-			g.enter();
-
-			Cache* cDb = NULL;
-			if (db)
-				cDb = locate(alias, db);
-			Cache* cSec = locate(securityAlias, securityDb);
-			if (cDb == cSec)
-				cDb = NULL;
-
-			SyncObject dummySync1, dummySync2;
-			Sync sDb(((!(flags & FLAG_DB)) && cDb) ? &cDb->syncObject : &dummySync1, FB_FUNCTION);
-			Sync sSec((!(flags & FLAG_SEC)) ? &cSec->syncObject : &dummySync2, FB_FUNCTION);
-
-			sSec.lock(syncType);
-			if (!sDb.lockConditional(syncType))
-			{
-				// Avoid deadlocks cause hell knows which db is security for which
-				sSec.unlock();
-				// Now safely wait for sSec
-				sDb.lock(syncType);
-				// and repeat whole operation
-				continue;
-			}
-
-			// Required cache(s) are locked somehow - release treeMutex
-			g.leave();
-
-			// Check is it required to populate caches from DB
-			if ((cDb && !cDb->dataFlag) || !cSec->dataFlag)
-			{
-				if (syncType != SYNC_EXCLUSIVE)
+				// Map in wildcard mode first main, next security db
+				if (!(dbCache && dbCache->map4(true, internalFlags & FLAG_DB, auth, info, newBlock)))
 				{
-					syncType = SYNC_EXCLUSIVE;
-					sSec.unlock();
-					sDb.unlock();
-
-					continue;
+					if (secCache)
+						secCache->map4(true, internalFlags & FLAG_SEC, auth, info, newBlock);
 				}
-
-				if (cDb)
-					cDb->populate(iDb, dbDown);
-				cSec->populate(iSec, secDown);
-
-				sSec.downgrade(SYNC_SHARED);
-				sDb.downgrade(SYNC_SHARED);
 			}
-
-			// use down flags from caches
-			if (cDb)
-				dbDown = cDb->downFlag;
-			secDown = cSec->downFlag;
-
-			// Caches are ready somehow - proceed with analysis
-			AuthReader auth(authBlock);
-
-			// Map in simple mode first main, next security db
-			if (cDb && cDb->map4(false, flags & FLAG_DB, auth, info, newBlock))
-				break;
-			if (cSec->map4(false, flags & FLAG_SEC, auth, info, newBlock))
-				break;
-
-			// Map in wildcard mode first main, next security db
-			if (cDb && cDb->map4(true, flags & FLAG_DB, auth, info, newBlock))
-				break;
-			cSec->map4(true, flags & FLAG_SEC, auth, info, newBlock);
-
-			break;
-		}
-
-		for (AuthReader rdr(newBlock); rdr.getInfo(info); rdr.moveNext())
-		{
-			if (db && info.secDb == db)
-				flags |= FLAG_DB;
-			if (info.secDb == securityDb)
-				flags |= FLAG_SEC;
-		}
-
-		// mark both DBs as 'seen'
-		info.plugin = "";
-		info.name = "";
-		info.type = TYPE_SEEN;
-
-		if (!(flags & FLAG_DB))
-		{
-			info.secDb = db;
-			newBlock.add(info);
-		}
-
-		if (!(flags & FLAG_SEC))
-		{
-			info.secDb = securityDb;
-			newBlock.add(info);
 		}
 	}
 
-	newBlock.append(authBlock);
+	for (AuthReader rdr(newBlock); rdr.getInfo(info); rdr.moveNext())
+	{
+		if (mainDb && info.secDb == mainDb)
+			internalFlags |= FLAG_DB;
+		if (info.secDb == secExpanded.c_str())
+			internalFlags |= FLAG_SEC;
+	}
+
+	// mark both DBs as 'seen'
+	info.plugin = "";
+	info.name = "";
+	info.type = TYPE_SEEN;
+
+	if (!(internalFlags & FLAG_DB))
+	{
+		info.secDb = mainDb;
+		newBlock.add(info);
+	}
+
+	if (!(internalFlags & FLAG_SEC))
+	{
+		info.secDb = secExpanded.c_str();
+		newBlock.add(info);
+	}
+
+	newBlock.append(*authBlock);
 
 	Found fName, fRole;
 	MAP_DEBUG(fprintf(stderr, "Starting newblock scan\n"));
@@ -1398,8 +1473,8 @@ ULONG mapUser(const bool throwNotFoundError,
 			info.secDb.c_str(), info.plugin.c_str(), info.type.c_str(), info.name.c_str(), info.origPlug.c_str()));
 
 		Found::What recordWeight =
-			(db && info.secDb == db) ? Found::FND_DB :
-			(info.secDb == securityDb) ? Found::FND_SEC :
+			(mainDb && info.secDb == mainDb) ? Found::FND_DB :
+			(securityAlias && info.secDb == secExpanded.c_str()) ? Found::FND_SEC :
 			Found::FND_NOTHING;
 
 		if (recordWeight != Found::FND_NOTHING)
@@ -1411,26 +1486,26 @@ ULONG mapUser(const bool throwNotFoundError,
 		}
 	}
 
-	ULONG rc = secDown || dbDown ? MAPUSER_MAP_DOWN : 0;
+	ULONG rc = (internalFlags & (FLAG_DOWN_DB | FLAG_DOWN_SEC)) ? MAP_DOWN : 0;
 	if (fName.found == Found::FND_NOTHING)
 	{
-		if (throwNotFoundError)
+		if (flags & MAP_THROW_NOT_FOUND)
 		{
 			Arg::Gds v(isc_sec_context);
-			v << alias;
-			if (rc & MAPUSER_MAP_DOWN)
+			v << (errorMessagesContext ? errorMessagesContext : mainAlias ? mainAlias : "<unknown object>");
+			if (rc & MAP_DOWN)
 				v << Arg::Gds(isc_map_down);
 			v.raise();
 		}
-		rc |= MAPUSER_ERROR_NOT_THROWN;
+		rc |= MAP_ERROR_NOT_THROWN;
 	}
 	else
 	{
 		name = fName.value.ToString();
-		trusted_role = fRole.value.ToString();
-		MAP_DEBUG(fprintf(stderr, "login=%s tr=%s\n", name.c_str(), trusted_role.c_str()));
-		if (auth_method)
-			*auth_method = fName.method.ToString();
+		trustedRole = fRole.value.ToString();
+		MAP_DEBUG(fprintf(stderr, "login=%s tr=%s\n", name.c_str(), trustedRole.c_str()));
+		if (authMethod)
+			*authMethod = fName.method.ToString();
 
 		if (newAuthBlock)
 		{
@@ -1441,32 +1516,31 @@ ULONG mapUser(const bool throwNotFoundError,
 		}
 	}
 
-	if (name.hasData() || trusted_role.hasData())
+	if (name.hasData() || trustedRole.hasData())
 	{
-		if (system_privileges && db)
+		if (systemPrivileges && mainDb)
 		{
-			system_privileges->clearAll();
+			systemPrivileges->clearAll();
 
 			Sync sync(spCache().getSync(), FB_FUNCTION);
 			sync.lock(SYNC_SHARED);
 
 			MAP_DEBUG(fprintf(stderr, "GP: name=%s sql=%s trusted=%s\n",
-				name.c_str(), sql_role.c_str(), trusted_role.c_str()));
+				name.c_str(), sqlRole ? sqlRole->c_str() : "<nullptr>", trustedRole.c_str()));
 
-			if (!spCache().getPrivileges(db, name, sql_role, trusted_role, *system_privileges))
+			if (!spCache().getPrivileges(mainDb, name, sqlRole, trustedRole, *systemPrivileges))
 			{
 				sync.unlock();
 				sync.lock(SYNC_EXCLUSIVE);
 
-				if (!spCache().getPrivileges(db, name, sql_role, trusted_role, *system_privileges))
+				if (!spCache().getPrivileges(mainDb, name, sqlRole, trustedRole, *systemPrivileges))
 				{
-					if (!iDb)
-						iDb.attach(st, alias, cryptCb);
+					mainHandle.attach(mainAlias, cryptCallback);
 
-					if (iDb)
+					if (mainHandle)
 					{
-						spCache().populate(db, iDb, name, sql_role, trusted_role);
-						spCache().getPrivileges(db, name, sql_role, trusted_role, *system_privileges);
+						spCache().populate(mainDb, mainHandle, name, sqlRole, trustedRole);
+						spCache().getPrivileges(mainDb, name, sqlRole, trustedRole, *systemPrivileges);
 					}
 				}
 			}
@@ -1476,10 +1550,11 @@ ULONG mapUser(const bool throwNotFoundError,
 	return rc;
 }
 
-void clearMappingCache(const char* dbName, USHORT index)
+void Mapping::clearCache(const char* dbName, USHORT index)
 {
 	mappingIpc->clearCache(dbName, index);
 }
+
 
 const Format* GlobalMappingScan::getFormat(thread_db* tdbb, jrd_rel* relation) const
 {
@@ -1518,17 +1593,16 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, jrd_rel* relation)
 
 	FbLocalStatus st;
 	DispatcherPtr prov;
-	IAttachment* att = NULL;
-	ITransaction* tra = NULL;
-	IResultSet* curs = NULL;
+	IAttachment* att = nullptr;
+	ITransaction* tra = nullptr;
+	IResultSet* curs = nullptr;
 
 	try
 	{
-		ClumpletWriter embeddedSysdba(ClumpletWriter::Tagged,
-			MAX_DPB_SIZE, isc_dpb_version1);
-		embeddedSysdba.insertString(isc_dpb_user_name, DBA_USER_NAME,
-			fb_strlen(DBA_USER_NAME));
+		ClumpletWriter embeddedSysdba(ClumpletWriter::Tagged, MAX_DPB_SIZE, isc_dpb_version1);
+		embeddedSysdba.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
 		embeddedSysdba.insertByte(isc_dpb_sec_attach, TRUE);
+		embeddedSysdba.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
 		embeddedSysdba.insertByte(isc_dpb_no_db_triggers, TRUE);
 
 		const char* dbName = tdbb->getDatabase()->dbb_config->getSecurityDatabase();
@@ -1566,7 +1640,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, jrd_rel* relation)
 			"SELECT RDB$MAP_NAME, RDB$MAP_USING, RDB$MAP_PLUGIN, RDB$MAP_DB, "
 			"	RDB$MAP_FROM_TYPE, RDB$MAP_FROM, RDB$MAP_TO_TYPE, RDB$MAP_TO "
 			"FROM RDB$AUTH_MAPPING",
-			3, NULL, NULL, mMap.getMetadata(), NULL, 0);
+			3, nullptr, nullptr, mMap.getMetadata(), nullptr, 0);
 		if (st->getState() & IStatus::STATE_ERRORS)
 		{
 			if (!fb_utils::containsErrorCode(st->getErrors(), isc_dsql_relation_err))
@@ -1640,15 +1714,15 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, jrd_rel* relation)
 
 		curs->close(&st);
 		check("IResultSet::close", &st);
-		curs = NULL;
+		curs = nullptr;
 
 		tra->rollback(&st);
 		check("ITransaction::rollback", &st);
-		tra = NULL;
+		tra = nullptr;
 
 		att->detach(&st);
 		check("IAttachment::detach", &st);
-		att = NULL;
+		att = nullptr;
 	}
 	catch (const Exception&)
 	{
@@ -1666,7 +1740,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, jrd_rel* relation)
 	return getData(relation);
 }
 
-void shutdownMappingIpc()
+void Mapping::shutdownIpc()
 {
 	mappingIpc->shutdown();
 }

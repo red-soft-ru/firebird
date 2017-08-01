@@ -33,12 +33,12 @@ namespace Firebird
 	class RefCounted
 	{
 	public:
-		virtual int addRef()
+		virtual int addRef() const
 		{
 			return ++m_refCnt;
 		}
 
-		virtual int release()
+		virtual int release() const
 		{
 			fb_assert(m_refCnt.value() > 0);
 			const int refCnt = --m_refCnt;
@@ -56,7 +56,7 @@ namespace Firebird
 		}
 
 	private:
-		AtomicCounter m_refCnt;
+		mutable AtomicCounter m_refCnt;
 	};
 
 	// reference counted object guard
@@ -193,7 +193,7 @@ namespace Firebird
 			return ptr;
 		}
 
-	private:
+	protected:
 		T* assign(T* const p)
 		{
 			if (ptr != p)
@@ -215,6 +215,7 @@ namespace Firebird
 			return ptr;
 		}
 
+	private:
 		T* ptr;
 	};
 

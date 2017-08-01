@@ -148,9 +148,12 @@ public:
 	{
 		ULONG minMark = MAX_ULONG;
 		FB_SIZE_T i;
+
 		for (i = 0; i < dpMap.getCount(); i++)
+		{
 			if (minMark > dpMap[i].mark)
 				minMark = dpMap[i].mark;
+		}
 
 		minMark = (minMark + dpMapMark) / 2;
 
@@ -162,6 +165,7 @@ public:
 			else
 				dpMap.remove(i);
 		}
+
 		dpMapMark -= minMark;
 	}
 
@@ -249,12 +253,12 @@ public:
 	Lock*		rel_gc_lock;		// garbage collection lock
 	IndexLock*	rel_index_locks;	// index existence locks
 	IndexBlock*	rel_index_blocks;	// index blocks for caching index info
-	trig_vec*	rel_pre_erase; 		// Pre-operation erase trigger
-	trig_vec*	rel_post_erase;		// Post-operation erase trigger
-	trig_vec*	rel_pre_modify;		// Pre-operation modify trigger
-	trig_vec*	rel_post_modify;	// Post-operation modify trigger
-	trig_vec*	rel_pre_store;		// Pre-operation store trigger
-	trig_vec*	rel_post_store;		// Post-operation store trigger
+	TrigVector*	rel_pre_erase; 		// Pre-operation erase trigger
+	TrigVector*	rel_post_erase;		// Post-operation erase trigger
+	TrigVector*	rel_pre_modify;		// Pre-operation modify trigger
+	TrigVector*	rel_post_modify;	// Post-operation modify trigger
+	TrigVector*	rel_pre_store;		// Pre-operation store trigger
+	TrigVector*	rel_post_store;		// Post-operation store trigger
 	prim		rel_primary_dpnds;	// foreign dependencies on this relation's primary key
 	frgn		rel_foreign_refs;	// foreign references to other relations' primary keys
 	Nullable<bool>	rel_ss_definer;
@@ -399,7 +403,7 @@ const ULONG REL_gc_lockneed				= 0x80000;	// gc lock should be acquired
 inline jrd_rel::jrd_rel(MemoryPool& p)
 	: rel_pool(&p), rel_flags(REL_gc_lockneed),
 	  rel_name(p), rel_owner_name(p), rel_security_name(p),
-	  rel_view_contexts(p), rel_gc_records(p), rel_ss_definer(false), 
+	  rel_view_contexts(p), rel_gc_records(p), rel_ss_definer(false),
 	  rel_pages_base(p)
 {
 }
@@ -480,11 +484,17 @@ public:
 	Firebird::MetaName	fld_name;	// Field name
 	Firebird::MetaName	fld_security_name;	// security class name for field
 	Firebird::MetaName	fld_generator_name;	// identity generator name
+	Firebird::MetaNamePair	fld_source_rel_field;	// Relation/field source name
+	Nullable<IdentityType> fld_identity_type;
 
 public:
 	explicit jrd_fld(MemoryPool& p)
-		: fld_name(p), fld_security_name(p), fld_generator_name(p)
-	{ }
+		: fld_name(p),
+		  fld_security_name(p),
+		  fld_generator_name(p),
+		  fld_source_rel_field(p)
+	{
+	}
 };
 
 }

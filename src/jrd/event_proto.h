@@ -51,7 +51,7 @@ public:
 	static void init(Attachment*);
 	static void destroy(EventManager*);
 
-	EventManager(const Firebird::string& id, Firebird::RefPtr<Config> conf);
+	EventManager(const Firebird::string& id, Firebird::RefPtr<const Config> conf);
 	~EventManager();
 
 	void deleteSession(SLONG);
@@ -63,6 +63,7 @@ public:
 
 	bool initialize(Firebird::SharedMemoryBase*, bool);
 	void mutexBug(int osErrorCode, const char* text);
+	void exceptionHandler(const Firebird::Exception& ex, ThreadFinishSync<EventManager*>::ThreadRoutine* routine);
 
 private:
 	void acquire_shmem();
@@ -91,11 +92,9 @@ private:
 	void detach_shared_file();
 	void get_shared_file_name(Firebird::PathName&) const;
 
-	static THREAD_ENTRY_DECLARE watcher_thread(THREAD_ENTRY_PARAM arg)
+	static void watcher_thread(EventManager* eventMgr)
 	{
-		EventManager* const eventMgr = static_cast<EventManager*>(arg);
 		eventMgr->watcher_thread();
-		return 0;
 	}
 
 	static void mutex_bugcheck(const TEXT*, int);
@@ -105,11 +104,11 @@ private:
 	SLONG m_processOffset;
 
 	Firebird::string m_dbId;
-	Firebird::RefPtr<Config> m_config;
+	Firebird::RefPtr<const Config> m_config;
 	Firebird::AutoPtr<Firebird::SharedMemory<evh> > m_sharedMemory;
 
 	Firebird::Semaphore m_startupSemaphore;
-	Firebird::Semaphore m_cleanupSemaphore;
+	ThreadFinishSync<EventManager*> m_cleanupSync;
 
 	bool m_sharedFileCreated;
 	bool m_exiting;

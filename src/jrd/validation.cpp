@@ -847,7 +847,8 @@ const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 	{true, fb_info_pip_errors,		"Data page %" ULONGFORMAT" marked as free in PIP (%" ULONGFORMAT":%" ULONGFORMAT")"},
 	{true, isc_info_ppage_errors,	"Data page %" ULONGFORMAT" is not in PP (%" ULONGFORMAT"). Slot (%d) is not found"},
 	{true, isc_info_ppage_errors,	"Data page %" ULONGFORMAT" is not in PP (%" ULONGFORMAT"). Slot (%d) has value %" ULONGFORMAT},
-	{true, isc_info_ppage_errors,	"Pointer page is not found for data page %" ULONGFORMAT". dpg_sequence (%" ULONGFORMAT") is invalid"}
+	{true, isc_info_ppage_errors,	"Pointer page is not found for data page %" ULONGFORMAT". dpg_sequence (%" ULONGFORMAT") is invalid"},
+	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} marked as secondary but contains primary record versions"}
 };
 
 Validation::Validation(thread_db* tdbb, UtilSvc* uSvc) :
@@ -1751,6 +1752,8 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 	const UCHAR* const end_page = (UCHAR*) page + dbb->dbb_page_size;
 	const data_page::dpg_repeat* const end = page->dpg_rpt + page->dpg_count;
 	RecordNumber number((SINT64)sequence * dbb->dbb_max_records);
+	int primary_versions = 0;
+	bool marked = false;
 
 	for (const data_page::dpg_repeat* line = page->dpg_rpt; line < end; line++, number.increment())
 	{
@@ -1798,6 +1801,8 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 					if (state == tra_committed || state == tra_limbo)
 						RBM_SET(vdr_tdbb->getDefaultPool(), &vdr_rel_records, number.getValue());
 				}
+
+				primary_versions++;
 			}
 
 #ifdef DEBUG_VAL_VERBOSE
@@ -1820,7 +1825,12 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 
 				if ((result == rtn_corrupt) && (vdr_flags & VDR_repair))
 				{
-					CCH_MARK(vdr_tdbb, &window);
+					if (!marked)
+					{
+						CCH_MARK(vdr_tdbb, &window);
+						marked = true;
+					}
+
 					header->rhd_flags |= rhd_damaged;
 					vdr_fixed++;
 				}
@@ -1830,6 +1840,24 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 		else if (VAL_debug_level)
 			fprintf(stdout, "(empty)\n");
 #endif
+	}
+
+	if (primary_versions && (dp_flags & dpg_secondary))
+	{
+		corrupt(VAL_DATA_PAGE_SEC_PRI, relation, page_number, sequence);
+
+		if (vdr_flags & VDR_update)
+		{
+			if (!marked)
+			{
+				CCH_MARK(vdr_tdbb, &window);
+				marked = true;
+			}
+
+			page->dpg_header.pag_flags &= ~dpg_secondary;
+			pp_bits &= ~ppg_dp_secondary;
+			vdr_fixed++;
+		}
 	}
 
 	release_page(&window);

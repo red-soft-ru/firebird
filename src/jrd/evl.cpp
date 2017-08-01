@@ -148,7 +148,7 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 	const VariableNode* varNode;
 	const FieldNode* fieldNode;
 
-	if ((paramNode = ExprNode::as<ParameterNode>(node)))
+	if ((paramNode = nodeAs<ParameterNode>(node)))
 	{
 		message = paramNode->message;
 		arg_number = paramNode->argNumber;
@@ -175,15 +175,15 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 
 		return &impure->vlu_desc;
 	}
-	else if (ExprNode::is<NullNode>(node))
+	else if (nodeIs<NullNode>(node))
 		return NULL;
-	else if ((varNode = ExprNode::as<VariableNode>(node)))
+	else if ((varNode = nodeAs<VariableNode>(node)))
 	{
 		// Calculate descriptor
 		impure = request->getImpure<impure_value>(varNode->varDecl->impureOffset);
 		return &impure->vlu_desc;
 	}
-	else if ((fieldNode = ExprNode::as<FieldNode>(node)))
+	else if ((fieldNode = nodeAs<FieldNode>(node)))
 	{
 		record = request->req_rpb[fieldNode->fieldStream].rpb_record;
 
@@ -202,7 +202,7 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 		return &impure->vlu_desc;
 	}
 
-	BUGCHECK(229);	// msg 229 EVL_assign_to: invalid operation
+	SOFT_BUGCHECK(229);	// msg 229 EVL_assign_to: invalid operation
 	return NULL;
 }
 
@@ -261,7 +261,7 @@ RecordBitmap** EVL_bitmap(thread_db* tdbb, const InversionNode* node, RecordBitm
 				(desc->isText() || desc->isDbKey()))
 			{
 				UCHAR* ptr = NULL;
-				const int length = MOV_get_string(desc, &ptr, NULL, 0);
+				const int length = MOV_get_string(tdbb, desc, &ptr, NULL, 0);
 
 				if (length == sizeof(RecordNumber::Packed))
 				{
@@ -290,7 +290,7 @@ RecordBitmap** EVL_bitmap(thread_db* tdbb, const InversionNode* node, RecordBitm
 		}
 
 	default:
-		BUGCHECK(230);			// msg 230 EVL_bitmap: invalid operation
+		SOFT_BUGCHECK(230);			// msg 230 EVL_bitmap: invalid operation
 	}
 
 	return NULL;
@@ -426,6 +426,14 @@ void EVL_make_value(thread_db* tdbb, const dsc* desc, impure_value* value, Memor
 		value->vlu_misc.vlu_double = *((double*) from.dsc_address);
 		return;
 
+	case dtype_dec64:
+		value->vlu_misc.vlu_dec64 = *((Decimal64*) from.dsc_address);
+		return;
+
+	case dtype_dec128:
+		value->vlu_misc.vlu_dec128 = *((Decimal128*) from.dsc_address);
+		return;
+
 	case dtype_timestamp:
 	case dtype_quad:
 		value->vlu_misc.vlu_dbkey[0] = ((SLONG*) from.dsc_address)[0];
@@ -459,7 +467,7 @@ void EVL_make_value(thread_db* tdbb, const dsc* desc, impure_value* value, Memor
 	// temporary buffer.  Since this will always be the result of a conversion,
 	// this isn't a serious problem.
 
-	const USHORT length = MOV_get_string_ptr(&from, &ttype, &address, &temp, sizeof(temp));
+	const USHORT length = MOV_get_string_ptr(tdbb, &from, &ttype, &address, &temp, sizeof(temp));
 
 	// Allocate a string block of sufficient size.
 
@@ -539,7 +547,7 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 		if (!fieldInfo.validationExpr->execute(tdbb, request) && !(request->req_flags & req_null))
 		{
 			const USHORT length = desc_is_null ? 0 :
-				MOV_make_string(desc, ttype_dynamic, &value, &temp, sizeof(temp) - 1);
+				MOV_make_string(tdbb, desc, ttype_dynamic, &value, &temp, sizeof(temp) - 1);
 
 			if (desc_is_null)
 				value = NULL_STRING_MARK;

@@ -102,6 +102,8 @@ namespace Jrd
 			: interMod(m.interMod)
 		{ }
 
+		~Module();
+
 		// used for UDF/BLOB Filter
 		static FPTR_INT lookup(const char*, const char*, Firebird::SortedObjectsArray<Module>&);
 

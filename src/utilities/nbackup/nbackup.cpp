@@ -682,7 +682,15 @@ void NBackup::create_backup()
 	}
 	else
 	{
-		backup = CreateFile(nm.c_str(), GENERIC_WRITE, FILE_SHARE_DELETE,
+		// See CORE-4913 and "Create File" article on MSDN:
+		// When an application creates a file across a network, it is better to use
+		// GENERIC_READ | GENERIC_WRITE for dwDesiredAccess than to use GENERIC_WRITE
+		// alone. The resulting code is faster, because the redirector can use the
+		// cache manager and send fewer SMBs with more data. This combination also
+		// avoids an issue where writing to a file across a network can occasionally
+		// return ERROR_ACCESS_DENIED.
+
+		backup = CreateFile(nm.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_DELETE,
 			NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
 	}
 	if (backup != INVALID_HANDLE_VALUE)

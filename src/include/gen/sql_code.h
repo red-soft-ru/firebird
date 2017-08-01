@@ -827,6 +827,32 @@ static const struct {
 	{335545124, -833}, /* 804 dsql_window_cant_overr_frame */
 	{335545125, -833}, /* 805 dsql_window_duplicate */
 	{335545126, -902}, /* 806 sql_too_long */
+	{335545127, -901}, /* 807 cfg_stmt_timeout */
+	{335545128, -901}, /* 808 att_stmt_timeout */
+	{335545129, -901}, /* 809 req_stmt_timeout */
+	{335545130, -902}, /* 810 att_shut_killed */
+	{335545131, -902}, /* 811 att_shut_idle */
+	{335545132, -902}, /* 812 att_shut_db_down */
+	{335545133, -902}, /* 813 att_shut_engine */
+	{335545134, -902}, /* 814 overriding_without_identity */
+	{335545135, -902}, /* 815 overriding_system_invalid */
+	{335545136, -902}, /* 816 overriding_user_invalid */
+	{335545137, -902}, /* 817 overriding_system_missing */
+	{335545138, -842}, /* 818 decprecision_err */
+	{335545139, -901}, /* 819 decfloat_divide_by_zero */
+	{335545140, -901}, /* 820 decfloat_inexact_result */
+	{335545141, -901}, /* 821 decfloat_invalid_operation */
+	{335545142, -901}, /* 822 decfloat_overflow */
+	{335545143, -901}, /* 823 decfloat_underflow */
+	{335545144, -901}, /* 824 subfunc_notdef */
+	{335545145, -901}, /* 825 subproc_notdef */
+	{335545146, -901}, /* 826 subfunc_signat */
+	{335545147, -901}, /* 827 subproc_signat */
+	{335545148, -901}, /* 828 subfunc_defvaldecl */
+	{335545149, -901}, /* 829 subproc_defvaldecl */
+	{335545150, -901}, /* 830 subfunc_not_impl */
+	{335545151, -901}, /* 831 subproc_not_impl */
+	{335545152, -901}, /* 832 sysf_invalid_hash_algorithm */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */
@@ -893,6 +919,7 @@ static const struct {
 	{336003110, -802}, /*  38 dsql_no_output_sqlda */
 	{336003111, -313}, /*  39 dsql_wrong_param_num */
 	{336003112, -817}, /*  40 dsql_invalid_drop_ss_clause */
+	{336003113, -313}, /*  41 upd_ins_cannot_default */
 	{336068645, -901}, /*  37 dyn_filter_not_found */
 	{336068649, -901}, /*  41 dyn_func_not_found */
 	{336068656, -901}, /*  48 dyn_index_not_found */
@@ -969,6 +996,7 @@ static const struct {
 	{336068896, -901}, /* 288 dyn_cant_use_zero_increment */
 	{336068897, -901}, /* 289 dyn_cant_use_in_foreignkey */
 	{336068898, -901}, /* 290 dyn_defvaldecl_package_func */
+	{336068904, -901}, /* 296 dyn_cant_use_zero_inc_ident */
 	{336330753, -901}, /*   1 gbak_unknown_switch */
 	{336330754, -901}, /*   2 gbak_page_size_missing */
 	{336330755, -901}, /*   3 gbak_page_size_toobig */

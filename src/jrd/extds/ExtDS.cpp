@@ -320,7 +320,7 @@ void Connection::generateDPB(thread_db* tdbb, ClumpletWriter& dpb,
 	dpb.insertInt(isc_dpb_ext_call_depth, attachment->att_ext_call_depth + 1);
 
 	if ((m_provider.getFlags() & prvTrustedAuth) &&
-		user.isEmpty() && pwd.isEmpty() && role.isEmpty())
+		user.isEmpty() && pwd.isEmpty() && role.isEmpty() && attachment->att_user)
 	{
 		attachment->att_user->populateDpb(dpb);
 	}
@@ -847,6 +847,11 @@ void Statement::prepare(thread_db* tdbb, Transaction* tran, const string& sql, b
 	m_sql = sql;
 	m_sql.trim();
 	m_preparedByReq = m_callerPrivileges ? tdbb->getRequest() : NULL;
+}
+
+void Statement::setTimeout(thread_db* tdbb, unsigned int timeout)
+{
+	doSetTimeout(tdbb, timeout);
 }
 
 void Statement::execute(thread_db* tdbb, Transaction* tran,

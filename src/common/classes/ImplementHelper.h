@@ -117,7 +117,7 @@ protected:
 	void refCntDPrt(char f)
 	{
 		if (mark)
-			fprintf(stderr, "%s %p %c %lld\n", mark, this, f, refCounter.value());
+			fprintf(stderr, "%s %p %c %d\n", mark, this, f, int(refCounter.value()));
 	}
 
 	AtomicCounter refCounter;

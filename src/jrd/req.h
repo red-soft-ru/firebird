@@ -175,6 +175,7 @@ public:
 		  req_ext_stmt(NULL),
 		  req_cursors(*req_pool),
 		  req_ext_resultset(NULL),
+		  req_timeout(0),
 		  req_domain_validation(NULL),
 		  req_auto_trans(*req_pool),
 		  req_sorts(*req_pool),
@@ -252,6 +253,8 @@ public:
 	Savepoint*	req_savepoints;			// Looper savepoint list
 	Savepoint*	req_proc_sav_point;		// procedure savepoint list
 	Firebird::TimeStamp	req_timestamp;	// Start time of request
+	unsigned int req_timeout;					// query timeout in milliseconds, set by the dsql_req::setupTimer
+	Firebird::RefPtr<TimeoutTimer> req_timer;	// timeout timer, shared with dsql_req
 
 	Firebird::AutoPtr<Jrd::RuntimeStatistics> req_fetch_baseline; // State of request performance counters when we reported it last time
 	SINT64 req_fetch_elapsed;	// Number of clock ticks spent while fetching rows for this request since we reported it last time

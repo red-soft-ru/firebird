@@ -104,7 +104,6 @@
 #include "../intl/charsets.h"
 #include "../intl/country_codes.h"
 #include "../common/gdsassert.h"
-//#include "../jrd/license.h"
 #ifdef INTL_BUILTIN
 #include "../intl/ld_proto.h"
 #endif
@@ -610,11 +609,11 @@ int INTL_compare(thread_db* tdbb, const dsc* pText1, const dsc* pText2, ErrorFun
 
 	UCHAR* p1;
 	USHORT t1;
-	ULONG length1 = CVT_get_string_ptr(pText1, &t1, &p1, NULL, 0, err);
+	ULONG length1 = CVT_get_string_ptr(pText1, &t1, &p1, NULL, 0, tdbb->getAttachment()->att_dec_status, err);
 
 	UCHAR* p2;
 	USHORT t2;
-	ULONG length2 = CVT_get_string_ptr(pText2, &t2, &p2, NULL, 0, err);
+	ULONG length2 = CVT_get_string_ptr(pText2, &t2, &p2, NULL, 0, tdbb->getAttachment()->att_dec_status, err);
 
 	// YYY - by SQL II compare_type must be explicit in the
 	// SQL statement if there is any doubt
@@ -820,7 +819,7 @@ int INTL_convert_string(dsc* to, const dsc* from, ErrorFunction err)
 
 	UCHAR* from_ptr;
 	USHORT from_type;
-	const USHORT from_len = CVT_get_string_ptr(from, &from_type, &from_ptr, NULL, 0, err);
+	const USHORT from_len = CVT_get_string_ptr(from, &from_type, &from_ptr, NULL, 0, tdbb->getAttachment()->att_dec_status, err);
 
 	const ULONG to_size = TEXT_LEN(to);
 	ULONG from_fill, to_fill;

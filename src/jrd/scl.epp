@@ -73,6 +73,7 @@ static bool check_user_group(thread_db* tdbb, const UCHAR*, USHORT);
 static bool check_string(const UCHAR*, const Firebird::MetaName&);
 static SecurityClass::flags_t compute_access(thread_db* tdbb, const SecurityClass*,
 	const MetaName &userName,	SLONG, const Firebird::MetaName&);
+static SecurityClass::flags_t get_sys_privileges(thread_db* tdbb);
 static SecurityClass::flags_t walk_acl(thread_db* tdbb, const Acl&, const MetaName&,
 	SLONG, const Firebird::MetaName&);
 static void raiseError(SecurityClass::flags_t mask, SLONG type, const Firebird::MetaName& name,
@@ -229,6 +230,10 @@ void SCL_check_access(thread_db* tdbb,
 										  Arg::Str("security_class") <<
 										  Arg::Str(s_class->scl_name));
 	}
+
+	// Make fast check first
+	if (mask & get_sys_privileges(tdbb))
+		return;
 
 	// Check global DDL permissions with ANY option which allow user to make changes non owned objects
 	if ((type > obj_last_non_ddl) && (mask & SCL_get_object_mask(type)))
@@ -1414,6 +1419,35 @@ static void get_string(const UCHAR* acl, Firebird::MetaName& string)
 	string.assign(ptr, length);
 }
 
+static SecurityClass::flags_t get_sys_privileges(thread_db* tdbb)
+{
+/**************************************
+ *
+ *	g e t _ s y s _ p r i v i l e g e s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Returns access flags for current user's system-wide privileges
+ *
+ **************************************/
+	const Jrd::Attachment* attachment = tdbb->getAttachment();
+	if (!attachment)
+		return 0;
+
+	SecurityClass::flags_t flags = 0;
+
+	if (attachment->locksmith(tdbb, ACCESS_ANY_OBJECT_IN_DATABASE))
+		flags |= SCL_ACCESS_ANY;
+	else if (attachment->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE))
+		flags |= SCL_SELECT_ANY;
+
+	if (attachment->locksmith(tdbb, MODIFY_ANY_OBJECT_IN_DATABASE))
+		flags |= SCL_MODIFY_ANY;
+
+	return flags;
+}
+
 static SecurityClass::flags_t compute_access(thread_db* tdbb,
 											 const SecurityClass* s_class,
 											 const MetaName& userName,
@@ -1439,19 +1473,7 @@ static SecurityClass::flags_t compute_access(thread_db* tdbb,
 	jrd_tra* sysTransaction = attachment->getSysTransaction();
 
 	SecurityClass::flags_t privileges = 0;
-	SecurityClass::flags_t sysPriv = SCL_exists;
-
-	const SecurityClass::flags_t selectAnyObject = SCL_select | SCL_references;
-	const SecurityClass::flags_t accessAnyObject = SCL_insert | SCL_update | SCL_delete |
-												   SCL_execute | SCL_usage | selectAnyObject;
-	const SecurityClass::flags_t anyDdl = SCL_create | SCL_alter | SCL_control | SCL_drop;
-
-	if (attachment->locksmith(tdbb, ACCESS_ANY_OBJECT_IN_DATABASE))
-		sysPriv |= accessAnyObject;
-	else if (attachment->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE))
-		sysPriv |= selectAnyObject;
-	if (attachment->locksmith(tdbb, MODIFY_ANY_OBJECT_IN_DATABASE))
-		sysPriv |= anyDdl;
+	SecurityClass::flags_t sysPriv = SCL_exists | get_sys_privileges(tdbb);
 
 	AutoCacheRequest request(tdbb, irq_l_security, IRQ_REQUESTS);
 
@@ -1517,8 +1539,10 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 
 	if (userName.hasData())
 		user.setUserName(userName);
-	else
+	else if (attachment->att_user)
 		user = *attachment->att_user;
+	else
+		user.setUserName("");
 
 	SecurityClass::flags_t privilege = 0;
 	const UCHAR* a = acl.begin();

@@ -83,6 +83,11 @@ const SecurityClass::flags_t SCL_execute		= 1024;		// EXECUTE access
 const SecurityClass::flags_t SCL_usage			= 2048;		// USAGE access
 const SecurityClass::flags_t SCL_create			= 4096;
 
+const SecurityClass::flags_t SCL_SELECT_ANY	= SCL_select | SCL_references;
+const SecurityClass::flags_t SCL_ACCESS_ANY	= SCL_insert | SCL_update | SCL_delete |
+											  SCL_execute | SCL_usage | SCL_SELECT_ANY;
+const SecurityClass::flags_t SCL_MODIFY_ANY	= SCL_create | SCL_alter | SCL_control | SCL_drop;
+
 
 /*
 scl pathcalls

@@ -183,6 +183,7 @@ ISC_STATUS BLF_get_segment(thread_db* tdbb,
 	{
 		if (status != localStatus[1])
 		{
+			localStatus[0] = isc_arg_gds;
 			localStatus[1] = status;
 			localStatus[2] = isc_arg_end;
 		}
@@ -291,6 +292,7 @@ void BLF_put_segment(thread_db* tdbb,
 	{
 		if (status != localStatus[1])
 		{
+			localStatus[0] = isc_arg_gds;
 			localStatus[1] = status;
 			localStatus[2] = isc_arg_end;
 		}

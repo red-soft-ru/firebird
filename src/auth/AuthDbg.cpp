@@ -123,6 +123,9 @@ int DebugServer::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IS
 	return AUTH_FAILED;
 }
 
+void DebugServer::setDbCryptCallback(Firebird::CheckStatusWrapper*, Firebird::ICryptKeyCallback*)
+{ /* ignore it */ }
+
 int DebugServer::release()
 {
 	if (--refCounter == 0)

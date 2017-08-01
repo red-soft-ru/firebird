@@ -113,7 +113,7 @@ static int blocking_ast_relation(void*);
 static int partners_ast_relation(void*);
 static int rescan_ast_relation(void*);
 static ULONG get_rel_flags_from_FLAGS(USHORT);
-static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, trig_vec**, const TEXT*, FB_UINT64, bool,
+static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, TrigVector**, const TEXT*, FB_UINT64, bool,
 	USHORT, const MetaName&, const string&, const bid*, Nullable<bool> ssDefiner);
 static bool get_type(thread_db*, USHORT*, const UCHAR*, const TEXT*);
 static void lookup_view_contexts(thread_db*, jrd_rel*);
@@ -121,7 +121,7 @@ static void make_relation_scope_name(const TEXT*, const USHORT, string& str);
 static ValueExprNode* parse_field_default_blr(thread_db* tdbb, bid* blob_id);
 static BoolExprNode* parse_field_validation_blr(thread_db* tdbb, bid* blob_id, const MetaName name);
 static bool resolve_charset_and_collation(thread_db*, USHORT*, const UCHAR*, const UCHAR*);
-static void save_trigger_data(thread_db*, trig_vec**, jrd_rel*, JrdStatement*, blb*, blb*,
+static void save_trigger_data(thread_db*, TrigVector**, jrd_rel*, JrdStatement*, blb*, blb*,
 	const TEXT*, FB_UINT64, bool, USHORT, const MetaName&, const string&,
 	const bid*, Nullable<bool> ssDefiner);
 static void scan_partners(thread_db*, jrd_rel*);
@@ -131,7 +131,7 @@ static bool verify_TRG_ignore_perm(thread_db*, const MetaName&);
 
 
 // Decompile all triggers from vector
-static void release_cached_triggers(thread_db* tdbb, trig_vec* vector)
+static void release_cached_triggers(thread_db* tdbb, TrigVector* vector)
 {
 	if (!vector)
 		return;
@@ -178,7 +178,7 @@ static void inc_int_use_count(JrdStatement* statement)
 
 
 // Increment int_use_count for all procedures used by triggers
-static void post_used_procedures(trig_vec* vector)
+static void post_used_procedures(TrigVector* vector)
 {
 	if (!vector)
 		return;
@@ -1843,7 +1843,8 @@ void MET_load_db_triggers(thread_db* tdbb, int type)
 	}
 
 	attachment->att_triggers[type] = FB_NEW_POOL(*attachment->att_pool)
-		trig_vec(*attachment->att_pool);
+		TrigVector(*attachment->att_pool);
+	attachment->att_triggers[type]->addRef();
 
 	AutoRequest trigger_request;
 	int encoded_type = type | TRIGGER_TYPE_DB;
@@ -1876,7 +1877,7 @@ void MET_load_ddl_triggers(thread_db* tdbb)
 	}
 
 	attachment->att_ddl_triggers = FB_NEW_POOL(*attachment->att_pool)
-		trig_vec(*attachment->att_pool);
+		TrigVector(*attachment->att_pool);
 
 	AutoRequest trigger_request;
 
@@ -1899,7 +1900,7 @@ void MET_load_ddl_triggers(thread_db* tdbb)
 void MET_load_trigger(thread_db* tdbb,
 					  jrd_rel* relation,
 					  const MetaName& trigger_name,
-					  trig_vec** triggers)
+					  TrigVector** triggers)
 {
 /**************************************
  *
@@ -3119,7 +3120,7 @@ void MET_parse_sys_trigger(thread_db* tdbb, jrd_rel* relation)
 		const USHORT trig_flags = TRG.RDB$FLAGS;
 		const TEXT* name = TRG.RDB$TRIGGER_NAME;
 
-		trig_vec** ptr;
+		TrigVector** ptr;
 
 		switch (type)
 		{
@@ -3763,7 +3764,7 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	trig_vec* triggers[TRIGGER_MAX];
+	TrigVector* triggers[TRIGGER_MAX];
 	Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
 	Jrd::ContextPoolHolder context(tdbb, attachment->att_pool);
@@ -3971,6 +3972,18 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 				}
 				else
 					field->fld_source = PAR_make_field(tdbb, csb, view_context, (TEXT*) p);
+
+				{	// scope
+					const ViewContexts& ctx = relation->rel_view_contexts;
+					FB_SIZE_T pos;
+
+					if (ctx.find(view_context, pos) &&
+						(ctx[pos]->vcx_type == VCT_TABLE || ctx[pos]->vcx_type == VCT_VIEW))
+					{
+						field->fld_source_rel_field = MetaNamePair(ctx[pos]->vcx_relation_name, (TEXT*) p);
+					}
+				}
+
 				break;
 
 			case RSR_computed_blr:
@@ -4033,6 +4046,12 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 			case RSR_field_generator_name:
 				field->fld_generator_name = (const TEXT*) p;
+				if (!field->fld_identity_type.specified)
+					field->fld_identity_type = IDENT_TYPE_BY_DEFAULT;
+				break;
+
+			case RSR_field_identity_type:
+				field->fld_identity_type = static_cast<IdentityType>(n);
 				break;
 
 			default:    // Shut up compiler warning
@@ -4065,7 +4084,7 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 		// We have just loaded the triggers onto the local vector triggers.
 		// Its now time to place them at their rightful place ie the relation block.
 
-		trig_vec* tmp_vector;
+		TrigVector* tmp_vector;
 
 		tmp_vector = relation->rel_pre_store;
 		relation->rel_pre_store = triggers[TRIGGER_PRE_STORE];
@@ -4458,7 +4477,7 @@ ULONG MET_get_rel_flags_from_TYPE(USHORT type)
 
 
 static void get_trigger(thread_db* tdbb, jrd_rel* relation,
-						bid* blob_id, bid* debug_blob_id, trig_vec** ptr,
+						bid* blob_id, bid* debug_blob_id, TrigVector** ptr,
 						const TEXT* name, FB_UINT64 type,
 						bool sys_trigger, USHORT flags,
 						const MetaName& engine, const string& entryPoint,
@@ -4653,7 +4672,7 @@ static BoolExprNode* parse_field_validation_blr(thread_db* tdbb, bid* blob_id, c
 }
 
 
-void MET_release_trigger(thread_db* tdbb, trig_vec** vector_ptr, const MetaName& name)
+void MET_release_trigger(thread_db* tdbb, TrigVector** vector_ptr, const MetaName& name)
 {
 /***********************************************
  *
@@ -4670,7 +4689,7 @@ void MET_release_trigger(thread_db* tdbb, trig_vec** vector_ptr, const MetaName&
 	if (!*vector_ptr)
 		return;
 
-	trig_vec& vector = **vector_ptr;
+	TrigVector& vector = **vector_ptr;
 
 	SET_TDBB(tdbb);
 
@@ -4692,7 +4711,7 @@ void MET_release_trigger(thread_db* tdbb, trig_vec** vector_ptr, const MetaName&
 }
 
 
-void MET_release_triggers( thread_db* tdbb, trig_vec** vector_ptr)
+void MET_release_triggers( thread_db* tdbb, TrigVector** vector_ptr)
 {
 /***********************************************
  *
@@ -4706,7 +4725,7 @@ void MET_release_triggers( thread_db* tdbb, trig_vec** vector_ptr)
  *      else do the work.
  *
  **************************************/
-	trig_vec* vector = *vector_ptr;
+	TrigVector* vector = *vector_ptr;
 
 	if (!vector)
 		return;
@@ -4722,16 +4741,7 @@ void MET_release_triggers( thread_db* tdbb, trig_vec** vector_ptr)
 			return;
 	}
 
-	for (FB_SIZE_T i = 0; i < vector->getCount(); i++)
-	{
-		JrdStatement* stmt = (*vector)[i].statement;
-		if (stmt)
-			stmt->release(tdbb);
-
-		delete (*vector)[i].extTrigger;
-	}
-
-	delete vector;
+	vector->release(tdbb);
 }
 
 
@@ -4848,7 +4858,7 @@ static bool resolve_charset_and_collation(thread_db* tdbb,
 }
 
 
-static void save_trigger_data(thread_db* tdbb, trig_vec** ptr, jrd_rel* relation,
+static void save_trigger_data(thread_db* tdbb, TrigVector** ptr, jrd_rel* relation,
 							  JrdStatement* statement, blb* blrBlob, blb* debugInfoBlob,
 							  const TEXT* name, FB_UINT64 type,
 							  bool sys_trigger, USHORT flags,
@@ -4866,12 +4876,13 @@ static void save_trigger_data(thread_db* tdbb, trig_vec** ptr, jrd_rel* relation
  *
  **************************************/
 	Attachment* attachment = tdbb->getAttachment();
-	trig_vec* vector = *ptr;
+	TrigVector* vector = *ptr;
 
 	if (!vector)
 	{
 		MemoryPool* pool = relation ? relation->rel_pool : attachment->att_pool;
-		vector = FB_NEW_POOL(*pool) trig_vec(*pool);
+		vector = FB_NEW_POOL(*pool) TrigVector(*pool);
+		vector->addRef();
 		*ptr = vector;
 	}
 
@@ -4918,11 +4929,11 @@ static void save_trigger_data(thread_db* tdbb, trig_vec** ptr, jrd_rel* relation
 }
 
 
-const Trigger* findTrigger(trig_vec* triggers, const MetaName& trig_name)
+const Trigger* findTrigger(TrigVector* triggers, const MetaName& trig_name)
 {
 	if (triggers)
 	{
-		for (trig_vec::iterator t = triggers->begin(); t != triggers->end(); ++t)
+		for (TrigVector::iterator t = triggers->begin(); t != triggers->end(); ++t)
 		{
 			if (t->name.compare(trig_name) == 0)
 				return &(*t);

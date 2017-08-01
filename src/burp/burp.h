@@ -779,8 +779,6 @@ struct burp_meta_obj
 // I need to review if we tolerate different lengths for different OS's here.
 const unsigned int MAX_FILE_NAME_SIZE		= 256;
 
-//#include "../jrd/svc.h"
-
 #include "../burp/std_desc.h"
 
 #ifdef WIN_NT

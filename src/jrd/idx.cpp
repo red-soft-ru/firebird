@@ -314,16 +314,14 @@ void IDX_create_index(thread_db* tdbb,
 
 	sort_key_def key_desc[2];
 	// Key sort description
-	key_desc[0].skd_dtype = SKD_bytes;
+	key_desc[0].setSkdLength(SKD_bytes, key_length);
 	key_desc[0].skd_flags = SKD_ascending;
-	key_desc[0].skd_length = key_length;
-	key_desc[0].skd_offset = 0;
+	key_desc[0].setSkdOffset();
 	key_desc[0].skd_vary_offset = 0;
 	// RecordNumber sort description
-	key_desc[1].skd_dtype = SKD_int64;
+	key_desc[1].setSkdLength(SKD_int64, sizeof(RecordNumber));
 	key_desc[1].skd_flags = SKD_ascending;
-	key_desc[1].skd_length = sizeof(RecordNumber);
-	key_desc[1].skd_offset = key_length;
+	key_desc[1].setSkdOffset(key_desc);
 	key_desc[1].skd_vary_offset = 0;
 
 	FPTR_REJECT_DUP_CALLBACK callback = (idx->idx_flags & idx_unique) ? duplicate_key : NULL;
@@ -1102,7 +1100,7 @@ static idx_e check_duplicates(thread_db* tdbb,
 				bool flag_rec = false;
 				const dsc* desc_rec = BTR_eval_expression(tdbb, insertion_idx, rpb.rpb_record, flag_rec);
 
-				if (flag_rec && flag_idx && (MOV_compare(desc_rec, &desc1) == 0))
+				if (flag_rec && flag_idx && (MOV_compare(tdbb, desc_rec, &desc1) == 0))
 				{
 					result = idx_e_duplicate;
 					break;
@@ -1123,7 +1121,7 @@ static idx_e check_duplicates(thread_db* tdbb,
 					field_id = record_idx->idx_rpt[i].idx_field;
 					const bool flag_idx = EVL_field(relation_2, record, field_id, &desc2);
 
-					if (flag_rec != flag_idx || (flag_rec && (MOV_compare(&desc1, &desc2) != 0) ))
+					if (flag_rec != flag_idx || (flag_rec && (MOV_compare(tdbb, &desc1, &desc2) != 0) ))
 						break;
 
 					all_nulls = all_nulls && !flag_rec && !flag_idx;
@@ -1556,7 +1554,7 @@ void IDX_modify_flag_uk_modified(thread_db* tdbb,
 			const bool flag_org = EVL_field(org_rpb->rpb_relation, org_rpb->rpb_record, idx_desc->idx_field, &desc1);
 			const bool flag_new = EVL_field(new_rpb->rpb_relation, new_rpb->rpb_record, idx_desc->idx_field, &desc2);
 
-			if (flag_org != flag_new || MOV_compare(&desc1, &desc2) != 0)
+			if (flag_org != flag_new || MOV_compare(tdbb, &desc1, &desc2) != 0)
 			{
 				new_rpb->rpb_flags |= rpb_uk_modified;
 				CCH_RELEASE(tdbb, &window);

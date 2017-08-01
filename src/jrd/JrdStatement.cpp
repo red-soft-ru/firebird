@@ -203,9 +203,9 @@ JrdStatement* JrdStatement::makeStatement(thread_db* tdbb, CompilerScratch* csb,
 
 		DmlNode::doPass1(tdbb, csb, &csb->csb_node);
 
-		// CVC: I'm going to allocate the map before the loop to avoid alloc/dealloc calls.
-		AutoPtr<StreamType, ArrayDelete<StreamType> > localMap(FB_NEW_POOL(*tdbb->getDefaultPool())
-			StreamType[STREAM_MAP_LENGTH]);
+		// CVC: I'm going to preallocate the map before the loop to avoid alloc/dealloc calls.
+		StreamMap localMap;
+		StreamType* const map = localMap.getBuffer(STREAM_MAP_LENGTH);
 
 		// Copy and compile (pass1) domains DEFAULT and constraints.
 		MapFieldInfo::Accessor accessor(&csb->csb_map_field_info);
@@ -213,18 +213,17 @@ JrdStatement* JrdStatement::makeStatement(thread_db* tdbb, CompilerScratch* csb,
 		for (bool found = accessor.getFirst(); found; found = accessor.getNext())
 		{
 			FieldInfo& fieldInfo = accessor.current()->second;
-			//StreamType local_map[MAP_LENGTH];
 
 			AutoSetRestore<USHORT> autoRemapVariable(&csb->csb_remap_variable,
 				(csb->csb_variables ? csb->csb_variables->count() : 0) + 1);
 
-			fieldInfo.defaultValue = NodeCopier::copy(tdbb, csb, fieldInfo.defaultValue, localMap);
+			fieldInfo.defaultValue = NodeCopier::copy(tdbb, csb, fieldInfo.defaultValue, map);
 
 			csb->csb_remap_variable = (csb->csb_variables ? csb->csb_variables->count() : 0) + 1;
 
 			if (fieldInfo.validationExpr)
 			{
-				NodeCopier copier(csb, localMap);
+				NodeCopier copier(csb, map);
 				fieldInfo.validationExpr = copier.copy(tdbb, fieldInfo.validationExpr);
 			}
 
@@ -616,7 +615,7 @@ void JrdStatement::release(thread_db* tdbb)
 
 // Check that we have enough rights to access all resources this list of triggers touches.
 void JrdStatement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
-	trig_vec* triggers, MetaName userName)
+	TrigVector* triggers, MetaName userName)
 {
 	if (!triggers)
 		return;
@@ -676,7 +675,7 @@ void JrdStatement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 
 // Invoke buildExternalAccess for triggers in vector
 inline void JrdStatement::triggersExternalAccess(thread_db* tdbb, ExternalAccessList& list,
-	trig_vec* tvec)
+	TrigVector* tvec)
 {
 	if (!tvec)
 		return;
@@ -723,7 +722,7 @@ void JrdStatement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list
 			if (!relation)
 				continue;
 
-			trig_vec *vec1, *vec2;
+			RefPtr<TrigVector> vec1, vec2;
 
 			switch (item->exa_action)
 			{
@@ -762,7 +761,7 @@ template <typename T> static void makeSubRoutines(thread_db* tdbb, JrdStatement*
 		Routine* subRoutine = subNode->routine;
 		CompilerScratch*& subCsb = subNode->subCsb;
 
-		JrdStatement* subStatement = JrdStatement::makeStatement(tdbb, subCsb, true);
+		JrdStatement* subStatement = JrdStatement::makeStatement(tdbb, subCsb, false);
 		subStatement->parentStatement = statement;
 		subRoutine->setStatement(subStatement);
 

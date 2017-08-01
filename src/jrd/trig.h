@@ -41,7 +41,7 @@ struct jrd_trg
 	USHORT			trg_length;
 	const UCHAR*	trg_blr;
 	USHORT			trg_flags;
-	UCHAR			trg_ods_version;
+	USHORT			trg_ods_version;
 };
 
 /* trigger message structure */
@@ -51,7 +51,7 @@ struct trigger_msg
 	const SCHAR*	trigmsg_name;
 	USHORT			trigmsg_number;
 	const SCHAR*	trigmsg_text;
-	UCHAR			trg_ods_version;
+	USHORT			trg_ods_version;
 };
 
 /* generator definition structure */

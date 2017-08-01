@@ -126,7 +126,7 @@
 #define FB_CPU CpuPowerPc
 #endif
 
-#ifdef i386
+#if defined(i386) || defined(__i386) || defined(__i386__)
 #define I386
 #define FB_CPU CpuIntel
 #endif /* i386 */
@@ -551,11 +551,6 @@ extern "C" int remove(const char* path);
 #define INET_ERRNO	WSAGetLastError()
 #define H_ERRNO		WSAGetLastError()
 
-// For Visual Studio 2003 and earlier enable Windows 9X support
-#if defined _MSC_VER && (_MSC_VER < 1400)
-#define WIN9X_SUPPORT
-#endif
-
 #endif /* WIN_NT */
 
 
@@ -608,6 +603,13 @@ extern "C" int remove(const char* path);
 #define FB_EXPORTED
 #endif
 
+#ifdef HAS_NOEXCEPT
+#define NOEXCEPT noexcept
+#define NOEXCEPT_ARG(X) noexcept((X))
+#else
+#define NOEXCEPT
+#define NOEXCEPT_ARG(X)
+#endif
 
 /* alignment macros */
 

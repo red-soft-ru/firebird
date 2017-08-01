@@ -107,6 +107,7 @@ public:
 	// IServer implementation
 	int authenticate(Firebird::CheckStatusWrapper* status, Firebird::IServerBlock* sBlock,
 		Firebird::IWriter* writerInterface);
+	void setDbCryptCallback(Firebird::CheckStatusWrapper* status, Firebird::ICryptKeyCallback* callback) {}; // do nothing
     int release();
 
 	WinSspiServer(Firebird::IPluginConfig*);

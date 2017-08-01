@@ -281,6 +281,28 @@ public:
 };
 
 
+class SessionManagementNode : public Node
+{
+public:
+	explicit SessionManagementNode(MemoryPool& pool)
+		: Node(pool)
+	{
+	}
+
+public:
+	virtual SessionManagementNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
+	{
+		Node::dsqlPass(dsqlScratch);
+
+		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_SESSION_MANAGEMENT);
+
+		return this;
+	}
+
+	virtual void execute(thread_db* tdbb, dsql_req* request) const = 0;
+};
+
+
 class DmlNode : public Node
 {
 public:
@@ -332,6 +354,37 @@ public:
 public:
 	const static typename T::Type TYPE = typeConst;
 };
+
+
+template <typename To, typename From> static To* nodeAs(From* fromNode)
+{
+	return fromNode && fromNode->type == To::TYPE ? static_cast<To*>(fromNode) : NULL;
+}
+
+template <typename To, typename From> static To* nodeAs(NestConst<From>& fromNode)
+{
+	return fromNode && fromNode->type == To::TYPE ? static_cast<To*>(fromNode.getObject()) : NULL;
+}
+
+template <typename To, typename From> static const To* nodeAs(const From* fromNode)
+{
+	return fromNode && fromNode->type == To::TYPE ? static_cast<const To*>(fromNode) : NULL;
+}
+
+template <typename To, typename From> static const To* nodeAs(const NestConst<From>& fromNode)
+{
+	return fromNode && fromNode->type == To::TYPE ? static_cast<const To*>(fromNode.getObject()) : NULL;
+}
+
+template <typename To, typename From> static bool nodeIs(const From* fromNode)
+{
+	return fromNode && fromNode->type == To::TYPE;
+}
+
+template <typename To, typename From> static bool nodeIs(const NestConst<From>& fromNode)
+{
+	return fromNode && fromNode->type == To::TYPE;
+}
 
 
 // Stores a reference to a specialized ExprNode.
@@ -408,6 +461,7 @@ public:
 		TYPE_CURRENT_USER,
 		TYPE_DERIVED_EXPR,
 		TYPE_DECODE,
+		TYPE_DEFAULT,
 		TYPE_DERIVED_FIELD,
 		TYPE_DOMAIN_VALIDATION,
 		TYPE_EXTRACT,
@@ -470,7 +524,8 @@ public:
 	// Value flags.
 	static const unsigned FLAG_DOUBLE		= 0x10;
 	static const unsigned FLAG_DATE			= 0x20;
-	static const unsigned FLAG_VALUE		= 0x40;	// Full value area required in impure space.
+	static const unsigned FLAG_DECFLOAT		= 0x40;
+	static const unsigned FLAG_VALUE		= 0x80;	// Full value area required in impure space.
 
 	explicit ExprNode(Type aType, MemoryPool& pool, Kind aKind)
 		: DmlNode(pool, aKind),
@@ -481,39 +536,6 @@ public:
 		  dsqlChildNodes(pool),
 		  jrdChildNodes(pool)
 	{
-	}
-
-	template <typename T> T* as()
-	{
-		const ExprNode* const thisPointer = this;	// avoid warning
-		return thisPointer && type == T::TYPE ? static_cast<T*>(this) : NULL;
-	}
-
-	template <typename T> const T* as() const
-	{
-		const ExprNode* const thisPointer = this;	// avoid warning
-		return thisPointer && type == T::TYPE ? static_cast<const T*>(this) : NULL;
-	}
-
-	template <typename T> bool is() const
-	{
-		const ExprNode* const thisPointer = this;	// avoid warning
-		return thisPointer && type == T::TYPE;
-	}
-
-	template <typename T, typename LegacyType> static T* as(LegacyType* node)
-	{
-		return node ? node->template as<T>() : NULL;
-	}
-
-	template <typename T, typename LegacyType> static const T* as(const LegacyType* node)
-	{
-		return node ? node->template as<T>() : NULL;
-	}
-
-	template <typename T, typename LegacyType> static bool is(const LegacyType* node)
-	{
-		return node ? node->template is<T>() : false;
 	}
 
 	// Allocate and assign impure space for various nodes.
@@ -853,13 +875,13 @@ public:
 		fb_assert(false);
 	}
 
-	virtual DsqlNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
+	virtual ValueExprNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
 	{
 		fb_assert(false);
 		return NULL;
 	}
 
-	virtual DsqlNode* pass2(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
+	virtual ValueExprNode* pass2(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
 	{
 		fb_assert(false);
 		return NULL;
@@ -1658,6 +1680,22 @@ public:
 	SLONG id;
 	Firebird::MetaName name;
 	Firebird::MetaName secName;
+};
+
+typedef Firebird::Array<StreamType> StreamMap;
+
+// Copy sub expressions (including subqueries).
+class SubExprNodeCopier : private StreamMap, public NodeCopier
+{
+public:
+	SubExprNodeCopier(CompilerScratch* aCsb)
+		: NodeCopier(aCsb, getBuffer(STREAM_MAP_LENGTH))
+	{
+		// Initialize the map so all streams initially resolve to the original number.
+		// As soon as copy creates new streams, the map is being overwritten.
+		for (unsigned i = 0; i < STREAM_MAP_LENGTH; ++i)
+			remap[i] = i;
+	}
 };
 
 

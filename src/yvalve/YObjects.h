@@ -49,6 +49,7 @@ class YRequest;
 class YResultSet;
 class YService;
 class YStatement;
+class IscStatement;
 class YTransaction;
 
 class YObject
@@ -98,10 +99,13 @@ public:
 	void destroy(unsigned dstrFlags)
 	{
 		Firebird::MutexLockGuard guard(mtx, FB_FUNCTION);
-		FB_SIZE_T i;
 
-		while ((i = array.getCount()) > 0)
-			array[i - 1]->destroy(dstrFlags);
+		// Call destroy() only once even if handle is not removed from array
+		// by this call for any reason
+		for (int i = array.getCount() - 1; i >= 0; i--)
+			array[i]->destroy(dstrFlags);
+
+		clear();
 	}
 
 	void assign(HandleArray& from)
@@ -375,6 +379,9 @@ public:
 	void free(Firebird::CheckStatusWrapper* status);
 	unsigned getFlags(Firebird::CheckStatusWrapper* status);
 
+	unsigned int getTimeout(Firebird::CheckStatusWrapper* status);
+	void setTimeout(Firebird::CheckStatusWrapper* status, unsigned int timeOut);
+
 public:
 	Firebird::Mutex statementMutex;
 	YAttachment* attachment;
@@ -466,6 +473,11 @@ public:
 		Firebird::IMessageMetadata* inMetadata, void* inBuffer,
 		Firebird::IMessageMetadata* outMetadata, void* outBuffer);
 
+	unsigned int getIdleTimeout(Firebird::CheckStatusWrapper* status);
+	void setIdleTimeout(Firebird::CheckStatusWrapper* status, unsigned int timeOut);
+	unsigned int getStatementTimeout(Firebird::CheckStatusWrapper* status);
+	void setStatementTimeout(Firebird::CheckStatusWrapper* status, unsigned int timeOut);
+
 public:
 	Firebird::IProvider* provider;
 	Firebird::PathName dbPath;
@@ -473,6 +485,7 @@ public:
 	HandleArray<YEvents> childEvents;
 	HandleArray<YRequest> childRequests;
 	HandleArray<YStatement> childStatements;
+	HandleArray<IscStatement> childIscStatements;
 	HandleArray<YTransaction> childTransactions;
 	Firebird::Array<CleanupCallback*> cleanupHandlers;
 	Firebird::StatusHolder savedStatus;	// Do not use raise() method of this class in yValve.
@@ -575,6 +588,8 @@ public:
 	unsigned setOffsets(Firebird::CheckStatusWrapper* status, Firebird::IMessageMetadata* metadata,
 		Firebird::IOffsetsCallback* callback);
 	Firebird::IEventBlock* createEventBlock(Firebird::CheckStatusWrapper* status, const char** events);
+	Firebird::IDecFloat16* getDecFloat16(Firebird::CheckStatusWrapper* status);
+	Firebird::IDecFloat34* getDecFloat34(Firebird::CheckStatusWrapper* status);
 };
 
 }	// namespace Why

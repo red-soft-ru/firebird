@@ -1389,6 +1389,7 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 	{
 		window->win_page = page_number;
 		data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, lock_type, pag_undefined);
+
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&
 			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_large | dpg_orphan)) &&
@@ -1411,6 +1412,7 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 	// Find the pointer page, data page, and record
 	pointer_page* page = get_pointer_page(tdbb, rpb->rpb_relation,
 		relPages, window, pp_sequence, LCK_read);
+
 	if (!page)
 		return false;
 
@@ -1421,6 +1423,7 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 
 	page_number = page->ppg_page[slot];
 	relPages->setDPNumber(dpSequence, page_number);
+
 	if (page_number)
 	{
 		CCH_HANDOFF(tdbb, window, page_number, lock_type, pag_data);
@@ -1642,6 +1645,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 
 		window->win_page = page_number;
 		const data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, lock_type, pag_undefined);
+
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&
 			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_large | dpg_orphan)) &&
@@ -1668,8 +1672,8 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 
 		if (window->win_flags & WIN_large_scan)
 			CCH_RELEASE_TAIL(tdbb, window);
-		else if (window->win_flags & WIN_garbage_collector &&
-				 window->win_flags & WIN_garbage_collect)
+		else if ((window->win_flags & WIN_garbage_collector) &&
+				 (window->win_flags & WIN_garbage_collect))
 		{
 			CCH_RELEASE_TAIL(tdbb, window);
 			window->win_flags &= ~WIN_garbage_collect;
@@ -3203,6 +3207,7 @@ static rhd* locate_space(thread_db* tdbb,
 	{
 		window->win_page = relPages->rel_last_free_pri_dp;
 		data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, LCK_write, pag_undefined);
+
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&
 			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_large | dpg_orphan)) &&

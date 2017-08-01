@@ -55,7 +55,7 @@ public:
 		: server(NULL), data(getPool()), account(getPool()),
 		  clientPubKey(getPool()), serverPubKey(getPool()),
 		  verifier(getPool()), salt(getPool()), sessionKey(getPool()),
-		  secDbName(NULL)
+		  secDbName(NULL), cryptCallback(NULL)
 	{
 		LocalStatus ls;
 		CheckStatusWrapper s(&ls);
@@ -65,6 +65,7 @@ public:
 
 	// IServer implementation
 	int authenticate(CheckStatusWrapper* status, IServerBlock* sBlock, IWriter* writerInterface);
+	void setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback);
     int release();
 
 private:
@@ -82,6 +83,7 @@ private:
 	UCharBuffer sessionKey;
 	RefPtr<IFirebirdConf> config;
 	const char* secDbName;
+	ICryptKeyCallback* cryptCallback;
 };
 
 int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWriter* writerInterface)
@@ -130,11 +132,16 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 
 			try
 			{
+				if (cryptCallback)
+				{
+					p->setDbCryptCallback(status, cryptCallback);
+					status->init();		// ignore possible errors like missing call in provider
+				}
+
 				ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 				dpb.insertByte(isc_dpb_sec_attach, TRUE);
 				dpb.insertString(isc_dpb_user_name, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
-				const char* providers = "Providers=" CURRENT_ENGINE;
-				dpb.insertString(isc_dpb_config, providers, fb_strlen(providers));
+				dpb.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
 				att = p->attachDatabase(status, secDbName, dpb.getBufferLength(), dpb.getBuffer());
 				check(status);
 				HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: attached sec db %s\n", secDbName));
@@ -285,6 +292,11 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 
 	status->init();
 	return AUTH_CONTINUE;
+}
+
+void SrpServer::setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback)
+{
+	cryptCallback = callback;
 }
 
 int SrpServer::release()

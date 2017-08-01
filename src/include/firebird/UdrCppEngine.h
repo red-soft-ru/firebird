@@ -330,13 +330,13 @@ public:
 	{
 		CheckStatusWrapper statusWrapper(status);
 
-		if (!run(&statusWrapper, plugin, &IUdrPlugin::registerFunction, regFunctions))
+		if (!run<IUdrFunctionFactory>(&statusWrapper, plugin, &IUdrPlugin::registerFunction, regFunctions))
 			return;
 
-		if (!run(&statusWrapper, plugin, &IUdrPlugin::registerProcedure, regProcedures))
+		if (!run<IUdrProcedureFactory>(&statusWrapper, plugin, &IUdrPlugin::registerProcedure, regProcedures))
 			return;
 
-		if (!run(&statusWrapper, plugin, &IUdrPlugin::registerTrigger, regTriggers))
+		if (!run<IUdrTriggerFactory>(&statusWrapper, plugin, &IUdrPlugin::registerTrigger, regTriggers))
 			return;
 	}
 

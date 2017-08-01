@@ -47,7 +47,7 @@
 #include "../jrd/Monitoring.h"
 #include "../jrd/os/pio_proto.h"
 #include "../common/isc_proto.h"
-#include "../common/classes/GetPlugins.h"
+#include "../common/classes/auto.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/sha.h"
@@ -69,6 +69,19 @@ namespace {
 	const UCHAR CRYPT_INIT = LCK_EX;
 
 	const int MAX_PLUGIN_NAME_LEN = 31;
+
+	class ReleasePlugin
+	{
+	public:
+		static void clear(IPluginBase* ptr)
+		{
+			if (ptr)
+			{
+				PluginManagerInterfacePtr()->releasePlugin(ptr);
+			}
+		}
+	};
+
 }
 
 
@@ -265,10 +278,12 @@ namespace Jrd {
 		: PermanentStorage(*tdbb->getDatabase()->dbb_permanent),
 		  sync(this),
 		  keyName(getPool()),
-		  keyHolderPlugins(getPool()),
+		  keyHolderPlugins(getPool(), this),
+		  hash(getPool()),
 		  dbInfo(FB_NEW DbInfo(this)),
 		  cryptThreadId(0),
 		  cryptPlugin(NULL),
+		  checkFactory(NULL),
 		  dbb(*tdbb->getDatabase()),
 		  cryptAtt(NULL),
 		  slowIO(0),
@@ -289,6 +304,7 @@ namespace Jrd {
 
 		delete stateLock;
 		delete threadLock;
+		delete checkFactory;
 
 		dbInfo->destroy();
 	}
@@ -361,24 +377,37 @@ namespace Jrd {
 			else
 				keyName = "";
 
-			loadPlugin(hdr->hdr_crypt_plugin);
+			loadPlugin(tdbb, hdr->hdr_crypt_plugin);
 
 			string valid;
-			calcValidation(valid);
+			calcValidation(valid, cryptPlugin);
 			if (hc.find(Ods::HDR_crypt_hash))
 			{
-				string hash;
 				hc.getString(hash);
 				if (hash != valid)
 					(Arg::Gds(isc_bad_crypt_key) << keyName).raise();
 			}
+			else
+				hash = valid;
 		}
 
 		if (flags & CRYPT_HDR_INIT)
-			checkDigitalSignature(hdr);
+			checkDigitalSignature(tdbb, hdr);
 	}
 
-	void CryptoManager::loadPlugin(const char* pluginName)
+	void CryptoManager::setDbInfo(IDbCryptPlugin* cp)
+	{
+		FbLocalStatus status;
+		cp->setInfo(&status, dbInfo);
+		if (status->getState() & IStatus::STATE_ERRORS)
+		{
+			const ISC_STATUS* v = status->getErrors();
+			if (v[0] == isc_arg_gds && v[1] != isc_arg_end && v[1] != isc_interface_version_too_old)
+				status_exception::raise(&status);
+		}
+	}
+
+	void CryptoManager::loadPlugin(thread_db* tdbb, const char* pluginName)
 	{
 		if (cryptPlugin)
 		{
@@ -391,27 +420,30 @@ namespace Jrd {
 			return;
 		}
 
-		GetPlugins<IDbCryptPlugin> cryptControl(IPluginManager::TYPE_DB_CRYPT, dbb.dbb_config, pluginName);
-		if (!cryptControl.hasData())
+		AutoPtr<Factory> cryptControl(FB_NEW Factory(IPluginManager::TYPE_DB_CRYPT, dbb.dbb_config, pluginName));
+		if (!cryptControl->hasData())
 		{
 			(Arg::Gds(isc_no_crypt_plugin) << pluginName).raise();
 		}
 
 		// do not assign cryptPlugin directly before key init complete
-		IDbCryptPlugin* p = cryptControl.plugin();
+		IDbCryptPlugin* p = cryptControl->plugin();
+		setDbInfo(p);
 
-		FbLocalStatus status;
-		p->setInfo(&status, dbInfo);
-		if (status->getState() & IStatus::STATE_ERRORS)
-		{
-			const ISC_STATUS* v = status->getErrors();
-			if (v[0] == isc_arg_gds && v[1] != isc_arg_end && v[1] != isc_interface_version_too_old)
-				status_exception::raise(&status);
-		}
-
-		keyHolderPlugins.init(p, keyName.c_str());
+		keyHolderPlugins.init(p, keyName);
 		cryptPlugin = p;
 		cryptPlugin->addRef();
+
+		// remove old factory if present
+		delete checkFactory;
+		checkFactory = NULL;
+
+		// store new one
+		if (dbb.dbb_config->getServerMode() == MODE_SUPER)
+		{
+			checkFactory = cryptControl.release();
+			keyHolderPlugins.validateNewAttachment(tdbb->getAttachment(), keyName);
+		}
 	}
 
 	void CryptoManager::prepareChangeCryptState(thread_db* tdbb, const MetaName& plugName,
@@ -467,24 +499,31 @@ namespace Jrd {
 				}
 
 				keyName = key;
-				loadPlugin(plugName.c_str());
+				loadPlugin(tdbb, plugName.c_str());
 			}
 		}
 	}
 
-	void CryptoManager::calcValidation(string& valid)
+	void CryptoManager::calcValidation(string& valid, IDbCryptPlugin* plugin)
 	{
 		// crypt verifier
 		const char* sample = "0123456789ABCDEF";
 		char result[16];
 		FbLocalStatus sv;
-		cryptPlugin->encrypt(&sv, sizeof(result), sample, result);
+		plugin->encrypt(&sv, sizeof(result), sample, result);
 		if (sv->getState() & IStatus::STATE_ERRORS)
 			Arg::StatusVector(&sv).raise();
 
 		// calculate its hash
 		const string verifier(result, sizeof(result));
 		Sha1::hashBased64(valid, verifier);
+	}
+
+	bool CryptoManager::checkValidation(IDbCryptPlugin* plugin)
+	{
+		string valid;
+		calcValidation(valid, plugin);
+		return valid == hash;
 	}
 
 	void CryptoManager::changeCryptState(thread_db* tdbb, const string& plugName)
@@ -537,7 +576,7 @@ namespace Jrd {
 			// Load plugin
 			if (newCryptState)
 			{
-				loadPlugin(plugName.c_str());
+				loadPlugin(tdbb, plugName.c_str());
 			}
 			crypt = newCryptState;
 
@@ -550,14 +589,16 @@ namespace Jrd {
 			{
 				header->hdr_flags |= Ods::hdr_encrypted;
 				plugName.copyTo(header->hdr_crypt_plugin, sizeof(header->hdr_crypt_plugin));
-				string hash;
-				calcValidation(hash);
+				calcValidation(hash, cryptPlugin);
 				hc.deleteWithTag(Ods::HDR_crypt_hash);
 				hc.insertString(Ods::HDR_crypt_hash, hash);
 
 				hc.deleteWithTag(Ods::HDR_crypt_key);
 				if (keyName.hasData())
 					hc.insertString(Ods::HDR_crypt_key, keyName);
+
+				if (checkFactory)
+					keyHolderPlugins.validateExistingAttachments(keyName);
 			}
 			else
 				header->hdr_flags &= ~Ods::hdr_encrypted;
@@ -569,7 +610,7 @@ namespace Jrd {
 			header->hdr_flags |= Ods::hdr_crypt_process;
 			process = true;
 
-			digitalySignDatabase(hdr);
+			digitalySignDatabase(tdbb, hdr);
 			hdr.flush();
 		}
 		catch (const Exception&)
@@ -619,7 +660,15 @@ namespace Jrd {
 	{
 		keyHolderPlugins.attach(att, dbb.dbb_config);
 
+		Factory* f = checkFactory;
+
 		lockAndReadHeader(tdbb, CRYPT_HDR_INIT);
+
+		if (f && f == checkFactory)
+		{
+			if (!keyHolderPlugins.validateNewAttachment(att, keyName))
+				(Arg::Gds(isc_bad_crypt_key) << keyName).raise();
+		}
 	}
 
 	void CryptoManager::terminateCryptThread(thread_db*, bool wait)
@@ -683,7 +732,7 @@ namespace Jrd {
 			crypt = hdr->hdr_flags & Ods::hdr_encrypted ? true : false;
 
 			// If we are going to start crypt thread, we need plugin to be loaded
-			loadPlugin(hdr->hdr_crypt_plugin);
+			loadPlugin(tdbb, hdr->hdr_crypt_plugin);
 
 			releasingLock = true;
 			LCK_release(tdbb, threadLock);
@@ -767,7 +816,7 @@ namespace Jrd {
 				if (!down)
 				{
 					RefPtr<JAttachment> jAtt(REF_NO_INCR, dbb.dbb_provider->attachDatabase(&status_vector,
-						dbb.dbb_filename.c_str(), writer.getBufferLength(), writer.getBuffer()));
+						dbb.dbb_database_name.c_str(), writer.getBufferLength(), writer.getBuffer()));
 					check(&status_vector);
 
 					MutexLockGuard attGuard(*(jAtt->getStable()->getMutex()), FB_FUNCTION);
@@ -926,7 +975,7 @@ namespace Jrd {
 			}
 		}
 
-		digitalySignDatabase(hdr);
+		digitalySignDatabase(tdbb, hdr);
 		hdr.flush();
 	}
 
@@ -995,7 +1044,6 @@ namespace Jrd {
 
 		if (page->pag_flags & Ods::crypted_page)
 		{
-			fb_assert(cryptPlugin);
 			if (!cryptPlugin)
 			{
 				Arg::Gds(isc_decrypt_error).copyTo(sv);
@@ -1132,50 +1180,7 @@ namespace Jrd {
 		return (crypt ? fb_info_crypt_encrypted : 0) | (process ? fb_info_crypt_process : 0);
 	}
 
-	CryptoManager::HolderAttachments::HolderAttachments(MemoryPool& p)
-		: keyHolder(NULL), attachments(p)
-	{ }
-
-	void CryptoManager::HolderAttachments::setPlugin(IKeyHolderPlugin* kh)
-	{
-		keyHolder = kh;
-		keyHolder->addRef();
-	}
-
-	CryptoManager::HolderAttachments::~HolderAttachments()
-	{
-		if (keyHolder)
-		{
-			PluginManagerInterfacePtr()->releasePlugin(keyHolder);
-		}
-	}
-
-	void CryptoManager::HolderAttachments::registerAttachment(Attachment* att)
-	{
-		attachments.add(att);
-	}
-
-	bool CryptoManager::HolderAttachments::unregisterAttachment(Attachment* att)
-	{
-		unsigned i = attachments.getCount();
-		while (i--)
-		{
-			if (attachments[i] == att)
-			{
-				attachments.remove(i);
-				break;
-			}
-		}
-		return attachments.getCount() == 0;
-	}
-
-	bool CryptoManager::HolderAttachments::operator==(IKeyHolderPlugin* kh) const
-	{
-		// ASF: I think there should be a better way to do this.
-		return keyHolder->cloopVTable == kh->cloopVTable;
-	}
-
-	void CryptoManager::KeyHolderPlugins::attach(Attachment* att, Config* config)
+	void CryptoManager::KeyHolderPlugins::attach(Attachment* att, const Config* config)
 	{
 		MutexLockGuard g(holdersMutex, FB_FUNCTION);
 
@@ -1184,31 +1189,43 @@ namespace Jrd {
 		{
 			IKeyHolderPlugin* keyPlugin = keyControl.plugin();
 			FbLocalStatus st;
-			if (keyPlugin->keyCallback(&st, att->att_crypt_callback) > 0)
+			bool flProvide = false;
+
+			if (keyPlugin->keyCallback(&st, att->att_crypt_callback))
+				flProvide = true;
+			else
 			{
-				// holder accepted attachment's key
-				HolderAttachments* ha = NULL;
+				st.check();
+				flProvide = !keyPlugin->useOnlyOwnKeys(&st);
+				// Ignore error condition to support old plugins
+			}
+
+			if (flProvide)
+			{
+				// holder is going to provide a key
+				PerAttHolders* pa = NULL;
 
 				for (unsigned i = 0; i < knownHolders.getCount(); ++i)
 				{
-					if (knownHolders[i] == keyPlugin)
+					if (knownHolders[i].first == att)
 					{
-						ha = &knownHolders[i];
+						pa = &knownHolders[i];
 						break;
 					}
 				}
 
-				if (!ha)
+				if (!pa)
 				{
-					ha = &(knownHolders.add());
-					ha->setPlugin(keyPlugin);
+					pa = &(knownHolders.add());
+					pa->first = att;
 				}
 
-				ha->registerAttachment(att);
-				break;		// Do not need >1 key from attachment to single DB
+				if (pa)
+				{
+					pa->second.add(keyPlugin);
+					keyPlugin->addRef();
+				}
 			}
-			else
-				st.check();
 		}
 	}
 
@@ -1216,31 +1233,148 @@ namespace Jrd {
 	{
 		MutexLockGuard g(holdersMutex, FB_FUNCTION);
 
-		unsigned i = knownHolders.getCount();
-		while (i--)
+		for (unsigned i = 0; i < knownHolders.getCount(); ++i)
 		{
-			if (knownHolders[i].unregisterAttachment(att))
+			if (knownHolders[i].first == att)
 			{
+				releaseHolders(knownHolders[i]);
 				knownHolders.remove(i);
+				break;
 			}
 		}
 	}
 
-	void CryptoManager::KeyHolderPlugins::init(IDbCryptPlugin* crypt, const char* keyName)
+	void CryptoManager::KeyHolderPlugins::releaseHolders(PerAttHolders& pa)
+	{
+		unsigned j = 0;
+
+		for (; j < pa.second.getCount(); ++j)
+			PluginManagerInterfacePtr()->releasePlugin(pa.second[j]);
+
+		pa.second.removeCount(0, j);
+	}
+
+	void CryptoManager::KeyHolderPlugins::init(IDbCryptPlugin* crypt, const MetaName& keyName)
 	{
 		MutexLockGuard g(holdersMutex, FB_FUNCTION);
 
 		Firebird::HalfStaticArray<Firebird::IKeyHolderPlugin*, 64> holdersVector;
-		unsigned int length = knownHolders.getCount();
-		IKeyHolderPlugin** vector = holdersVector.getBuffer(length);
-		for (unsigned i = 0; i < length; ++i)
+
+		for (unsigned i = 0; i < knownHolders.getCount(); ++i)
 		{
-			vector[i] = knownHolders[i].getPlugin();
+			PerAttHolders pa = knownHolders[i];
+			for (unsigned j = 0; j < pa.second.getCount(); ++j)
+				holdersVector.push(pa.second[j]);
 		}
 
 		FbLocalStatus st;
-		crypt->setKey(&st, length, vector, keyName);
+		crypt->setKey(&st, holdersVector.getCount(), holdersVector.begin(), keyName.c_str());
 		st.check();
+	}
+
+	bool CryptoManager::KeyHolderPlugins::validateHoldersGroup(PerAttHolders& pa, const MetaName& keyName)
+	{
+		FbLocalStatus st;
+		fb_assert(holdersMutex.locked());
+
+		for (unsigned j = 0; j < pa.second.getCount(); ++j)
+		{
+			IKeyHolderPlugin* keyHolder = pa.second[j];
+			if (!keyHolder->useOnlyOwnKeys(&st))
+				return true;
+
+			if (validateHolder(keyHolder, keyName))
+				return true;
+		}
+
+		return false;
+	}
+
+	bool CryptoManager::KeyHolderPlugins::validateNewAttachment(Attachment* att, const MetaName& keyName)
+	{
+		FbLocalStatus st;
+		MutexLockGuard g(holdersMutex, FB_FUNCTION);
+
+		// Check for current attachment
+		for (unsigned i = 0; i < knownHolders.getCount(); ++i)
+		{
+			PerAttHolders& pa = knownHolders[i];
+
+			if (pa.first == att)
+			{
+				bool empty = (pa.second.getCount() == 0);
+				bool result = empty ? false : validateHoldersGroup(pa, keyName);
+
+				if (empty)
+					break;
+
+				return result;
+			}
+		}
+
+		// Special case - holders not needed at all
+		return validateHolder(NULL, keyName);
+	}
+
+	bool CryptoManager::KeyHolderPlugins::validateHolder(IKeyHolderPlugin* keyHolder, const MetaName& keyName)
+	{
+		fb_assert(mgr->checkFactory);
+		if (!mgr->checkFactory)
+			return false;
+
+		FbLocalStatus st;
+
+		AutoPtr<IDbCryptPlugin, ReleasePlugin> crypt(mgr->checkFactory->makeInstance());
+		mgr->setDbInfo(crypt);
+		crypt->setKey(&st, keyHolder ? 1 : 0, &keyHolder, keyName.c_str());
+
+		if (st.isSuccess())
+		{
+			try
+			{
+				if (mgr->checkValidation(crypt))
+					return true;
+			}
+			catch (const Exception&)
+			{ }		// Ignore possible errors, continue analysis
+		}
+		return false;
+	}
+
+	void CryptoManager::KeyHolderPlugins::validateExistingAttachments(const MetaName& keyName)
+	{
+		FbLocalStatus st;
+
+		// Special case - holders not needed at all
+		if (validateHolder(NULL, keyName))
+			return;
+
+		// Loop through whole attachments list of DBB, shutdown attachments missing any holders
+		fb_assert(!mgr->dbb.dbb_sync.isLocked());
+		MutexLockGuard g(holdersMutex, FB_FUNCTION);
+		SyncLockGuard dsGuard(&mgr->dbb.dbb_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
+		for (Attachment* att = mgr->dbb.dbb_attachments; att; att = att->att_next)
+		{
+			bool found = false;
+			for (unsigned i = 0; i < knownHolders.getCount(); ++i)
+			{
+				if (knownHolders[i].first == att)
+				{
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+				att->signalShutdown(0 /* no special shutdown code */);
+		}
+
+		// Loop through internal attachments list closing one missing valid holders
+		for (unsigned i = 0; i < knownHolders.getCount(); ++i)
+		{
+			if (!validateHoldersGroup(knownHolders[i], keyName))
+				knownHolders[i].first->signalShutdown(0);
+		}
 	}
 
 	void CryptoManager::addClumplet(string& signature, ClumpletReader& block, UCHAR tag)
@@ -1254,7 +1388,7 @@ namespace Jrd {
 		}
 	}
 
-	void CryptoManager::calcDigitalSignature(string& signature, const Header& hdr)
+	void CryptoManager::calcDigitalSignature(thread_db* tdbb, string& signature, const Header& hdr)
 	{
 		/*
 		We use the following items to calculate digital signature (hash of encrypted string)
@@ -1283,7 +1417,7 @@ namespace Jrd {
 		unsigned len = signature.length();
 		len &= ~(QUANTUM - 1);
 
-		loadPlugin(hdr->hdr_crypt_plugin);
+		loadPlugin(tdbb, hdr->hdr_crypt_plugin);
 
 		string enc;
 		FbLocalStatus sv;
@@ -1295,7 +1429,7 @@ namespace Jrd {
 	}
 
 
-	void CryptoManager::digitalySignDatabase(CchHdr& hdr)
+	void CryptoManager::digitalySignDatabase(thread_db* tdbb, CchHdr& hdr)
 	{
 		ClumpletWriter hc(ClumpletWriter::UnTagged, hdr->hdr_page_size);
 		hdr.getClumplets(hc);
@@ -1307,7 +1441,7 @@ namespace Jrd {
 		{
 			wf = true;
 			string signature;
-			calcDigitalSignature(signature, hdr);
+			calcDigitalSignature(tdbb, signature, hdr);
 			hc.insertString(Ods::HDR_crypt_checksum, signature);
 		}
 
@@ -1315,7 +1449,7 @@ namespace Jrd {
 			hdr.setClumplets(hc);
 	}
 
-	void CryptoManager::checkDigitalSignature(const Header& hdr)
+	void CryptoManager::checkDigitalSignature(thread_db* tdbb, const Header& hdr)
 	{
 		if (hdr->hdr_flags & (Ods::hdr_crypt_process | Ods::hdr_encrypted))
 		{
@@ -1326,7 +1460,7 @@ namespace Jrd {
 
 			string sig1, sig2;
 			hc.getString(sig1);
-			calcDigitalSignature(sig2, hdr);
+			calcDigitalSignature(tdbb, sig2, hdr);
 			if (sig1 != sig2)
 				Arg::Gds(isc_crypt_checksum).raise();
 		}

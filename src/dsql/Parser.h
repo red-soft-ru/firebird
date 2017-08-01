@@ -144,6 +144,11 @@ public:
 		return FB_NEW_POOL(getPool()) Firebird::string(getPool(), s);
 	}
 
+	Lim64String* newLim64String(const Firebird::string& s, int scale)
+	{
+		return FB_NEW_POOL(getPool()) Lim64String(getPool(), s, scale);
+	}
+
 	IntlString* newIntlString(const Firebird::string& s, const char* charSet = NULL)
 	{
 		return FB_NEW_POOL(getPool()) IntlString(getPool(), s, charSet);
@@ -209,7 +214,7 @@ private:
 
 	BoolExprNode* valueToBool(ValueExprNode* value)
 	{
-		BoolAsValueNode* node = value->as<BoolAsValueNode>();
+		BoolAsValueNode* node = nodeAs<BoolAsValueNode>(value);
 		if (node)
 			return node->boolean;
 

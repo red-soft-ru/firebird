@@ -260,7 +260,7 @@ public:
 
 	bool isFiltered() const
 	{
-		return (baseSelectivity < MAXIMUM_SELECTIVITY);
+		return (baseIndexes || baseSelectivity < MAXIMUM_SELECTIVITY);
 	}
 
 	IndexedRelationships indexedRelationships;

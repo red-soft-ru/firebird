@@ -563,7 +563,7 @@ namespace
 			{
 				if (!firebirdConf.hasData())
 				{
-					RefPtr<Config> specificConf(Config::getDefaultConfig());
+					RefPtr<const Config> specificConf(Config::getDefaultConfig());
 					firebirdConf = FB_NEW FirebirdConf(specificConf);
 				}
 
@@ -1094,8 +1094,6 @@ IPluginSet* PluginManager::getPlugins(CheckStatusWrapper* status, unsigned int i
 
 void PluginManager::releasePlugin(IPluginBase* plugin)
 {
-	MutexLockGuard g(plugins->mutex, FB_FUNCTION);
-
 	IReferenceCounted* parent = plugin->getOwner();
 
 	if (plugin->release() == 0)
@@ -1103,6 +1101,8 @@ void PluginManager::releasePlugin(IPluginBase* plugin)
 		///fb_assert(parent);
 		if (parent)
 		{
+			MutexLockGuard g(plugins->mutex, FB_FUNCTION);
+
 			parent->release();
 			if (plugins->wakeIt)
 			{
@@ -1257,7 +1257,7 @@ public:
 		try
 		{
 			PathName dummy;
-			Firebird::RefPtr<Config> config;
+			Firebird::RefPtr<const Config> config;
 			expandDatabaseName(dbName, dummy, &config);
 
 			IFirebirdConf* firebirdConf = FB_NEW FirebirdConf(config);

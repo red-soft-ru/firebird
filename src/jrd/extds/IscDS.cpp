@@ -63,7 +63,6 @@ static RegisterFBProvider reg;
 
 static bool isConnectionBrokenError(FbStatusVector* status);
 static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc>& descs);
-static UCHAR sqlTypeToDscType(SSHORT sqlType);
 
 // 	IscProvider
 
@@ -124,12 +123,32 @@ void IscConnection::attach(thread_db* tdbb, const PathName& dbName, const MetaNa
 	FbLocalStatus status;
 	{
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
-		m_iscProvider.isc_attach_database(&status, m_dbName.length(), m_dbName.c_str(),
-			&m_handle, newDpb.getBufferLength(),
-			reinterpret_cast<const char*>(newDpb.getBuffer()));
-	}
-	if (status->getState() & IStatus::STATE_ERRORS) {
-		raise(&status, tdbb, "attach");
+
+		ICryptKeyCallback* cb = tdbb->getAttachment()->att_crypt_callback;
+		try
+		{
+			m_iscProvider.fb_database_crypt_callback(&status, cb);
+			if (status->getState() & IStatus::STATE_ERRORS) {
+				raise(&status, tdbb, "crypt_callback");
+			}
+
+			m_iscProvider.isc_attach_database(&status, m_dbName.length(), m_dbName.c_str(),
+				&m_handle, newDpb.getBufferLength(),
+				reinterpret_cast<const char*>(newDpb.getBuffer()));
+			if (status->getState() & IStatus::STATE_ERRORS) {
+				raise(&status, tdbb, "attach");
+			}
+		}
+		catch (const Exception&)
+		{
+			m_iscProvider.fb_database_crypt_callback(&status, NULL);
+			throw;
+		}
+
+		m_iscProvider.fb_database_crypt_callback(&status, NULL);
+		if (status->getState() & IStatus::STATE_ERRORS) {
+			raise(&status, tdbb, "crypt_callback");
+		}
 	}
 
 	char buff[16];
@@ -470,6 +489,26 @@ void IscStatement::doPrepare(thread_db* tdbb, const string& sql)
 			sWhereError = "isc_dsql_prepare";
 			raise(&status, tdbb, sWhereError, &sql);
 		}
+	}
+}
+
+void IscStatement::doSetTimeout(thread_db* tdbb, unsigned int timeout)
+{
+	FbLocalStatus status;
+
+	{
+		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
+		m_iscProvider.fb_dsql_set_timeout(&status, &m_handle, timeout);
+	}
+
+	if (status->getState() & IStatus::STATE_ERRORS)
+	{
+		// silently ignore error if timeouts is not supported by remote server
+		// or loaded client library
+		if (status[0] == isc_arg_gds && (status[1] == isc_wish_list || status[1] == isc_unavailable))
+			return;
+
+		raise(&status, tdbb, "fb_dsql_set_timeout");
 	}
 }
 
@@ -1474,6 +1513,25 @@ ISC_STATUS ISC_EXPORT IscProvider::fb_cancel_operation(FbStatusVector* user_stat
 	return notImplemented(user_status);
 }
 
+ISC_STATUS ISC_EXPORT IscProvider::fb_database_crypt_callback(FbStatusVector* user_status,
+										void* cb)
+{
+	if (m_api.fb_database_crypt_callback)
+		return m_api.fb_database_crypt_callback(IscStatus(user_status), cb);
+
+	return notImplemented(user_status);
+}
+
+ISC_STATUS ISC_EXPORT IscProvider::fb_dsql_set_timeout(Jrd::FbStatusVector* user_status,
+	isc_stmt_handle* stmt_handle,
+	ULONG timeout)
+{
+	if (m_api.fb_dsql_set_timeout)
+		return m_api.fb_dsql_set_timeout(IscStatus(user_status), stmt_handle, timeout);
+
+	return notImplemented(user_status);
+}
+
 void IscProvider::loadAPI()
 {
 	FbLocalStatus status;
@@ -1565,7 +1623,9 @@ static FirebirdApiPointers isc_callbacks =
 	PROTO(isc_service_detach),
 	PROTO(isc_service_query),
 	PROTO(isc_service_start),
-	PROTO(fb_cancel_operation)
+	PROTO(fb_cancel_operation),
+	PROTO(fb_database_crypt_callback),
+	PROTO(fb_dsql_set_timeout)
 };
 
 
@@ -1597,7 +1657,7 @@ static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc> &
 
     for (int i = 0; i < xsqlda->sqld; xVar++, i++)
 	{
-		const UCHAR dtype = sqlTypeToDscType(xVar->sqltype & ~1);
+		const UCHAR dtype = fb_utils::sqlTypeToDscType(xVar->sqltype & ~1);
 		xVar->sqltype |= 1;
 
 		if (type_alignments[dtype])
@@ -1622,7 +1682,7 @@ static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc> &
 
     for (int i = 0; i < xsqlda->sqld; xVar++, i++)
 	{
-		const UCHAR dtype = sqlTypeToDscType(xVar->sqltype & ~1);
+		const UCHAR dtype = fb_utils::sqlTypeToDscType(xVar->sqltype & ~1);
 		if (type_alignments[dtype])
 			offset = FB_ALIGN(offset, type_alignments[dtype]);
 
@@ -1655,48 +1715,6 @@ static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc> &
 		null.makeShort(0, xVar->sqlind);
 
 		offset += sizeof(SSHORT);
-	}
-}
-
-
-static UCHAR sqlTypeToDscType(SSHORT sqlType)
-{
-	switch (sqlType)
-	{
-	case SQL_VARYING:
-		return dtype_varying;
-	case SQL_TEXT:
-		return dtype_text;
-	case SQL_NULL:
-		return dtype_text;
-	case SQL_DOUBLE:
-		return dtype_double;
-	case SQL_FLOAT:
-		return dtype_real;
-	case SQL_D_FLOAT:
-		return dtype_d_float;
-	case SQL_TYPE_DATE:
-		return dtype_sql_date;
-	case SQL_TYPE_TIME:
-		return dtype_sql_time;
-	case SQL_TIMESTAMP:
-		return dtype_timestamp;
-	case SQL_BLOB:
-		return dtype_blob;
-	case SQL_ARRAY:
-		return dtype_array;
-	case SQL_LONG:
-		return dtype_long;
-	case SQL_SHORT:
-		return dtype_short;
-	case SQL_INT64:
-		return dtype_int64;
-	case SQL_QUAD:
-		return dtype_quad;
-	case SQL_BOOLEAN:
-		return dtype_boolean;
-	default:
-		return dtype_unknown;
 	}
 }
 

@@ -233,6 +233,7 @@ public:
 
 			Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 			dpb.insertByte(isc_dpb_sec_attach, TRUE);
+			dpb.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
 
 			unsigned int authBlockSize;
 			const unsigned char* authBlock = logonInfo->authBlock(&authBlockSize);
@@ -539,12 +540,13 @@ public:
 
 			case Firebird::IUser::OP_USER_DISPLAY:
 				{
-					Firebird::string disp =	"SELECT PLG$USER_NAME, PLG$FIRST, PLG$MIDDLE, PLG$LAST, PLG$COMMENT, PLG$ATTRIBUTES, "
-											"	CASE WHEN RDB$RELATION_NAME IS NULL THEN FALSE ELSE TRUE END, PLG$ACTIVE "
-											"FROM PLG$SRP_VIEW LEFT JOIN RDB$USER_PRIVILEGES "
-											"	ON PLG$SRP_VIEW.PLG$USER_NAME = RDB$USER_PRIVILEGES.RDB$USER "
-											"		AND RDB$RELATION_NAME = '" ADMIN_ROLE "' "
-											"		AND RDB$PRIVILEGE = 'M' ";
+					Firebird::string disp =
+						"WITH ADMINS AS (SELECT RDB$USER FROM RDB$USER_PRIVILEGES "
+						"	WHERE RDB$RELATION_NAME = 'RDB$ADMIN' AND RDB$PRIVILEGE = 'M' GROUP BY RDB$USER) "
+						"SELECT PLG$USER_NAME, PLG$FIRST, PLG$MIDDLE, PLG$LAST, PLG$COMMENT, PLG$ATTRIBUTES, "
+						"	CASE WHEN RDB$USER IS NULL THEN FALSE ELSE TRUE END, PLG$ACTIVE "
+						"FROM PLG$SRP_VIEW LEFT JOIN ADMINS "
+						"	ON PLG$SRP_VIEW.PLG$USER_NAME = ADMINS.RDB$USER ";
 					if (user->userName()->entered())
 					{
 						disp += " WHERE PLG$USER_NAME = ?";

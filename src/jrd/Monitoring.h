@@ -137,6 +137,11 @@ public:
 				storeField(field_id, VALUE_TIMESTAMP, sizeof(ISC_TIMESTAMP), &value.value());
 		}
 
+		void storeTimestamp(int field_id, const ISC_TIMESTAMP& value)
+		{
+			storeField(field_id, VALUE_TIMESTAMP, sizeof(ISC_TIMESTAMP), &value);
+		}
+
 		void storeString(int field_id, const Firebird::string& value)
 		{
 			if (value.length())

@@ -4,6 +4,9 @@
  *	DESCRIPTION:	A sample of using static messages.
  *					Prints user-defined tables with comments.
  *
+ *					Example for the following interface:
+ *					IDecFloat16 - support for IEEE-754 64-bit decimal float numbers
+ *
  *					Example for the following macro:
  *
  *					FB_MESSAGE - defines static messages
@@ -32,6 +35,7 @@
 #include <firebird/Message.h>
 
 static IMaster* master = fb_get_master_interface();
+static IDecFloat16* idf = NULL;
 
 int main()
 {
@@ -51,6 +55,8 @@ int main()
 
 	try
 	{
+		idf = master->getUtilInterface()->getDecFloat16(&status);
+
 		att = prov->attachDatabase(&status, dbName, 0, NULL);
 		tra = att->startTransaction(&status, 0, NULL);
 
@@ -72,13 +78,15 @@ int main()
 			(FB_SMALLINT, relationId)
 			(FB_VARCHAR(31), relationName)
 			(FB_VARCHAR(100), description)
+			(FB_DECFLOAT16, df16)
 		) output(&status, master);
 
 		input.clear();
 		input->systemFlag = 0;
 
 		rs = att->openCursor(&status, tra, 0,
-			"select rdb$relation_id, rdb$relation_name, rdb$description"
+			"select rdb$relation_id, rdb$relation_name, rdb$description,"
+			"    cast (rdb$relation_id as decfloat(16)) * 0.05 as df16"
 			"  from rdb$relations"
 			"  where rdb$system_flag = ?"
 			"  order by rdb$relation_id",
@@ -89,10 +97,13 @@ int main()
 		{
 			unsigned lRelName = output->relationNameNull ? 0 : output->relationName.length;
 			unsigned lDesc = output->descriptionNull ? 0 : output->description.length;
-			printf("%4d %*.*s%c%*.*s\n", output->relationId,
+			char t[IDecFloat16::STRING_SIZE];
+			idf->toStr(&output->df16, t);
+
+			printf("%4d %*.*s%c%*.*s (%s)\n", output->relationId,
 				lRelName, lRelName, output->relationName.str,
 				lDesc ? '/' : ' ',
-				lDesc, lDesc, output->description.str);
+				lDesc, lDesc, output->description.str, t);
 		}
 
 		rs->close(&status);

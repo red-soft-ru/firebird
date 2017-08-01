@@ -222,6 +222,7 @@ EXPORTS
 	isc_dsql_release	@199
 	isc_dsql_set_cursor_name	@200
 	isc_dsql_sql_info	@201
+	fb_dsql_set_timeout
 
 	; ESQL functions
 

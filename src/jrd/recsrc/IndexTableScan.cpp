@@ -318,44 +318,37 @@ int IndexTableScan::compareKeys(const index_desc* idx,
 		// figure out what segment we're on; if it's a
 		// character segment we've matched the partial string
 		const UCHAR* segment = NULL;
-		const index_desc::idx_repeat* tail;
+		USHORT segnum = 0;
+
 		if (idx->idx_count > 1)
 		{
 			segment = key_string1 + ((length2 - 1) / (Ods::STUFF_COUNT + 1)) * (Ods::STUFF_COUNT + 1);
-			tail = idx->idx_rpt + (idx->idx_count - *segment);
-		}
-		else
-		{
-			tail = &idx->idx_rpt[0];
+			segnum = idx->idx_count - (UCHAR) ((flags & irb_descending) ? ((*segment) ^ -1) : *segment);
 		}
 
 		// If it's a string type key, and we're allowing "starting with" fuzzy
 		// type matching, we're done
-		if ((flags & irb_starting) &&
-			(tail->idx_itype == idx_string ||
-			 tail->idx_itype == idx_byte_array ||
-			 tail->idx_itype == idx_metadata ||
-			 tail->idx_itype >= idx_first_intl_string))
+		if (flags & irb_starting)
 		{
-			return 0;
+			const index_desc::idx_repeat* const tail = idx->idx_rpt + segnum;
+
+			if (tail->idx_itype == idx_string ||
+				tail->idx_itype == idx_byte_array ||
+				tail->idx_itype == idx_metadata ||
+				tail->idx_itype >= idx_first_intl_string)
+			{
+				return 0;
+			}
 		}
 
 		if (idx->idx_count > 1)
 		{
 			// If we search for NULLs at the beginning then we're done if the first
-			// segment isn't the first one possible (0 for ASC, 255 for DESC).
+			// segment isn't the first one possible
 			if (length2 == 0)
 			{
-				if (flags & irb_descending)
-				{
-					if (*segment != 255)
-						return 0;
-				}
-				else
-				{
-					if (*segment != 0)
-						return 0;
-				}
+				if (segnum != 0)
+					return 0;
 			}
 
 			// if we've exhausted the segment, we've found a match

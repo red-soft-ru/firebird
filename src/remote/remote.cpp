@@ -604,7 +604,12 @@ void rem_port::linkParent(rem_port* const parent)
 	parent->port_clients = parent->port_next = this;
 }
 
-const Firebird::RefPtr<Config>& rem_port::getPortConfig() const
+const Firebird::RefPtr<const Config>& rem_port::getPortConfig() const
+{
+	return port_config.hasData() ? port_config : Config::getDefaultConfig();
+}
+
+Firebird::RefPtr<const Config> rem_port::getPortConfig()
 {
 	return port_config.hasData() ? port_config : Config::getDefaultConfig();
 }
@@ -1006,7 +1011,7 @@ void ClntAuthBlock::resetClnt(const Firebird::PathName* fileName, const CSTRING*
 	plugins.set(final.c_str());
 }
 
-Firebird::RefPtr<Config>* ClntAuthBlock::getConfig()
+Firebird::RefPtr<const Config>* ClntAuthBlock::getConfig()
 {
 	return clntConfig.hasData() ? &clntConfig : NULL;
 }
@@ -1017,10 +1022,10 @@ void ClntAuthBlock::storeDataForPlugin(unsigned int length, const unsigned char*
 	HANDSHAKE_DEBUG(fprintf(stderr, "Cli: accepted data for plugin length=%d\n", length));
 }
 
-Firebird::RefPtr<Config> REMOTE_get_config(const Firebird::PathName* dbName,
+Firebird::RefPtr<const Config> REMOTE_get_config(const Firebird::PathName* dbName,
 	const Firebird::string* dpb_config)
 {
-	Firebird::RefPtr<Config> config;
+	Firebird::RefPtr<const Config> config;
 
 	if (dbName && dbName->hasData())
 	{

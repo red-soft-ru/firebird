@@ -27,5 +27,6 @@
 @del types.y
 @del y_tab.h
 @del y_tab.c
+@del sed*
 
 :END

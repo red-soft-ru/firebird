@@ -318,6 +318,7 @@ public:
 	Transaction* getTransaction() { return m_transaction; }
 
 	void prepare(Jrd::thread_db* tdbb, Transaction* tran, const Firebird::string& sql, bool named);
+	void setTimeout(Jrd::thread_db* tdbb, unsigned int timeout);
 	void execute(Jrd::thread_db* tdbb, Transaction* tran,
 		const Firebird::MetaName* const* in_names, const Jrd::ValueListNode* in_params,
 		const Jrd::ValueListNode* out_params);
@@ -352,6 +353,7 @@ public:
 
 protected:
 	virtual void doPrepare(Jrd::thread_db* tdbb, const Firebird::string& sql) = 0;
+	virtual void doSetTimeout(Jrd::thread_db* tdbb, unsigned int timeout) = 0;
 	virtual void doExecute(Jrd::thread_db* tdbb) = 0;
 	virtual void doOpen(Jrd::thread_db* tdbb) = 0;
 	virtual bool doFetch(Jrd::thread_db* tdbb) = 0;

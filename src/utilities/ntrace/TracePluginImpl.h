@@ -169,8 +169,14 @@ private:
 	Firebird::RWLock renameLock;
 
 	UnicodeCollationHolder unicodeCollation;
-	Firebird::AutoPtr<Firebird::SimilarToMatcher<UCHAR, Jrd::UpcaseConverter<> > >
-		include_matcher, exclude_matcher;
+	typedef Firebird::SimilarToMatcher <ULONG, Jrd::UpcaseConverter<Jrd::CanonicalConverter<> > >
+		TraceSimilarToMatcher;
+	Firebird::AutoPtr<TraceSimilarToMatcher> include_matcher, exclude_matcher;
+
+	// Filters for gds error codes
+	typedef Firebird::SortedArray<ISC_STATUS> GdsCodesArray;
+	GdsCodesArray include_codes;
+	GdsCodesArray exclude_codes;
 
 	void appendGlobalCounts(const PerformanceInfo* info);
 	void appendTableCounts(const PerformanceInfo* info);
@@ -178,6 +184,8 @@ private:
 	void appendServiceQueryParams(size_t send_item_length, const ntrace_byte_t* send_items,
 								  size_t recv_item_length, const ntrace_byte_t* recv_items);
 	void formatStringArgument(Firebird::string& result, const UCHAR* str, size_t len);
+	bool filterStatus(const ISC_STATUS* status, GdsCodesArray& arr);
+	void str2Array(const Firebird::string& str, GdsCodesArray& arr);
 
 	// register various objects
 	void register_connection(Firebird::ITraceDatabaseConnection* connection);

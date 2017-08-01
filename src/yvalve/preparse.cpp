@@ -25,7 +25,6 @@
 #include "firebird.h"
 #include <stdlib.h>
 #include <string.h>
-//#include "../dsql/chars.h"
 #include "../yvalve/prepa_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../yvalve/YObjects.h"

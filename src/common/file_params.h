@@ -32,10 +32,13 @@
 #ifndef COMMON_FILE_PARAMS_H
 #define COMMON_FILE_PARAMS_H
 
+#define COMMON_FILE_PREFIX "13"
+
 static const char* const EVENT_FILE		= "fb_event_%s";
 static const char* const LOCK_FILE		= "fb_lock_%s";
 static const char* const MONITOR_FILE	= "fb_monitor_%s";
-static const char* const TRACE_FILE		= "fb13_trace";
+static const char* const TRACE_FILE		= "fb" COMMON_FILE_PREFIX "_trace";
+static const char* const USER_MAP_FILE	= "fb" COMMON_FILE_PREFIX "_user_mapping";
 
 #ifdef UNIX
 static const char* const INIT_FILE		= "fb_init";

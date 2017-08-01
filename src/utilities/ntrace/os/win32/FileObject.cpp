@@ -27,7 +27,6 @@
 
 #include "firebird.h"
 #include "../FileObject.h"
-//#include "../common/classes/locks.h"
 
 using namespace Firebird;
 Firebird::Mutex open_mutex;

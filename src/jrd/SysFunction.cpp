@@ -30,6 +30,7 @@
 
 #include "firebird.h"
 #include "../common/classes/VaryStr.h"
+#include "../common/classes/Hash.h"
 #include "../jrd/SysFunction.h"
 #include "../jrd/DataTypeUtil.h"
 #include "../include/fb_blk.h"
@@ -76,7 +77,9 @@ enum Function
 	funLPad,
 	funRPad,
 	funLnat,
-	funLog10
+	funLog10,
+	funTotalOrd,
+	funCmpDec
 };
 
 enum TrigonFunction
@@ -98,6 +101,58 @@ enum TrigonFunction
 };
 
 
+struct HashAlgorithmDescriptor
+{
+	const char* name;
+	USHORT length;
+	HashContext* (*create)(MemoryPool&);
+
+	static const HashAlgorithmDescriptor* find(const char* name);
+};
+
+template <typename T>
+struct HashAlgorithmDescriptorFactory
+{
+	static HashAlgorithmDescriptor* getInstance(const char* name, USHORT length)
+	{
+		desc.name = name;
+		desc.length = length;
+		desc.create = createContext;
+		return &desc;
+	}
+
+	static HashContext* createContext(MemoryPool& pool)
+	{
+		return FB_NEW_POOL(pool) T(pool);
+	}
+
+	static HashAlgorithmDescriptor desc;
+};
+
+template <typename T> HashAlgorithmDescriptor HashAlgorithmDescriptorFactory<T>::desc;
+
+static const HashAlgorithmDescriptor* hashAlgorithmDescriptors[] = {
+	HashAlgorithmDescriptorFactory<Md5HashContext>::getInstance("MD5", 16),
+	HashAlgorithmDescriptorFactory<Sha1HashContext>::getInstance("SHA1", 20),
+	HashAlgorithmDescriptorFactory<Sha256HashContext>::getInstance("SHA256", 32),
+	HashAlgorithmDescriptorFactory<Sha512HashContext>::getInstance("SHA512", 64)
+};
+
+const HashAlgorithmDescriptor* HashAlgorithmDescriptor::find(const char* name)
+{
+	unsigned count = FB_NELEM(hashAlgorithmDescriptors);
+
+	for (unsigned i = 0; i < count; ++i)
+	{
+		if (strcmp(name, hashAlgorithmDescriptors[i]->name) == 0)
+			return hashAlgorithmDescriptors[i];
+	}
+
+	status_exception::raise(Arg::Gds(isc_sysf_invalid_hash_algorithm) << name);
+	return nullptr;
+}
+
+
 // constants
 const int oneDay = 86400;
 
@@ -107,6 +162,8 @@ double fbcot(double value) throw();
 
 // generic setParams functions
 void setParamsDouble(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
+void setParamsDblDec(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
+void setParamsDecFloat(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsFromList(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsInteger(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsSecondInteger(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
@@ -124,6 +181,8 @@ void setParamsUuidToChar(DataTypeUtilBase* dataTypeUtil, const SysFunction* func
 
 // generic make functions
 void makeDoubleResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeDblDecResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeDecFloatResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeFromListResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeInt64Result(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeLongResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
@@ -138,10 +197,12 @@ void makeBinShift(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, d
 void makeCeilFloor(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeDateAdd(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeGetSetContext(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeHash(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeLeftRight(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeMod(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeOverlay(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makePad(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makePi(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeReplace(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeReverse(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeRound(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
@@ -218,6 +279,8 @@ const char
 	CLIENT_PROCESS_NAME[] = "CLIENT_PROCESS",
 	CURRENT_USER_NAME[] = "CURRENT_USER",
 	CURRENT_ROLE_NAME[] = "CURRENT_ROLE",
+	SESSION_IDLE_TIMEOUT[] = "SESSION_IDLE_TIMEOUT",
+	STATEMENT_TIMEOUT[] = "STATEMENT_TIMEOUT",
 	// SYSTEM namespace: transaction wise items
 	TRANSACTION_ID_NAME[] = "TRANSACTION_ID",
 	ISOLATION_LEVEL_NAME[] = "ISOLATION_LEVEL",
@@ -303,6 +366,77 @@ void setParamsDouble(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc**
 }
 
 
+template <typename DSC>
+bool areParamsDouble(int argsCount, DSC** args)
+{
+	bool decSeen = false;
+
+	for (int i = 0; i < argsCount; ++i)
+	{
+		if (args[i]->isApprox())
+			return true;
+		if (args[i]->isDecFloat())
+			decSeen = true;
+	}
+
+	return !decSeen;
+}
+
+
+bool areParamsDec64(int argsCount, dsc** args)
+{
+	bool f64 = false;
+
+	for (int i = 0; i < argsCount; ++i)
+	{
+		switch (args[i]->dsc_dtype)
+		{
+		case dtype_dec64:
+			f64 = true;
+			break;
+		case dtype_dec128:
+			return false;
+		}
+	}
+
+	return f64;
+}
+
+
+void setParamsDblDec(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	bool fDbl = areParamsDouble(argsCount, args);
+
+	for (int i = 0; i < argsCount; ++i)
+	{
+		if (args[i]->isUnknown())
+		{
+			if (fDbl)
+				args[i]->makeDouble();
+			else
+				args[i]->makeDecimal128();
+		}
+	}
+}
+
+
+void setParamsDecFloat(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	bool f64 = areParamsDec64(argsCount, args);
+
+	for (int i = 0; i < argsCount; ++i)
+	{
+		if (args[i]->isUnknown())
+		{
+			if (f64)
+				args[i]->makeDecimal64();
+			else
+				args[i]->makeDecimal128();
+		}
+	}
+}
+
+
 void setParamsFromList(DataTypeUtilBase* dataTypeUtil, const SysFunction* function,
 	int argsCount, dsc** args)
 {
@@ -356,7 +490,7 @@ void setParamsDateAdd(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc*
 	if (argsCount >= 1 && args[0]->isUnknown())
 	{
 		if (args[1]->dsc_address &&	// constant
-			CVT_get_long(args[1], 0, ERR_post) == blr_extract_millisecond)
+			CVT_get_long(args[1], 0, JRD_get_thread_data()->getAttachment()->att_dec_status, ERR_post) == blr_extract_millisecond)
 		{
 			args[0]->makeInt64(ISC_TIME_SECONDS_PRECISION_SCALE + 3);
 		}
@@ -488,6 +622,46 @@ void makeDoubleResult(DataTypeUtilBase*, const SysFunction*, dsc* result,
 }
 
 
+void makeDblDecResult(DataTypeUtilBase*, const SysFunction*, dsc* result,
+	int argsCount, const dsc** args)
+{
+	if (argsCount == 0 || areParamsDouble(argsCount, args))
+		result->makeDouble();
+	else
+		result->makeDecimal128();
+
+	bool isNullable;
+	if (initResult(result, argsCount, args, &isNullable))
+		return;
+
+	result->setNullable(isNullable);
+}
+
+
+void makeDecFloatResult(DataTypeUtilBase*, const SysFunction*, dsc* result,
+	int argsCount, const dsc** args)
+{
+	if (argsCount == 0 || args[0]->dsc_dtype == dtype_dec128)
+		result->makeDecimal128();
+	else
+		result->makeDecimal64();
+
+	bool isNullable;
+	if (initResult(result, argsCount, args, &isNullable))
+		return;
+
+	result->setNullable(isNullable);
+}
+
+
+void makePi(DataTypeUtilBase*, const SysFunction*, dsc* result, int, const dsc**)
+{
+	result->makeDouble();
+	result->clearNull();
+	result->setNullable(false);
+}
+
+
 void makeFromListResult(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result,
 	int argsCount, const dsc** args)
 {
@@ -593,6 +767,8 @@ void makeAbs(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* r
 		case dtype_real:
 		case dtype_double:
 		case dtype_int64:
+		case dtype_dec64:
+		case dtype_dec128:
 			*result = *value;
 			break;
 
@@ -734,6 +910,11 @@ void makeCeilFloor(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 			result->makeInt64(0);
 			break;
 
+		case dtype_dec128:
+		case dtype_dec64:
+			result->makeDecimal128(0);
+			break;
+
 		default:
 			result->makeDouble();
 			break;
@@ -769,6 +950,27 @@ void makeGetSetContext(DataTypeUtilBase* /*dataTypeUtil*/, const SysFunction* fu
 	{
 		result->makeVarying(255, ttype_none);
 		result->setNullable(true);
+	}
+}
+
+
+void makeHash(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result,
+	int argsCount, const dsc** args)
+{
+	fb_assert(argsCount >= function->minArgCount);
+
+	if (argsCount == 1)
+		makeInt64Result(dataTypeUtil, function, result, argsCount, args);
+	else if (argsCount >= 2)
+	{
+		if (!args[1]->dsc_address || !args[1]->isText())	// not a constant
+			status_exception::raise(Arg::Gds(isc_sysf_invalid_hash_algorithm) << "<not a string constant>");
+
+		MetaName algorithmName;
+		MOV_get_metaname(JRD_get_thread_data(), args[1], algorithmName);
+
+		result->makeVarying(HashAlgorithmDescriptor::find(algorithmName.c_str())->length, ttype_binary);
+		result->setNullable(args[0]->isNullable());
 	}
 }
 
@@ -906,7 +1108,7 @@ void makePad(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* r
 		if (length->dsc_address)	// constant
 		{
 			result->dsc_length = static_cast<USHORT>(sizeof(USHORT)) + dataTypeUtil->fixLength(result,
-				CVT_get_long(length, 0, ERR_post) *
+				CVT_get_long(length, 0, JRD_get_thread_data()->getAttachment()->att_dec_status, ERR_post) *
 					dataTypeUtil->maxBytesPerChar(result->getCharSet()));
 		}
 		else
@@ -1017,7 +1219,8 @@ void makeRound(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 		return;
 	}
 
-	if (value1->isExact() || value1->dsc_dtype == dtype_real || value1->dsc_dtype == dtype_double)
+	if (value1->isExact() || value1->dsc_dtype == dtype_real || value1->dsc_dtype == dtype_double ||
+		value1->dsc_dtype == dtype_dec64 || value1->dsc_dtype == dtype_dec128)
 	{
 		*result = *value1;
 		if (argsCount == 1)
@@ -1109,7 +1312,7 @@ dsc* evlStdMath(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	const double v = MOV_get_double(value);
+	const double v = MOV_get_double(tdbb, value);
 	double rc;
 
 	// CVC: Apparently, gcc has built-in inverse hyperbolic functions, but since
@@ -1221,10 +1424,18 @@ dsc* evlAbs(thread_db* tdbb, const SysFunction*, const NestValueArray& args, imp
 			impure->vlu_misc.vlu_double = fabs(impure->vlu_misc.vlu_double);
 			break;
 
+		case dtype_dec64:
+			impure->vlu_misc.vlu_dec64 = impure->vlu_misc.vlu_dec64.abs();
+			break;
+
+		case dtype_dec128:
+			impure->vlu_misc.vlu_dec128 = impure->vlu_misc.vlu_dec128.abs();
+			break;
+
 		case dtype_short:
 		case dtype_long:
 		case dtype_int64:
-			impure->vlu_misc.vlu_int64 = MOV_get_int64(value, value->dsc_scale);
+			impure->vlu_misc.vlu_int64 = MOV_get_int64(tdbb, value, value->dsc_scale);
 
 			if (impure->vlu_misc.vlu_int64 == MIN_SINT64)
 				status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
@@ -1235,7 +1446,7 @@ dsc* evlAbs(thread_db* tdbb, const SysFunction*, const NestValueArray& args, imp
 			break;
 
 		default:
-			impure->vlu_misc.vlu_double = fabs(MOV_get_double(&impure->vlu_desc));
+			impure->vlu_misc.vlu_double = fabs(MOV_get_double(tdbb, &impure->vlu_desc));
 			impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
 			break;
 	}
@@ -1255,7 +1466,7 @@ dsc* evlAsciiChar(thread_db* tdbb, const SysFunction*, const NestValueArray& arg
 	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	const SLONG code = MOV_get_long(value, 0);
+	const SLONG code = MOV_get_long(tdbb, value, 0);
 	if (!(code >= 0 && code <= 255))
 		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 
@@ -1316,8 +1527,8 @@ dsc* evlAtan2(thread_db* tdbb, const SysFunction* function, const NestValueArray
 	if (request->req_flags & req_null)	// return NULL if desc2 is NULL
 		return NULL;
 
-	double value1 = MOV_get_double(desc1);
-	double value2 = MOV_get_double(desc2);
+	double value1 = MOV_get_double(tdbb, desc1);
+	double value2 = MOV_get_double(tdbb, desc2);
 
 	if (value1 == 0 && value2 == 0)
 	{
@@ -1349,24 +1560,24 @@ dsc* evlBin(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 		if (i == 0)
 		{
 			if ((Function)(IPTR) function->misc == funBinNot)
-				impure->vlu_misc.vlu_int64 = ~MOV_get_int64(value, 0);
+				impure->vlu_misc.vlu_int64 = ~MOV_get_int64(tdbb, value, 0);
 			else
-				impure->vlu_misc.vlu_int64 = MOV_get_int64(value, 0);
+				impure->vlu_misc.vlu_int64 = MOV_get_int64(tdbb, value, 0);
 		}
 		else
 		{
 			switch ((Function)(IPTR) function->misc)
 			{
 				case funBinAnd:
-					impure->vlu_misc.vlu_int64 &= MOV_get_int64(value, 0);
+					impure->vlu_misc.vlu_int64 &= MOV_get_int64(tdbb, value, 0);
 					break;
 
 				case funBinOr:
-					impure->vlu_misc.vlu_int64 |= MOV_get_int64(value, 0);
+					impure->vlu_misc.vlu_int64 |= MOV_get_int64(tdbb, value, 0);
 					break;
 
 				case funBinXor:
-					impure->vlu_misc.vlu_int64 ^= MOV_get_int64(value, 0);
+					impure->vlu_misc.vlu_int64 ^= MOV_get_int64(tdbb, value, 0);
 					break;
 
 				default:
@@ -1397,7 +1608,7 @@ dsc* evlBinShift(thread_db* tdbb, const SysFunction* function, const NestValueAr
 	if (request->req_flags & req_null)	// return NULL if value2 is NULL
 		return NULL;
 
-	const SINT64 shift = MOV_get_int64(value2, 0);
+	const SINT64 shift = MOV_get_int64(tdbb, value2, 0);
 	if (shift < 0)
 	{
 		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
@@ -1407,7 +1618,7 @@ dsc* evlBinShift(thread_db* tdbb, const SysFunction* function, const NestValueAr
 	const SINT64 rotshift = shift % sizeof(SINT64);
 	SINT64 tempbits = 0;
 
-	const SINT64 target = MOV_get_int64(value1, 0);
+	const SINT64 target = MOV_get_int64(tdbb, value1, 0);
 
 	switch ((Function)(IPTR) function->misc)
 	{
@@ -1464,8 +1675,8 @@ dsc* evlCeil(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 				for (int i = -impure->vlu_desc.dsc_scale; i > 0; --i)
 					scale *= 10;
 
-				const SINT64 v1 = MOV_get_int64(&impure->vlu_desc, impure->vlu_desc.dsc_scale);
-				const SINT64 v2 = MOV_get_int64(&impure->vlu_desc, 0) * scale;
+				const SINT64 v1 = MOV_get_int64(tdbb, &impure->vlu_desc, impure->vlu_desc.dsc_scale);
+				const SINT64 v2 = MOV_get_int64(tdbb, &impure->vlu_desc, 0) * scale;
 
 				impure->vlu_misc.vlu_int64 = v1 / scale;
 
@@ -1481,12 +1692,22 @@ dsc* evlCeil(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 			break;
 
 		default:
-			impure->vlu_misc.vlu_double = MOV_get_double(&impure->vlu_desc);
+			impure->vlu_misc.vlu_double = MOV_get_double(tdbb, &impure->vlu_desc);
 			// fall through
 
 		case dtype_double:
 			impure->vlu_misc.vlu_double = ceil(impure->vlu_misc.vlu_double);
 			impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
+			break;
+
+		case dtype_dec64:
+			impure->vlu_misc.vlu_dec64 = impure->vlu_misc.vlu_dec64.ceil(tdbb->getAttachment()->att_dec_status);
+			impure->vlu_desc.makeDecimal64(&impure->vlu_misc.vlu_dec64);
+			break;
+
+		case dtype_dec128:
+			impure->vlu_misc.vlu_dec128 = impure->vlu_misc.vlu_dec128.ceil(tdbb->getAttachment()->att_dec_status);
+			impure->vlu_desc.makeDecimal128(&impure->vlu_misc.vlu_dec128);
 			break;
 	}
 
@@ -1520,7 +1741,7 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 	}
 
 	UCHAR* data_temp;
-	USHORT len = MOV_get_string(value, &data_temp, NULL, 0);
+	USHORT len = MOV_get_string(tdbb, value, &data_temp, NULL, 0);
 	const UCHAR* data;
 
 	if (len > GUID_BODY_SIZE)
@@ -1649,7 +1870,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	if (request->req_flags & req_null)	// return NULL if valueDsc is NULL
 		return NULL;
 
-	const SLONG part = MOV_get_long(partDsc, 0);
+	const SLONG part = MOV_get_long(tdbb, partDsc, 0);
 
 	TimeStamp timestamp;
 
@@ -1699,7 +1920,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	static const SSHORT milliScale = ISC_TIME_SECONDS_PRECISION_SCALE + 3;
 	static const int milliPow = NoThrowTimeStamp::POW_10_TABLE[-milliScale];
 
-	const SINT64 quantity = MOV_get_int64(quantityDsc,
+	const SINT64 quantity = MOV_get_int64(tdbb, quantityDsc,
 		(part == blr_extract_millisecond ? milliScale : 0));
 
 	switch (part)
@@ -1909,7 +2130,7 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 	timestamp1.decode(&times1);
 	timestamp2.decode(&times2);
 
-	const SLONG part = MOV_get_long(partDsc, 0);
+	const SLONG part = MOV_get_long(tdbb, partDsc, 0);
 
 	switch (part)
 	{
@@ -2060,14 +2281,27 @@ dsc* evlExp(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	const double rc = exp(MOV_get_double(value));
-	if (rc == HUGE_VAL) // unlikely to trap anything
-		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
-	if (isinf(rc))
-		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
+	if (value->isDecFloat())
+	{
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		impure->vlu_misc.vlu_dec128 = MOV_get_dec128(tdbb, value);
 
-	impure->vlu_misc.vlu_double = rc;
-	impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
+		Decimal128 e;
+		e.set("2.718281828459045235360287471352662497757", decSt);
+		impure->vlu_misc.vlu_dec128 = e.pow(decSt, impure->vlu_misc.vlu_dec128);
+		impure->vlu_desc.makeDecimal128(&impure->vlu_misc.vlu_dec128);
+	}
+	else
+	{
+		const double rc = exp(MOV_get_double(tdbb, value));
+		if (rc == HUGE_VAL) // unlikely to trap anything
+			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
+		if (isinf(rc))
+			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
+
+		impure->vlu_misc.vlu_double = rc;
+		impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
+	}
 
 	return &impure->vlu_desc;
 }
@@ -2098,8 +2332,8 @@ dsc* evlFloor(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 				for (int i = -impure->vlu_desc.dsc_scale; i > 0; --i)
 					scale *= 10;
 
-				const SINT64 v1 = MOV_get_int64(&impure->vlu_desc, impure->vlu_desc.dsc_scale);
-				const SINT64 v2 = MOV_get_int64(&impure->vlu_desc, 0) * scale;
+				const SINT64 v1 = MOV_get_int64(tdbb, &impure->vlu_desc, impure->vlu_desc.dsc_scale);
+				const SINT64 v2 = MOV_get_int64(tdbb, &impure->vlu_desc, 0) * scale;
 
 				impure->vlu_misc.vlu_int64 = v1 / scale;
 
@@ -2115,12 +2349,22 @@ dsc* evlFloor(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 			break;
 
 		default:
-			impure->vlu_misc.vlu_double = MOV_get_double(&impure->vlu_desc);
+			impure->vlu_misc.vlu_double = MOV_get_double(tdbb, &impure->vlu_desc);
 			// fall through
 
 		case dtype_double:
 			impure->vlu_misc.vlu_double = floor(impure->vlu_misc.vlu_double);
 			impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
+			break;
+
+		case dtype_dec64:
+			impure->vlu_misc.vlu_dec64 = impure->vlu_misc.vlu_dec64.floor(tdbb->getAttachment()->att_dec_status);
+			impure->vlu_desc.makeDecimal64(&impure->vlu_misc.vlu_dec64);
+			break;
+
+		case dtype_dec128:
+			impure->vlu_misc.vlu_dec128 = impure->vlu_misc.vlu_dec128.floor(tdbb->getAttachment()->att_dec_status);
+			impure->vlu_desc.makeDecimal128(&impure->vlu_misc.vlu_dec128);
 			break;
 	}
 
@@ -2254,6 +2498,10 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 				return NULL;
 			resultStr = role.c_str();
 		}
+		else if (nameStr == SESSION_IDLE_TIMEOUT)
+			resultStr.printf("%" ULONGFORMAT, attachment->getIdleTimeout());
+		else if (nameStr == STATEMENT_TIMEOUT)
+			resultStr.printf("%" ULONGFORMAT, attachment->getStatementTimeout());
 		else if (nameStr == TRANSACTION_ID_NAME)
 			resultStr.printf("%" SQUADFORMAT, transaction->tra_number);
 		else if (nameStr == ISOLATION_LEVEL_NAME)
@@ -2466,7 +2714,7 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 dsc* evlHash(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	impure_value* impure)
 {
-	fb_assert(args.getCount() == 1);
+	fb_assert(args.getCount() >= 1);
 
 	jrd_req* request = tdbb->getRequest();
 
@@ -2474,9 +2722,27 @@ dsc* evlHash(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	impure->vlu_misc.vlu_int64 = 0;
+	AutoPtr<HashContext> hashContext;
+	MemoryPool& pool = *request->req_pool;
 
-	UCHAR* address;
+	if (args.getCount() >= 2)
+	{
+		const dsc* algorithmDesc = EVL_expr(tdbb, request, args[1]);
+		if (request->req_flags & req_null)	// return NULL if algorithm is NULL
+			return NULL;
+
+		if (!algorithmDesc->isText())
+			status_exception::raise(Arg::Gds(isc_sysf_invalid_hash_algorithm) << "<not a string constant>");
+
+		MetaName algorithmName;
+		MOV_get_metaname(tdbb, algorithmDesc, algorithmName);
+		hashContext.reset(HashAlgorithmDescriptor::find(algorithmName.c_str())->create(pool));
+	}
+	else
+	{
+		hashContext.reset(FB_NEW_POOL(pool) WeakHashContext());
+		impure->vlu_misc.vlu_int64 = 0;
+	}
 
 	if (value->isBlob())
 	{
@@ -2486,40 +2752,37 @@ dsc* evlHash(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 
 		while (!(blob->blb_flags & BLB_eof))
 		{
-			address = buffer;
-			const ULONG length = blob->BLB_get_data(tdbb, address, sizeof(buffer), false);
-
-			for (const UCHAR* end = address + length; address < end; ++address)
-			{
-				impure->vlu_misc.vlu_int64 = (impure->vlu_misc.vlu_int64 << 4) + *address;
-
-				const SINT64 n = impure->vlu_misc.vlu_int64 & FB_CONST64(0xF000000000000000);
-				if (n)
-					impure->vlu_misc.vlu_int64 ^= n >> 56;
-				impure->vlu_misc.vlu_int64 &= ~n;
-			}
+			const ULONG length = blob->BLB_get_data(tdbb, buffer, sizeof(buffer), false);
+			hashContext->update(buffer, length);
 		}
 
 		blob->BLB_close(tdbb);
 	}
 	else
 	{
+		UCHAR* address;
 		MoveBuffer buffer;
 		const ULONG length = MOV_make_string2(tdbb, value, value->getTextType(), &address, buffer, false);
-
-		for (const UCHAR* end = address + length; address < end; ++address)
-		{
-			impure->vlu_misc.vlu_int64 = (impure->vlu_misc.vlu_int64 << 4) + *address;
-
-			const SINT64 n = impure->vlu_misc.vlu_int64 & FB_CONST64(0xF000000000000000);
-			if (n)
-				impure->vlu_misc.vlu_int64 ^= n >> 56;
-			impure->vlu_misc.vlu_int64 &= ~n;
-		}
+		hashContext->update(address, length);
 	}
 
-	// make descriptor for return value
-	impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);
+	HashContext::Buffer resultBuffer;
+	hashContext->finish(resultBuffer);
+
+	if (args.getCount() >= 2)
+	{
+		dsc result;
+		result.makeText(resultBuffer.getCount(), ttype_binary, resultBuffer.begin());
+		EVL_make_value(tdbb, &result, impure);
+	}
+	else
+	{
+		fb_assert(resultBuffer.getCount() == sizeof(SINT64));
+		memcpy(&impure->vlu_misc.vlu_int64, resultBuffer.begin(), sizeof(SINT64));
+
+		// make descriptor for return value
+		impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);
+	}
 
 	return &impure->vlu_desc;
 }
@@ -2560,32 +2823,63 @@ dsc* evlLnLog10(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	const double v = MOV_get_double(value);
-
-	if (v <= 0)
+	if (value->isDecFloat())
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argmustbe_positive) <<
-										Arg::Str(function->name));
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		Decimal128 d = MOV_get_dec128(tdbb, value);
+
+		if (d.compare(decSt, CDecimal128(0)) <= 0)
+		{
+			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+										Arg::Gds(isc_sysf_argmustbe_positive) <<
+											Arg::Str(function->name));
+		}
+
+		switch ((Function)(IPTR) function->misc)
+		{
+		case funLnat:
+			d = d.ln(decSt);
+			break;
+		case funLog10:
+			d = d.log10(decSt);
+			break;
+		default:
+			fb_assert(0);
+			return NULL;
+		}
+
+		impure->vlu_misc.vlu_dec128 = d;
+		impure->vlu_desc.makeDecimal128(&impure->vlu_misc.vlu_dec128);
 	}
-
-	double rc;
-
-	switch ((Function)(IPTR) function->misc)
+	else
 	{
-	case funLnat:
-		rc = log(v);
-		break;
-	case funLog10:
-		rc = log10(v);
-		break;
-	default:
-		fb_assert(0);
-		return NULL;
-	}
+		const double v = MOV_get_double(tdbb, value);
 
-	impure->vlu_misc.vlu_double = rc;
-	impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
+		if (v <= 0)
+		{
+			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+										Arg::Gds(isc_sysf_argmustbe_positive) <<
+											Arg::Str(function->name));
+		}
+
+		double rc;
+
+		switch ((Function)(IPTR) function->misc)
+		{
+		case funLnat:
+			rc = log(v);
+			break;
+		case funLog10:
+			rc = log10(v);
+			break;
+		default:
+			fb_assert(0);
+			return NULL;
+		}
+
+		impure->vlu_misc.vlu_double = rc;
+		impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
+	}
 
 	return &impure->vlu_desc;
 }
@@ -2598,33 +2892,188 @@ dsc* evlLog(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 
 	jrd_req* request = tdbb->getRequest();
 
-	const dsc* value1 = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value1 is NULL
+	const dsc* value[2];
+	value[0] = EVL_expr(tdbb, request, args[0]);
+	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	const dsc* value2 = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if value2 is NULL
+	value[1] = EVL_expr(tdbb, request, args[1]);
+	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	const double v1 = MOV_get_double(value1);
-	const double v2 = MOV_get_double(value2);
-
-	if (v1 <= 0)
+	if (!areParamsDouble(2, value))
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_basemustbe_positive) <<
-										Arg::Str(function->name));
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		Decimal128 v1 = MOV_get_dec128(tdbb, value[0]);
+		Decimal128 v2 = MOV_get_dec128(tdbb, value[1]);
+
+		if (v1.compare(decSt, CDecimal128(0)) <= 0)
+		{
+			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+										Arg::Gds(isc_sysf_basemustbe_positive) <<
+											Arg::Str(function->name));
+		}
+
+		if (v2.compare(decSt, CDecimal128(0)) <= 0)
+		{
+			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+										Arg::Gds(isc_sysf_argmustbe_positive) <<
+											Arg::Str(function->name));
+		}
+
+		impure->vlu_misc.vlu_dec128 = v2.ln(decSt).div(decSt, v1.ln(decSt));
+		impure->vlu_desc.makeDecimal128(&impure->vlu_misc.vlu_dec128);
+	}
+	else
+	{
+		const double v1 = MOV_get_double(tdbb, value[0]);
+		const double v2 = MOV_get_double(tdbb, value[1]);
+
+		if (v1 <= 0)
+		{
+			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+										Arg::Gds(isc_sysf_basemustbe_positive) <<
+											Arg::Str(function->name));
+		}
+
+		if (v2 <= 0)
+		{
+			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+										Arg::Gds(isc_sysf_argmustbe_positive) <<
+											Arg::Str(function->name));
+		}
+
+		impure->vlu_misc.vlu_double = log(v2) / log(v1);
+		impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
 	}
 
-	if (v2 <= 0)
+	return &impure->vlu_desc;
+}
+
+
+dsc* evlQuantize(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
+	impure_value* impure)
+{
+	fb_assert(args.getCount() == 2);
+
+	jrd_req* request = tdbb->getRequest();
+
+	const dsc* value[2];
+	value[0] = EVL_expr(tdbb, request, args[0]);
+	if (request->req_flags & req_null)	// return NULL if value is NULL
+		return NULL;
+
+	value[1] = EVL_expr(tdbb, request, args[1]);
+	if (request->req_flags & req_null)	// return NULL if value is NULL
+		return NULL;
+
+	DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+
+	if (value[0]->dsc_dtype == dtype_dec64)
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argmustbe_positive) <<
-										Arg::Str(function->name));
+		Decimal64 v1 = MOV_get_dec64(tdbb, value[0]);
+		Decimal64 v2 = MOV_get_dec64(tdbb, value[1]);
+
+		impure->vlu_misc.vlu_dec64 = v1.quantize(decSt, v2);
+		impure->vlu_desc.makeDecimal64(&impure->vlu_misc.vlu_dec64);
+	}
+	else
+	{
+		Decimal128 v1 = MOV_get_dec128(tdbb, value[0]);
+		Decimal128 v2 = MOV_get_dec128(tdbb, value[1]);
+
+		impure->vlu_misc.vlu_dec128 = v1.quantize(decSt, v2);
+		impure->vlu_desc.makeDecimal128(&impure->vlu_misc.vlu_dec128);
 	}
 
-	impure->vlu_misc.vlu_double = log(v2) / log(v1);
-	impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
+	return &impure->vlu_desc;
+}
+
+
+dsc* evlCompare(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
+	impure_value* impure)
+{
+	fb_assert(args.getCount() == 2);
+
+	jrd_req* request = tdbb->getRequest();
+
+	const dsc* value[2];
+	value[0] = EVL_expr(tdbb, request, args[0]);
+	if (request->req_flags & req_null)	// return NULL if value is NULL
+		return NULL;
+
+	value[1] = EVL_expr(tdbb, request, args[1]);
+	if (request->req_flags & req_null)	// return NULL if value is NULL
+		return NULL;
+
+	if (value[0]->dsc_dtype == dtype_dec64)
+	{
+		Decimal64 v1 = MOV_get_dec64(tdbb, value[0]);
+		Decimal64 v2 = MOV_get_dec64(tdbb, value[1]);
+
+		switch ((Function)(IPTR) function->misc)
+		{
+		case funTotalOrd:
+			impure->vlu_misc.vlu_short = v1.totalOrder(v2);
+			break;
+		case funCmpDec:
+			impure->vlu_misc.vlu_short = v1.decCompare(v2);
+			break;
+		default:
+			fb_assert(false);
+		}
+	}
+	else
+	{
+		Decimal128 v1 = MOV_get_dec128(tdbb, value[0]);
+		Decimal128 v2 = MOV_get_dec128(tdbb, value[1]);
+
+		switch ((Function)(IPTR) function->misc)
+		{
+		case funTotalOrd:
+			impure->vlu_misc.vlu_short = v1.totalOrder(v2);
+			break;
+		case funCmpDec:
+			impure->vlu_misc.vlu_short = v1.decCompare(v2);
+			break;
+		default:
+			fb_assert(false);
+		}
+	}
+
+	impure->vlu_desc.makeShort(0, &impure->vlu_misc.vlu_short);
+	return &impure->vlu_desc;
+}
+
+
+dsc* evlNormDec(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
+	impure_value* impure)
+{
+	fb_assert(args.getCount() == 1);
+
+	jrd_req* request = tdbb->getRequest();
+
+	const dsc* value;
+	value = EVL_expr(tdbb, request, args[0]);
+	if (request->req_flags & req_null)	// return NULL if value is NULL
+		return NULL;
+
+	DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+
+	if (value->dsc_dtype == dtype_dec64)
+	{
+		Decimal64 v = MOV_get_dec64(tdbb, value);
+
+		impure->vlu_misc.vlu_dec64 = v.normalize(decSt);
+		impure->vlu_desc.makeDecimal64(&impure->vlu_misc.vlu_dec64);
+	}
+	else
+	{
+		Decimal128 v = MOV_get_dec128(tdbb, value);
+
+		impure->vlu_misc.vlu_dec128 = v.normalize(decSt);
+		impure->vlu_desc.makeDecimal128(&impure->vlu_misc.vlu_dec128);
+	}
 
 	return &impure->vlu_desc;
 }
@@ -2652,12 +3101,12 @@ dsc* evlMaxMinValue(thread_db* tdbb, const SysFunction* function, const NestValu
 			switch ((Function)(IPTR) function->misc)
 			{
 				case funMaxValue:
-					if (MOV_compare(value, result) > 0)
+					if (MOV_compare(tdbb, value, result) > 0)
 						result = value;
 					break;
 
 				case funMinValue:
-					if (MOV_compare(value, result) < 0)
+					if (MOV_compare(tdbb, value, result) < 0)
 						result = value;
 					break;
 
@@ -2689,12 +3138,12 @@ dsc* evlMod(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	EVL_make_value(tdbb, value1, impure);
 	impure->vlu_desc.dsc_scale = 0;
 
-	const SINT64 divisor = MOV_get_int64(value2, 0);
+	const SINT64 divisor = MOV_get_int64(tdbb, value2, 0);
 
 	if (divisor == 0)
 		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_divide_by_zero));
 
-	const SINT64 result = MOV_get_int64(value1, 0) % divisor;
+	const SINT64 result = MOV_get_int64(tdbb, value1, 0) % divisor;
 
 	switch (impure->vlu_desc.dsc_dtype)
 	{
@@ -2748,7 +3197,7 @@ dsc* evlOverlay(thread_db* tdbb, const SysFunction* function, const NestValueArr
 		if (request->req_flags & req_null)	// return NULL if lengthDsc is NULL
 			return NULL;
 
-		const SLONG auxlen = MOV_get_long(lengthDsc, 0);
+		const SLONG auxlen = MOV_get_long(tdbb, lengthDsc, 0);
 
 		if (auxlen < 0)
 		{
@@ -2761,7 +3210,7 @@ dsc* evlOverlay(thread_db* tdbb, const SysFunction* function, const NestValueArr
 		length = auxlen;
 	}
 
-	SLONG from = MOV_get_long(fromDsc, 0);
+	SLONG from = MOV_get_long(tdbb, fromDsc, 0);
 
 	if (from <= 0)
 	{
@@ -2919,7 +3368,7 @@ dsc* evlPad(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 	if (request->req_flags & req_null)	// return NULL if padLenDsc is NULL
 		return NULL;
 
-	const SLONG padLenArg = MOV_get_long(padLenDsc, 0);
+	const SLONG padLenArg = MOV_get_long(tdbb, padLenDsc, 0);
 	if (padLenArg < 0)
 	{
 		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
@@ -3102,7 +3551,7 @@ dsc* evlPosition(thread_db* tdbb, const SysFunction* function, const NestValueAr
 		if (request->req_flags & req_null)	// return NULL if value3 is NULL
 			return NULL;
 
-		start = MOV_get_long(value3, 0);
+		start = MOV_get_long(tdbb, value3, 0);
 		if (start <= 0)
 		{
 			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
@@ -3212,41 +3661,54 @@ dsc* evlPower(thread_db* tdbb, const SysFunction* function, const NestValueArray
 
 	jrd_req* request = tdbb->getRequest();
 
-	const dsc* value1 = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value1 is NULL
+	const dsc* value[2];
+	value[0] = EVL_expr(tdbb, request, args[0]);
+	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	const dsc* value2 = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if value2 is NULL
+	value[1] = EVL_expr(tdbb, request, args[1]);
+	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
-
-	const double v1 = MOV_get_double(value1);
-	const double v2 = MOV_get_double(value2);
-
-	if (v1 == 0 && v2 < 0)
+	if (!areParamsDouble(2, value))
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_invalid_zeropowneg) <<
-										Arg::Str(function->name));
-	}
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		impure->vlu_misc.vlu_dec128 = MOV_get_dec128(tdbb, value[0]);
+		Decimal128 v2 = MOV_get_dec128(tdbb, value[1]);
 
-	if (v1 < 0 &&
-		(!value2->isExact() ||
-		 MOV_get_int64(value2, 0) * SINT64(CVT_power_of_ten(-value2->dsc_scale)) !=
-			MOV_get_int64(value2, value2->dsc_scale)))
+		impure->vlu_misc.vlu_dec128 = impure->vlu_misc.vlu_dec128.pow(decSt, v2);
+		impure->vlu_desc.makeDecimal128(&impure->vlu_misc.vlu_dec128);
+	}
+	else
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_invalid_negpowfp) <<
-										Arg::Str(function->name));
+		impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
+
+		const double v1 = MOV_get_double(tdbb, value[0]);
+		const double v2 = MOV_get_double(tdbb, value[1]);
+
+		if (v1 == 0 && v2 < 0)
+		{
+			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+										Arg::Gds(isc_sysf_invalid_zeropowneg) <<
+											Arg::Str(function->name));
+		}
+
+		if (v1 < 0 &&
+			(!value[1]->isExact() ||
+			 MOV_get_int64(tdbb, value[1], 0) * SINT64(CVT_power_of_ten(-value[1]->dsc_scale)) !=
+				MOV_get_int64(tdbb, value[1], value[1]->dsc_scale)))
+		{
+			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+										Arg::Gds(isc_sysf_invalid_negpowfp) <<
+											Arg::Str(function->name));
+		}
+
+		const double rc = pow(v1, v2);
+		if (isinf(rc))
+			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
+
+		impure->vlu_misc.vlu_double = rc;
 	}
-
-	const double rc = pow(v1, v2);
-	if (isinf(rc))
-		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
-
-	impure->vlu_misc.vlu_double = rc;
 
 	return &impure->vlu_desc;
 }
@@ -3572,7 +4034,7 @@ dsc* evlRight(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 		start = charSet->length(start, p, true);
 	}
 
-	start -= MOV_get_long(len, 0);
+	start -= MOV_get_long(tdbb, len, 0);
 	start = MAX(0, start);
 
 	dsc startDsc;
@@ -3601,7 +4063,7 @@ dsc* evlRound(thread_db* tdbb, const SysFunction* function, const NestValueArray
 		if (request->req_flags & req_null)	// return NULL if scaleDsc is NULL
 			return NULL;
 
-		scale = -MOV_get_long(scaleDsc, 0);
+		scale = -MOV_get_long(tdbb, scaleDsc, 0);
 		if (!(scale >= MIN_SCHAR && scale <= MAX_SCHAR))
 		{
 			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
@@ -3610,7 +4072,7 @@ dsc* evlRound(thread_db* tdbb, const SysFunction* function, const NestValueArray
 		}
 	}
 
-	impure->vlu_misc.vlu_int64 = MOV_get_int64(value, scale);
+	impure->vlu_misc.vlu_int64 = MOV_get_int64(tdbb, value, scale);
 	impure->vlu_desc.makeInt64(scale, &impure->vlu_misc.vlu_int64);
 
 	return &impure->vlu_desc;
@@ -3628,14 +4090,19 @@ dsc* evlSign(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	const double val = MOV_get_double(value);
+	if (value->isDecFloat())
+		impure->vlu_misc.vlu_short = MOV_get_dec128(tdbb, value).sign();
+	else
+	{
+		const double val = MOV_get_double(tdbb, value);
 
-	if (val > 0)
-		impure->vlu_misc.vlu_short = 1;
-	else if (val < 0)
-		impure->vlu_misc.vlu_short = -1;
-	else	// val == 0
-		impure->vlu_misc.vlu_short = 0;
+		if (val > 0)
+			impure->vlu_misc.vlu_short = 1;
+		else if (val < 0)
+			impure->vlu_misc.vlu_short = -1;
+		else	// val == 0
+			impure->vlu_misc.vlu_short = 0;
+	}
 
 	impure->vlu_desc.makeShort(0, &impure->vlu_misc.vlu_short);
 
@@ -3654,16 +4121,33 @@ dsc* evlSqrt(thread_db* tdbb, const SysFunction* function, const NestValueArray&
 	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	impure->vlu_misc.vlu_double = MOV_get_double(value);
-
-	if (impure->vlu_misc.vlu_double < 0)
+	if (value->isDecFloat())
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argmustbe_nonneg) << Arg::Str(function->name));
-	}
+		DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+		impure->vlu_misc.vlu_dec128 = MOV_get_dec128(tdbb, value);
 
-	impure->vlu_misc.vlu_double = sqrt(impure->vlu_misc.vlu_double);
-	impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
+		if (impure->vlu_misc.vlu_dec128.compare(decSt, CDecimal128(0)) < 0)
+		{
+			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+									Arg::Gds(isc_sysf_argmustbe_nonneg) << Arg::Str(function->name));
+		}
+
+		impure->vlu_misc.vlu_dec128 = impure->vlu_misc.vlu_dec128.sqrt(decSt);
+		impure->vlu_desc.makeDecimal128(&impure->vlu_misc.vlu_dec128);
+	}
+	else
+	{
+		impure->vlu_misc.vlu_double = MOV_get_double(tdbb, value);
+
+		if (impure->vlu_misc.vlu_double < 0)
+		{
+			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+									Arg::Gds(isc_sysf_argmustbe_nonneg) << Arg::Str(function->name));
+		}
+
+		impure->vlu_misc.vlu_double = sqrt(impure->vlu_misc.vlu_double);
+		impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
+	}
 
 	return &impure->vlu_desc;
 }
@@ -3687,7 +4171,7 @@ dsc* evlTrunc(thread_db* tdbb, const SysFunction* function, const NestValueArray
 		if (request->req_flags & req_null)	// return NULL if scaleDsc is NULL
 			return NULL;
 
-		resultScale = -MOV_get_long(scaleDsc, 0);
+		resultScale = -MOV_get_long(tdbb, scaleDsc, 0);
 		if (!(resultScale >= MIN_SCHAR && resultScale <= MAX_SCHAR))
 		{
 			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
@@ -3699,7 +4183,7 @@ dsc* evlTrunc(thread_db* tdbb, const SysFunction* function, const NestValueArray
 	if (value->isExact())
 	{
 		SSHORT scale = value->dsc_scale;
-		impure->vlu_misc.vlu_int64 = MOV_get_int64(value, scale);
+		impure->vlu_misc.vlu_int64 = MOV_get_int64(tdbb, value, scale);
 
 		if (resultScale < scale)
 			resultScale = scale;
@@ -3719,7 +4203,7 @@ dsc* evlTrunc(thread_db* tdbb, const SysFunction* function, const NestValueArray
 	}
 	else
 	{
-		impure->vlu_misc.vlu_double = MOV_get_double(value);
+		impure->vlu_misc.vlu_double = MOV_get_double(tdbb, value);
 
 		SINT64 v = 1;
 
@@ -3775,7 +4259,7 @@ dsc* evlUuidToChar(thread_db* tdbb, const SysFunction* function, const NestValue
 	}
 
 	UCHAR* data;
-	const USHORT len = MOV_get_string(value, &data, NULL, 0);
+	const USHORT len = MOV_get_string(tdbb, value, &data, NULL, 0);
 
 	if (len != sizeof(Guid))
 	{
@@ -3814,8 +4298,8 @@ dsc* evlRoleInUse(thread_db* tdbb, const SysFunction*, const NestValueArray& arg
 	string roleStr(MOV_make_string2(tdbb, value, ttype_none));
 	roleStr.upper();
 
-	impure->vlu_misc.vlu_uchar = attachment->att_user->roleInUse(tdbb, roleStr.c_str()) ?
-		FB_TRUE : FB_FALSE;
+	impure->vlu_misc.vlu_uchar = (attachment->att_user &&
+		attachment->att_user->roleInUse(tdbb, roleStr.c_str())) ? FB_TRUE : FB_FALSE;
 
 	impure->vlu_desc.makeBoolean(&impure->vlu_misc.vlu_uchar);
 
@@ -3837,7 +4321,8 @@ dsc* evlSystemPrivilege(thread_db* tdbb, const SysFunction*, const NestValueArra
 	USHORT p = *((USHORT*) value->dsc_address);
 
 	Jrd::Attachment* attachment = tdbb->getAttachment();
-	impure->vlu_misc.vlu_uchar = attachment->att_user->locksmith(tdbb, p) ? FB_TRUE : FB_FALSE;
+	impure->vlu_misc.vlu_uchar = (attachment->att_user &&
+		attachment->att_user->locksmith(tdbb, p)) ? FB_TRUE : FB_FALSE;
 	impure->vlu_desc.makeBoolean(&impure->vlu_misc.vlu_uchar);
 
 	return &impure->vlu_desc;
@@ -3849,7 +4334,7 @@ dsc* evlSystemPrivilege(thread_db* tdbb, const SysFunction*, const NestValueArra
 
 const SysFunction SysFunction::functions[] =
 	{
-		{"ABS", 1, 1, setParamsDouble, makeAbs, evlAbs, NULL},
+		{"ABS", 1, 1, setParamsDblDec, makeAbs, evlAbs, NULL},
 		{"ACOS", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAcos},
 		{"ACOSH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAcosh},
 		{"ASCII_CHAR", 1, 1, setParamsInteger, makeAsciiChar, evlAsciiChar, NULL},
@@ -3867,30 +4352,33 @@ const SysFunction SysFunction::functions[] =
 		{"BIN_SHL_ROT", 2, 2, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShlRot},
 		{"BIN_SHR_ROT", 2, 2, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShrRot},
 		{"BIN_XOR", 2, -1, setParamsInteger, makeBin, evlBin, (void*) funBinXor},
-		{"CEIL", 1, 1, setParamsDouble, makeCeilFloor, evlCeil, NULL},
-		{"CEILING", 1, 1, setParamsDouble, makeCeilFloor, evlCeil, NULL},
+		{"CEIL", 1, 1, setParamsDblDec, makeCeilFloor, evlCeil, NULL},
+		{"CEILING", 1, 1, setParamsDblDec, makeCeilFloor, evlCeil, NULL},
 		{"CHAR_TO_UUID", 1, 1, setParamsCharToUuid, makeUuid, evlCharToUuid, NULL},
+		{"COMPARE_DECFLOAT", 2, 2, setParamsDecFloat, makeShortResult, evlCompare, (void*) funCmpDec},
 		{"COS", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCos},
 		{"COSH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCosh},
 		{"COT", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCot},
 		{"DATEADD", 3, 3, setParamsDateAdd, makeDateAdd, evlDateAdd, NULL},
 		{"DATEDIFF", 3, 3, setParamsDateDiff, makeInt64Result, evlDateDiff, NULL},
-		{"EXP", 1, 1, setParamsDouble, makeDoubleResult, evlExp, NULL},
-		{"FLOOR", 1, 1, setParamsDouble, makeCeilFloor, evlFloor, NULL},
+		{"EXP", 1, 1, setParamsDblDec, makeDblDecResult, evlExp, NULL},
+		{"FLOOR", 1, 1, setParamsDblDec, makeCeilFloor, evlFloor, NULL},
 		{"GEN_UUID", 0, 0, NULL, makeUuid, evlGenUuid, NULL},
-		{"HASH", 1, 1, NULL, makeInt64Result, evlHash, NULL},
+		{"HASH", 1, 2, NULL, makeHash, evlHash, NULL},
 		{"LEFT", 2, 2, setParamsSecondInteger, makeLeftRight, evlLeft, NULL},
-		{"LN", 1, 1, setParamsDouble, makeDoubleResult, evlLnLog10, (void*) funLnat},
-		{"LOG", 2, 2, setParamsDouble, makeDoubleResult, evlLog, NULL},
-		{"LOG10", 1, 1, setParamsDouble, makeDoubleResult, evlLnLog10, (void*) funLog10},
+		{"LN", 1, 1, setParamsDblDec, makeDblDecResult, evlLnLog10, (void*) funLnat},
+		{"LOG", 2, 2, setParamsDblDec, makeDblDecResult, evlLog, NULL},
+		{"LOG10", 1, 1, setParamsDblDec, makeDblDecResult, evlLnLog10, (void*) funLog10},
 		{"LPAD", 2, 3, setParamsSecondInteger, makePad, evlPad, (void*) funLPad},
 		{"MAXVALUE", 1, -1, setParamsFromList, makeFromListResult, evlMaxMinValue, (void*) funMaxValue},
 		{"MINVALUE", 1, -1, setParamsFromList, makeFromListResult, evlMaxMinValue, (void*) funMinValue},
 		{"MOD", 2, 2, setParamsFromList, makeMod, evlMod, NULL},
+		{"NORMALIZE_DECFLOAT", 1, 1, setParamsDecFloat, makeDecFloatResult, evlNormDec, NULL},
 		{"OVERLAY", 3, 4, setParamsOverlay, makeOverlay, evlOverlay, NULL},
-		{"PI", 0, 0, NULL, makeDoubleResult, evlPi, NULL},
+		{"PI", 0, 0, NULL, makePi, evlPi, NULL},
 		{"POSITION", 2, 3, setParamsPosition, makeLongResult, evlPosition, NULL},
-		{"POWER", 2, 2, setParamsDouble, makeDoubleResult, evlPower, NULL},
+		{"POWER", 2, 2, setParamsDblDec, makeDblDecResult, evlPower, NULL},
+		{"QUANTIZE", 2, 2, setParamsDecFloat, makeDecFloatResult, evlQuantize, NULL},
 		{"RAND", 0, 0, NULL, makeDoubleResult, evlRand, NULL},
 		{RDB_GET_CONTEXT, 2, 2, setParamsGetSetContext, makeGetSetContext, evlGetContext, NULL},
 		{"RDB$ROLE_IN_USE", 1, 1, setParamsAsciiVal, makeBooleanResult, evlRoleInUse, NULL},
@@ -3901,12 +4389,13 @@ const SysFunction SysFunction::functions[] =
 		{"RIGHT", 2, 2, setParamsSecondInteger, makeLeftRight, evlRight, NULL},
 		{"ROUND", 1, 2, setParamsRoundTrunc, makeRound, evlRound, NULL},
 		{"RPAD", 2, 3, setParamsSecondInteger, makePad, evlPad, (void*) funRPad},
-		{"SIGN", 1, 1, setParamsDouble, makeShortResult, evlSign, NULL},
+		{"SIGN", 1, 1, setParamsDblDec, makeShortResult, evlSign, NULL},
 		{"SIN", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfSin},
 		{"SINH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfSinh},
-		{"SQRT", 1, 1, setParamsDouble, makeDoubleResult, evlSqrt, NULL},
+		{"SQRT", 1, 1, setParamsDblDec, makeDblDecResult, evlSqrt, NULL},
 		{"TAN", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfTan},
 		{"TANH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfTanh},
+		{"TOTALORDER", 2, 2, setParamsDecFloat, makeShortResult, evlCompare, (void*) funTotalOrd},
 		{"TRUNC", 1, 2, setParamsRoundTrunc, makeTrunc, evlTrunc, NULL},
 		{"UUID_TO_CHAR", 1, 1, setParamsUuidToChar, makeUuidToChar, evlUuidToChar, NULL},
 		{"", 0, 0, NULL, NULL, NULL, NULL}

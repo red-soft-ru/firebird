@@ -39,6 +39,7 @@
 #include "../yvalve/gds_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/DebugInterface.h"
+#include "../jrd/mov_proto.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -297,38 +298,123 @@ ISC_STATUS filter_format(USHORT action, BlobControl* control)
  *	Get next segment from a record format blob.
  *
  **************************************/
-	// Unless this is a get segment call, just return success
 
-	if (action != isc_blob_filter_get_segment)
-		return FB_SUCCESS;
+	if (action != isc_blob_filter_open)
+		return string_filter(action, control);
 
-	// Try to get next descriptor
-	Ods::Descriptor desc;
-	memset(&desc, 0, sizeof(desc));
+	//                           1         2         3         4         5         6
+	//                  12345678901234567890123456789012345678901234567890123456789012345678
+	const char* head1 = " id offset type           length sub_type flags";	// descriptors
+	const char* sep1  = "--- ------ -------------- ------ -------- -----";
 
-    USHORT length;
-	const ISC_STATUS status = caller(isc_blob_filter_get_segment, control,
-									 sizeof(desc), reinterpret_cast<UCHAR*>(&desc), &length);
+	const char* head2 = " id type           length default value";			// defaults
+	const char* sep2  = "--- -------------- ------ -----------------------------------";
+
+	const char* fmt1 = "%3d %6d %2d %-11s %6d %8d  0x%02x";		// descriptors
+	const char* fmt2 = "%3d %2d %-11s %6d %s";					// defaults
+
+	const char* name1 = "Fields:";
+	const char* name2 = "Defaults:";
+
+	string str;
+	USHORT length;
+	ISC_STATUS status;
+
+	// read number of fields descriptors
+
+	USHORT num;
+	status = caller(isc_blob_filter_get_segment, control,
+		sizeof(USHORT), reinterpret_cast<UCHAR*>(&num), &length);
 	if (status != FB_SUCCESS && status != isc_segment)
 		return status;
 
-    char buffer[256];
+	if (num)
+	{
+		string_put(control, name1);
+		string_put(control, head1);
+		string_put(control, sep1);
+	}
 
-    sprintf(buffer, "%5d: type=%d (%s) length=%d sub_type=%d flags=0x%X",
-		desc.dsc_offset,
-		desc.dsc_dtype,
-		desc.dsc_dtype >= DTYPE_TYPE_MAX ? "unknown" : dtypes[desc.dsc_dtype],
-		desc.dsc_length,
-		desc.dsc_sub_type,
-		desc.dsc_flags);
+	// read fields descriptors
+	for (int id = 0; num; --num, id++)
+	{
+		Ods::Descriptor desc;
+		memset(&desc, 0, sizeof(desc));
 
-	length = static_cast<USHORT>(strlen(buffer));
-	if (length > control->ctl_buffer_length)
-		length = control->ctl_buffer_length;
+		status = caller(isc_blob_filter_get_segment, control,
+			sizeof(desc), reinterpret_cast<UCHAR*>(&desc), &length);
+		if (status != FB_SUCCESS && status != isc_segment)
+			return status;
 
-	control->ctl_segment_length = length;
-	memcpy(control->ctl_buffer, buffer, length);
+		str.printf(fmt1,
+			id,
+			desc.dsc_offset,
+			desc.dsc_dtype,
+			desc.dsc_dtype >= DTYPE_TYPE_MAX ? "unknown" : dtypes[desc.dsc_dtype],
+			desc.dsc_length,
+			desc.dsc_sub_type,
+			desc.dsc_flags);
 
+		string_put(control, str.c_str());
+	}
+
+	// read number of default values
+	num = 0;
+	status = caller(isc_blob_filter_get_segment, control,
+		sizeof(USHORT), reinterpret_cast<UCHAR*>(&num), &length);
+	if (status != FB_SUCCESS && status != isc_segment)
+		return status;
+
+	if (num)
+	{
+		string_put(control, "");
+		string_put(control, name2);
+		string_put(control, head2);
+		string_put(control, sep2);
+	}
+
+	// defaults descriptors and values
+	for (; num; --num)
+	{
+		USHORT fieldId;
+		status = caller(isc_blob_filter_get_segment, control,
+			sizeof(fieldId), reinterpret_cast<UCHAR*>(&fieldId), &length);
+		if (status != FB_SUCCESS && status != isc_segment)
+			return status;
+
+		Ods::Descriptor desc;
+		memset(&desc, 0, sizeof(desc));
+
+		status = caller(isc_blob_filter_get_segment, control,
+			sizeof(desc), reinterpret_cast<UCHAR*>(&desc), &length);
+		if (status != FB_SUCCESS && status != isc_segment)
+			return status;
+
+		UCharBuffer buff;
+		UCHAR* pBuff = buff.getBuffer(desc.dsc_length);
+
+		status = caller(isc_blob_filter_get_segment, control,
+			desc.dsc_length, pBuff, &length);
+		if (status != FB_SUCCESS && status != isc_segment)
+			return status;
+
+		dsc d;
+		d = desc;
+		d.dsc_address = pBuff;
+
+		DescPrinter val(JRD_get_thread_data(), &d, 32);
+
+		str.printf(fmt2,
+			fieldId,
+			desc.dsc_dtype,
+			desc.dsc_dtype >= DTYPE_TYPE_MAX ? "unknown" : dtypes[desc.dsc_dtype],
+			desc.dsc_length,
+			val.get().c_str());
+
+		string_put(control, str.c_str());
+	}
+
+	control->ctl_data[1] = control->ctl_data[0];
 	return FB_SUCCESS;
 }
 
@@ -447,6 +533,10 @@ ISC_STATUS filter_runtime(USHORT action, BlobControl* control)
 
 	case RSR_field_generator_name:
 		sprintf(line, "    field_generator_name: %s", p);
+		break;
+
+	case RSR_field_identity_type:
+		sprintf(line, "Field identity type: %d", n);
 		break;
 
 	default:

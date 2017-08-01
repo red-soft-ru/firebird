@@ -440,7 +440,7 @@ public:
 	GarbageCollector*	dbb_garbage_collector;	// GarbageCollector class
 	Firebird::Semaphore dbb_gc_sem;		// Event to wake up garbage collector
 	Firebird::Semaphore dbb_gc_init;	// Event for initialization garbage collector
-	Firebird::Semaphore dbb_gc_fini;	// Event for finalization garbage collector
+	ThreadFinishSync<Database*> dbb_gc_fini;	// Sync for finalization garbage collector
 
 	Firebird::MemoryStats dbb_memory_stats;
 	RuntimeStatistics dbb_stats;
@@ -461,7 +461,7 @@ public:
 	BackupManager*	dbb_backup_manager;						// physical backup manager
 	Firebird::TimeStamp dbb_creation_date; 					// creation date
 	ExternalFileDirectoryList* dbb_external_file_directory_list;
-	Firebird::RefPtr<Config> dbb_config;
+	Firebird::RefPtr<const Config> dbb_config;
 
 	SharedCounter dbb_shared_counter;
 	CryptoManager* dbb_crypto_manager;
@@ -512,6 +512,7 @@ private:
 		dbb_owner(*p),
 		dbb_pools(*p, 4),
 		dbb_sort_buffers(*p),
+		dbb_gc_fini(*p, garbage_collector, THREAD_medium),
 		dbb_stats(*p),
 		dbb_lock_owner_id(getLockOwnerId()),
 		dbb_tip_cache(NULL),
@@ -560,6 +561,9 @@ public:
 	bool allowSweepRun(thread_db* tdbb);
 	// reset sweep flags and release sweep lock
 	void clearSweepFlags(thread_db* tdbb);
+
+	static void garbage_collector(Database* dbb);
+	void exceptionHandler(const Firebird::Exception& ex, ThreadFinishSync<Database*>::ThreadRoutine* routine);
 
 private:
 	//static int blockingAstSharedCounter(void*);

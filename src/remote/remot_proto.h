@@ -61,7 +61,7 @@ void		REMOTE_reset_request (struct Rrq *, struct RMessage*);
 void		REMOTE_reset_statement (struct Rsr *);
 bool_t		REMOTE_getbytes (XDR*, SCHAR*, u_int);
 LegacyPlugin REMOTE_legacy_auth(const char* nm, int protocol);
-Firebird::RefPtr<Config> REMOTE_get_config(const Firebird::PathName* dbName,
+Firebird::RefPtr<const Config> REMOTE_get_config(const Firebird::PathName* dbName,
 	const Firebird::string* dpb_config = NULL);
 void		REMOTE_check_response(Firebird::IStatus* warning, Rdb* rdb, PACKET* packet, bool checkKeys = false);
 bool		REMOTE_inflate(rem_port*, PacketReceive*, UCHAR*, SSHORT, SSHORT*);

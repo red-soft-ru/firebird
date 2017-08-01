@@ -517,6 +517,9 @@ RELATION(nam_mon_attachments, rel_mon_attachments, ODS_11_1, rel_virtual)
 	FIELD(f_mon_att_remote_os_user, nam_mon_remote_os_user, fld_os_user, 0, ODS_12_0)
 	FIELD(f_mon_att_auth_method, nam_mon_auth_method, fld_auth_method, 0, ODS_12_0)
 	FIELD(f_mon_att_sys_flag, nam_mon_sys_flag, fld_flag, 0, ODS_12_0)
+	FIELD(f_mon_att_idle_timeout, nam_idle_timeout, fld_idle_timeout, 0, ODS_13_0)
+	FIELD(f_mon_att_idle_timer, nam_idle_timer, fld_idle_timer, 0, ODS_13_0)
+	FIELD(f_mon_att_stmt_timeout, nam_stmt_timeout, fld_stmt_timeout, 0, ODS_13_0)
 END_RELATION
 
 // Relation 35 (MON$TRANSACTIONS)
@@ -546,6 +549,8 @@ RELATION(nam_mon_statements, rel_mon_statements, ODS_11_1, rel_virtual)
 	FIELD(f_mon_stmt_sql_text, nam_mon_sql_text, fld_source, 0, ODS_11_1)
 	FIELD(f_mon_stmt_stat_id, nam_mon_stat_id, fld_stat_id, 0, ODS_11_1)
 	FIELD(f_mon_stmt_expl_plan, nam_mon_expl_plan, fld_source, 0, ODS_11_1)
+	FIELD(f_mon_stmt_timeout, nam_stmt_timeout, fld_stmt_timeout, 0, ODS_13_0)
+	FIELD(f_mon_stmt_timer, nam_stmt_timer, fld_stmt_timer, 0, ODS_13_0)
 END_RELATION
 
 // Relation 37 (MON$CALL_STACK)

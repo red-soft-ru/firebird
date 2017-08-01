@@ -475,6 +475,10 @@ ISC_STATUS ISC_EXPORT isc_dsql_sql_info(ISC_STATUS*,
 										short,
 										ISC_SCHAR*);
 
+ISC_STATUS ISC_EXPORT fb_dsql_set_timeout(ISC_STATUS*,
+										  isc_stmt_handle*,
+										  ISC_ULONG);
+
 void ISC_EXPORT isc_encode_date(const void*,
 								ISC_QUAD*);
 

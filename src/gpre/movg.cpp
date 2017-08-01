@@ -49,7 +49,7 @@ static void post_error(const Firebird::Arg::StatusVector&);
 
 void MOVG_move(const dsc* from, dsc* to)
 {
-	CVT_move(from, to, post_error);
+	CVT_move(from, to, 0, post_error);
 }
 
 

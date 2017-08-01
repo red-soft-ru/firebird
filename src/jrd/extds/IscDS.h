@@ -482,6 +482,13 @@ public:
 	virtual ISC_STATUS ISC_EXPORT fb_cancel_operation(Jrd::FbStatusVector*,
 											isc_db_handle*,
 											USHORT);
+
+	virtual ISC_STATUS ISC_EXPORT fb_database_crypt_callback(Jrd::FbStatusVector*,
+											void*);
+
+	virtual ISC_STATUS API_ROUTINE fb_dsql_set_timeout(Jrd::FbStatusVector*,
+										isc_stmt_handle*,
+										ULONG);
 };
 
 
@@ -573,6 +580,7 @@ protected:
 
 protected:
 	virtual void doPrepare(Jrd::thread_db* tdbb, const Firebird::string& sql);
+	virtual void doSetTimeout(Jrd::thread_db* tdbb, unsigned int timeout);
 	virtual void doExecute(Jrd::thread_db* tdbb);
 	virtual void doOpen(Jrd::thread_db* tdbb);
 	virtual bool doFetch(Jrd::thread_db* tdbb);

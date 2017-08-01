@@ -322,6 +322,28 @@ public:
 	void free(CheckStatusWrapper* status);
 	unsigned getFlags(CheckStatusWrapper* status);
 
+	unsigned int getTimeout(CheckStatusWrapper* status)
+	{
+		if (statement->rsr_rdb->rdb_port->port_protocol < PROTOCOL_STMT_TOUT)
+		{
+			status->setErrors(Arg::Gds(isc_wish_list).value());
+			return 0;
+		}
+
+		return statement->rsr_timeout;
+	}
+
+	void setTimeout(CheckStatusWrapper* status, unsigned int timeOut)
+	{
+		if (timeOut && statement->rsr_rdb->rdb_port->port_protocol < PROTOCOL_STMT_TOUT)
+		{
+			status->setErrors(Arg::Gds(isc_wish_list).value());
+			return;
+		}
+
+		statement->rsr_timeout = timeOut;
+	}
+
 public:
 	Statement(Rsr* handle, Attachment* a, unsigned aDialect)
 		: metadata(getPool(), this, NULL),
@@ -509,6 +531,11 @@ public:
 	void detach(CheckStatusWrapper* status);
 	void dropDatabase(CheckStatusWrapper* status);
 
+	unsigned int getIdleTimeout(CheckStatusWrapper* status);
+	void setIdleTimeout(CheckStatusWrapper* status, unsigned int timeOut);
+	unsigned int getStatementTimeout(CheckStatusWrapper* status);
+	void setStatementTimeout(CheckStatusWrapper* status, unsigned int timeOut);
+
 public:
 	Attachment(Rdb* handle, const PathName& path)
 		: rdb(handle), dbPath(getPool(), path)
@@ -529,7 +556,9 @@ public:
 	Statement* createStatement(CheckStatusWrapper* status, unsigned dialect);
 
 private:
+	void execWithCheck(CheckStatusWrapper* status, const string& stmt);
 	void freeClientData(CheckStatusWrapper* status, bool force = false);
+	SLONG getSingleInfo(CheckStatusWrapper* status, UCHAR infoItem);
 
 	Rdb* rdb;
 	const PathName dbPath;
@@ -693,7 +722,8 @@ static Rvnt* add_event(rem_port*);
 static void add_other_params(rem_port*, ClumpletWriter&, const ParametersSet&);
 static void add_working_directory(ClumpletWriter&, const PathName&);
 static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned flags,
-	ClumpletWriter& pb, const ParametersSet& parSet, PathName& node_name, PathName* ref_db_name);
+	ClumpletWriter& pb, const ParametersSet& parSet, PathName& node_name, PathName* ref_db_name,
+	Firebird::ICryptKeyCallback* cryptCb);
 static void batch_gds_receive(rem_port*, struct rmtque *, USHORT);
 static void batch_dsql_fetch(rem_port*, struct rmtque *, USHORT);
 static void clear_queue(rem_port*);
@@ -798,7 +828,7 @@ IAttachment* RProvider::attach(CheckStatusWrapper* status, const char* filename,
 		PathName node_name;
 
 		ClntAuthBlock cBlock(&expanded_name, &newDpb, &dpbParam);
-		rem_port* port = analyze(cBlock, expanded_name, flags, newDpb, dpbParam, node_name, NULL);
+		rem_port* port = analyze(cBlock, expanded_name, flags, newDpb, dpbParam, node_name, NULL, cryptCallback);
 
 		if (!port)
 		{
@@ -1420,7 +1450,7 @@ Firebird::IAttachment* RProvider::create(CheckStatusWrapper* status, const char*
 		PathName node_name;
 
 		ClntAuthBlock cBlock(&expanded_name, &newDpb, &dpbParam);
-		rem_port* port = analyze(cBlock, expanded_name, flags, newDpb, dpbParam, node_name, NULL);
+		rem_port* port = analyze(cBlock, expanded_name, flags, newDpb, dpbParam, node_name, NULL, cryptCallback);
 
 		if (!port)
 		{
@@ -1729,6 +1759,103 @@ void Attachment::dropDatabase(CheckStatusWrapper* status)
 }
 
 
+SLONG Attachment::getSingleInfo(CheckStatusWrapper* status, UCHAR infoItem)
+{
+	UCHAR buff[16];
+
+	getInfo(status, 1, &infoItem, sizeof(buff), buff);
+	if (status->getState() & IStatus::STATE_ERRORS)
+		return 0;
+
+	const UCHAR* p = buff;
+	const UCHAR* const end = buff + sizeof(buff);
+	UCHAR item;
+	while ((item = *p++) != isc_info_end && p < end - 1)
+	{
+		const SLONG length = gds__vax_integer(p, 2);
+		p += 2;
+
+		if (item == infoItem)
+			return gds__vax_integer(p, (SSHORT)length);
+
+		fb_assert(false);
+
+		p += length;
+	}
+	return 0;
+}
+
+
+void Attachment::execWithCheck(CheckStatusWrapper* status, const string& stmt)
+{
+/**************************************
+ *
+ *	Used to execute "SET xxx TIMEOUT" statements. Checks for protocol version
+ *  and convert expected SQL error into isc_wish_list error. The only possible
+ *  case is when modern network server works with legacy engine.
+ *
+ **************************************/
+	if (rdb->rdb_port->port_protocol >= PROTOCOL_STMT_TOUT)
+	{
+		execute(status, NULL, stmt.length(), stmt.c_str(), SQL_DIALECT_CURRENT, NULL, NULL, NULL, NULL);
+
+		if (!(status->getState() & IStatus::STATE_ERRORS))
+			return;
+
+		// handle isc_dsql_token_unk_err
+		const ISC_STATUS* errs = status->getErrors();
+
+		if (!fb_utils::containsErrorCode(errs, isc_sqlerr) ||
+			!fb_utils::containsErrorCode(errs, isc_dsql_token_unk_err))
+		{
+			return;
+		}
+
+		status->init();
+	}
+
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+}
+
+
+unsigned int Attachment::getIdleTimeout(CheckStatusWrapper* status)
+{
+	if (rdb->rdb_port->port_protocol >= PROTOCOL_STMT_TOUT)
+		return getSingleInfo(status, fb_info_ses_idle_timeout_att);
+
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+	return 0;
+}
+
+
+void Attachment::setIdleTimeout(CheckStatusWrapper* status, unsigned int timeOut)
+{
+	string stmt;
+	stmt.printf("SET SESSION IDLE TIMEOUT %lu", timeOut);
+
+	execWithCheck(status, stmt);
+}
+
+
+unsigned int Attachment::getStatementTimeout(CheckStatusWrapper* status)
+{
+	if (rdb->rdb_port->port_protocol >= PROTOCOL_STMT_TOUT)
+		return getSingleInfo(status, fb_info_statement_timeout_att);
+
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+	return 0;
+}
+
+
+void Attachment::setStatementTimeout(CheckStatusWrapper* status, unsigned int timeOut)
+{
+	string stmt;
+	stmt.printf("SET STATEMENT TIMEOUT %lu", timeOut);
+
+	execWithCheck(status, stmt);
+}
+
+
 Firebird::ITransaction* Statement::execute(CheckStatusWrapper* status, Firebird::ITransaction* apiTra,
 	IMessageMetadata* inMetadata, void* inBuffer, IMessageMetadata* outMetadata, void* outBuffer)
 {
@@ -1856,6 +1983,7 @@ Firebird::ITransaction* Statement::execute(CheckStatusWrapper* status, Firebird:
 		sqldata->p_sqldata_out_blr.cstr_length = out_blr_length;
 		sqldata->p_sqldata_out_blr.cstr_address = const_cast<UCHAR*>(out_blr);
 		sqldata->p_sqldata_out_message_number = 0;	// out_msg_type
+		sqldata->p_sqldata_timeout = statement->rsr_timeout;
 
 		send_packet(port, packet);
 
@@ -2020,6 +2148,7 @@ ResultSet* Statement::openCursor(CheckStatusWrapper* status, Firebird::ITransact
 		sqldata->p_sqldata_out_blr.cstr_length = out_blr_length;
 		sqldata->p_sqldata_out_blr.cstr_address = const_cast<UCHAR*>(out_blr);
 		sqldata->p_sqldata_out_message_number = 0;	// out_msg_type
+		sqldata->p_sqldata_timeout = statement->rsr_timeout;
 
 		send_partial_packet(port, packet);
 		defer_packet(port, packet, true);
@@ -4631,7 +4760,7 @@ Firebird::IService* RProvider::attachSvc(CheckStatusWrapper* status, const char*
 		if (newSpb.find(isc_spb_expected_db))
 			newSpb.getPath(refDbName);
 
-		rem_port* port = analyze(cBlock, expanded_name, flags, newSpb, spbParam, node_name, &refDbName);
+		rem_port* port = analyze(cBlock, expanded_name, flags, newSpb, spbParam, node_name, &refDbName, cryptCallback);
 
 		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
 		Rdb* rdb = port->port_context;
@@ -5400,7 +5529,8 @@ static void secureAuthentication(ClntAuthBlock& cBlock, rem_port* port)
 
 
 static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned flags,
-	ClumpletWriter& pb, const ParametersSet& parSet, PathName& node_name, PathName* ref_db_name)
+	ClumpletWriter& pb, const ParametersSet& parSet, PathName& node_name, PathName* ref_db_name,
+	Firebird::ICryptKeyCallback* cryptCb)
 {
 /**************************************
  *
@@ -5464,7 +5594,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 		}
 
 		port = INET_analyze(&cBlock, attach_name, node_name.c_str(), flags & ANALYZE_UV, pb,
-			cBlock.getConfig(), ref_db_name, inet_af);
+			cBlock.getConfig(), ref_db_name, cryptCb, inet_af);
 	}
 
 	// We have a local connection string. If it's a file on a network share,
@@ -5498,7 +5628,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 				ISC_utf8ToSystem(node_name);
 
 				port = INET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_UV, pb,
-					cBlock.getConfig(), ref_db_name);
+					cBlock.getConfig(), ref_db_name, cryptCb);
 			}
 		}
 #endif
@@ -5527,7 +5657,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 			if (!port)
 			{
 				port = INET_analyze(&cBlock, attach_name, INET_LOCALHOST, flags & ANALYZE_UV, pb,
-					cBlock.getConfig(), ref_db_name);
+					cBlock.getConfig(), ref_db_name, cryptCb);
 			}
 		}
 	}
@@ -6486,7 +6616,7 @@ static void mov_dsql_message(const UCHAR* from_msg,
 		// Safe const cast, we are going to move from it to anywhere.
 		from.dsc_address = const_cast<UCHAR*>(from_msg) + (IPTR) from.dsc_address;
 		to.dsc_address = to_msg + (IPTR) to.dsc_address;
-		CVT_move(&from, &to, move_error);
+		CVT_move(&from, &to, DecimalStatus(DEC_Errors), move_error);
 	}
 }
 

@@ -1664,6 +1664,58 @@ C --
       PARAMETER (GDS__dsql_window_duplicate            = 335545125)
       INTEGER*4 GDS__sql_too_long                    
       PARAMETER (GDS__sql_too_long                     = 335545126)
+      INTEGER*4 GDS__cfg_stmt_timeout                
+      PARAMETER (GDS__cfg_stmt_timeout                 = 335545127)
+      INTEGER*4 GDS__att_stmt_timeout                
+      PARAMETER (GDS__att_stmt_timeout                 = 335545128)
+      INTEGER*4 GDS__req_stmt_timeout                
+      PARAMETER (GDS__req_stmt_timeout                 = 335545129)
+      INTEGER*4 GDS__att_shut_killed                 
+      PARAMETER (GDS__att_shut_killed                  = 335545130)
+      INTEGER*4 GDS__att_shut_idle                   
+      PARAMETER (GDS__att_shut_idle                    = 335545131)
+      INTEGER*4 GDS__att_shut_db_down                
+      PARAMETER (GDS__att_shut_db_down                 = 335545132)
+      INTEGER*4 GDS__att_shut_engine                 
+      PARAMETER (GDS__att_shut_engine                  = 335545133)
+      INTEGER*4 GDS__overriding_without_identity     
+      PARAMETER (GDS__overriding_without_identity      = 335545134)
+      INTEGER*4 GDS__overriding_system_invalid       
+      PARAMETER (GDS__overriding_system_invalid        = 335545135)
+      INTEGER*4 GDS__overriding_user_invalid         
+      PARAMETER (GDS__overriding_user_invalid          = 335545136)
+      INTEGER*4 GDS__overriding_system_missing       
+      PARAMETER (GDS__overriding_system_missing        = 335545137)
+      INTEGER*4 GDS__decprecision_err                
+      PARAMETER (GDS__decprecision_err                 = 335545138)
+      INTEGER*4 GDS__decfloat_divide_by_zero         
+      PARAMETER (GDS__decfloat_divide_by_zero          = 335545139)
+      INTEGER*4 GDS__decfloat_inexact_result         
+      PARAMETER (GDS__decfloat_inexact_result          = 335545140)
+      INTEGER*4 GDS__decfloat_invalid_operation      
+      PARAMETER (GDS__decfloat_invalid_operation       = 335545141)
+      INTEGER*4 GDS__decfloat_overflow               
+      PARAMETER (GDS__decfloat_overflow                = 335545142)
+      INTEGER*4 GDS__decfloat_underflow              
+      PARAMETER (GDS__decfloat_underflow               = 335545143)
+      INTEGER*4 GDS__subfunc_notdef                  
+      PARAMETER (GDS__subfunc_notdef                   = 335545144)
+      INTEGER*4 GDS__subproc_notdef                  
+      PARAMETER (GDS__subproc_notdef                   = 335545145)
+      INTEGER*4 GDS__subfunc_signat                  
+      PARAMETER (GDS__subfunc_signat                   = 335545146)
+      INTEGER*4 GDS__subproc_signat                  
+      PARAMETER (GDS__subproc_signat                   = 335545147)
+      INTEGER*4 GDS__subfunc_defvaldecl              
+      PARAMETER (GDS__subfunc_defvaldecl               = 335545148)
+      INTEGER*4 GDS__subproc_defvaldecl              
+      PARAMETER (GDS__subproc_defvaldecl               = 335545149)
+      INTEGER*4 GDS__subfunc_not_impl                
+      PARAMETER (GDS__subfunc_not_impl                 = 335545150)
+      INTEGER*4 GDS__subproc_not_impl                
+      PARAMETER (GDS__subproc_not_impl                 = 335545151)
+      INTEGER*4 GDS__sysf_invalid_hash_algorithm     
+      PARAMETER (GDS__sysf_invalid_hash_algorithm      = 335545152)
       INTEGER*4 GDS__gfix_db_name                    
       PARAMETER (GDS__gfix_db_name                     = 335740929)
       INTEGER*4 GDS__gfix_invalid_sw                 
@@ -1796,6 +1848,8 @@ C --
       PARAMETER (GDS__dsql_wrong_param_num             = 336003111)
       INTEGER*4 GDS__dsql_invalid_drop_ss_clause     
       PARAMETER (GDS__dsql_invalid_drop_ss_clause      = 336003112)
+      INTEGER*4 GDS__upd_ins_cannot_default          
+      PARAMETER (GDS__upd_ins_cannot_default           = 336003113)
       INTEGER*4 GDS__dyn_filter_not_found            
       PARAMETER (GDS__dyn_filter_not_found             = 336068645)
       INTEGER*4 GDS__dyn_func_not_found              
@@ -1948,6 +2002,8 @@ C --
       PARAMETER (GDS__dyn_cant_use_in_foreignkey       = 336068897)
       INTEGER*4 GDS__dyn_defvaldecl_package_func     
       PARAMETER (GDS__dyn_defvaldecl_package_func      = 336068898)
+      INTEGER*4 GDS__dyn_cant_use_zero_inc_ident     
+      PARAMETER (GDS__dyn_cant_use_zero_inc_ident      = 336068904)
       INTEGER*4 GDS__gbak_unknown_switch             
       PARAMETER (GDS__gbak_unknown_switch              = 336330753)
       INTEGER*4 GDS__gbak_page_size_missing          

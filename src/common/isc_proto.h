@@ -39,10 +39,6 @@ void	iscLogStatus(const TEXT* text, const ISC_STATUS* status_vector);
 void	iscLogStatus(const TEXT* text, const Firebird::IStatus* status);
 void	iscLogException(const TEXT* text, const Firebird::Exception& e);
 
-#ifdef WIN9X_SUPPORT
-bool	ISC_is_WinNT();
-#endif
-
 #ifdef WIN_NT
 struct _SECURITY_ATTRIBUTES* ISC_get_security_desc();
 #endif

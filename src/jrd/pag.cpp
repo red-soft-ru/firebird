@@ -1717,6 +1717,14 @@ void PAG_set_db_readonly(thread_db* tdbb, bool flag)
 		// for WRITE operations
 		header->hdr_flags &= ~hdr_read_only;
 		dbb->dbb_flags &= ~DBB_read_only;
+
+		// This is necessary as dbb's Next could be less than OAT.
+		// And this is safe as we currently in exclusive attachment and
+		// all executed transactions was read-only.
+		dbb->dbb_next_transaction = Ods::getNT(header);
+		dbb->dbb_oldest_transaction = Ods::getOIT(header);
+		dbb->dbb_oldest_active = Ods::getOAT(header);
+		dbb->dbb_oldest_snapshot = Ods::getOST(header);
 	}
 
 	CCH_MARK_MUST_WRITE(tdbb, &window);

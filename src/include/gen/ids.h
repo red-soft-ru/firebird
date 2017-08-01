@@ -518,6 +518,9 @@
 	const USHORT  f_mon_att_remote_os_user = 17;
 	const USHORT  f_mon_att_auth_method = 18;
 	const USHORT  f_mon_att_sys_flag = 19;
+	const USHORT  f_mon_att_idle_timeout = 20;
+	const USHORT  f_mon_att_idle_timer = 21;
+	const USHORT  f_mon_att_stmt_timeout = 22;
 
 
 // Relation 35 (MON$TRANSACTIONS)
@@ -547,6 +550,8 @@
 	const USHORT  f_mon_stmt_sql_text = 5;
 	const USHORT  f_mon_stmt_stat_id = 6;
 	const USHORT  f_mon_stmt_expl_plan = 7;
+	const USHORT  f_mon_stmt_timeout = 8;
+	const USHORT  f_mon_stmt_timer = 9;
 
 
 // Relation 37 (MON$CALL_STACK)

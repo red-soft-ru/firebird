@@ -33,10 +33,7 @@
 #define CLASSES_SYNCHRONIZE_H
 
 #include "../common/classes/SyncObject.h"
-
-#ifndef WIN_NT
-#include "fb_pthread.h"
-#endif
+#include "../common/ThreadStart.h"
 
 
 namespace Firebird {

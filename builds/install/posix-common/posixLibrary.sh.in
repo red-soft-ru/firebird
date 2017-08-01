@@ -1175,7 +1175,7 @@ extractBuildroot() {
 #  depending upon presence of startup script starts super or classic server
 
 startFirebird() {
-	if [ "${fb_install_prefix}" == "${default_prefix}" ]
+	if [ "${fb_install_prefix}" = "${default_prefix}" ]
 	then
 		if standaloneServerInstalled; then
 			startService

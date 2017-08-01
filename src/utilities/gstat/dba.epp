@@ -56,6 +56,7 @@
 #include "../common/classes/UserBlob.h"
 #include "../common/os/os_utils.h"
 #include "../common/StatusHolder.h"
+#include "../common/ThreadStart.h"
 
 using MsgFormat::SafeArg;
 
@@ -675,10 +676,15 @@ int gstat(Firebird::UtilSvc* uSvc)
 					++non;
 			}
 
+			bool hasCrypted()
+			{
+				return enc > 0;
+			}
+
 		private:
 			ULONG enc, non;
 		};
-		Statist data, index, blob;
+		Statist data, index, blob, other;
 
 		for (page = 0; true; ++page)
 		{
@@ -699,6 +705,9 @@ int gstat(Firebird::UtilSvc* uSvc)
 			case pag_blob:
 				blob.log(p->pag_flags);
 				break;
+			default:
+				other.log(p->pag_flags);
+				break;
 			}
 		}
 
@@ -706,6 +715,8 @@ int gstat(Firebird::UtilSvc* uSvc)
 		data.print(52);
 		index.print(53);
 		blob.print(54);
+		if (other.hasCrypted())
+			other.print(58);
 
 		dba_exit(FINI_OK, tddba);
 	}

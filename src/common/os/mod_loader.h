@@ -70,23 +70,15 @@ public:
 		/// Destructor
 		virtual ~Module() {}
 
-#ifdef WIN_NT
 		const Firebird::PathName fileName;
-#endif
 
 	protected:
 		/// The constructor is protected so normal code can't allocate instances
 		/// of the class, but the class itself is still able to be subclassed.
-#ifdef WIN_NT
 		Module(MemoryPool& pool, const Firebird::PathName& aFileName)
 			: fileName(pool, aFileName)
 		{
 		}
-#else
-		Module()
-		{
-		}
-#endif
 
 	private:
 		/// Copy construction is not supported, hence the copy constructor is private

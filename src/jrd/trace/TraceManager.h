@@ -121,9 +121,18 @@ public:
 
 	inline bool needs(unsigned e)
 	{
+		if (!active)
+			return 0;
+
 		if (changeNumber != getStorage()->getChangeNumber())
 			update_sessions();
 		return trace_needs & (FB_CONST64(1) << e);
+	}
+
+	// should be called after attachment user is authenticated
+	void activate()
+	{
+		active = true;
 	}
 
 	/* DSQL-friendly routines to call Trace API hooks.
@@ -229,6 +238,7 @@ private:
 	static Firebird::GlobalPtr<StorageInstance, Firebird::InstanceControl::PRIORITY_DELETE_FIRST> storageInstance;
 
 	ULONG changeNumber;
+	bool active;
 };
 
 }

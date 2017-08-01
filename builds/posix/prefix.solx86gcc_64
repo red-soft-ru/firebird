@@ -27,7 +27,7 @@
 # ./configure --build=x86_64-pc-solaris2.10
 # copy libncurses.a from the ncurses build to gen/firebird/lib
 # make sure that make.defaults uses -lncurses instead of -lcurses for
-# LINK_LIBS and STATICLINK_LIBS e.g. -lncurses -leditline
+# LINK_LIBS and SO_LINK_LIBS e.g. -lncurses -leditline
 
 WARNINGS=-Wall -Wno-switch -Wno-parentheses -Wno-unused-variable -Wno-non-virtual-dtor
 COMM_SOLX_FLAGS:=-DSOLARIS -DBSD_COMP -DAMD64 -pipe -fmessage-length=0 -MMD -fPIC
@@ -46,7 +46,6 @@ PROD_FLAGS=-w $(COMM_SOLX_FLAGS) -O2
 DEV_FLAGS=$(COMM_SOLX_FLAGS) -ggdb $(WARNINGS)
 ifdef SFIO
 LINK_LIBS+=$(SFIO_LDFLAGS) -lstdio -lsfio
-STATICLINK_LIBS+=$(SFIO_LDFLAGS) -lstdio -lsfio
 SO_LINK_LIBS+=$(SFIO_LDFLAGS) -lstdio -lsfio
 endif
 

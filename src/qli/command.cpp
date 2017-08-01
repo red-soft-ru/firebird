@@ -30,7 +30,6 @@
 #include "../qli/parse.h"
 #include "../qli/compile.h"
 #include "../qli/exe.h"
-//#include "../jrd/license.h"
 #include "../qli/all_proto.h"
 #include "../qli/err_proto.h"
 #include "../qli/exe_proto.h"

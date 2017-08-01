@@ -39,6 +39,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/stack.h"
 #include "../common/classes/timestamp.h"
+#include "../common/ThreadStart.h"
 
 #include "../jrd/EngineInterface.h"
 
@@ -77,7 +78,7 @@ namespace Jrd
 	class jrd_rel;
 	class jrd_prc;
 	class Trigger;
-	typedef Firebird::ObjectsArray<Trigger> trig_vec;
+	class TrigVector;
 	class Function;
 	class JrdStatement;
 	class Validation;
@@ -114,9 +115,35 @@ struct DdlTriggerContext
 };
 
 
-struct bid;
+// Attachment flags
+
+const ULONG ATT_no_cleanup			= 0x00001L;	// Don't expunge, purge, or garbage collect
+const ULONG ATT_shutdown			= 0x00002L;	// attachment has been shutdown
+const ULONG ATT_shutdown_manager	= 0x00004L;	// attachment requesting shutdown
+const ULONG ATT_exclusive			= 0x00008L;	// attachment wants exclusive database access
+const ULONG ATT_attach_pending		= 0x00010L;	// Indicate attachment is only pending
+const ULONG ATT_exclusive_pending	= 0x00020L;	// Indicate exclusive attachment pending
+const ULONG ATT_notify_gc			= 0x00040L;	// Notify garbage collector to expunge, purge ..
+const ULONG ATT_garbage_collector	= 0x00080L;	// I'm a garbage collector
+const ULONG ATT_cancel_raise		= 0x00100L;	// Cancel currently running operation
+const ULONG ATT_cancel_disable		= 0x00200L;	// Disable cancel operations
+const ULONG ATT_no_db_triggers		= 0x00400L;	// Don't execute database triggers
+const ULONG ATT_manual_lock			= 0x00800L;	// Was locked manually
+const ULONG ATT_async_manual_lock	= 0x01000L;	// Async mutex was locked manually
+//const ULONG ATT_purge_started		= 0x02000L; // Purge already started - avoid 2 purges at once
+const ULONG ATT_overwrite_check		= 0x02000L;	// Attachment checks is it possible to overwrite DB
+const ULONG ATT_system				= 0x04000L; // Special system attachment
+const ULONG ATT_creator				= 0x08000L; // This attachment created the DB
+const ULONG ATT_monitor_done		= 0x10000L; // Monitoring data is refreshed
+const ULONG ATT_security_db			= 0x20000L; // Attachment used for security purposes
+const ULONG ATT_mapping				= 0x40000L; // Attachment used for mapping auth block
+const ULONG ATT_crypt_thread		= 0x80000L; // Attachment from crypt thread
+
+const ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 
 class Attachment;
+struct bid;
+
 
 //
 // RefCounted part of Attachment object, placed into permanent pool
@@ -125,7 +152,7 @@ class StableAttachmentPart : public Firebird::RefCounted, public Firebird::Globa
 {
 public:
 	explicit StableAttachmentPart(Attachment* handle)
-		: att(handle), jAtt(NULL)
+		: att(handle), jAtt(NULL), shutError(0)
 	{ }
 
 	Attachment* getHandle() throw()
@@ -144,6 +171,7 @@ public:
 			jAtt->detachEngine();
 
 		jAtt = ja;
+		shutError = 0;
 	}
 
 	Firebird::Mutex* getMutex(bool useAsync = false, bool forceAsync = false)
@@ -153,6 +181,11 @@ public:
 			fb_assert(!mainMutex.locked());
 		}
 		return useAsync ? &asyncMutex : &mainMutex;
+	}
+
+	Firebird::Mutex* getBlockingMutex()
+	{
+		return &blockingMutex;
 	}
 
 	void cancel()
@@ -172,17 +205,31 @@ public:
 		return getInterface()->getTransactionInterface(status, tra);
 	}
 
-	void manualLock(ULONG& flags);
+	void manualLock(ULONG& flags, const ULONG whatLock = ATT_manual_lock | ATT_async_manual_lock);
 	void manualUnlock(ULONG& flags);
 	void manualAsyncUnlock(ULONG& flags);
+
+	void setShutError(ISC_STATUS code)
+	{
+		if (!shutError)
+			shutError = code;
+	}
+
+	ISC_STATUS getShutError() const
+	{
+		return shutError;
+	}
 
 private:
 	Attachment* att;
 	JAttachment* jAtt;
+	ISC_STATUS shutError;
 
 	// These mutexes guarantee attachment existence. After releasing both of them with possibly
 	// zero att_use_count one should check does attachment still exists calling getHandle().
 	Firebird::Mutex mainMutex, asyncMutex;
+	// This mutex guarantees attachment is not accessed by more than single external thread.
+	Firebird::Mutex blockingMutex;
 };
 
 //
@@ -295,13 +342,15 @@ public:
 
 	vec<jrd_rel*>*					att_relations;			// relation vector
 	Firebird::Array<jrd_prc*>		att_procedures;			// scanned procedures
-	trig_vec*						att_triggers[DB_TRIGGER_MAX];
-	trig_vec*						att_ddl_triggers;
+	TrigVector*						att_triggers[DB_TRIGGER_MAX];
+	TrigVector*						att_ddl_triggers;
 	Firebird::Array<Function*>		att_functions;			// User defined functions
 
 	Firebird::Array<JrdStatement*>	att_internal;			// internal statements
 	Firebird::Array<JrdStatement*>	att_dyn_req;			// internal dyn statements
 	Firebird::ICryptKeyCallback*	att_crypt_callback;		// callback for DB crypt
+	Firebird::DecimalStatus			att_dec_status;			// error handling and rounding
+	Firebird::DecimalBinding		att_dec_binding;		// use legacy datatype for DecFloat in outer world
 
 	jrd_req* findSystemRequest(thread_db* tdbb, USHORT id, USHORT which);
 
@@ -357,7 +406,7 @@ public:
 		const Firebird::ByteChunk& chunk);
 
 	void signalCancel();
-	void signalShutdown();
+	void signalShutdown(ISC_STATUS code);
 
 	void mergeStats();
 
@@ -378,37 +427,70 @@ public:
 
 	JAttachment* getInterface() throw();
 
+	unsigned int getIdleTimeout() const
+	{
+		return att_idle_timeout;
+	}
+
+	void setIdleTimeout(unsigned int timeOut)
+	{
+		att_idle_timeout = timeOut;
+	}
+
+	unsigned int getActualIdleTimeout() const;
+
+	unsigned int getStatementTimeout() const
+	{
+		return att_stmt_timeout;
+	}
+
+	void setStatementTimeout(unsigned int timeOut)
+	{
+		att_stmt_timeout = timeOut;
+	}
+
+	// evaluate new value or clear idle timer
+	void setupIdleTimer(bool clear);
+
+	// returns time when idle timer will be expired, if set
+	bool getIdleTimerTimestamp(Firebird::TimeStamp& ts) const;
+
 private:
 	Attachment(MemoryPool* pool, Database* dbb);
 	~Attachment();
+
+	class IdleTimer FB_FINAL :
+		public Firebird::RefCntIface<Firebird::ITimerImpl<IdleTimer, Firebird::CheckStatusWrapper> >
+	{
+	public:
+		explicit IdleTimer(JAttachment* jAtt) :
+			m_attachment(jAtt),
+			m_fireTime(0),
+			m_expTime(0)
+		{ }
+
+		// ITimer implementation
+		void handler();
+		int release();
+
+		// Set timeout, seconds
+		void reset(unsigned int timeout);
+
+		time_t getExpiryTime() const
+		{
+			return m_expTime;
+		}
+
+	private:
+		Firebird::RefPtr<JAttachment> m_attachment;
+		time_t m_fireTime;		// when ITimer will fire, could be less than m_expTime
+		time_t m_expTime;		// when actual idle timeout will expire
+	};
+
+	unsigned int att_idle_timeout;		// seconds
+	unsigned int att_stmt_timeout;		// milliseconds
+	Firebird::RefPtr<IdleTimer> att_idle_timer;
 };
-
-
-// Attachment flags
-
-const ULONG ATT_no_cleanup			= 0x00001L;	// Don't expunge, purge, or garbage collect
-const ULONG ATT_shutdown			= 0x00002L;	// attachment has been shutdown
-const ULONG ATT_shutdown_manager	= 0x00004L;	// attachment requesting shutdown
-const ULONG ATT_exclusive			= 0x00008L;	// attachment wants exclusive database access
-const ULONG ATT_attach_pending		= 0x00010L;	// Indicate attachment is only pending
-const ULONG ATT_exclusive_pending	= 0x00020L;	// Indicate exclusive attachment pending
-const ULONG ATT_notify_gc			= 0x00040L;	// Notify garbage collector to expunge, purge ..
-const ULONG ATT_garbage_collector	= 0x00080L;	// I'm a garbage collector
-const ULONG ATT_cancel_raise		= 0x00100L;	// Cancel currently running operation
-const ULONG ATT_cancel_disable		= 0x00200L;	// Disable cancel operations
-const ULONG ATT_no_db_triggers		= 0x00400L;	// Don't execute database triggers
-const ULONG ATT_manual_lock			= 0x00800L;	// Was locked manually
-const ULONG ATT_async_manual_lock	= 0x01000L;	// Async mutex was locked manually
-//const ULONG ATT_purge_started		= 0x02000L; // Purge already started - avoid 2 purges at once
-const ULONG ATT_overwrite_check		= 0x02000L;	// Attachment checks is it possible to overwrite DB
-const ULONG ATT_system				= 0x04000L; // Special system attachment
-const ULONG ATT_creator				= 0x08000L; // This attachment created the DB
-const ULONG ATT_monitor_done		= 0x10000L; // Monitoring data is refreshed
-const ULONG ATT_security_db			= 0x20000L; // Attachment used for security purposes
-const ULONG ATT_mapping				= 0x40000L; // Attachment used for mapping auth block
-const ULONG ATT_crypt_thread		= 0x80000L; // Attachment from crypt thread
-
-const ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 
 
 inline bool Attachment::locksmith(thread_db* tdbb, SystemPrivilege sp) const
@@ -561,7 +643,6 @@ private:
 	// "public" interface for internal (system) attachment
 	Firebird::RefPtr<JAttachment> m_JAttachment;
 };
-
 
 } // namespace Jrd
 

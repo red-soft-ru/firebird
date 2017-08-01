@@ -38,6 +38,9 @@ if "%ERRLEV%"=="1" goto :END
 call :LibTomMath
 if "%ERRLEV%"=="1" goto :END
 
+call :decNumber
+if "%ERRLEV%"=="1" goto :END
+
 call :zlib
 if "%ERRLEV%"=="1" goto :END
 
@@ -130,6 +133,21 @@ if errorlevel 1 call :boot2 libtommath_%FB_OBJ_DIR%
 @echo Building LibTomMath (%FB_OBJ_DIR%)...
 @call compile.bat %FB_ROOT_PATH%\extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log libtommath
 if errorlevel 1 call :boot2 libtommath_%FB_OBJ_DIR%
+@call set_build_target.bat %*
+goto :EOF
+
+::===================
+:: BUILD decNumber
+:decNumber
+@echo.
+@call set_build_target.bat %* RELEASE
+@echo Building decNumber (%FB_OBJ_DIR%)...
+@call compile.bat %FB_ROOT_PATH%\extern\decNumber\msvc\decNumber_MSVC%MSVC_VERSION% decNumber_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log decNumber
+if errorlevel 1 call :boot2 decNumber_%FB_OBJ_DIR%
+@call set_build_target.bat %* DEBUG
+@echo Building decNumber (%FB_OBJ_DIR%)...
+@call compile.bat %FB_ROOT_PATH%\extern\decNumber\msvc\decNumber_MSVC%MSVC_VERSION% decNumber_%FB_OBJ_DIR%_%FB_TARGET_PLATFORM%.log decNumber
+if errorlevel 1 call :boot2 decNumber_%FB_OBJ_DIR%
 @call set_build_target.bat %*
 goto :EOF
 

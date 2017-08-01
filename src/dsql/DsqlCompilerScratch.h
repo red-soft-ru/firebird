@@ -70,7 +70,7 @@ public:
 
 public:
 	DsqlCompilerScratch(MemoryPool& p, dsql_dbb* aDbb, jrd_tra* aTransaction,
-				DsqlCompiledStatement* aStatement)
+				DsqlCompiledStatement* aStatement, DsqlCompilerScratch* aMainScratch = NULL)
 		: BlrDebugWriter(p),
 		  dbb(aDbb),
 		  transaction(aTransaction),
@@ -79,7 +79,6 @@ public:
 		  nestingLevel(0),
 		  ports(p),
 		  relation(NULL),
-		  procedure(NULL),
 		  mainContext(p),
 		  context(&mainContext),
 		  unionContext(p),
@@ -115,6 +114,7 @@ public:
 		  ctes(p),
 		  cteAliases(p),
 		  psql(false),
+		  mainScratch(aMainScratch),
 		  subFunctions(p),
 		  subProcedures(p)
 	{
@@ -247,43 +247,11 @@ public:
 	bool isPsql() const { return psql; }
 	void setPsql(bool value) { psql = value; }
 
-	dsql_udf* getSubFunction(const Firebird::MetaName& name)
-	{
-		dsql_udf* subFunc = NULL;
-		subFunctions.get(name, subFunc);
-		return subFunc;
-	}
+	DeclareSubFuncNode* getSubFunction(const Firebird::MetaName& name);
+	void putSubFunction(DeclareSubFuncNode* subFunc, bool replace = false);
 
-	void putSubFunction(dsql_udf* subFunc)
-	{
-		if (subFunctions.exist(subFunc->udf_name.identifier))
-		{
-			using namespace Firebird;
-			status_exception::raise(
-				Arg::Gds(isc_dsql_duplicate_spec) << subFunc->udf_name.identifier);
-		}
-
-		subFunctions.put(subFunc->udf_name.identifier, subFunc);
-	}
-
-	dsql_prc* getSubProcedure(const Firebird::MetaName& name)
-	{
-		dsql_prc* subProc = NULL;
-		subProcedures.get(name, subProc);
-		return subProc;
-	}
-
-	void putSubProcedure(dsql_prc* subProc)
-	{
-		if (subProcedures.exist(subProc->prc_name.identifier))
-		{
-			using namespace Firebird;
-			status_exception::raise(
-				Arg::Gds(isc_dsql_duplicate_spec) << subProc->prc_name.identifier);
-		}
-
-		subProcedures.put(subProc->prc_name.identifier, subProc);
-	}
+	DeclareSubProcNode* getSubProcedure(const Firebird::MetaName& name);
+	void putSubProcedure(DeclareSubProcNode* subProc, bool replace = false);
 
 private:
 	SelectExprNode* pass1RecursiveCte(SelectExprNode* input);
@@ -300,7 +268,6 @@ public:
 	unsigned nestingLevel;				// begin...end nesting level
 	Firebird::Array<dsql_msg*> ports;	// Port messages
 	dsql_rel* relation;					// relation created by this request (for DDL)
-	dsql_prc* procedure;				// procedure created by this request (for DDL)
 	DsqlContextStack mainContext;
 	DsqlContextStack* context;
 	DsqlContextStack unionContext;		// Save contexts for views of unions
@@ -340,8 +307,9 @@ private:
 	Firebird::HalfStaticArray<SelectExprNode*, 4> ctes; // common table expressions
 	Firebird::HalfStaticArray<const Firebird::string*, 4> cteAliases; // CTE aliases in recursive members
 	bool psql;
-	Firebird::GenericMap<Firebird::Left<Firebird::MetaName, dsql_udf*> > subFunctions;
-	Firebird::GenericMap<Firebird::Left<Firebird::MetaName, dsql_prc*> > subProcedures;
+	DsqlCompilerScratch* mainScratch;
+	Firebird::GenericMap<Firebird::Left<Firebird::MetaName, DeclareSubFuncNode*> > subFunctions;
+	Firebird::GenericMap<Firebird::Left<Firebird::MetaName, DeclareSubProcNode*> > subProcedures;
 };
 
 class PsqlChanger

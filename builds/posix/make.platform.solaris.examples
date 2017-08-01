@@ -30,7 +30,6 @@ DEV_FLAGS=$(COMM_SOLX_FLAGS) -ggdb -g3 -p $(WARNINGS)
 
 ifdef SFIO
 LINK_LIBS+=$(SFIO_LDFLAGS) -lstdio -lsfio
-STATICLINK_LIBS+=$(SFIO_LDFLAGS) -lstdio -lsfio
 SO_LINK_LIBS+=$(SFIO_LDFLAGS) -lstdio -lsfio
 endif
 

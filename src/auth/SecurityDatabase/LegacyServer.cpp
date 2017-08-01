@@ -134,6 +134,7 @@ public:
 	// IServer implementation
 	int authenticate(Firebird::CheckStatusWrapper* status, Firebird::IServerBlock* sBlock,
 		Firebird::IWriter* writerInterface);
+	void setDbCryptCallback(Firebird::CheckStatusWrapper*, Firebird::ICryptKeyCallback*) { }	// ignore
 	int release();
 
 private:
@@ -292,8 +293,7 @@ void SecurityDatabase::prepare()
 	dpb.insertString(isc_dpb_trusted_auth, DBA_USER_NAME, fb_strlen(DBA_USER_NAME));
 
 	// Do not use other providers except current engine
-	const char* providers = "Providers=" CURRENT_ENGINE;
-	dpb.insertString(isc_dpb_config, providers, fb_strlen(providers));
+	dpb.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
 
 	isc_db_handle tempHandle = 0;
 	isc_attach_database(status, 0, secureDbName, &tempHandle,
@@ -352,6 +352,7 @@ int SecurityDatabase::verify(IWriter* authBlock, IServerBlock* sBlock)
 	pw1[MAX_LEGACY_PASSWORD_LENGTH] = 0;
 	string storedHash(pw1, MAX_LEGACY_PASSWORD_LENGTH);
 	storedHash.rtrim();
+	storedHash.recalculate_length();
 
 	string newHash;
 	LegacyHash::hash(newHash, login, passwordEnc, storedHash);

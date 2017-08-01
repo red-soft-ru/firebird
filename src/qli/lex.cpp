@@ -51,10 +51,6 @@ using MsgFormat::SafeArg;
 #include <unistd.h>
 #endif
 
-//#ifdef HAVE_CTYPES_H
-//#include <ctypes.h>
-//#endif
-
 #ifdef HAVE_IO_H
 #include <io.h> // isatty
 #endif

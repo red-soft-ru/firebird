@@ -30,11 +30,13 @@
 #include "../jrd/align.h"
 #include "../common/gdsassert.h"
 #include "../remote/parse_proto.h"
+#include "../common/DecFloat.h"
 
 #if !defined(DEV_BUILD) || (defined(DEV_BUILD) && defined(WIN_NT))
 #include "../yvalve/gds_proto.h"	// gds__log()
 #endif
 
+using namespace Firebird;
 
 static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length);
 
@@ -156,7 +158,7 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 	USHORT count = *blr++;
 	count += (*blr++) << 8;
 
-	Firebird::AutoPtr<rem_fmt> format(FB_NEW rem_fmt(count));
+	AutoPtr<rem_fmt> format(FB_NEW rem_fmt(count));
 
 	ULONG net_length = 0;
 	ULONG offset = 0;
@@ -284,6 +286,18 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			desc->dsc_dtype = dtype_double;
 			desc->dsc_length = sizeof(double);
 			align = type_alignments[dtype_double];
+			break;
+
+		case blr_dec64:
+			desc->dsc_dtype = dtype_dec64;
+			desc->dsc_length = sizeof(Decimal64);
+			align = type_alignments[dtype_dec64];
+			break;
+
+		case blr_dec128:
+			desc->dsc_dtype = dtype_dec128;
+			desc->dsc_length = sizeof(Decimal128);
+			align = type_alignments[dtype_dec128];
 			break;
 
 		// this case cannot occur as switch paramater is char and blr_blob

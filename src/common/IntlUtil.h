@@ -80,6 +80,8 @@ public:
 	static bool initUnicodeCollation(texttype* tt, charset* cs, const ASCII* name,
 		USHORT attributes, const UCharBuffer& specificAttributes, const string& configInfo);
 
+	static void finiCharset(charset* cs);
+
 	static ULONG toLower(Jrd::CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
 		const ULONG* exceptions);
 	static ULONG toUpper(Jrd::CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,

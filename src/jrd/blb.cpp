@@ -999,13 +999,13 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc, const ValueExprNod
 
 	if (field)
 	{
-		if ((fieldNode = ExprNode::as<FieldNode>(field)))
+		if ((fieldNode = nodeAs<FieldNode>(field)))
 		{
 			// We should not materialize the blob if the destination field
 			// stream (nod_union, for example) doesn't have a relation.
 			simpleMove = tdbb->getRequest()->req_rpb[fieldNode->fieldStream].rpb_relation == NULL;
 		}
-		else if (!(ExprNode::is<ParameterNode>(field) || ExprNode::is<VariableNode>(field)))
+		else if (!(nodeIs<ParameterNode>(field) || nodeIs<VariableNode>(field)))
 			BUGCHECK(199);	// msg 199 expected field node
 	}
 
@@ -2791,7 +2791,7 @@ static void slice_callback(array_slice* arg, ULONG /*count*/, DSC* descriptors)
 			DynamicVaryStr<1024> tmp_buffer;
 			const USHORT tmp_len = array_desc->dsc_length;
 			const char* p;
-			const USHORT len = MOV_make_string(slice_desc, INTL_TEXT_TYPE(*array_desc), &p,
+			const USHORT len = MOV_make_string(tdbb, slice_desc, INTL_TEXT_TYPE(*array_desc), &p,
 											   tmp_buffer.getBuffer(tmp_len), tmp_len);
 			memcpy(array_desc->dsc_address, &len, sizeof(USHORT));
 			memcpy(array_desc->dsc_address + sizeof(USHORT), p, (int) len);

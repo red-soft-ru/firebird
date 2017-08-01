@@ -1480,89 +1480,66 @@ void logAndDie(const char* text)
 #endif
 }
 
+UCHAR sqlTypeToDscType(SSHORT sqlType)
+{
+	switch (sqlType)
+	{
+	case SQL_VARYING:
+		return dtype_varying;
+	case SQL_TEXT:
+		return dtype_text;
+	case SQL_NULL:
+		return dtype_text;
+	case SQL_DOUBLE:
+		return dtype_double;
+	case SQL_FLOAT:
+		return dtype_real;
+	case SQL_D_FLOAT:
+		return dtype_d_float;
+	case SQL_TYPE_DATE:
+		return dtype_sql_date;
+	case SQL_TYPE_TIME:
+		return dtype_sql_time;
+	case SQL_TIMESTAMP:
+		return dtype_timestamp;
+	case SQL_BLOB:
+		return dtype_blob;
+	case SQL_ARRAY:
+		return dtype_array;
+	case SQL_LONG:
+		return dtype_long;
+	case SQL_SHORT:
+		return dtype_short;
+	case SQL_INT64:
+		return dtype_int64;
+	case SQL_QUAD:
+		return dtype_quad;
+	case SQL_BOOLEAN:
+		return dtype_boolean;
+	case SQL_DEC16:
+		return dtype_dec64;
+	case SQL_DEC34:
+		return dtype_dec128;
+	default:
+		return dtype_unknown;
+	}
+}
+
 unsigned sqlTypeToDsc(unsigned runOffset, unsigned sqlType, unsigned sqlLength,
 	unsigned* dtype, unsigned* len, unsigned* offset, unsigned* nullOffset)
 {
 	sqlType &= ~1;
-	unsigned dscType;
+	unsigned dscType = sqlTypeToDscType(sqlType);
 
-	switch (sqlType)
+	if (dscType == dtype_unknown)
 	{
-	case SQL_VARYING:
-		dscType = dtype_varying;
-		break;
-
-	case SQL_TEXT:
-		dscType = dtype_text;
-		break;
-
-	case SQL_DOUBLE:
-		dscType = dtype_double;
-		break;
-
-	case SQL_FLOAT:
-		dscType = dtype_real;
-		break;
-
-	case SQL_D_FLOAT:
-		dscType = dtype_d_float;
-		break;
-
-	case SQL_TYPE_DATE:
-		dscType = dtype_sql_date;
-		break;
-
-	case SQL_TYPE_TIME:
-		dscType = dtype_sql_time;
-		break;
-
-	case SQL_TIMESTAMP:
-		dscType = dtype_timestamp;
-		break;
-
-	case SQL_BLOB:
-		dscType = dtype_blob;
-		break;
-
-	case SQL_ARRAY:
-		dscType = dtype_array;
-		break;
-
-	case SQL_LONG:
-		dscType = dtype_long;
-		break;
-
-	case SQL_SHORT:
-		dscType = dtype_short;
-		break;
-
-	case SQL_INT64:
-		dscType = dtype_int64;
-		break;
-
-	case SQL_QUAD:
-		dscType = dtype_quad;
-		break;
-
-	case SQL_BOOLEAN:
-		dscType = dtype_boolean;
-		break;
-
-	case SQL_NULL:
-		dscType = dtype_text;
-		break;
-
-	default:
 		fb_assert(false);
 		// keep old yvalve logic
 		dscType = sqlType;
-		break;
 	}
 
 	if (dtype)
-	{
 		*dtype = dscType;
-	}
 
 	if (sqlType == SQL_VARYING)
 		sqlLength += sizeof(USHORT);

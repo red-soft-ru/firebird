@@ -120,12 +120,13 @@ void EventManager::destroy(EventManager* eventMgr)
 }
 
 
-EventManager::EventManager(const Firebird::string& id, Firebird::RefPtr<Config> conf)
+EventManager::EventManager(const Firebird::string& id, Firebird::RefPtr<const Config> conf)
 	: PID(getpid()),
 	  m_process(NULL),
 	  m_processOffset(0),
 	  m_dbId(getPool(), id),
 	  m_config(conf),
+	  m_cleanupSync(getPool(), watcher_thread, THREAD_medium),
 	  m_sharedFileCreated(false),
 	  m_exiting(false)
 {
@@ -146,7 +147,7 @@ EventManager::~EventManager()
 		// Terminate the event watcher thread
 		m_startupSemaphore.tryEnter(5);
 		(void) m_sharedMemory->eventPost(&m_process->prb_event);
-		m_cleanupSemaphore.tryEnter(5);
+		m_cleanupSync.waitForCompletion();
 
 #ifdef HAVE_OBJECT_MAP
 		m_sharedMemory->unmapObject(&localStatus, &m_process);
@@ -697,7 +698,7 @@ void EventManager::create_process()
 
 	release_shmem();
 
-	Thread::start(watcher_thread, this, THREAD_medium);
+	m_cleanupSync.run(this);
 }
 
 
@@ -1414,12 +1415,16 @@ void EventManager::watcher_thread()
 		{
 			m_startupSemaphore.release();
 		}
-		m_cleanupSemaphore.release();
 	}
 	catch (const Firebird::Exception& ex)
 	{
-		iscLogException("Error closing event watcher thread\n", ex);
+		exceptionHandler(ex, NULL);
 	}
+}
+
+void EventManager::exceptionHandler(const Firebird::Exception& ex, ThreadFinishSync<EventManager*>::ThreadRoutine*)
+{
+	iscLogException("Error closing event watcher thread\n", ex);
 }
 
 } // namespace

@@ -466,6 +466,37 @@
 #
 #KeyHolderPlugin =
 
+# ----------------------------
+#
+# Ability to use encrypted security database
+#
+# If one relies on network encryption feature with crypt key generated
+# by authentication plugin (like SRP does) to transfer database crypt
+# keys over the wire then use of encrypted security databases is a kind of
+# vicious circle. In order to send DB crypt key over the wire in secure way
+# wire transfers should be already encrypted but this requires wire crypt key
+# from authentication plugin which needs to open security database for hash
+# validation which in turn requires DB crypt key. Luckily in most cases there
+# is no big need to encrypt security database - it protects itself quite well
+# if you use high quality passwords. But in some cases it's desired to have
+# security database encrypted, for example if one wants to use self security
+# database feature for encrypted database. In that case special care should be
+# taken to encrypt that key before passing it to server using callback. Make
+# sure your keys are well encrypted before enabling this parameter. Take into
+# account that with AllowEncryptedSecurityDatabase=TRUE unencrypted by firebird
+# protocol key transfer may take place even with not encrypted security database.
+# This feature is not supported by legacy authentication plugin - if you care
+# about security please never use legacy authentication.
+#
+# Type: boolean
+#
+# Per-database configurable.
+#
+#########################################################################
+# Please understand what are you doing before enabling this feature !!! #
+#########################################################################
+#
+#AllowEncryptedSecurityDatabase = false
 
 # ----------------------------
 #
@@ -493,6 +524,30 @@
 # Type: integer
 #
 #DeadlockTimeout = 10
+
+
+# ----------------------------
+#
+# Set number of seconds after which statement execution will be automatically
+# cancelled by the engine. Zero means no timeout is set.
+#
+# Per-database configurable.
+#
+# Type: integer
+#
+#StatementTimeout = 0
+
+
+# ----------------------------
+#
+# Set number of minutes after which idle attachment will be disconnected by the
+# engine. Zero means no timeout is set.
+#
+# Per-database configurable.
+#
+# Type: integer
+#
+#ConnectionIdleTimeout = 0
 
 
 # ----------------------------

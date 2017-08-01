@@ -32,6 +32,7 @@
 #include "../../common/classes/fb_string.h"
 #include "../../common/classes/init.h"
 #include "../../common/isc_s_proto.h"
+#include "../../common/ThreadStart.h"
 #include "../../jrd/trace/TraceSession.h"
 #include "../../common/classes/RefCounted.h"
 

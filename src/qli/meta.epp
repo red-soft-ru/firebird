@@ -28,7 +28,6 @@
 #include "../qli/dtr.h"
 #include "../qli/compile.h"
 #include "../qli/exe.h"
-//#include "../jrd/license.h"
 #include "../jrd/flags.h"
 #include "../jrd/ibase.h"
 #include "../qli/reqs.h"

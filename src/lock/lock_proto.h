@@ -398,7 +398,7 @@ class LockManager : private Firebird::RefCounted,
 	const int PID;
 
 public:
-	static LockManager* create(const Firebird::string&, Firebird::RefPtr<Config>);
+	static LockManager* create(const Firebird::string&, Firebird::RefPtr<const Config>);
 	static void destroy(LockManager*);
 
 	bool initializeOwner(Firebird::CheckStatusWrapper*, LOCK_OWNER_T, UCHAR, SRQ_PTR*);
@@ -418,8 +418,10 @@ public:
 	SINT64 readData2(USHORT, const UCHAR*, USHORT, SRQ_PTR);
 	SINT64 writeData(SRQ_PTR, SINT64);
 
+	void exceptionHandler(const Firebird::Exception& ex, ThreadFinishSync<LockManager*>::ThreadRoutine* routine);
+
 private:
-	explicit LockManager(const Firebird::string&, Firebird::RefPtr<Config>);
+	explicit LockManager(const Firebird::string&, Firebird::RefPtr<const Config>);
 	~LockManager();
 
 	void acquire_shmem(SRQ_PTR);
@@ -471,11 +473,9 @@ private:
 	void detach_shared_file(Firebird::CheckStatusWrapper*);
 	void get_shared_file_name(Firebird::PathName&, ULONG extend = 0) const;
 
-	static THREAD_ENTRY_DECLARE blocking_action_thread(THREAD_ENTRY_PARAM arg)
+	static void blocking_action_thread(LockManager* lockMgr)
 	{
-		LockManager* const lockMgr = static_cast<LockManager*>(arg);
 		lockMgr->blocking_action_thread();
-		return 0;
 	}
 
 	bool initialize(Firebird::SharedMemoryBase* sm, bool init);
@@ -490,7 +490,7 @@ private:
 	Firebird::RWLock m_remapSync;
 	Firebird::AtomicCounter m_waitingOwners;
 
-	Firebird::Semaphore m_cleanupSemaphore;
+	ThreadFinishSync<LockManager*> m_cleanupSync;
 	Firebird::Semaphore m_startupSemaphore;
 
 public:
@@ -500,7 +500,7 @@ private:
 	bool m_blockage;
 
 	Firebird::string m_dbId;
-	Firebird::RefPtr<Config> m_config;
+	Firebird::RefPtr<const Config> m_config;
 
 	// configurations parameters - cached values
 	const ULONG m_acquireSpins;

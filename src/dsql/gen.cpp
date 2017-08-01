@@ -108,7 +108,7 @@ void GEN_hidden_variables(DsqlCompilerScratch* dsqlScratch)
  **/
 void GEN_expr(DsqlCompilerScratch* dsqlScratch, ExprNode* node)
 {
-	RseNode* rseNode = node->as<RseNode>();
+	RseNode* rseNode = nodeAs<RseNode>(node);
 	if (rseNode)
 	{
 		GEN_rse(dsqlScratch, rseNode);
@@ -200,6 +200,25 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 		{
 			if (fromCharSet != toCharSet)
 				parameter->par_desc.setTextType(toCharSet);
+		}
+		else if (parameter->par_desc.isDecFloat())
+		{
+			const DecimalBinding& b = tdbb->getAttachment()->att_dec_binding;
+			switch (b.bind)
+			{
+			case DecimalBinding::DEC_NATIVE:
+				break;
+			case DecimalBinding::DEC_TEXT:
+				parameter->par_desc.makeText((parameter->par_desc.dsc_dtype == dtype_dec64 ?
+					IDecFloat16::STRING_SIZE : IDecFloat34::STRING_SIZE) - 1, ttype_ascii);
+				break;
+			case DecimalBinding::DEC_DOUBLE:
+				parameter->par_desc.makeDouble();
+				break;
+			case DecimalBinding::DEC_NUMERIC:
+				parameter->par_desc.makeInt64(b.numScale);
+				break;
+			}
 		}
 
 		if (parameter->par_desc.dsc_dtype == dtype_text && parameter->par_index != 0)
@@ -364,6 +383,14 @@ void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool tex
 
 	case dtype_double:
 		dsqlScratch->appendUChar(blr_double);
+		break;
+
+	case dtype_dec64:
+		dsqlScratch->appendUChar(blr_dec64);
+		break;
+
+	case dtype_dec128:
+		dsqlScratch->appendUChar(blr_dec128);
 		break;
 
 	case dtype_sql_date:
@@ -598,7 +625,7 @@ void GEN_sort(DsqlCompilerScratch* dsqlScratch, UCHAR blrVerb, ValueListNode* li
 
 		for (const NestConst<ValueExprNode>* const end = list->items.end(); ptr != end; ++ptr)
 		{
-			OrderNode* orderNode = (*ptr)->as<OrderNode>();
+			OrderNode* orderNode = nodeAs<OrderNode>(*ptr);
 
 			switch (orderNode->nullsPlacement)
 			{

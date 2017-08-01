@@ -167,7 +167,7 @@ Firebird::GlobalPtr<LockManager::DbLockMgrMap> LockManager::g_lmMap;
 Firebird::GlobalPtr<Firebird::Mutex> LockManager::g_mapMutex;
 
 
-LockManager* LockManager::create(const Firebird::string& id, RefPtr<Config> conf)
+LockManager* LockManager::create(const Firebird::string& id, RefPtr<const Config> conf)
 {
 	Firebird::MutexLockGuard guard(g_mapMutex, FB_FUNCTION);
 
@@ -208,12 +208,13 @@ void LockManager::destroy(LockManager* lockMgr)
 }
 
 
-LockManager::LockManager(const Firebird::string& id, RefPtr<Config> conf)
+LockManager::LockManager(const Firebird::string& id, RefPtr<const Config> conf)
 	: PID(getpid()),
 	  m_bugcheck(false),
 	  m_sharedFileCreated(false),
 	  m_process(NULL),
 	  m_processOffset(0),
+	  m_cleanupSync(getPool(), blocking_action_thread, THREAD_high),
 	  m_sharedMemory(NULL),
 	  m_blockage(false),
 	  m_dbId(getPool(), id),
@@ -259,7 +260,7 @@ LockManager::~LockManager()
 			m_sharedMemory->eventPost(&m_process->prc_blocking);
 
 			// Wait for the AST thread to finish cleanup or for 5 seconds
-			m_cleanupSemaphore.tryEnter(5);
+			m_cleanupSync.waitForCompletion();
 		}
 
 #ifdef HAVE_OBJECT_MAP
@@ -1548,16 +1549,23 @@ void LockManager::blocking_action_thread()
 	{
 		iscLogException("Error in blocking action thread\n", x);
 	}
+}
 
-	try
-	{
-		// Wakeup the main thread waiting for our exit
-		m_cleanupSemaphore.release();
-	}
-	catch (const Firebird::Exception& x)
-	{
-		iscLogException("Error closing blocking action thread\n", x);
-	}
+
+void LockManager::exceptionHandler(const Firebird::Exception& ex,
+	ThreadFinishSync<LockManager*>::ThreadRoutine* /*routine*/)
+{
+/**************************************
+ *
+ *   e x c e p t i o n H a n d l e r
+ *
+ **************************************
+ *
+ * Functional description
+ *	Handler for blocking thread close bugs.
+ *
+ **************************************/
+	iscLogException("Error closing blocking action thread\n", ex);
 }
 
 
@@ -1815,7 +1823,7 @@ bool LockManager::create_process(CheckStatusWrapper* statusVector)
 	{
 		try
 		{
-			Thread::start(blocking_action_thread, this, THREAD_high);
+			m_cleanupSync.run(this);
 		}
 		catch (const Exception& ex)
 		{

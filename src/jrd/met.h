@@ -50,7 +50,8 @@ enum rsr_t {
 	RSR_field_length,
 	RSR_field_sub_type,
 	RSR_field_not_null,
-	RSR_field_generator_name
+	RSR_field_generator_name,
+	RSR_field_identity_type
 };
 
 // Temporary field block

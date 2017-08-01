@@ -306,7 +306,7 @@ void DataTypeUtilBase::makeSubstr(dsc* result, const dsc* value, const dsc* offs
 
 		if (length->dsc_address)	// constant
 		{
-			SLONG constant = CVT_get_long(length, 0, ERR_post);
+			SLONG constant = CVT_get_long(length, 0, JRD_get_thread_data()->getAttachment()->att_dec_status, ERR_post);
 			fb_assert(constant >= 0);
 			len = MIN(len, MIN(MAX_STR_SIZE, ULONG(constant)) * maxBytesPerChar(result->getCharSet()));
 		}

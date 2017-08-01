@@ -427,7 +427,7 @@ public:
 		SLONG subNumber;
 	};
 
-	explicit CompilerScratch(MemoryPool& p)
+	explicit CompilerScratch(MemoryPool& p, CompilerScratch* aMainCsb = NULL)
 	:	/*csb_node(0),
 		csb_variables(0),
 		csb_dependencies(0),
@@ -439,6 +439,7 @@ public:
 #ifdef CMP_DEBUG
 		csb_dump(p),
 #endif
+		mainCsb(aMainCsb),
 		csb_external(p),
 		csb_access(p),
 		csb_resources(p),
@@ -486,6 +487,7 @@ public:
 	Firebird::string csb_dump;
 #endif
 
+	CompilerScratch* mainCsb;
 	Firebird::BlrReader	csb_blr_reader;
 	DmlNode*		csb_node;
 	ExternalAccessList csb_external;			// Access to outside procedures/triggers to be checked

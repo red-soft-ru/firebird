@@ -56,6 +56,7 @@
 using namespace Jrd;
 using namespace Firebird;
 
+static SSHORT adjust_wait(thread_db* tdbb, SSHORT wait);
 static void bug_lck(const TEXT*);
 static bool compatible(const Lock*, const Lock*, USHORT);
 static void enqueue(thread_db*, CheckStatusWrapper*, Lock*, USHORT, SSHORT);
@@ -340,6 +341,7 @@ bool LCK_convert(thread_db* tdbb, Lock* lock, USHORT level, SSHORT wait)
 	WaitCancelGuard guard(tdbb, lock, wait);
 	FbLocalStatus statusVector;
 
+	wait = adjust_wait(tdbb, wait);
 	const bool result = CONVERT(tdbb, &statusVector, lock, level, wait);
 
 	if (!result)
@@ -657,6 +659,7 @@ bool LCK_lock(thread_db* tdbb, Lock* lock, USHORT level, SSHORT wait)
 	WaitCancelGuard guard(tdbb, lock, wait);
 	FbLocalStatus statusVector;
 
+	wait = adjust_wait(tdbb, wait);
 	ENQUEUE(tdbb, &statusVector, lock, level, wait);
 	fb_assert(LCK_CHECK_LOCK(lock));
 
@@ -853,6 +856,40 @@ void LCK_write_data(thread_db* tdbb, Lock* lock, SINT64 data)
 	lock->lck_data = data;
 
 	fb_assert(LCK_CHECK_LOCK(lock));
+}
+
+
+static SSHORT adjust_wait(thread_db* tdbb, SSHORT wait)
+{
+/**************************************
+ *
+ *	a d j u s t _ w a i t
+ *
+ **************************************
+ *
+ * Functional description
+ *	If wait is cancellable and if statement timer was started - calc new wait
+ *	time to ensure it will not take longer than rest of timeout.
+ *
+ **************************************/
+	if ((wait == LCK_NO_WAIT) || (tdbb->tdbb_flags & TDBB_wait_cancel_disable) || !tdbb->getTimeoutTimer())
+		return wait;
+
+	unsigned int tout = tdbb->getTimeoutTimer()->timeToExpire();
+	if (tout > 0)
+	{
+		SSHORT t;
+		if (tout < 1000)
+			t = 1;
+		else if (tout < MAX_SSHORT * 1000)
+			t = (tout + 999) / 1000;
+		else
+			t = MAX_SSHORT;
+
+		if ((wait == LCK_WAIT) || (-wait > t))
+			return -t;
+	}
+	return wait;
 }
 
 

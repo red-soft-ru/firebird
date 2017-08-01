@@ -33,6 +33,7 @@
 #include "PluginLogWriter.h"
 #include "os/platform.h"
 #include "consts_pub.h"
+#include "codetext.h"
 #include "../../common/isc_f_proto.h"
 #include "../../jrd/RuntimeStatistics.h"
 #include "../../common/dsc.h"
@@ -45,6 +46,7 @@
 #include "../../dsql/sqlda_pub.h"
 #include "../../common/classes/ImplementHelper.h"
 #include "../../common/SimpleStatusVector.h"
+#include "../../jrd/status.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -97,7 +99,9 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 	transactions(getDefaultMemoryPool()),
 	statements(getDefaultMemoryPool()),
 	services(getDefaultMemoryPool()),
-	unicodeCollation(*getDefaultMemoryPool())
+	unicodeCollation(*getDefaultMemoryPool()),
+	include_codes(*getDefaultMemoryPool()),
+	exclude_codes(*getDefaultMemoryPool())
 {
 	const char* ses_name = initInfo->getTraceSessionName();
 	session_name = ses_name && *ses_name ? ses_name : " ";
@@ -132,7 +136,7 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 			string filter(config.include_filter);
 			ISC_systemToUtf8(filter);
 
-			include_matcher = FB_NEW SimilarToMatcher<UCHAR, UpcaseConverter<> >(
+			include_matcher = FB_NEW TraceSimilarToMatcher(
 				*getDefaultMemoryPool(), textType, (const UCHAR*) filter.c_str(),
 				filter.length(), '\\', true);
 		}
@@ -143,7 +147,7 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 			string filter(config.exclude_filter);
 			ISC_systemToUtf8(filter);
 
-			exclude_matcher = FB_NEW SimilarToMatcher<UCHAR, UpcaseConverter<> >(
+			exclude_matcher = FB_NEW TraceSimilarToMatcher(
 				*getDefaultMemoryPool(), textType, (const UCHAR*) filter.c_str(),
 				filter.length(), '\\', true);
 		}
@@ -162,6 +166,13 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 				str, config.db_filename.c_str());
 		}
 	}
+
+	// parse filters for gds error codes
+	if (!config.include_gds_codes.isEmpty())
+		str2Array(config.include_gds_codes, include_codes);
+
+	if (!config.exclude_gds_codes.isEmpty())
+		str2Array(config.exclude_gds_codes, exclude_codes);
 
 	operational = true;
 	log_init();
@@ -496,18 +507,31 @@ void TracePluginImpl::appendTableCounts(const PerformanceInfo *info)
 	if (!config.print_perf || info->pin_count == 0)
 		return;
 
-	record.append(NEWLINE
-		"Table                             Natural     Index    Update    Insert    Delete   Backout     Purge   Expunge" NEWLINE
-		"***************************************************************************************************************" NEWLINE );
+	const TraceCounts* trc = info->pin_tables;
+	const TraceCounts* trc_end = trc + info->pin_count;
 
-	const TraceCounts* trc;
-	const TraceCounts* trc_end;
+	FB_SIZE_T max_len = 0;
+	for (; trc < trc_end; trc++)
+	{
+		FB_SIZE_T len = fb_strlen(trc->trc_relation_name);
+		if (max_len < len)
+			max_len = len;
+	}
+
+	if (max_len < 32)
+		max_len = 32;
+
+	record.append(NEWLINE"Table");
+	record.append(max_len - 5, ' ');
+	record.append("   Natural     Index    Update    Insert    Delete   Backout     Purge   Expunge" NEWLINE);
+	record.append(max_len + 80, '*');
+	record.append(NEWLINE);
 
 	string temp;
-	for (trc = info->pin_tables, trc_end = trc + info->pin_count; trc < trc_end; trc++)
+	for (trc = info->pin_tables; trc < trc_end; trc++)
 	{
 		record.append(trc->trc_relation_name);
-		record.append(MAX_SQL_IDENTIFIER_LEN - fb_strlen(trc->trc_relation_name), ' ');
+		record.append(max_len - fb_strlen(trc->trc_relation_name), ' ');
 		for (int j = 0; j < DBB_max_rel_count; j++)
 		{
 			if (trc->trc_counters[j] == 0)
@@ -545,6 +569,109 @@ void TracePluginImpl::formatStringArgument(string& result, const UCHAR* str, siz
 		return;
 	}
 	result.printf("%.*s", len, str);
+}
+
+
+bool TracePluginImpl::filterStatus(const ISC_STATUS* status, GdsCodesArray& arr)
+{
+	FB_SIZE_T pos;
+
+	while (*status != isc_arg_end)
+	{
+		const ISC_STATUS s = *status;
+
+		switch (s)
+		{
+		case isc_arg_gds:
+		case isc_arg_warning:
+			if (arr.find(status[1], pos))
+				return true;
+			status += 2;
+			break;
+
+		case isc_arg_cstring:
+			status += 3;
+			break;
+
+		default:
+			status += 2;
+			break;
+		}
+	}
+
+	return false;
+}
+
+
+namespace {
+
+class GdsName2CodeMap
+{
+public:
+	GdsName2CodeMap(MemoryPool& pool) :
+	  m_map(pool)
+	{
+		for (int i = 0; codes[i].code_string; i++)
+			m_map.put(codes[i].code_string, codes[i].code_number);
+	}
+
+	bool find(const char* name, ISC_STATUS& code) const
+	{
+		return m_map.get(name, code);
+	}
+
+private:
+	class NocaseCmp
+	{
+	public:
+		static bool greaterThan(const char* i1, const char* i2)
+		{
+			return fb_utils::stricmp(i1, i2) > 0;
+		}
+	};
+
+	GenericMap<Pair<NonPooled<const char*, ISC_STATUS> >, NocaseCmp > m_map;
+};
+
+}	// namespace
+
+static InitInstance<GdsName2CodeMap> gdsNamesMap;
+
+void TracePluginImpl::str2Array(const Firebird::string& str, GdsCodesArray& arr)
+{
+	// input: string with comma-delimited list of gds codes values and\or gds codes names
+	// output: sorted array of gds codes values
+
+	const char *sep = " ,";
+
+	FB_SIZE_T p1 = 0, p2 = 0;
+	while (p2 < str.length())
+	{
+		p2 = str.find_first_of(sep, p1);
+		if (p2 == string::npos)
+			p2 = str.length();
+
+		string s = str.substr(p1, p2 - p1);
+
+		ISC_STATUS code = atol(s.c_str());
+
+		if (!code && !gdsNamesMap().find(s.c_str(), code))
+		{
+			fatal_exception::raiseFmt(
+				"Error parsing error codes filter: \n"
+				"\t%s\n"
+				"\tbad item is: %s, at position: %d",
+				str.c_str(), s.c_str(), p1 + 1);
+		}
+
+		// avoid duplicates
+
+		FB_SIZE_T ins_pos;
+		if (!arr.find(code, ins_pos))
+			arr.insert(ins_pos, code);
+
+		p1 = str.find_first_not_of(sep, p2);
+	}
 }
 
 
@@ -599,21 +726,12 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 				else
 					paramtype = "smallint";
 				break;
-
 			case dtype_long:
 				if (parameters->dsc_scale)
 					paramtype.printf("integer(*, %d)", parameters->dsc_scale);
 				else
 					paramtype = "integer";
 				break;
-
-			case dtype_double:
-				if (parameters->dsc_scale)
-					paramtype.printf("double precision(*, %d)", parameters->dsc_scale);
-				else
-					paramtype = "double precision";
-				break;
-
 			case dtype_int64:
 				if (parameters->dsc_scale)
 					paramtype.printf("bigint(*, %d)", parameters->dsc_scale);
@@ -624,6 +742,20 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 			case dtype_real:
 				paramtype = "float";
 				break;
+			case dtype_double:
+				if (parameters->dsc_scale)
+					paramtype.printf("double precision(*, %d)", parameters->dsc_scale);
+				else
+					paramtype = "double precision";
+				break;
+
+			case dtype_dec64:
+				paramtype = "decfloat(16)";
+				break;
+			case dtype_dec128:
+				paramtype = "decfloat(34)";
+				break;
+
 			case dtype_sql_date:
 				paramtype = "date";
 				break;
@@ -633,9 +765,11 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 			case dtype_timestamp:
 				paramtype = "timestamp";
 				break;
+
 			case dtype_dbkey:
 				paramtype = "db_key";
 				break;
+
 			case dtype_boolean:
 				paramtype = "boolean";
 				break;
@@ -656,19 +790,41 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 			{
 				// Handle potentially long string values
 				case dtype_text:
-					formatStringArgument(paramvalue,
-						parameters->dsc_address, parameters->dsc_length);
+				{
+					FbLocalStatus status;
+					const char* text = params->getTextUTF8(&status, i);
+					
+					if (status->getState() & IStatus::STATE_ERRORS)
+					{
+						formatStringArgument(paramvalue,
+							parameters->dsc_address, parameters->dsc_length);
+					}
+					else
+						formatStringArgument(paramvalue, (UCHAR*)text, strlen(text));
+
 					break;
+				}
 				case dtype_cstring:
 					formatStringArgument(paramvalue,
 						parameters->dsc_address,
 						strlen(reinterpret_cast<const char*>(parameters->dsc_address)));
 					break;
 				case dtype_varying:
-					formatStringArgument(paramvalue,
-						parameters->dsc_address + 2,
-						*(USHORT*)parameters->dsc_address);
+				{
+					FbLocalStatus status;
+					const char* text = params->getTextUTF8(&status, i);
+
+					if (status->getState() & IStatus::STATE_ERRORS)
+					{
+						formatStringArgument(paramvalue,
+							parameters->dsc_address + 2,
+							*(USHORT*)parameters->dsc_address);
+					}
+					else
+						formatStringArgument(paramvalue, (UCHAR*)text, strlen(text));
+
 					break;
+				}
 
 				// Handle quad
 				case dtype_quad:
@@ -711,6 +867,14 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 						paramvalue.printf("%.15g",
 							*(double*) parameters->dsc_address * pow(10.0, -parameters->dsc_scale));
 					}
+					break;
+
+				case dtype_dec64:
+					((Decimal64*) parameters->dsc_address)->toString(paramvalue);
+					break;
+
+				case dtype_dec128:
+					((Decimal128*) parameters->dsc_address)->toString(paramvalue);
 					break;
 
 				case dtype_sql_date:
@@ -931,14 +1095,22 @@ void TracePluginImpl::appendServiceQueryParams(size_t send_item_length,
 
 void TracePluginImpl::log_init()
 {
-	record.printf("\tSESSION_%d %s" NEWLINE "\t%s" NEWLINE, session_id, session_name.c_str(), config.db_filename.c_str());
-	logRecord("TRACE_INIT");
+	if (config.log_initfini)
+	{
+		record.printf("\tSESSION_%d %s" NEWLINE "\t%s" NEWLINE,
+			session_id, session_name.c_str(), config.db_filename.c_str());
+		logRecord("TRACE_INIT");
+	}
 }
 
 void TracePluginImpl::log_finalize()
 {
-	record.printf("\tSESSION_%d %s" NEWLINE "\t%s" NEWLINE, session_id, session_name.c_str(), config.db_filename.c_str());
-	logRecord("TRACE_FINI");
+	if (config.log_initfini)
+	{
+		record.printf("\tSESSION_%d %s" NEWLINE "\t%s" NEWLINE,
+			session_id, session_name.c_str(), config.db_filename.c_str());
+		logRecord("TRACE_FINI");
+	}
 
 	logWriter->release();
 	logWriter = NULL;
@@ -1344,24 +1516,18 @@ void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
 	if (!sql_length)
 		return;
 
-	if (config.include_filter.hasData() || config.exclude_filter.hasData())
+	if (config.include_filter.hasData())
 	{
-		const char* sqlUtf8 = statement->getTextUTF8();
-		FB_SIZE_T utf8_length = fb_strlen(sqlUtf8);
+		include_matcher->reset();
+		include_matcher->process((const UCHAR*)sql, sql_length);
+		need_statement = include_matcher->result();
+	}
 
-		if (config.include_filter.hasData())
-		{
-			include_matcher->reset();
-			include_matcher->process((const UCHAR*) sqlUtf8, utf8_length);
-			need_statement = include_matcher->result();
-		}
-
-		if (need_statement && config.exclude_filter.hasData())
-		{
-			exclude_matcher->reset();
-			exclude_matcher->process((const UCHAR*) sqlUtf8, utf8_length);
-			need_statement = !exclude_matcher->result();
-		}
+	if (need_statement && config.exclude_filter.hasData())
+	{
+		exclude_matcher->reset();
+		exclude_matcher->process((const UCHAR*)sql, sql_length);
+		need_statement = !exclude_matcher->result();
 	}
 
 	if (need_statement)
@@ -2037,14 +2203,31 @@ void TracePluginImpl::log_event_trigger_execute(ITraceDatabaseConnection* connec
 void TracePluginImpl::log_event_error(ITraceConnection* connection, ITraceStatusVector* status,
 	const char* function)
 {
-	if (!config.log_errors)
-		return;
-
 	string event_type;
-	if (status->hasError())
+	if (config.log_errors && status->hasError())
+	{
+		const ISC_STATUS* errs = status->getStatus()->getErrors();
+
+		if (!include_codes.isEmpty() && !filterStatus(errs, include_codes))
+			return;
+
+		if (!exclude_codes.isEmpty() && filterStatus(errs, exclude_codes))
+			return;
+
 		event_type.printf("ERROR AT %s", function);
-	else if (status->hasWarning())
+	}
+	else if (config.log_warnings && status->hasWarning())
+	{
+		const ISC_STATUS* warns = status->getStatus()->getWarnings();
+
+		if (!include_codes.isEmpty() && !filterStatus(warns, include_codes))
+			return;
+
+		if (!exclude_codes.isEmpty() && filterStatus(warns, exclude_codes))
+			return;
+
 		event_type.printf("WARNING AT %s", function);
+	}
 	else
 		return;
 

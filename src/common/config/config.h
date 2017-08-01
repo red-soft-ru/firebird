@@ -142,6 +142,9 @@ public:
 		KEY_WIRE_COMPRESSION,
 		KEY_MAX_IDENTIFIER_BYTE_LENGTH,
 		KEY_MAX_IDENTIFIER_CHAR_LENGTH,
+		KEY_ENCRYPT_SECURITY_DATABASE,
+		KEY_STMT_TIMEOUT,
+		KEY_CONN_IDLE_TIMEOUT,
 		MAX_CONFIG_KEY		// keep it last
 	};
 
@@ -174,7 +177,7 @@ private:
 	static const ConfigEntry entries[MAX_CONFIG_KEY];
 
 	ConfigValue values[MAX_CONFIG_KEY];
-	Firebird::PathName notifyDatabase;
+	mutable Firebird::PathName notifyDatabase;
 
 public:
 	explicit Config(const ConfigFile& file);				// use to build default config
@@ -184,7 +187,7 @@ public:
 
 	// Call it when database with given config is created
 
-	void notify();
+	void notify() const;
 
 	// Check for missing firebird.conf
 
@@ -199,10 +202,10 @@ public:
 	static const Firebird::PathName* getCommandLineRootDirectory();
 
 	// Master config - needed to provide per-database config
-	static const Firebird::RefPtr<Config>& getDefaultConfig();
+	static const Firebird::RefPtr<const Config>& getDefaultConfig();
 
 	// Merge config entries from DPB into existing config
-	static void merge(Firebird::RefPtr<Config>& config, const Firebird::string* dpbConfig);
+	static void merge(Firebird::RefPtr<const Config>& config, const Firebird::string* dpbConfig);
 
 	// reports key to be used by the following functions
 	static unsigned int getKeyByName(ConfigName name);
@@ -349,6 +352,13 @@ public:
 	int getMaxIdentifierByteLength() const;
 
 	int getMaxIdentifierCharLength() const;
+
+	bool getCryptSecurityDatabase() const;
+
+	// set in seconds
+	unsigned int getStatementTimeout() const;
+	// set in minutes
+	unsigned int getConnIdleTimeout() const;
 };
 
 // Implementation of interface to access master configuration file
@@ -356,7 +366,7 @@ class FirebirdConf FB_FINAL :
 	public Firebird::RefCntIface<Firebird::IFirebirdConfImpl<FirebirdConf, Firebird::CheckStatusWrapper> >
 {
 public:
-	FirebirdConf(Config* existingConfig)
+	FirebirdConf(const Config* existingConfig)
 		: config(existingConfig)
 	{ }
 
@@ -369,7 +379,7 @@ public:
 	int release();
 
 private:
-	Firebird::RefPtr<Config> config;
+	Firebird::RefPtr<const Config> config;
 };
 
 // Create default instance of IFirebirdConf interface

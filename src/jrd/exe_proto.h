@@ -43,7 +43,7 @@ void EXE_execute_ddl_triggers(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction,
 const Jrd::StmtNode* EXE_looper(Jrd::thread_db* tdbb, Jrd::jrd_req* request,
 	const Jrd::StmtNode* in_node);
 
-void EXE_execute_triggers(Jrd::thread_db*, Jrd::trig_vec**, Jrd::record_param*, Jrd::record_param*,
+void EXE_execute_triggers(Jrd::thread_db*, Jrd::TrigVector**, Jrd::record_param*, Jrd::record_param*,
 	enum TriggerAction, Jrd::StmtNode::WhichTrigger);
 
 void EXE_receive(Jrd::thread_db*, Jrd::jrd_req*, USHORT, ULONG, UCHAR*, bool = false);

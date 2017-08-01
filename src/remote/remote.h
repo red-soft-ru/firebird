@@ -257,6 +257,9 @@ public:
 	{
 		if (rbl_self && *rbl_self == this)
 			*rbl_self = NULL;
+
+		if (rbl_iface)
+			rbl_iface->release();
 	}
 
 	static ISC_STATUS badHandle() { return isc_bad_segstr_handle; }
@@ -392,6 +395,9 @@ public:
 	{
 		if (rrq_self && *rrq_self == this)
 			*rrq_self = NULL;
+
+		if (rrq_iface)
+			rrq_iface->release();
 	}
 
 	Rrq* clone() const
@@ -476,6 +482,7 @@ struct Rsr : public Firebird::GlobalStorage, public TypedHandle<rem_type_rsr>
 
 	Firebird::string rsr_cursor_name;	// Name for cursor to be set on open
 	bool			rsr_delayed_format;	// Out format was delayed on execute, set it on fetch
+	unsigned int	rsr_timeout;		// Statement timeout to be set on open\execute
 	Rsr**			rsr_self;
 
 public:
@@ -498,13 +505,19 @@ public:
 		rsr_format(0), rsr_message(0), rsr_buffer(0), rsr_status(0),
 		rsr_id(0), rsr_fmt_length(0),
 		rsr_rows_pending(0), rsr_msgs_waiting(0), rsr_reorder_level(0), rsr_batch_count(0),
-		rsr_cursor_name(getPool()), rsr_delayed_format(false), rsr_self(NULL)
+		rsr_cursor_name(getPool()), rsr_delayed_format(false), rsr_timeout(0), rsr_self(NULL)
 	{ }
 
 	~Rsr()
 	{
 		if (rsr_self && *rsr_self == this)
 			*rsr_self = NULL;
+
+		if (rsr_cursor)
+			rsr_cursor->release();
+
+		if (rsr_iface)
+			rsr_iface->release();
 
 		delete rsr_status;
 	}
@@ -703,7 +716,7 @@ private:
 	Firebird::UCharBuffer dataForPlugin, dataFromPlugin;
 	Firebird::HalfStaticArray<InternalCryptKey*, 1> cryptKeys;		// Wire crypt keys that came from plugin(s) last time
 	Firebird::string dpbConfig;				// Used to recreate config with new filename
-	Firebird::RefPtr<Config> clntConfig;	// Used to get plugins list and pass to port
+	Firebird::RefPtr<const Config> clntConfig;	// Used to get plugins list and pass to port
 	unsigned nextKey;						// First key to be analyzed
 
 	bool hasCryptKey;						// DPB contains disk crypt key, may be passed only over encrypted wire
@@ -733,7 +746,7 @@ public:
 	Firebird::PathName getPluginName();
 	void tryNewKeys(rem_port*);
 	void releaseKeys(unsigned from);
-	Firebird::RefPtr<Config>* getConfig();
+	Firebird::RefPtr<const Config>* getConfig();
 
 	// Firebird::IClientBlock implementation
 	int release();
@@ -947,7 +960,7 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	OBJCT			port_last_object_id;	// cached last id
 	Firebird::ObjectsArray< Firebird::Array<char> > port_queue;
 	FB_SIZE_T		port_qoffset;			// current packet in the queue
-	Firebird::RefPtr<Config> port_config;	// connection-specific configuration info
+	Firebird::RefPtr<const Config> port_config;	// connection-specific configuration info
 
 	// Authentication and crypt stuff
 	ServerAuthBase*							port_srv_auth;
@@ -1023,7 +1036,8 @@ public:
 	static bool checkCompression();
 	void linkParent(rem_port* const parent);
 	void unlinkParent();
-	const Firebird::RefPtr<Config>& getPortConfig() const;
+	Firebird::RefPtr<const Config> getPortConfig();
+	const Firebird::RefPtr<const Config>& getPortConfig() const;
 	void versionInfo(Firebird::string& version) const;
 
 	bool extractNewKeys(CSTRING* to, bool flagPlugList = false)

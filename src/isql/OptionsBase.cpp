@@ -24,7 +24,6 @@
 
 #include "firebird.h"
 #include "OptionsBase.h"
-//#include "../common/utils_proto.h"  // strnicmp
 #include "../common/gdsassert.h"
 
 

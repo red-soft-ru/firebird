@@ -43,12 +43,11 @@ namespace
 	{
 		unsigned int hash_value = 0;
 
-		UCHAR* p;
+		UCHAR* const p = (UCHAR*) &hash_value;
 		const UCHAR* q = value;
 
 		while (length >= 4)
 		{
-			p = (UCHAR*) &hash_value;
 			p[0] += q[0];
 			p[1] += q[1];
 			p[2] += q[2];
@@ -57,18 +56,16 @@ namespace
 			q += 4;
 		}
 
-		p = (UCHAR*) &hash_value;
-
 		if (length >= 2)
 		{
 			p[0] += q[0];
 			p[1] += q[1];
 			length -= 2;
+			q += 2;
 		}
 
 		if (length)
 		{
-			q += 2;
 			*p += *q;
 		}
 
@@ -110,4 +107,27 @@ namespace
 unsigned int InternalHash::hash(unsigned int length, const UCHAR* value)
 {
 	return internalHash(length, value);
+}
+
+
+void WeakHashContext::update(const void* data, FB_SIZE_T length)
+{
+	const UCHAR* p = static_cast<const UCHAR*>(data);
+
+	for (const UCHAR* end = p + length; p != end; ++p)
+	{
+		hashNumber = (hashNumber << 4) + *p;
+
+		const SINT64 n = hashNumber & FB_CONST64(0xF000000000000000);
+		if (n)
+			hashNumber ^= n >> 56;
+
+		hashNumber &= ~n;
+	}
+}
+
+void WeakHashContext::finish(Buffer& result)
+{
+	UCHAR* resultBuffer = result.getBuffer(sizeof(hashNumber));
+	memcpy(resultBuffer, &hashNumber, sizeof(hashNumber));
 }

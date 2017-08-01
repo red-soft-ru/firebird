@@ -408,3 +408,8 @@ NAME("SEC$USER_TYPE", nam_sec_user_type)
 
 NAME("RDB$SYSTEM_PRIVILEGES", nam_system_privileges)
 NAME("RDB$SQL_SECURITY", nam_sql_security)
+
+NAME("MON$IDLE_TIMEOUT", nam_idle_timeout)
+NAME("MON$IDLE_TIMER", nam_idle_timer)
+NAME("MON$STATEMENT_TIMEOUT", nam_stmt_timeout)
+NAME("MON$STATEMENT_TIMER", nam_stmt_timer)

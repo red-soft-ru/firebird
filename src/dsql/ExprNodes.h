@@ -476,6 +476,36 @@ public:
 };
 
 
+class DefaultNode : public DsqlNode<DefaultNode, ExprNode::TYPE_DEFAULT>
+{
+public:
+	explicit DefaultNode(MemoryPool& pool, const Firebird::MetaName& aRelationName,
+		const Firebird::MetaName& aFieldName);
+
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+	static ValueExprNode* createFromField(thread_db* tdbb, CompilerScratch* csb, StreamType* map, jrd_fld* fld);
+
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
+	virtual void setParameterName(dsql_par* parameter) const;
+	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
+		const dsc* desc, bool forceVarChar);
+	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+
+	virtual bool dsqlMatch(const ExprNode* other, bool ignoreMapCast) const;
+
+	virtual ValueExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
+
+public:
+	const Firebird::MetaName relationName;
+	const Firebird::MetaName fieldName;
+
+private:
+	jrd_fld* field;
+};
+
+
 class DerivedExprNode : public TypedNode<ValueExprNode, ExprNode::TYPE_DERIVED_EXPR>
 {
 public:
@@ -698,9 +728,9 @@ public:
 	const bool dialect1;
 	GeneratorItem generator;
 	NestConst<ValueExprNode> arg;
+	SLONG step;
 
 private:
-	SLONG step;
 	bool sysGen;
 	const bool implicit;
 	const bool identity;
@@ -766,6 +796,8 @@ public:
 		fb_assert(litDesc.dsc_dtype == dtype_long);
 		return *reinterpret_cast<SLONG*>(litDesc.dsc_address);
 	}
+
+	void fixMinSInt64();
 
 public:
 	const IntlString* dsqlStr;
@@ -1029,7 +1061,7 @@ public:
 			if (!ListExprNode::dsqlMatch(other, ignoreMapCast))
 				return false;
 
-			const Frame* o = other->as<Frame>();
+			const Frame* o = nodeAs<Frame>(other);
 			fb_assert(o);
 
 			return bound == o->bound;
@@ -1098,7 +1130,7 @@ public:
 			if (!ListExprNode::dsqlMatch(other, ignoreMapCast))
 				return false;
 
-			const FrameExtent* o = other->as<FrameExtent>();
+			const FrameExtent* o = nodeAs<FrameExtent>(other);
 			fb_assert(o);
 
 			return unit == o->unit;
@@ -1167,7 +1199,7 @@ public:
 		if (!DsqlNode::dsqlMatch(other, ignoreMapCast))
 			return false;
 
-		const WindowClause* o = other->as<WindowClause>();
+		const WindowClause* o = nodeAs<WindowClause>(other);
 		fb_assert(o);
 
 		return exclusion == o->exclusion;
@@ -1720,6 +1752,7 @@ public:
 
 private:
 	dsql_udf* dsqlFunction;
+	bool isSubRoutine;
 };
 
 

@@ -242,5 +242,7 @@ static const struct
 	{"record_version2", byte_line},
 	{"gen_id2", gen_id2}, // 210
 	{"window_win", window_win},
+	{"default", relation_field},
+	{"store3", store3},
 	{0, 0}
 };

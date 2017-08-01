@@ -393,26 +393,8 @@ void defineComputed(DsqlCompilerScratch* dsqlScratch, RelationSourceNode* relati
 			field->subType = desc.dsc_sub_type;
 	}
 
-	if (field && field->precision == 0 && field->scale != 0)
-	{
-		switch (field->dtype)
-		{
-			case dtype_short:
-				field->precision = 4;
-				break;
-
-			case dtype_long:
-				field->precision = 9;
-				break;
-
-			case dtype_int64:
-				field->precision = 18;
-				break;
-
-			default:
-				fb_assert(!DTYPE_IS_EXACT(field->dtype));
-		}
-	}
+	if (field)
+		field->setExactPrecision();
 
 	dsqlScratch->resetContextStack();
 
@@ -1043,9 +1025,9 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, MetaName& 
 			 ++ptr, ++position)
 		{
 			const ValueExprNode* element = *ptr++;
-			const SLONG lrange = element->as<LiteralNode>()->getSlong();
+			const SLONG lrange = nodeAs<LiteralNode>(element)->getSlong();
 			element = *ptr;
-			const SLONG hrange = element->as<LiteralNode>()->getSlong();
+			const SLONG hrange = nodeAs<LiteralNode>(element)->getSlong();
 
 			if (lrange >= hrange)
 			{
@@ -1565,7 +1547,7 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		const NestConst<StmtNode>* ptr = variables->statements.begin();
 		for (const NestConst<StmtNode>* const end = variables->statements.end(); ptr != end; ++ptr)
 		{
-			const DeclareVariableNode* varNode = (*ptr)->as<DeclareVariableNode>();
+			const DeclareVariableNode* varNode = nodeAs<DeclareVariableNode>(*ptr);
 
 			if (varNode)
 			{
@@ -2011,9 +1993,11 @@ void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch
 		ARG.RDB$MECHANISM.NULL = TRUE;
 		ARG.RDB$FIELD_TYPE.NULL = TRUE;
 		ARG.RDB$FIELD_LENGTH.NULL = TRUE;
+		ARG.RDB$FIELD_SUB_TYPE.NULL = TRUE;
 		ARG.RDB$FIELD_PRECISION.NULL = TRUE;
 		ARG.RDB$FIELD_SCALE.NULL = TRUE;
 		ARG.RDB$CHARACTER_SET_ID.NULL = TRUE;
+		ARG.RDB$CHARACTER_LENGTH.NULL = TRUE;
 		ARG.RDB$COLLATION_ID.NULL = TRUE;
 		ARG.RDB$ARGUMENT_MECHANISM.NULL = TRUE;
 
@@ -2569,7 +2553,7 @@ DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		const NestConst<StmtNode>* ptr = variables->statements.begin();
 		for (const NestConst<StmtNode>* const end = variables->statements.end(); ptr != end; ++ptr)
 		{
-			const DeclareVariableNode* varNode = (*ptr)->as<DeclareVariableNode>();
+			const DeclareVariableNode* varNode = nodeAs<DeclareVariableNode>(*ptr);
 
 			if (varNode)
 			{
@@ -3878,6 +3862,7 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		{
 			if (MET_get_char_coll_subtype_info(tdbb,
 					INTL_CS_COLL_TO_TTYPE(forCharSetId, fromCollationId), &info) &&
+				forCharSetId != CS_METADATA &&
 				info.specificAttributes.hasData())
 			{
 				UCharBuffer temp;
@@ -4475,6 +4460,8 @@ void AlterDomainNode::checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld)
 	case blr_d_float:
 	case blr_double:
 	case blr_float:
+	case blr_dec64:
+	case blr_dec128:
 		switch (newFld.dyn_dtype)
 		{
 		case blr_blob:
@@ -4562,6 +4549,44 @@ void AlterDomainNode::checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld)
 			case blr_float:
 			case blr_short:
 			case blr_long:
+				break;
+
+			default:
+				// Cannot change datatype for column %s.  Conversion from base type %s to base type %s is not supported.
+				errorCode = isc_dyn_invalid_dtype_conversion;
+				break;
+			}
+			break;
+
+		case blr_dec64:
+			switch (origFld.dyn_dtype)
+			{
+			case blr_short:
+			case blr_long:
+			case blr_float:
+			case blr_d_float:
+			case blr_double:
+			case blr_dec64:
+				break;
+
+			default:
+				// Cannot change datatype for column %s.  Conversion from base type %s to base type %s is not supported.
+				errorCode = isc_dyn_invalid_dtype_conversion;
+				break;
+			}
+			break;
+
+		case blr_dec128:
+			switch (origFld.dyn_dtype)
+			{
+			case blr_short:
+			case blr_long:
+			case blr_int64:
+			case blr_float:
+			case blr_d_float:
+			case blr_double:
+			case blr_dec64:
+			case blr_dec128:
 				break;
 
 			default:
@@ -5951,7 +5976,7 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 			strcpy(RFR.RDB$GENERATOR_NAME, identitySequence.c_str());
 
 			RFR.RDB$IDENTITY_TYPE.NULL = FALSE;
-			RFR.RDB$IDENTITY_TYPE = IDENT_TYPE_BY_DEFAULT;
+			RFR.RDB$IDENTITY_TYPE = identityType.value;
 		}
 
 		if (notNullFlag.specified)
@@ -6214,7 +6239,7 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		ObjectsArray<CreateDropConstraint> constraints;
 		bool notNullFlag = false;
 
-		if (clause->identity)
+		if (clause->identityOptions)
 			notNullFlag = true;	// identity columns are implicitly not null
 
 		for (ObjectsArray<AddConstraintClause>::iterator ptr = clause->constraints.begin();
@@ -6277,8 +6302,15 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		if (clause->collate.hasData())
 			DDL_resolve_intl_type(dsqlScratch, field, clause->collate);
 
-		if (clause->identity)
+		if (clause->identityOptions)
 		{
+			if (clause->identityOptions->increment.orElse(1) == 0)
+			{
+				status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_inc_ident) <<
+					Arg::Str(field->fld_name) <<
+					Arg::Str(name));
+			}
+
 			dsc desc;
 			MET_get_domain(tdbb, *tdbb->getDefaultPool(), fieldDefinition.fieldSource, &desc, NULL);
 
@@ -6289,9 +6321,12 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 			}
 
 			DYN_UTIL_generate_generator_name(tdbb, fieldDefinition.identitySequence);
+			fieldDefinition.identityType = clause->identityOptions->type;
 
 			CreateAlterSequenceNode::store(tdbb, transaction, fieldDefinition.identitySequence,
-				fb_sysflag_identity_generator, clause->identityStart, 1);
+				fb_sysflag_identity_generator,
+				clause->identityOptions->startValue.orElse(0),
+				clause->identityOptions->increment.orElse(1));
 		}
 
 		BlrDebugWriter::BlrData defaultValue;
@@ -6355,7 +6390,7 @@ bool RelationNode::defineDefault(thread_db* /*tdbb*/, DsqlCompilerScratch* dsqlS
 
 	value.assign(dsqlScratch->getBlrData());
 
-	return ExprNode::is<NullNode>(input);
+	return nodeIs<NullNode>(input);
 }
 
 // Make a constraint object from a legacy node.
@@ -6859,104 +6894,78 @@ void RelationNode::defineSetDefaultTrigger(DsqlCompilerScratch* dsqlScratch,
 	Constraint::BlrWriter& blrWriter = constraint.blrWritersHolder.add();
 	blrWriter.init(dsqlScratch);
 
-	generateUnnamedTriggerBeginning(constraint, onUpdate, blrWriter);
+	blrWriter.appendUChar(blr_begin);
 
-	const int BLOB_BUFFER_SIZE = 4096;	// to read in blr blob for default values
-	UCHAR defaultVal[BLOB_BUFFER_SIZE];
+	USHORT index = 0;
 
 	for (ObjectsArray<MetaName>::const_iterator column(constraint.columns.begin());
 		 column != constraint.columns.end();
-		 ++column)
+		 ++column, index += 2)
+	{
+		// If the FK table's column is NOT NULL without DEFAULT, we want to avoid the engine throwing a constraint
+		// violation on our trigger's variable, so we declare two variables, one with blr_domain_type_of (don't use
+		// DEFAULT and null flag) and another blr_domain_full with DEFAULT and null flag. We swallow the error when
+		// transfering the value from the second to the first variable.
+
+		// This could be better done with blr_default, but let's maintain backward compatible BLR for now.
+
+		blrWriter.appendUChar(blr_dcl_variable);
+		blrWriter.appendUShort(index);
+
+		blrWriter.appendUChar(blr_column_name);
+		blrWriter.appendUChar(blr_domain_type_of);
+		blrWriter.appendNullString(0, name.c_str());
+		blrWriter.appendNullString(0, column->c_str());
+
+		blrWriter.appendUChar(blr_dcl_variable);
+		blrWriter.appendUShort(index + 1);
+
+		blrWriter.appendUChar(blr_column_name);
+		blrWriter.appendUChar(blr_domain_full);
+		blrWriter.appendNullString(0, name.c_str());
+		blrWriter.appendNullString(0, column->c_str());
+
+		blrWriter.appendUChar(blr_assignment);
+		blrWriter.appendUChar(blr_null);
+		blrWriter.appendUChar(blr_variable);
+		blrWriter.appendUShort(index);
+
+		blrWriter.appendUChar(blr_block);	// 1
+
+		blrWriter.appendUChar(blr_begin);	// 2
+
+		blrWriter.appendUChar(blr_init_variable);
+		blrWriter.appendUShort(index + 1);
+
+		blrWriter.appendUChar(blr_assignment);
+		blrWriter.appendUChar(blr_variable);
+		blrWriter.appendUShort(index + 1);
+		blrWriter.appendUChar(blr_variable);
+		blrWriter.appendUShort(index);
+
+		blrWriter.appendUChar(blr_end);		// 2
+
+		blrWriter.appendUChar(blr_error_handler);
+		blrWriter.appendUShort(1);
+		blrWriter.appendUChar(blr_default_code);
+		blrWriter.appendUChar(blr_begin);	// 3
+		blrWriter.appendUChar(blr_end);		// 3
+
+		blrWriter.appendUChar(blr_end);		// 1
+	}
+
+	generateUnnamedTriggerBeginning(constraint, onUpdate, blrWriter);
+
+	index = 0;
+
+	for (ObjectsArray<MetaName>::const_iterator column(constraint.columns.begin());
+		 column != constraint.columns.end();
+		 ++column, index += 2)
 	{
 		blrWriter.appendUChar(blr_assignment);
 
-		// ASF: This is wrong way to do the thing. See CORE-3073.
-
-		// Here stuff the default value as blr_literal .... or blr_null
-		// if this column does not have an applicable default.
-		// The default is determined in many cases:
-		// (1) the info. for the column is in memory. (This is because
-		// the column is being created in this ddl statement).
-		// (1-a) the table has a column level default. We get this by
-		// searching the dsql parse tree.
-		// (1-b) the table does not have a column level default, but
-		// has a domain default. We get the domain name from the dsql
-		// parse tree and call METD_get_domain_default to read the
-		// default from the system tables.
-		// (2) The default-info for this column is not in memory (This is
-		// because this is an alter table ddl statement). The table
-		// already exists; therefore we get the column and/or domain
-		// default value from the system tables by calling:
-		// METD_get_col_default().
-
-		bool foundDefault = false;
-		bool searchForDefault = true;
-
-		// Search the parse tree to find the column
-
-		for (NestConst<Clause>* ptr = clauses.begin(); ptr != clauses.end(); ++ptr)
-		{
-			if ((*ptr)->type != Clause::TYPE_ADD_COLUMN)
-				continue;
-
-			AddColumnClause* clause = static_cast<AddColumnClause*>(ptr->getObject());
-
-			if (*column != clause->field->fld_name)
-				continue;
-
-			// Now we have the right column in the parse tree. case (1) above
-
-			if (clause->defaultValue)
-			{
-				// case (1-a) above: There is a column level default
-
-				dsqlScratch->getBlrData().clear();
-				dsqlScratch->getDebugData().clear();
-
-				GEN_expr(dsqlScratch, clause->defaultValue->value);
-
-				foundDefault = true;
-				searchForDefault = false;
-
-				// Move the blr to the constraint blrWriter.
-				blrWriter.getBlrData().join(dsqlScratch->getBlrData());
-			}
-			else
-			{
-				if (!clause->field->typeOfName.hasData())
-					break;
-
-				// case: (1-b): Domain name is available. Column level default
-				// is not declared. So get the domain default.
-				const USHORT defaultLen = METD_get_domain_default(dsqlScratch->getTransaction(),
-					clause->field->typeOfName, &foundDefault, defaultVal, sizeof(defaultVal));
-
-				searchForDefault = false;
-
-				if (foundDefault)
-					stuffDefaultBlr(ByteChunk(defaultVal, defaultLen), blrWriter);
-				else
-				{
-					// Neither column level nor domain level default exists.
-					blrWriter.appendUChar(blr_null);
-				}
-			}
-
-			break;
-		}
-
-		if (searchForDefault)
-		{
-			// case 2: See if the column/domain has already been created.
-
-			const USHORT defaultLen = METD_get_col_default(dsqlScratch->getTransaction(),
-				name.c_str(), column->c_str(), &foundDefault, defaultVal, sizeof(defaultVal));
-
-			if (foundDefault)
-				stuffDefaultBlr(ByteChunk(defaultVal, defaultLen), blrWriter);
-			else
-				blrWriter.appendUChar(blr_null);
-		}
+		blrWriter.appendUChar(blr_variable);
+		blrWriter.appendUShort(index);
 
 		// The context for the foreign key relation.
 		blrWriter.appendUChar(blr_field);
@@ -6968,6 +6977,8 @@ void RelationNode::defineSetDefaultTrigger(DsqlCompilerScratch* dsqlScratch,
 
 	if (onUpdate)
 		blrWriter.appendUCharRepeated(blr_end, 3);
+
+	blrWriter.appendUChar(blr_end);
 
 	blrWriter.appendUChar(blr_eoc);	// end of the blr
 
@@ -7838,7 +7849,22 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					}
 				END_MODIFY
 			}
-			else if (clause->identityRestart)
+			else if (clause->dropIdentity)
+			{
+				if (RFR.RDB$GENERATOR_NAME.NULL)
+				{
+					// msg 285: "Column @1 is not an identity column"
+					status_exception::raise(Arg::PrivateDyn(285) << field->fld_name);
+				}
+
+				DropSequenceNode::deleteIdentity(tdbb, transaction, RFR.RDB$GENERATOR_NAME);
+
+				MODIFY RFR
+					RFR.RDB$GENERATOR_NAME.NULL = TRUE;
+					RFR.RDB$IDENTITY_TYPE.NULL = TRUE;
+				END_MODIFY
+			}
+			else if (clause->identityOptions)
 			{
 				bool found = false;
 				AutoRequest request2;
@@ -7849,11 +7875,35 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				{
 					const SLONG id = GEN.RDB$GENERATOR_ID;
 					const MetaName genName(RFR.RDB$GENERATOR_NAME);
-					const SINT64 val = clause->identityRestartValue.specified ?
-						clause->identityRestartValue.value :
-						(!GEN.RDB$INITIAL_VALUE.NULL ? GEN.RDB$INITIAL_VALUE : 0);
 
-					transaction->getGenIdCache()->put(id, val);
+					if (clause->identityOptions->restart)
+					{
+						const SINT64 val = clause->identityOptions->startValue
+							.orElse(!GEN.RDB$INITIAL_VALUE.NULL ? GEN.RDB$INITIAL_VALUE : 0);
+
+						transaction->getGenIdCache()->put(id, val);
+					}
+
+					if (clause->identityOptions->type.specified)
+					{
+						MODIFY RFR
+							RFR.RDB$IDENTITY_TYPE = clause->identityOptions->type.value;
+						END_MODIFY
+					}
+
+					if (clause->identityOptions->increment.specified)
+					{
+						if (clause->identityOptions->increment.value == 0)
+						{
+							status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_inc_ident) <<
+								Arg::Str(field->fld_name) <<
+								Arg::Str(name));
+						}
+
+						MET_update_generator_increment(tdbb, id,
+							clause->identityOptions->increment.value);
+					}
+
 					dsc desc;
 					desc.makeText((USHORT) genName.length(), ttype_metadata,
 						(UCHAR*) genName.c_str());
@@ -8616,22 +8666,21 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		ValueExprNode* nameNode = fieldNode;
 		const char* aliasName = NULL;
 
-		while (nameNode->is<DsqlAliasNode>() || nameNode->is<DerivedFieldNode>() ||
-			nameNode->is<DsqlMapNode>())
+		while (nodeIs<DsqlAliasNode>(nameNode) || nodeIs<DerivedFieldNode>(nameNode) || nodeIs<DsqlMapNode>(nameNode))
 		{
 			DsqlAliasNode* aliasNode;
 			DsqlMapNode* mapNode;
 			DerivedFieldNode* derivedField;
 
-			if ((aliasNode = nameNode->as<DsqlAliasNode>()))
+			if ((aliasNode = nodeAs<DsqlAliasNode>(nameNode)))
 			{
 				if (!aliasName)
 					aliasName = aliasNode->name.c_str();
 				nameNode = aliasNode->value;
 			}
-			else if ((mapNode = nameNode->as<DsqlMapNode>()))
+			else if ((mapNode = nodeAs<DsqlMapNode>(nameNode)))
 				nameNode = mapNode->map->map_node;
-			else if ((derivedField = nameNode->as<DerivedFieldNode>()))
+			else if ((derivedField = nodeAs<DerivedFieldNode>(nameNode)))
 			{
 				if (!aliasName)
 					aliasName = derivedField->name.c_str();
@@ -8640,7 +8689,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		}
 
 		const dsql_fld* nameField = NULL;
-		const FieldNode* fieldNameNode = nameNode->as<FieldNode>();
+		const FieldNode* fieldNameNode = nodeAs<FieldNode>(nameNode);
 
 		if (fieldNameNode)
 			nameField = fieldNameNode->dsqlField;
@@ -8654,7 +8703,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 		// Check if this is a field or an expression.
 
-		DsqlAliasNode* aliasNode = fieldNode->as<DsqlAliasNode>();
+		DsqlAliasNode* aliasNode = nodeAs<DsqlAliasNode>(fieldNode);
 
 		if (aliasNode)
 			fieldNode = aliasNode->value;
@@ -8662,7 +8711,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		dsql_fld* field = NULL;
 		const dsql_ctx* context = NULL;
 
-		fieldNameNode = fieldNode->as<FieldNode>();
+		fieldNameNode = nodeAs<FieldNode>(fieldNode);
 
 		if (fieldNameNode)
 		{
@@ -8689,7 +8738,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		if (ptr)
 		{
 			if (ptr < end)
-				fieldStr = (*ptr)->as<FieldNode>()->dsqlName.c_str();
+				fieldStr = nodeAs<FieldNode>(*ptr)->dsqlName.c_str();
 			else
 			{
 				// Generate an error when going out of this loop.
@@ -8805,6 +8854,8 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 			else
 				newField.subType = desc.dsc_sub_type;
 
+			newField.setExactPrecision();
+
 			if (relField)	// modifying a view
 			{
 				AutoRequest request2;
@@ -8900,11 +8951,11 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 				Arg::Gds(isc_col_name_err));
 		}
 
-		RseNode* querySpec = selectExpr->querySpec->as<RseNode>();
+		RseNode* querySpec = nodeAs<RseNode>(selectExpr->querySpec);
 		fb_assert(querySpec);
 
 		if (querySpec->dsqlFrom->items.getCount() != 1 ||
-			!querySpec->dsqlFrom->items[0]->is<ProcedureSourceNode>())
+			!nodeIs<ProcedureSourceNode>(querySpec->dsqlFrom->items[0]))
 		{
 			// Only one table allowed for VIEW WITH CHECK OPTION
 			status_exception::raise(
@@ -8972,10 +9023,10 @@ void CreateAlterViewNode::createCheckTrigger(thread_db* tdbb, DsqlCompilerScratc
 
 	dsqlScratch->resetContextStack();
 
-	RseNode* querySpec = selectExpr->querySpec->as<RseNode>();
+	RseNode* querySpec = nodeAs<RseNode>(selectExpr->querySpec);
 	fb_assert(querySpec);
 
-	ProcedureSourceNode* sourceNode = querySpec->dsqlFrom->items[0]->as<ProcedureSourceNode>();
+	ProcedureSourceNode* sourceNode = nodeAs<ProcedureSourceNode>(querySpec->dsqlFrom->items[0]);
 
 	if (triggerType == PRE_MODIFY_TRIGGER)
 	{
@@ -9044,14 +9095,14 @@ void CreateAlterViewNode::createCheckTrigger(thread_db* tdbb, DsqlCompilerScratc
 			NestConst<ValueExprNode> valueNod = *ptr2;
 			DsqlAliasNode* aliasNode;
 
-			if ((aliasNode = fieldNod->as<DsqlAliasNode>()))
+			if ((aliasNode = nodeAs<DsqlAliasNode>(fieldNod)))
 				fieldNod = aliasNode->value;
 
-			if ((aliasNode = valueNod->as<DsqlAliasNode>()))
+			if ((aliasNode = nodeAs<DsqlAliasNode>(valueNod)))
 				valueNod = aliasNode->value;
 
-			FieldNode* fieldNode = fieldNod->as<FieldNode>();
-			FieldNode* valueNode = valueNod->as<FieldNode>();
+			FieldNode* fieldNode = nodeAs<FieldNode>(fieldNod);
+			FieldNode* valueNode = nodeAs<FieldNode>(valueNod);
 
 			// Generate the actual comparisons.
 
@@ -9110,10 +9161,10 @@ void CreateAlterViewNode::createCheckTrigger(thread_db* tdbb, DsqlCompilerScratc
 		ValueExprNode* valueNode = *ptr;
 		DsqlAliasNode* aliasNode;
 
-		if ((aliasNode = valueNode->as<DsqlAliasNode>()))
+		if ((aliasNode = nodeAs<DsqlAliasNode>(valueNode)))
 			valueNode = aliasNode->value;
 
-		FieldNode* fieldNode = valueNode->as<FieldNode>();
+		FieldNode* fieldNode = nodeAs<FieldNode>(valueNode);
 		fb_assert(fieldNode);
 
 		savedNames.add(field->fld_name);
@@ -9552,7 +9603,7 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		for (; ptr != end; ++ptr)
 		{
 			MetaName& column = definition.columns.add();
-			column = (*ptr)->as<FieldNode>()->dsqlName;
+			column = nodeAs<FieldNode>(*ptr)->dsqlName;
 		}
 	}
 	else if (computed)
@@ -10588,7 +10639,7 @@ void MappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd
 	if (ddlTriggerAction > 0)
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, ddlTriggerAction, name, NULL);
 
-	DFW_post_work(transaction, dfw_clear_cache, NULL, MAPPING_CACHE);
+	DFW_post_work(transaction, dfw_clear_cache, NULL, Mapping::MAPPING_CACHE);
 	savePoint.release();	// everything is ok
 }
 
@@ -10980,7 +11031,7 @@ void GrantRevokeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 			}
 
 			// Invalidate system privileges cache
-			DFW_post_work(transaction, dfw_clear_cache, NULL, SYSTEM_PRIVILEGES_CACHE);
+			DFW_post_work(transaction, dfw_clear_cache, NULL, Mapping::SYSTEM_PRIVILEGES_CACHE);
 		}
 	}
 
@@ -11098,7 +11149,7 @@ void GrantRevokeNode::modifyPrivileges(thread_db* tdbb, jrd_tra* transaction, SS
 			for (NestConst<ValueExprNode>* ptr = fields->items.begin(); ptr != fields->items.end(); ++ptr)
 			{
 				grantRevoke(tdbb, transaction, object, user, privs0,
-					(*ptr)->as<FieldNode>()->dsqlName, option);
+					nodeAs<FieldNode>(*ptr)->dsqlName, option);
 			}
 		}
 		else

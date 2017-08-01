@@ -29,6 +29,8 @@
 typedef ISC_DATE;
 typedef ISC_QUAD;
 typedef ISC_TIME;
+typedef FB_DEC16;
+typedef FB_DEC34;
 
 // Versioned interface - base for all FB interfaces
 interface Versioned
@@ -439,6 +441,11 @@ interface Statement : ReferenceCounted
 	void setCursorName(Status status, const string name);
 	void free(Status status);
 	uint getFlags(Status status);
+
+version:	// 3.0 => 4.0
+	// Statement execution timeout, milliseconds
+	uint getTimeout(Status status);
+	void setTimeout(Status status, uint timeOut);
 }
 
 interface Request : ReferenceCounted
@@ -516,6 +523,15 @@ interface Attachment : ReferenceCounted
 	void ping(Status status);
 	void detach(Status status);
 	void dropDatabase(Status status);
+
+version:	// 3.0 => 4.0
+	// Idle attachment timeout, seconds
+	uint getIdleTimeout(Status status);
+	void setIdleTimeout(Status status, uint timeOut);
+
+	// Statement execution timeout, milliseconds
+	uint getStatementTimeout(Status status);
+	void setStatementTimeout(Status status, uint timeOut);
 }
 
 interface Service : ReferenceCounted
@@ -599,6 +615,9 @@ interface Server : Auth
 {
 	[notImplemented(Auth::AUTH_FAILED)]
 	int authenticate(Status status, ServerBlock sBlock, Writer writerInterface);
+
+version:		// 3.0.1 => 4.0
+	void setDbCryptCallback(Status status, CryptKeyCallback cryptCallback);
 }
 
 // .. and corresponding client
@@ -732,6 +751,13 @@ interface KeyHolderPlugin : PluginBase
 	// Missing key with given name is not an error condition for keyHandle().
 	// It should just return NULL in this case
 	CryptKeyCallback keyHandle(Status status, const string keyName);
+
+version:		// 3.0.1 => 4.0
+	// With returning true here KeyHolder attachment can use only keys, provided by this KeyHolder.
+	// Use of keys, got by database crypt plugin from other attachments, is prohibited.
+	boolean useOnlyOwnKeys(Status status);
+	// Communication in a chain of key holders - get callback interface for chaining holders
+	CryptKeyCallback chainHandle(Status status);
 }
 
 
@@ -959,8 +985,10 @@ interface Util : Versioned
 	XpbBuilder getXpbBuilder(Status status, uint kind, const uchar* buf, uint len);
 	uint setOffsets(Status status, MessageMetadata metadata, OffsetsCallback callback);
 
-version:
+version:	// 3.0 => 4.0
 	EventBlock createEventBlock(Status status, const string* events);
+	DecFloat16 getDecFloat16(Status status);
+	DecFloat34 getDecFloat34(Status status);
 }
 
 interface OffsetsCallback : Versioned
@@ -1052,6 +1080,9 @@ interface TraceParams : Versioned
 {
 	uint getCount();
 	const dsc* getParam(uint idx);
+
+version:
+	const string getTextUTF8(Status status, uint idx);
 }
 
 interface TraceStatement : Versioned
@@ -1340,4 +1371,24 @@ interface UdrPlugin : Versioned
 	void registerFunction(Status status, const string name, UdrFunctionFactory factory);
 	void registerProcedure(Status status, const string name, UdrProcedureFactory factory);
 	void registerTrigger(Status status, const string name, UdrTriggerFactory factory);
+}
+
+interface DecFloat16 : Versioned
+{
+	const uint BCD_SIZE = 16;
+	const uint STRING_SIZE = 24;	// includes terminating \0
+	void toBcd(const FB_DEC16* from, int* sign, uchar* bcd, int* exp);
+	void toString(Status status, const FB_DEC16* from, uint bufferLength, string buffer);
+	void fromBcd(int sign, const uchar* bcd, int exp, FB_DEC16* to);
+	void fromString(Status status, const string from, FB_DEC16* to);
+}
+
+interface DecFloat34 : Versioned
+{
+	const uint BCD_SIZE = 34;
+	const uint STRING_SIZE = 43;	// includes terminating \0
+	void toBcd(const FB_DEC34* from, int* sign, uchar* bcd, int* exp);
+	void toString(Status status, const FB_DEC34* from, uint bufferLength, string buffer);
+	void fromBcd(int sign, const uchar* bcd, int exp, FB_DEC34* to);
+	void fromString(Status status, const string from, FB_DEC34* to);
 }

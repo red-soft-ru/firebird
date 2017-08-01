@@ -409,7 +409,7 @@ int MergeJoin::compare(thread_db* tdbb, const NestValueArray* node1,
 
 		if (!null1 && !null2)
 		{
-			const int result = MOV_compare(desc1, desc2);
+			const int result = MOV_compare(tdbb, desc1, desc2);
 
 			if (result != 0)
 				return result;
