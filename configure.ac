@@ -1264,7 +1264,6 @@ case "$PLATFORM" in
     INSTALL_SRC_DIR=builds/install/arch-specific/linux
     AC_CONFIG_FILES([
         gen/install/makeInstallImage.sh:builds/install/arch-specific/linux/makeInstallImage.sh.in
-        gen/install/misc/firebird.xinetd:builds/install/arch-specific/linux/firebird.xinetd.in
         gen/install/misc/firebird.init.d.generic:builds/install/arch-specific/linux/firebird.init.d.generic.in
         gen/install/misc/firebird.init.d.mandrake:builds/install/arch-specific/linux/firebird.init.d.mandrake.in
         gen/install/misc/firebird.init.d.suse:builds/install/arch-specific/linux/firebird.init.d.suse.in
@@ -1273,9 +1272,7 @@ case "$PLATFORM" in
         gen/install/misc/firebird.init.d.slackware:builds/install/arch-specific/linux/firebird.init.d.slackware.in
         gen/install/misc/rc.config.firebird:builds/install/arch-specific/linux/rc.config.firebird.in
         gen/Release/firebird/bin/linuxLibrary.sh:builds/install/arch-specific/linux/linuxLibrary.sh.in
-        gen/install/misc/firebird-classic@.service:builds/install/arch-specific/linux/firebird-classic.service.in
-        gen/install/misc/firebird-classic.socket:builds/install/arch-specific/linux/firebird-classic.socket.in
-        gen/install/misc/firebird-superserver.service:builds/install/arch-specific/linux/firebird-superserver.service.in
+        gen/install/misc/firebird.service:builds/install/arch-specific/linux/firebird.service.in
     ],
 	[chmod a+x gen/install/*sh 2>/dev/null])
     ;;

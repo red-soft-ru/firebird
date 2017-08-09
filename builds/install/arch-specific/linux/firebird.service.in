@@ -1,7 +1,6 @@
 [Unit]
-Description=Firebird Database Server ( SuperServer )
+Description=Firebird Database Server
 After=syslog.target network.target
-Conflicts=firebird-classic.socket
 
 [Service]
 User=firebird

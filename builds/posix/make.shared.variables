@@ -27,10 +27,11 @@ AllObjects=
 CO1:= $(call dirObjects,common)
 CO2:= $(call dirObjects,common/classes)
 CO3:= $(call dirObjects,common/config)
-#CO4:= $(call dirObjects,common/exceptions)
-#CO5:= $(call dirObjects,common/sync)
-Common_Objects:= $(CO1) $(CO2) $(CO3) 
-# $(CO4) $(CO5)
+CO4:= $(call dirObjects,common/tomcrypt)
+#CO5:= $(call dirObjects,common/exceptions)
+#CO6:= $(call dirObjects,common/sync)
+Common_Objects:= $(CO1) $(CO2) $(CO3) $(CO4)
+# $(CO5) $(CO6)
 
 AllObjects += $(Common_Objects)
 

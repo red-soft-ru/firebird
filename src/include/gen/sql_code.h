@@ -852,6 +852,7 @@ static const struct {
 	{335545149, -901}, /* 829 subproc_defvaldecl */
 	{335545150, -901}, /* 830 subfunc_not_impl */
 	{335545151, -901}, /* 831 subproc_not_impl */
+	{335545152, -901}, /* 832 sysf_invalid_hash_algorithm */
 	{335740929, -901}, /*   1 gfix_db_name */
 	{335740930, -901}, /*   2 gfix_invalid_sw */
 	{335740932, -901}, /*   4 gfix_incmp_sw */

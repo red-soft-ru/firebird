@@ -30,6 +30,7 @@
 
 #include "firebird.h"
 #include "../common/classes/VaryStr.h"
+#include "../common/classes/Hash.h"
 #include "../jrd/SysFunction.h"
 #include "../jrd/DataTypeUtil.h"
 #include "../include/fb_blk.h"
@@ -100,6 +101,58 @@ enum TrigonFunction
 };
 
 
+struct HashAlgorithmDescriptor
+{
+	const char* name;
+	USHORT length;
+	HashContext* (*create)(MemoryPool&);
+
+	static const HashAlgorithmDescriptor* find(const char* name);
+};
+
+template <typename T>
+struct HashAlgorithmDescriptorFactory
+{
+	static HashAlgorithmDescriptor* getInstance(const char* name, USHORT length)
+	{
+		desc.name = name;
+		desc.length = length;
+		desc.create = createContext;
+		return &desc;
+	}
+
+	static HashContext* createContext(MemoryPool& pool)
+	{
+		return FB_NEW_POOL(pool) T(pool);
+	}
+
+	static HashAlgorithmDescriptor desc;
+};
+
+template <typename T> HashAlgorithmDescriptor HashAlgorithmDescriptorFactory<T>::desc;
+
+static const HashAlgorithmDescriptor* hashAlgorithmDescriptors[] = {
+	HashAlgorithmDescriptorFactory<Md5HashContext>::getInstance("MD5", 16),
+	HashAlgorithmDescriptorFactory<Sha1HashContext>::getInstance("SHA1", 20),
+	HashAlgorithmDescriptorFactory<Sha256HashContext>::getInstance("SHA256", 32),
+	HashAlgorithmDescriptorFactory<Sha512HashContext>::getInstance("SHA512", 64)
+};
+
+const HashAlgorithmDescriptor* HashAlgorithmDescriptor::find(const char* name)
+{
+	unsigned count = FB_NELEM(hashAlgorithmDescriptors);
+
+	for (unsigned i = 0; i < count; ++i)
+	{
+		if (strcmp(name, hashAlgorithmDescriptors[i]->name) == 0)
+			return hashAlgorithmDescriptors[i];
+	}
+
+	status_exception::raise(Arg::Gds(isc_sysf_invalid_hash_algorithm) << name);
+	return nullptr;
+}
+
+
 // constants
 const int oneDay = 86400;
 
@@ -144,6 +197,7 @@ void makeBinShift(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, d
 void makeCeilFloor(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeDateAdd(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeGetSetContext(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeHash(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeLeftRight(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeMod(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeOverlay(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
@@ -896,6 +950,27 @@ void makeGetSetContext(DataTypeUtilBase* /*dataTypeUtil*/, const SysFunction* fu
 	{
 		result->makeVarying(255, ttype_none);
 		result->setNullable(true);
+	}
+}
+
+
+void makeHash(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result,
+	int argsCount, const dsc** args)
+{
+	fb_assert(argsCount >= function->minArgCount);
+
+	if (argsCount == 1)
+		makeInt64Result(dataTypeUtil, function, result, argsCount, args);
+	else if (argsCount >= 2)
+	{
+		if (!args[1]->dsc_address || !args[1]->isText())	// not a constant
+			status_exception::raise(Arg::Gds(isc_sysf_invalid_hash_algorithm) << "<not a string constant>");
+
+		MetaName algorithmName;
+		MOV_get_metaname(JRD_get_thread_data(), args[1], algorithmName);
+
+		result->makeVarying(HashAlgorithmDescriptor::find(algorithmName.c_str())->length, ttype_binary);
+		result->setNullable(args[0]->isNullable());
 	}
 }
 
@@ -2639,7 +2714,7 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 dsc* evlHash(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	impure_value* impure)
 {
-	fb_assert(args.getCount() == 1);
+	fb_assert(args.getCount() >= 1);
 
 	jrd_req* request = tdbb->getRequest();
 
@@ -2647,9 +2722,27 @@ dsc* evlHash(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	if (request->req_flags & req_null)	// return NULL if value is NULL
 		return NULL;
 
-	impure->vlu_misc.vlu_int64 = 0;
+	AutoPtr<HashContext> hashContext;
+	MemoryPool& pool = *request->req_pool;
 
-	UCHAR* address;
+	if (args.getCount() >= 2)
+	{
+		const dsc* algorithmDesc = EVL_expr(tdbb, request, args[1]);
+		if (request->req_flags & req_null)	// return NULL if algorithm is NULL
+			return NULL;
+
+		if (!algorithmDesc->isText())
+			status_exception::raise(Arg::Gds(isc_sysf_invalid_hash_algorithm) << "<not a string constant>");
+
+		MetaName algorithmName;
+		MOV_get_metaname(tdbb, algorithmDesc, algorithmName);
+		hashContext.reset(HashAlgorithmDescriptor::find(algorithmName.c_str())->create(pool));
+	}
+	else
+	{
+		hashContext.reset(FB_NEW_POOL(pool) WeakHashContext());
+		impure->vlu_misc.vlu_int64 = 0;
+	}
 
 	if (value->isBlob())
 	{
@@ -2659,40 +2752,37 @@ dsc* evlHash(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 
 		while (!(blob->blb_flags & BLB_eof))
 		{
-			address = buffer;
-			const ULONG length = blob->BLB_get_data(tdbb, address, sizeof(buffer), false);
-
-			for (const UCHAR* end = address + length; address < end; ++address)
-			{
-				impure->vlu_misc.vlu_int64 = (impure->vlu_misc.vlu_int64 << 4) + *address;
-
-				const SINT64 n = impure->vlu_misc.vlu_int64 & FB_CONST64(0xF000000000000000);
-				if (n)
-					impure->vlu_misc.vlu_int64 ^= n >> 56;
-				impure->vlu_misc.vlu_int64 &= ~n;
-			}
+			const ULONG length = blob->BLB_get_data(tdbb, buffer, sizeof(buffer), false);
+			hashContext->update(buffer, length);
 		}
 
 		blob->BLB_close(tdbb);
 	}
 	else
 	{
+		UCHAR* address;
 		MoveBuffer buffer;
 		const ULONG length = MOV_make_string2(tdbb, value, value->getTextType(), &address, buffer, false);
-
-		for (const UCHAR* end = address + length; address < end; ++address)
-		{
-			impure->vlu_misc.vlu_int64 = (impure->vlu_misc.vlu_int64 << 4) + *address;
-
-			const SINT64 n = impure->vlu_misc.vlu_int64 & FB_CONST64(0xF000000000000000);
-			if (n)
-				impure->vlu_misc.vlu_int64 ^= n >> 56;
-			impure->vlu_misc.vlu_int64 &= ~n;
-		}
+		hashContext->update(address, length);
 	}
 
-	// make descriptor for return value
-	impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);
+	HashContext::Buffer resultBuffer;
+	hashContext->finish(resultBuffer);
+
+	if (args.getCount() >= 2)
+	{
+		dsc result;
+		result.makeText(resultBuffer.getCount(), ttype_binary, resultBuffer.begin());
+		EVL_make_value(tdbb, &result, impure);
+	}
+	else
+	{
+		fb_assert(resultBuffer.getCount() == sizeof(SINT64));
+		memcpy(&impure->vlu_misc.vlu_int64, resultBuffer.begin(), sizeof(SINT64));
+
+		// make descriptor for return value
+		impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);
+	}
 
 	return &impure->vlu_desc;
 }
@@ -4274,7 +4364,7 @@ const SysFunction SysFunction::functions[] =
 		{"EXP", 1, 1, setParamsDblDec, makeDblDecResult, evlExp, NULL},
 		{"FLOOR", 1, 1, setParamsDblDec, makeCeilFloor, evlFloor, NULL},
 		{"GEN_UUID", 0, 0, NULL, makeUuid, evlGenUuid, NULL},
-		{"HASH", 1, 1, NULL, makeInt64Result, evlHash, NULL},
+		{"HASH", 1, 2, NULL, makeHash, evlHash, NULL},
 		{"LEFT", 2, 2, setParamsSecondInteger, makeLeftRight, evlLeft, NULL},
 		{"LN", 1, 1, setParamsDblDec, makeDblDecResult, evlLnLog10, (void*) funLnat},
 		{"LOG", 2, 2, setParamsDblDec, makeDblDecResult, evlLog, NULL},

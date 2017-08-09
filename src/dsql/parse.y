@@ -7709,7 +7709,6 @@ system_function_std_syntax
 	| EXP
 	| FLOOR
 	| GEN_UUID
-	| HASH
 	| LEFT
 	| LN
 	| LOG
@@ -7767,6 +7766,14 @@ system_function_special_syntax
 		{
 			$$ = newNode<SysFuncCallNode>(*$1,
 				newNode<ValueListNode>(MAKE_const_slong($3))->add($5)->add($7));
+			$$->dsqlSpecialSyntax = true;
+		}
+	| HASH '(' value ')'
+		{ $$ = newNode<SysFuncCallNode>(*$1, newNode<ValueListNode>($3)); }
+	| HASH '(' value USING valid_symbol_name ')'
+		{
+			$$ = newNode<SysFuncCallNode>(*$1,
+				newNode<ValueListNode>($3)->add(MAKE_str_constant(newIntlString($5->c_str()), CS_ASCII)));
 			$$->dsqlSpecialSyntax = true;
 		}
 	| OVERLAY '(' value PLACING value FROM value FOR value ')'

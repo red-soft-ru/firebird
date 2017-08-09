@@ -9,7 +9,7 @@
 #
 # /usr/sbin/rcfirebird
 #
-# System startup script for the Firebird SuperServer
+# System startup script for the Firebird Server
 #
 ### BEGIN INIT INFO
 # Provides: firebird

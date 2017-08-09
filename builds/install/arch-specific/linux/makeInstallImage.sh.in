@@ -285,10 +285,9 @@ copyFiles() {
 	#misc
     cp $BuildRootDir/src/misc/intl.sql							${TargetDir}@FB_MISCDIR@
     cp $BuildRootDir/src/misc/upgrade/v3.0/security_database*	${TargetDir}@FB_MISCDIR@/upgrade/security
-    cp $BuildRootDir/gen/install/misc/firebird.xinetd			${TargetDir}@FB_MISCDIR@
 	cp $BuildRootDir/gen/install/misc/firebird.init.d.*			${TargetDir}@FB_MISCDIR@
 	cp $BuildRootDir/gen/install/misc/rc.config.firebird		${TargetDir}@FB_MISCDIR@
-    cp $BuildRootDir/gen/install/misc/firebird-*				${TargetDir}@FB_MISCDIR@
+    cp $BuildRootDir/gen/install/misc/firebird.service			${TargetDir}@FB_MISCDIR@
 
 	chmod -R go-rwx ${TargetDir}@FB_MISCDIR@
 

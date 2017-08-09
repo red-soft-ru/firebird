@@ -111,8 +111,7 @@ getInitScriptLocation() {
 #  register/start/stop server using systemd
 
 SYSTEMCTL=systemctl
-CLASSIC_CTRL=${fb_startup_name}-classic.socket
-SUPER_CTRL=${fb_startup_name}-superserver.service
+CTRL=${fb_startup_name}.service
 SYSTEMD_DIR=/usr/lib/systemd/system
 [ -d $SYSTEMD_DIR ] || SYSTEMD_DIR=/lib/systemd/system
 TMPFILE_CONF=/usr/lib/tmpfiles.d/firebird.conf
@@ -140,13 +139,9 @@ installSystemdCtrlFiles() {
 			exit 1
 		fi
 
-		editFile "@FB_MISCDIR@/firebird-superserver.service" ExecStart "ExecStart=${fb_install_prefix}/bin/fbguard -pidfile $PidDir/${fb_startup_name}.pid -daemon -forever"
-		editFile "@FB_MISCDIR@/firebird-superserver.service" PIDFile "PIDFile=$PidDir/${fb_startup_name}.pid"
-		editFile "@FB_MISCDIR@/firebird-classic@.service" ExecStart "ExecStart=${fb_install_prefix}/bin/firebird"
-
-		cp @FB_MISCDIR@/firebird-superserver.service "${SYSTEMD_DIR}/${fb_startup_name}-superserver.service"
-		cp @FB_MISCDIR@/firebird-classic@.service "${SYSTEMD_DIR}/${fb_startup_name}-classic@.service"
-		cp @FB_MISCDIR@/firebird-classic.socket "${SYSTEMD_DIR}/${fb_startup_name}-classic.socket"
+		editFile "@FB_MISCDIR@/firebird.service" ExecStart "ExecStart=${fb_install_prefix}/bin/fbguard -pidfile $PidDir/${fb_startup_name}.pid -daemon -forever"
+		editFile "@FB_MISCDIR@/firebird.service" PIDFile "PIDFile=$PidDir/${fb_startup_name}.pid"
+		cp @FB_MISCDIR@/firebird.service "${SYSTEMD_DIR}/${fb_startup_name}.service"
 
 		mkdir -p ${PidDir}
 		chown $RunUser:$RunGroup ${PidDir}
@@ -156,7 +151,7 @@ installSystemdCtrlFiles() {
 }
 
 osRemoveStartupFiles() {
-	rm -f ${SYSTEMD_DIR}/${fb_startup_name}-*
+	rm -f ${SYSTEMD_DIR}/${fb_startup_name}.*
 	rm -f ${TMPFILE_CONF}
 }
 
@@ -180,33 +175,10 @@ systemdSrv() {
 	return 1
 }
 
-classicSrv() {
-	op=${1}
-
-	systemdSrv ${op} ${CLASSIC_CTRL}
-}
-
 superSrv() {
 	op=${1}
 
-	systemdSrv ${op} ${SUPER_CTRL}
-}
-
-osRegisterClassicServer() {
-	installSystemdCtrlFiles
-	classicSrv enable
-}
-
-osUnregisterClassicServer() {
-	classicSrv disable
-}
-
-osStartClassicServer() {
-	classicSrv start
-}
-
-osStopClassicServer() {
-	classicSrv stop
+	systemdSrv ${op} ${CTRL}
 }
 
 registerSuperServer() {
@@ -235,9 +207,6 @@ stopSuperServer() {
 	return 1
 }
 
-
-# Additional OS settings
-systemdPresent && OS_Has_Specific_Classic_Startup=yes
 
 
 #------------------------------------------------------------------------
@@ -493,7 +462,7 @@ removeServiceAutostart() {
 
 standaloneServerInstalled() {
 	if systemdPresent; then
-		${SYSTEMCTL} --quiet is-enabled ${SUPER_CTRL} && return 0
+		${SYSTEMCTL} --quiet is-enabled ${CTRL} && return 0
 		return 1
 	fi
 

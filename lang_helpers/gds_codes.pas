@@ -1709,6 +1709,8 @@ const
 	gds_subfunc_not_impl                 = 335545150;
 	isc_subproc_not_impl                 = 335545151;
 	gds_subproc_not_impl                 = 335545151;
+	isc_sysf_invalid_hash_algorithm      = 335545152;
+	gds_sysf_invalid_hash_algorithm      = 335545152;
 	isc_gfix_db_name                     = 335740929;
 	gds_gfix_db_name                     = 335740929;
 	isc_gfix_invalid_sw                  = 335740930;

@@ -227,64 +227,6 @@ checkLibraries() {
 
 
 #------------------------------------------------------------------------
-#  resetInetdServer
-#  Works for both inetd and xinetd
-
-resetInetdServer() {
-	pid=`grepProcess "inetd|xinetd" | awk '{print $2}'`
-    if [ "$pid" ]
-    then
-        kill -HUP $pid
-    fi
-}
-
-
-#------------------------------------------------------------------------
-# remove the xinetd config file(s)
-
-removeXinetdEntry() {
-	file="${XINETD}${fb_startup_name}"
-	[ -f $file ] && rm -f $file
-}
-
-
-#------------------------------------------------------------------------
-# remove the line from inetd file
-
-removeInetdEntry() {
-    FileName=/etc/inetd.conf
-    oldLine=`grep "^@FB_SERVICE_NAME@" $FileName`
-    removeLineFromFile "$FileName" "$oldLine"
-}
-
-
-#------------------------------------------------------------------------
-#  Remove (x)inetd service entry and restart the service.
-#  Check to see if we have xinetd installed or plain inetd.  
-#  Install differs for each of them.
-
-removeInetdServiceEntry() {
-	if [ "$OS_Has_Specific_Classic_Startup" ]
-	then
-		osStopClassicServer
-		osUnregisterClassicServer
-		return
-	fi
-
-    if [ -d /etc/xinetd.d ]
-    then
-        removeXinetdEntry
-    elif [ -f /etc/inetd.conf ]
-	then
-        removeInetdEntry
-    fi
-
-    # make [x]inetd reload configuration
-	resetInetdServer
-}
-
-
-#------------------------------------------------------------------------
 #  grep process by name
 
 grepProcess() {
@@ -359,12 +301,6 @@ checkIfServerRunning() {
         echo "Please quit all Firebird applications and then proceed." 
         exit 1 
     fi
-
-# have to be root to modify (x)inetd
-	if [ "$1" != "install-embedded" ]
-	then
-		removeInetdServiceEntry
-	fi
 }
 
 
@@ -1006,64 +942,6 @@ fixFilePermissions() {
 }
 
 
-#------------------------------------------------------------------------
-#  Update inetd service entry
-#  This just adds/replaces the service entry line
-
-updateInetdEntry() {
-    newLine="@FB_SERVICE_NAME@  stream  tcp     nowait.30000      $RunUser @FB_SBINDIR@/firebird firebird # Firebird Database Remote Server"
-    replaceLineInFile /etc/inetd.conf "$newLine" "^@FB_SERVICE_NAME@"
-}
-
-
-#------------------------------------------------------------------------
-#  Update xinetd service entry
-
-updateXinetdEntry() {
-    InitFile="${XINETD}${fb_startup_name}"
-    cp @FB_MISCDIR@/firebird.xinetd $InitFile
-
-    if [ -f $InitFile ]
-    then
-        editFile $InitFile user "\tuser\t\t\t= $RunUser"
-        editFile $InitFile server "\tserver\t\t= ${fb_install_prefix}/bin/firebird"
-        yesno=yes
-        [ ${fb_install_prefix} = ${default_prefix} ] && yesno=no
-       	editFile $InitFile disable "\tdisable\t\t= ${yesno}"
-    fi
-}
-
-
-#------------------------------------------------------------------------
-#  Update inetd service entry
-#  Check to see if we have xinetd installed or plain inetd.
-#  Install differs for each of them.
-
-updateInetdServiceEntry() {
-	if ! standaloneServerInstalled
-	then
-		if [ "$OS_Has_Specific_Classic_Startup" ]
-		then
-			osRegisterClassicServer
-			return
-		fi
-
-	    if [ -d /etc/xinetd.d ]
-    	then
-        	updateXinetdEntry
-    	else
-    		if [ ${fb_install_prefix} = ${default_prefix} ]
-    		then
-        		updateInetdEntry
-        	else
-        		echo "Install of classic server in non-default path is not supported with inetd - xinetd needed"
-        		exit 1
-        	fi
-		fi
-    fi
-}
-
-
 fbUsage() {
 	pf=""
 	if [ "@CHANGE_PATH_SUPPORT@" = "yes" ]
@@ -1172,21 +1050,11 @@ extractBuildroot() {
 
 
 #---------------------------------------------------------------------------
-#  depending upon presence of startup script starts super or classic server
+#  starts firebird server
 
 startFirebird() {
 	if [ "${fb_install_prefix}" = "${default_prefix}" ]
 	then
-		if standaloneServerInstalled; then
-			startService
-		else
-			if [ "$OS_Has_Specific_Classic_Startup" ]
-			then
-				osStartClassicServer
-				return
-			fi
-
-			resetInetdServer
-		fi
+		startService
 	fi
 }

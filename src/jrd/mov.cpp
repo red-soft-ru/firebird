@@ -176,7 +176,7 @@ void MOV_get_metaname(Jrd::thread_db* tdbb, const dsc* desc, MetaName& name)
 
 	fb_assert(length && ptr);
 	fb_assert(length <= MAX_SQL_IDENTIFIER_LEN);
-	fb_assert(ttype == ttype_metadata);
+	fb_assert(ttype == ttype_ascii || ttype == ttype_metadata);
 
 	name.assign(reinterpret_cast<char*>(ptr), length);
 }

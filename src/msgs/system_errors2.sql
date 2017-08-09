@@ -838,6 +838,7 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (-901, '42', '000', 0, 829, 'subproc_defvaldecl', NULL, NULL)
 (-901, '42', '000', 0, 830, 'subfunc_not_impl', NULL, NULL)
 (-901, '42', '000', 0, 831, 'subproc_not_impl', NULL, NULL)
+(-901, '42', '000', 0, 832, 'sysf_invalid_hash_algorithm', NULL, NULL)
 -- GFIX
 (-901, '00', '000', 3, 1, 'gfix_db_name', NULL, NULL)
 (-901, '00', '000', 3, 2, 'gfix_invalid_sw', NULL, NULL)
