@@ -503,19 +503,6 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 	if (irt_desc->getRoot() == 0)
 		return false;
 
-	IndexLock* index = CMP_get_index_lock(tdbb, relation, id);
-	if (index)
-	{
-		// try to get lock on the index, if it's unsuccessful, then
-		// the index already locked on deletion stage
-		if(!LCK_lock(tdbb, index->idl_lock, LCK_SR, LCK_NO_WAIT))
-		{
-			// clean status vector after trying lock
-			fb_utils::init_status(tdbb->tdbb_status_vector);
-			return false;
-		}
-	}
-
 	idx->idx_id = id;
 	idx->idx_root = irt_desc->getRoot();
 	idx->idx_count = irt_desc->irt_keys;

@@ -313,20 +313,6 @@ const ULONG req_proc_fetch		= 0x200L;		// Fetch from procedure in progress
 const ULONG req_same_tx_upd		= 0x400L;		// record was updated by same transaction
 const ULONG req_reserved		= 0x800L;		// Request reserved for client
 
-
-// Index lock block
-
-class IndexLock : public pool_alloc<type_idl>
-{
-public:
-	IndexLock*	idl_next;		// Next index lock block for relation
-	Lock*		idl_lock;		// Lock block
-	jrd_rel*	idl_relation;	// Parent relation
-	USHORT		idl_id;			// Index id
-	USHORT		idl_count;		// Use count
-	bool		idl_deletion;	// Deletion stage
-};
-
 } //namespace Jrd
 
 #endif // JRD_REQ_H

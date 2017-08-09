@@ -64,7 +64,7 @@ namespace Jrd
 	class ExternalFile;
 	class ViewContext;
 	class IndexBlock;
-	class IndexLock;
+	class jrd_idx;
 	class ArrayField;
 	struct sort_context;
 	class vcl;

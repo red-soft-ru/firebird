@@ -9797,34 +9797,6 @@ bool DropIndexNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 	return true;
 }
 
-static int blocking_ast_index(void* ast_object)
-{
-/**************************************
- *
- *	b l o c k i n g _ a s t _ i n d e x
- *
- **************************************
- *
- * Functional description
- *	Someone is trying to get lock on index.
- *	If index is not on deletion, relese the lock.
- *
- **************************************/
-	IndexLock* const index = static_cast<IndexLock*>(ast_object);
-	try
-	{
-		if (!index->idl_deletion && index->idl_lock)
-		{
-			Database* const dbb = index->idl_lock->lck_dbb;
-			AsyncContextHolder tdbb(dbb, FB_FUNCTION, index->idl_lock);
-			LCK_release(tdbb, index->idl_lock);
-		}
-	}
-	catch (const Exception&)
-	{} // no-op
-
-	return 0;
-}
 
 void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
@@ -9845,15 +9817,13 @@ void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 	if (idx_id != -1)
 	{
 		jrd_rel* relation = MET_lookup_relation_id(tdbb, rel_id, true);
-		IndexLock* index = CMP_get_index_lock(tdbb, relation, idx_id);
-		if (index)
-		{
-			// mark the index to deletion stage and get exclusive lock on it
-			index->idl_lock->lck_ast = blocking_ast_index;
-			index->idl_lock->lck_object = index;
-			index->idl_deletion = true;
-			LCK_lock(tdbb, index->idl_lock, LCK_EX, LCK_WAIT);
-		}
+		// notify others through AST to mark as deleted
+		AutoPtr<Lock> temp_lock(FB_NEW_RPT(*tdbb->getDefaultPool(), sizeof(SLONG))
+			Lock(tdbb, sizeof(SLONG), LCK_idx_exist));
+		temp_lock->setKey(relation->rel_id << 16 | idx_id);
+
+		if (LCK_lock(tdbb, temp_lock, LCK_EX, LCK_WAIT))
+			LCK_release(tdbb, temp_lock);
 	}
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)

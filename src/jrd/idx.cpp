@@ -533,12 +533,15 @@ void IDX_create_index(thread_db* tdbb,
 
 	if ((relation->rel_flags & REL_temp_conn) && (relation->getPages(tdbb)->rel_instance_id != 0))
 	{
-		IndexLock* idx_lock = CMP_get_index_lock(tdbb, relation, idx->idx_id);
-		if (idx_lock)
+		jrd_idx* index = MET_get_index_lock(tdbb, relation, idx->idx_id);
+		if (index)
 		{
-			++idx_lock->idl_count;
-			if (idx_lock->idl_count == 1)
-				LCK_lock(tdbb, idx_lock->idl_lock, LCK_SR, LCK_WAIT);
+			index->inc();
+			if (index->count() == 1)
+			{
+				LCK_lock(tdbb, index->idx_lock, LCK_SR, LCK_WAIT);
+				index->setDeleted(false);
+			}
 		}
 	}
 }
@@ -606,13 +609,9 @@ void IDX_delete_index(thread_db* tdbb, jrd_rel* relation, USHORT id)
 	if ((relation->rel_flags & REL_temp_conn) && (relation->getPages(tdbb)->rel_instance_id != 0) &&
 		tree_exists)
 	{
-		IndexLock* idx_lock = CMP_get_index_lock(tdbb, relation, id);
-		if (idx_lock)
-		{
-			if (!--idx_lock->idl_count) {
-				LCK_release(tdbb, idx_lock->idl_lock);
-			}
-		}
+		jrd_idx* index = MET_get_index_lock(tdbb, relation, id);
+		if (index)
+			index->dec(tdbb);
 	}
 }
 
@@ -646,13 +645,9 @@ void IDX_delete_indices(thread_db* tdbb, jrd_rel* relation, RelationPages* relPa
 
 		if (is_temp && tree_exists)
 		{
-			IndexLock* idx_lock = CMP_get_index_lock(tdbb, relation, i);
-			if (idx_lock)
-			{
-				if (!--idx_lock->idl_count) {
-					LCK_release(tdbb, idx_lock->idl_lock);
-				}
-			}
+			jrd_idx* index = MET_get_index_lock(tdbb, relation, i);
+			if (index)
+				index->dec(tdbb);
 		}
 	}
 

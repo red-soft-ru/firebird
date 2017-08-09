@@ -90,6 +90,7 @@ Jrd::DmlNode*	MET_get_dependencies(Jrd::thread_db*, Jrd::jrd_rel*, const UCHAR*,
 								Jrd::jrd_tra*, const Firebird::MetaName& = Firebird::MetaName());
 Jrd::jrd_fld*	MET_get_field(const Jrd::jrd_rel*, USHORT);
 ULONG		MET_get_rel_flags_from_TYPE(USHORT);
+Jrd::jrd_idx*	MET_get_index_lock(Jrd::thread_db*, Jrd::jrd_rel*, USHORT);
 void		MET_get_shadow_files(Jrd::thread_db*, bool);
 void		MET_load_db_triggers(Jrd::thread_db*, int);
 void		MET_load_ddl_triggers(Jrd::thread_db* tdbb);

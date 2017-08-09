@@ -1294,26 +1294,6 @@ void DFW_delete_deferred( jrd_tra* transaction, SavNumber sav_number)
 	for (DfwHash::iterator i(h->hash); i.hasData();)
 	{
 		DeferredWork* work(i);
-		// If the index deleting was rolled back,
-		// We need to deque the index lock from lock manager
-		if (work->dfw_type == dfw_delete_index ||
-			work->dfw_type == dfw_delete_expression_index)
-		{
-			DeferredWork* w = work;
-			const DeferredWork* arg = w->findArg(dfw_arg_index_name);
-			fb_assert(arg);
-			fb_assert(arg->dfw_id > 0);
-			const USHORT id = arg->dfw_id - 1;
-
-			Jrd::thread_db* tdbb = JRD_get_thread_data();
-			jrd_rel* relation = MET_lookup_relation_id(tdbb, w->dfw_id, false);
-
-			IndexLock* index = CMP_get_index_lock(tdbb, relation, id);
-
-			// mark index as non deleted and make it shared
-			index->idl_deletion = false;
-			LCK_lock(tdbb, index->idl_lock, LCK_SR, LCK_WAIT);
-		}
 		++i;
 		delete work;
 	}
@@ -3013,12 +2993,11 @@ static void cleanup_index_creation(thread_db* tdbb, DeferredWork* work, jrd_tra*
 				}
 				else if (tree_exists)
 				{
-					IndexLock* const idx_lock = CMP_get_index_lock(tdbb, relation, work->dfw_id);
+					jrd_idx* const idx_lock = MET_get_index_lock(tdbb, relation, work->dfw_id);
 
 					if (idx_lock)
 					{
-						if (!--idx_lock->idl_count)
-							LCK_release(tdbb, idx_lock->idl_lock);
+						idx_lock->dec(tdbb);
 					}
 				}
 			}
@@ -4433,7 +4412,7 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
  * Functional description
  *
  **************************************/
-	IndexLock* index = NULL;
+	jrd_idx* index = NULL;
 
 	SET_TDBB(tdbb);
 
@@ -4465,11 +4444,11 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 	switch (phase)
 	{
 	case 0:
-		index = CMP_get_index_lock(tdbb, relation, id);
+		index = MET_get_index_lock(tdbb, relation, id);
 		if (index)
 		{
-			if (!index->idl_count)
-				LCK_release(tdbb, index->idl_lock);
+			if (!index->count())
+				LCK_release(tdbb, index->idx_lock);
 		}
 		return false;
 
@@ -4487,50 +4466,50 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		// will remains 1 and will be decremented by IDX_delete_index at
 		// phase 4
 
-		index = CMP_get_index_lock(tdbb, relation, id);
+		index = MET_get_index_lock(tdbb, relation, id);
 		if (index)
 		{
 			// take into account lock probably used by temp index instance
 			bool temp_lock_released = false;
-			if (isTempIndex && (index->idl_count == 1))
+			if (isTempIndex && (index->count() == 1))
 			{
 				index_desc idx;
 				if (BTR_lookup(tdbb, relation, id, &idx, relPages))
 				{
-					index->idl_count--;
-					LCK_release(tdbb, index->idl_lock);
+					index->dec(tdbb);
 					temp_lock_released = true;
 				}
 			}
 
 			// Try to clear trigger cache to release lock
-			if (index->idl_count)
+			if (index->count())
 				MET_clear_cache(tdbb);
 
 			if (!isTempIndex)
 			{
-				if (index->idl_count ||
-					!LCK_lock(tdbb, index->idl_lock, LCK_EX, transaction->getLockWait()))
+				if (index->count() ||
+					!LCK_lock(tdbb, index->idx_lock, LCK_EX, transaction->getLockWait()))
 				{
 					// restore lock used by temp index instance
 					if (temp_lock_released)
 					{
-						LCK_lock(tdbb, index->idl_lock, LCK_SR, LCK_WAIT);
-						index->idl_count++;
+						LCK_lock(tdbb, index->idx_lock, LCK_SR, LCK_WAIT);
+						index->setDeleted(false);
+						index->inc();
 					}
 
 					raiseObjectInUseError("INDEX", arg->dfw_name);
 				}
-				index->idl_count++;
+				index->inc();
 			}
 		}
 
 		return true;
 
 	case 4:
-		index = CMP_get_index_lock(tdbb, relation, id);
+		index = MET_get_index_lock(tdbb, relation, id);
 		if (isTempIndex && index)
-			index->idl_count++;
+			index->inc();
 		IDX_delete_index(tdbb, relation, id);
 
 		if (isTempIndex)
@@ -4566,24 +4545,21 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 			* it for the exclusive lock it would have to be 1.
 			* IF now it is NOT 1 then someone else got a lock to
 			* the index and something is seriously wrong */
-			fb_assert(index->idl_count == 1);
-			if (!--index->idl_count)
+			fb_assert(index->count() == 1);
+			if (!index->dec(tdbb))
 			{
 				// Release index existence lock and memory.
 
-				for (IndexLock** ptr = &relation->rel_index_locks; *ptr; ptr = &(*ptr)->idl_next)
+				for (jrd_idx** ptr = &relation->rel_index_locks; *ptr; ptr = &(*ptr)->idx_next)
 				{
 					if (*ptr == index)
 					{
-						*ptr = index->idl_next;
+						*ptr = index->idx_next;
 						break;
 					}
 				}
-				if (index->idl_lock)
-				{
-					LCK_release(tdbb, index->idl_lock);
-					delete index->idl_lock;
-				}
+				if (index->idx_lock)
+					delete index->idx_lock;
 				delete index;
 
 				// Release index refresh lock and memory.

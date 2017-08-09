@@ -525,3 +525,48 @@ void RelationPages::free(RelationPages*& nextFree)
 	dpMap.clear();
 	dpMapMark = 0;
 }
+
+jrd_idx::jrd_idx(thread_db* tdbb, jrd_rel* relation, USHORT id)
+{
+	idx_next = relation->rel_index_locks;
+	relation->rel_index_locks = this;
+	idx_relation = relation;
+	idx_id = id;
+	idx_count = 0;
+
+	Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0) Lock(tdbb, sizeof(SLONG), LCK_idx_exist);
+	idx_lock = lock;
+	lock->setKey((relation->rel_id << 16) | id);
+}
+
+void jrd_idx::setDeleted(bool flag)
+{
+	idx_deletion = flag;
+}
+
+bool jrd_idx::isDeleted()
+{
+	return idx_deletion;
+}
+
+USHORT jrd_idx::count()
+{
+	return idx_count;
+}
+
+USHORT jrd_idx::inc()
+{
+	return ++idx_count;
+}
+
+USHORT jrd_idx::dec(thread_db* tdbb)
+{
+	if (!--idx_count && idx_deletion)
+		LCK_release(tdbb, idx_lock);
+	return idx_count;
+}
+
+void jrd_idx::free()
+{
+	idx_count = 0;
+}

@@ -108,6 +108,7 @@ using namespace Firebird;
 
 static int blocking_ast_dsql_cache(void* ast_object);
 static DSqlCacheItem* get_dsql_cache_item(thread_db* tdbb, int type, const QualifiedName& name);
+static int blocking_ast_index(void*);
 static int blocking_ast_procedure(void*);
 static int blocking_ast_relation(void*);
 static int partners_ast_relation(void*);
@@ -4294,6 +4295,40 @@ static DSqlCacheItem* get_dsql_cache_item(thread_db* tdbb, int type, const Quali
 }
 
 
+static int blocking_ast_index(void* ast_object)
+{
+/**************************************
+ *
+ *	b l o c k i n g _ a s t _ i n d e x
+ *
+ **************************************
+ *
+ * Functional description
+ * Someone is trying to drop index.
+ * If index isn't using, release the lock.
+ * Otherwise, mark index as deleted.
+ *
+ **************************************/
+	jrd_idx* const index = static_cast<jrd_idx*>(ast_object);
+	try
+	{
+		if (index->idx_lock)
+		{
+			Database* const dbb = index->idx_lock->lck_dbb;
+			AsyncContextHolder tdbb(dbb, FB_FUNCTION, index->idx_lock);
+			if (index->count())
+				index->setDeleted(true);
+			else
+				LCK_release(tdbb, index->idx_lock);
+		}
+	}
+	catch (const Exception&)
+	{} // no-op
+
+	return 0;
+}
+
+
 static int blocking_ast_procedure(void* ast_object)
 {
 /**************************************
@@ -4473,6 +4508,45 @@ ULONG MET_get_rel_flags_from_TYPE(USHORT type)
 	}
 
 	return ret;
+}
+
+
+Jrd::jrd_idx* MET_get_index_lock(thread_db* tdbb, jrd_rel* relation, USHORT id)
+{
+	/**************************************
+	 *
+	 *	M E T _ g e t _ i n d e x _ l o c k
+	 *
+	 **************************************
+	 *
+	 * Functional description
+	 *	Get index lock block for index.  If one doesn't exist,
+	 *	make one.
+	 *
+	 **************************************/
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+
+	DEV_BLKCHK(relation, type_rel);
+
+	if (relation->rel_id < (USHORT) rel_MAX) {
+		return NULL;
+	}
+
+	// for to find an existing block
+
+	for (jrd_idx* index = relation->rel_index_locks; index; index = index->idx_next)
+	{
+		if (index->idx_id == id) {
+			return index;
+		}
+	}
+
+	jrd_idx* index = FB_NEW_POOL(*relation->rel_pool) jrd_idx(tdbb, relation, id);
+	index->idx_lock->lck_ast = blocking_ast_index;
+	index->idx_lock->lck_object = index;
+
+	return index;
 }
 
 

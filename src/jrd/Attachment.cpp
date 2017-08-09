@@ -506,12 +506,12 @@ void Jrd::Attachment::releaseLocks(thread_db* tdbb)
 					relation->rel_flags |= REL_gc_lockneed;
 				}
 
-				for (IndexLock* index = relation->rel_index_locks; index; index = index->idl_next)
+				for (jrd_idx* index = relation->rel_index_locks; index; index = index->idx_next)
 				{
-					if (index->idl_lock)
+					if (index->idx_lock)
 					{
-						index->idl_count = 0;
-						LCK_release(tdbb, index->idl_lock);
+						index->free();
+						LCK_release(tdbb, index->idx_lock);
 					}
 				}
 

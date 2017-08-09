@@ -251,7 +251,7 @@ public:
 	Lock*		rel_partners_lock;	// partners lock
 	Lock*		rel_rescan_lock;	// lock forcing relation to be scanned
 	Lock*		rel_gc_lock;		// garbage collection lock
-	IndexLock*	rel_index_locks;	// index existence locks
+	jrd_idx*	rel_index_locks;	// index existence locks
 	IndexBlock*	rel_index_blocks;	// index blocks for caching index info
 	TrigVector*	rel_pre_erase; 		// Pre-operation erase trigger
 	TrigVector*	rel_post_erase;		// Post-operation erase trigger
@@ -495,6 +495,31 @@ public:
 		  fld_source_rel_field(p)
 	{
 	}
+};
+
+
+// Index block
+
+class jrd_idx : public pool_alloc<type_idx>
+{
+public:
+	jrd_idx*	idx_next;		// Next index block for relation
+	Lock*		idx_lock;		// Lock block
+	jrd_rel*	idx_relation;	// Parent relation
+	USHORT		idx_id;			// Index id
+
+	explicit jrd_idx(thread_db*, jrd_rel*, USHORT);
+
+	void setDeleted(bool);
+	bool isDeleted();
+	USHORT count();
+	USHORT inc();
+	USHORT dec(thread_db*);
+	void free();
+
+private:
+	USHORT		idx_count;		// Use count
+	bool		idx_deletion;	// Deletion stage
 };
 
 }

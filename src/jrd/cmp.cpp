@@ -275,52 +275,6 @@ const Format* CMP_format(thread_db* tdbb, CompilerScratch* csb, StreamType strea
 }
 
 
-IndexLock* CMP_get_index_lock(thread_db* tdbb, jrd_rel* relation, USHORT id)
-{
-/**************************************
- *
- *	C M P _ g e t _ i n d e x _ l o c k
- *
- **************************************
- *
- * Functional description
- *	Get index lock block for index.  If one doesn't exist,
- *	make one.
- *
- **************************************/
-	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-
-	DEV_BLKCHK(relation, type_rel);
-
-	if (relation->rel_id < (USHORT) rel_MAX) {
-		return NULL;
-	}
-
-	// for to find an existing block
-
-	for (IndexLock* index = relation->rel_index_locks; index; index = index->idl_next)
-	{
-		if (index->idl_id == id) {
-			return index;
-		}
-	}
-
-	IndexLock* index = FB_NEW_POOL(*relation->rel_pool) IndexLock();
-	index->idl_next = relation->rel_index_locks;
-	relation->rel_index_locks = index;
-	index->idl_relation = relation;
-	index->idl_id = id;
-	index->idl_count = 0;
-
-	Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0) Lock(tdbb, sizeof(SLONG), LCK_idx_exist);
-	index->idl_lock = lock;
-	lock->setKey((relation->rel_id << 16) | id);
-
-	return index;
-}
-
-
 ULONG CMP_impure(CompilerScratch* csb, ULONG size)
 {
 /**************************************

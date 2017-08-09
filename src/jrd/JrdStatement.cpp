@@ -99,12 +99,13 @@ JrdStatement::JrdStatement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 				case Resource::rsc_index:
 				{
 					jrd_rel* relation = resource->rsc_rel;
-					IndexLock* index = CMP_get_index_lock(tdbb, relation, resource->rsc_id);
+					jrd_idx* index = MET_get_index_lock(tdbb, relation, resource->rsc_id);
 					if (index)
 					{
-						++index->idl_count;
-						if (index->idl_count == 1) {
-							LCK_lock(tdbb, index->idl_lock, LCK_SR, LCK_WAIT);
+						index->inc();
+						if (index->count() == 1) {
+							LCK_lock(tdbb, index->idx_lock, LCK_SR, LCK_WAIT);
+							index->setDeleted(false);
 						}
 					}
 					break;
@@ -572,13 +573,9 @@ void JrdStatement::release(thread_db* tdbb)
 			case Resource::rsc_index:
 			{
 				jrd_rel* relation = resource->rsc_rel;
-				IndexLock* index = CMP_get_index_lock(tdbb, relation, resource->rsc_id);
-				if (index && index->idl_count)
-				{
-					--index->idl_count;
-					if (!index->idl_count)
-						LCK_release(tdbb, index->idl_lock);
-				}
+				jrd_idx* index = MET_get_index_lock(tdbb, relation, resource->rsc_id);
+				if (index && index->count())
+					index->dec(tdbb);
 				break;
 			}
 

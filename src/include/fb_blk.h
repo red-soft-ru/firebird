@@ -34,7 +34,7 @@ enum BlockType
 	type_att,
 	type_sym,
 	type_irl,
-	type_idl,
+	type_idx,
 	type_sdw,
 	type_blf,
 	type_arr,
