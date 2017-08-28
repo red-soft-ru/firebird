@@ -304,7 +304,7 @@ const char* TraceSQLStatementImpl::DSQLParamsImpl::getTextUTF8(CheckStatusWrappe
 	if (DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
 		return temp_utf8_text.c_str();
 	else
-		return (const char*)address;
+		return (const char*) address;
 }
 
 
@@ -358,7 +358,7 @@ const char* TraceParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T i
 	if (DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type))
 		return temp_utf8_text.c_str();
 	else
-		return (const char*)address;
+		return (const char*) address;
 }
 
 

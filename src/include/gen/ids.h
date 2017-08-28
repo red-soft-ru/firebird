@@ -521,6 +521,8 @@
 	const USHORT  f_mon_att_idle_timeout = 20;
 	const USHORT  f_mon_att_idle_timer = 21;
 	const USHORT  f_mon_att_stmt_timeout = 22;
+	const USHORT  f_mon_att_conn_compressed = 23;
+	const USHORT  f_mon_att_conn_encrypted = 24;
 
 
 // Relation 35 (MON$TRANSACTIONS)

@@ -279,6 +279,73 @@ With `ROWS`, order expressions is not limited by number or types. In this case, 
 
 The frame syntax with `<window frame start>` specifies the start frame, with the end frame being `CURRENT ROW`.
 
+
+
+When `ORDER BY` window clause is used but frame clause is omitted, it defaults to `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. This fact makes the query below to produce "weird" behaviour for the "sum_salary" column. It sums from the partition start to the current key, instead of sum the whole partition.
+
+```sql
+select
+    id,
+    salary,
+    sum(salary) over (order by salary) sum_salary
+  from employee
+  order by salary;
+```
+
+| id | salary | sum_salary |
+|---:|-------:|-----------:|
+|  3 |   8.00 |       8.00 |
+|  4 |   9.00 |      17.00 |
+|  1 |  10.00 |      37.00 |
+|  5 |  10.00 |      37.00 |
+|  2 |  12.00 |      49.00 |
+
+You can explicitely set a frame to sum the whole partition as following query:
+
+```sql
+select
+    id,
+    salary,
+    sum(salary) over (
+      order by salary
+      rows between unbounded preceding and unbounded following
+    ) sum_salary
+  from employee
+  order by salary;
+```
+
+| id | salary | sum_salary |
+|---:|-------:|-----------:|
+|  3 |   8.00 |      49.00 |
+|  4 |   9.00 |      49.00 |
+|  1 |  10.00 |      49.00 |
+|  5 |  10.00 |      49.00 |
+|  2 |  12.00 |      49.00 |
+
+While this query "fixes" the weird nature of the default frame clause, it produces a result similar to a simple `OVER ()` clause without `ORDER BY`.
+
+We can use a range frame to compute the count of employees with salaries between his salary - 1 and his salary + 1 with this query:
+
+```sql
+select
+    id,
+    salary,
+    count(*) over (
+      order by salary
+      range between 1 preceding and 1 following
+    ) range_count
+  from employee
+  order by salary;
+```
+
+| id | salary | range_count |
+|---:|-------:|------------:|
+|  3 |   8.00 |           2 |
+|  4 |   9.00 |           4 |
+|  1 |  10.00 |           3 |
+|  5 |  10.00 |           3 |
+|  2 |  12.00 |           1 |
+
 Some window functions discard frames. `ROW_NUMBER`, `LAG` and `LEAD` always work as `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. And `DENSE_RANK`, `RANK`, `PERCENT_RANK` and `CUME_DIST` always work as `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.
 
 `FIRST_VALUE`, `LAST_VALUE` and `NTH_VALUE` respect frames, but the `RANGE` unit works identically as `ROWS`.

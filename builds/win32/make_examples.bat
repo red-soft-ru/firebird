@@ -27,6 +27,10 @@
   @call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\FirebirdExamples intlbuild_%FB_TARGET_PLATFORM%.log intlbuild
 )
 @call compile.bat %FB_ROOT_PATH%\builds\win32\%VS_VER%\FirebirdExamples udrcpp_example_%FB_TARGET_PLATFORM%.log udrcpp_example
+if errorlevel 1 ( 
+    @call :ERROR building udrcpp example failed - see make_examples_%FB_TARGET_PLATFORM%.log for details 
+    @goto :EOF 
+)
 
 @echo.
 @call :MOVE

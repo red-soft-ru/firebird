@@ -316,6 +316,7 @@ public:
 	Firebird::string att_network_protocol;	// Network protocol used by client for connection
 	Firebird::string att_remote_address;	// Protocol-specific address of remote client
 	SLONG att_remote_pid;					// Process id of remote client
+	ULONG att_remote_flags;					// Flags specific for server/client link
 	Firebird::PathName att_remote_process;	// Process name of remote client
 	Firebird::string att_client_version;	// Version of the client library
 	Firebird::string att_remote_protocol;	// Details about the remote protocol

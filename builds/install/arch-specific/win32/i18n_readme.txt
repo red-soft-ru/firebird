@@ -40,9 +40,8 @@ an existing translation. The steps to follow are these:
 o The Win32 install files are located in install\arch-specific\win32.
   This sub-directory is located as follows:
 
-    Firebird 1.5  - firebird2\src
-    Firebird 2.n  - firebird2\builds
-    Firebird 3.n  - firebird2\builds
+    Firebird 1.5  			- firebird2\src
+    Firebird 2.n and newer  - firebird2\builds
 
 o You can use a tool such as TortoiseSVN to checkout the Win32 install 
   kit. Just open the SVN checkout dialogue and enter something similar 

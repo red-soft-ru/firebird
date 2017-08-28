@@ -793,14 +793,14 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 				{
 					FbLocalStatus status;
 					const char* text = params->getTextUTF8(&status, i);
-					
+
 					if (status->getState() & IStatus::STATE_ERRORS)
 					{
 						formatStringArgument(paramvalue,
 							parameters->dsc_address, parameters->dsc_length);
 					}
 					else
-						formatStringArgument(paramvalue, (UCHAR*)text, strlen(text));
+						formatStringArgument(paramvalue, (UCHAR*) text, strlen(text));
 
 					break;
 				}
@@ -821,7 +821,7 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 							*(USHORT*)parameters->dsc_address);
 					}
 					else
-						formatStringArgument(paramvalue, (UCHAR*)text, strlen(text));
+						formatStringArgument(paramvalue, (UCHAR*) text, strlen(text));
 
 					break;
 				}
@@ -1519,14 +1519,14 @@ void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
 	if (config.include_filter.hasData())
 	{
 		include_matcher->reset();
-		include_matcher->process((const UCHAR*)sql, sql_length);
+		include_matcher->process((const UCHAR*) sql, sql_length);
 		need_statement = include_matcher->result();
 	}
 
 	if (need_statement && config.exclude_filter.hasData())
 	{
 		exclude_matcher->reset();
-		exclude_matcher->process((const UCHAR*)sql, sql_length);
+		exclude_matcher->process((const UCHAR*) sql, sql_length);
 		need_statement = !exclude_matcher->result();
 	}
 

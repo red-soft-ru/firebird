@@ -520,6 +520,8 @@ RELATION(nam_mon_attachments, rel_mon_attachments, ODS_11_1, rel_virtual)
 	FIELD(f_mon_att_idle_timeout, nam_idle_timeout, fld_idle_timeout, 0, ODS_13_0)
 	FIELD(f_mon_att_idle_timer, nam_idle_timer, fld_idle_timer, 0, ODS_13_0)
 	FIELD(f_mon_att_stmt_timeout, nam_stmt_timeout, fld_stmt_timeout, 0, ODS_13_0)
+	FIELD(f_mon_att_conn_compressed, nam_conn_compressed, fld_bool, 0, ODS_13_0)
+	FIELD(f_mon_att_conn_encrypted, nam_conn_encrypted, fld_bool, 0, ODS_13_0)
 END_RELATION
 
 // Relation 35 (MON$TRANSACTIONS)

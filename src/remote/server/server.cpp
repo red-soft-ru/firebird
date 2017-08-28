@@ -2182,6 +2182,23 @@ static void addClumplets(ClumpletWriter* dpb_buffer,
 	if (port->port_address.hasData())
 		address_record.insertString(isc_dpb_addr_endpoint, port->port_address);
 
+	if (port->port_crypt_plugin
+#ifdef WIRE_COMPRESS_SUPPORT
+						|| port->port_compressed
+#endif
+									)
+	{
+		int flags = 0;
+#ifdef WIRE_COMPRESS_SUPPORT
+		if (port->port_compressed)
+			flags |= isc_dpb_addr_flag_conn_compressed;
+#endif
+		if (port->port_crypt_plugin)
+			flags |= isc_dpb_addr_flag_conn_encrypted;
+
+		address_record.insertInt(isc_dpb_addr_flags, flags);
+	}
+
 	// We always insert remote address descriptor as a first element
 	// of appropriate clumplet so user cannot fake it and engine may somewhat trust it.
 	fb_assert(address_stack_buffer.getCurOffset() == 0);

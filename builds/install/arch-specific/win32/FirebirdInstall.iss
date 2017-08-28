@@ -120,7 +120,8 @@
 
 
 ;------If necessary we can turn off i18n by uncommenting this undefine
-;#undef  i18n
+;------In general this is a good idea for alpha and beta releases. 
+#undef  i18n
 
 ;----- If we are debugging the script (and not executed from command prompt)
 ;----- there is no guarantee that the environment variable exists. However an
@@ -200,7 +201,7 @@
 #if PlatformTarget == "x64"
 #define WOW64Dir="output_win32"
 #endif
-#define msvc_version 10
+#define msvc_version 12
 
 ;BaseVer should be used for all v2.5.n installs.
 ;This allows us to upgrade silently from 2.5.m to 2.5.n
@@ -214,8 +215,9 @@
 #define FB21_cur_ver GetEnv("FBBUILD_FB21_CUR_VER")
 #define FB25_cur_ver GetEnv("FBBUILD_FB25_CUR_VER")
 #define FB30_cur_ver GetEnv("FBBUILD_FB30_CUR_VER")
-#define FB_cur_ver FB30_cur_ver
-#define FB_last_ver FB25_cur_ver
+#define FB40_cur_ver GetEnv("FBBUILD_FB40_CUR_VER")
+#define FB_cur_ver FB40_cur_ver
+#define FB_last_ver FB30_cur_ver
 
 ; We can save space by shipping a pdb package that just includes
 ; the pdb files. It would then upgrade an existing installation,
@@ -392,7 +394,7 @@ Name: EnableLegacyClientAuth; Description: {cm:EnableLegacyClientAuth}; Componen
 
 
 [Run]
-#if msvc_version == 10
+#if msvc_version >= 10
 Filename: msiexec.exe; Parameters: "/qn /i ""{tmp}\vccrt{#msvc_version}_Win32.msi"" /L*v ""{tmp}\vccrt{#msvc_version}_Win32.log"" "; StatusMsg: "Installing MSVC 32-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
 #if PlatformTarget == "x64"
 Filename: msiexec.exe; Parameters: "/qn /i ""{tmp}\vccrt{#msvc_version}_x64.msi"" /L*v ""{tmp}\vccrt{#msvc_version}_x64.log"" ";  StatusMsg: "Installing MSVC 64-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
@@ -524,15 +526,15 @@ Source: {#WOW64Dir}\msvcp{#msvc_version}?.dll; DestDir: {app}\WOW64; Components:
 #endif
 #endif  /* if msvc_version >= 10 */
 
-#if msvc_version == 10
-;Try to install CRT libraries to <sys> via msi, _IF_ msvc_version is 10.
+#if msvc_version >= 10
+;Try to install CRT libraries to <sys> via msi, _IF_ msvc_version is 10 or later.
 #if PlatformTarget == "x64"
 ;MinVersion 0,5.0 means no version of Win9x and at least Win2k if NT O/S
 ;In addition, O/S must have Windows Installer 3.0.
-Source: {#FilesDir}\system32\vccrt10_x64.msi; DestDir: {tmp};  Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
-Source: {#WOW64Dir}\system32\vccrt10_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
+Source: {#FilesDir}\system32\vccrt{#msvc_version}_x64.msi; DestDir: {tmp};  Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
+Source: {#WOW64Dir}\system32\vccrt{#msvc_version}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
 #else
-Source: {#FilesDir}\system32\vccrt10_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
+Source: {#FilesDir}\system32\vccrt{#msvc_version}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: 0,5.0; Components: ClientComponent;
 #endif
 #endif
 
@@ -666,8 +668,7 @@ begin
   { Create a page to grab the new SYSDBA password }
   AdminUserPage := CreateInputQueryPage(wpSelectTasks,
       'Create a password for the Database System Administrator'
-    , 'Or click through to use the default password of ''masterkey''. ' +  #13#10
-     ' *** Note - in Firebird 3 masterkey and masterke are different passwords. ***'
+    , 'Or click through to use the default password of ''masterkey''. '
     , ''
     );
   AdminUserPage.Add('SYSDBA Name:', False);

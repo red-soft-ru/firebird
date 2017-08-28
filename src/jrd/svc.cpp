@@ -257,7 +257,7 @@ void Service::getOptions(ClumpletReader& spb)
 			break;
 
 		case isc_spb_address_path:
-			spb.getString(svc_address_path);
+			spb.getData(svc_address_path);
 			{
 				ClumpletReader address_stack(ClumpletReader::UnTagged,
 					spb.getBytes(), spb.getClumpLength());
@@ -570,7 +570,7 @@ void Service::fillDpb(ClumpletWriter& dpb)
 	dpb.insertString(isc_dpb_config, EMBEDDED_PROVIDERS, fb_strlen(EMBEDDED_PROVIDERS));
 	if (svc_address_path.hasData())
 	{
-		dpb.insertString(isc_dpb_address_path, svc_address_path);
+		dpb.insertData(isc_dpb_address_path, svc_address_path);
 	}
 	if (svc_utf8)
 	{

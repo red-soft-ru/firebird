@@ -175,7 +175,7 @@ Parameters specific to Firebird uninstalls
     firebird.conf
     databases.conf
     firebird.log
-    security3.fdb
+    security4.fdb
 	fbtrace.conf
 
   The assumption is that these files will be useful to users

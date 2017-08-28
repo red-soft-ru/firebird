@@ -77,6 +77,7 @@ public:
 	void insertPath(UCHAR tag, const PathName& str);
 	void insertString(UCHAR tag, const char* str);
 	void insertString(UCHAR tag, const char* str, FB_SIZE_T length);
+	void insertData(UCHAR tag, const UCharBuffer& data);
 	void insertByte(UCHAR tag, const UCHAR byte);
 	void insertTag(UCHAR tag);
 	void insertDouble(UCHAR tag, const double value);

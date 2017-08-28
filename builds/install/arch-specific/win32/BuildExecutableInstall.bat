@@ -188,15 +188,15 @@ set FBBUILD_FILE_ID=%FBBUILD_PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%_%FB_TA
 @echo s/define compression/define %ISS_COMPRESS%/ >> %temp%.\b$3.txt
 @echo s/FBBUILD_PRODUCT_VER_STRING/%FBBUILD_PRODUCT_VER_STRING%/ >> %temp%.\b$3.txt
 
-sed -f  %temp%.\b$3.txt FirebirdInstall_30.iss > FirebirdInstall_%FBBUILD_FILE_ID%.iss
+sed -f  %temp%.\b$3.txt FirebirdInstall.iss > FirebirdInstall_%FBBUILD_FILE_ID%.iss
 
 :: This is a better way of achieving what is done in make_all.bat, but we don't
 :: test for sed in that script.
 @sed /@UDF_COMMENT@/s/@UDF_COMMENT@/#/ < %FB_ROOT_PATH%\builds\install\misc\firebird.conf.in >  %FB_OUTPUT_DIR%\firebird.conf
 
-set FBBUILD_FB30_CUR_VER=%FB_MAJOR_VER%.%FB_MINOR_VER%.%FB_REV_NO%
-set FBBUILD_FB_CUR_VER=%FBBUILD_FB30_CUR_VER%
-set FBBUILD_FB_LAST_VER=%FBBUILD_FB25_CUR_VER%
+set FBBUILD_FB40_CUR_VER=%FB_MAJOR_VER%.%FB_MINOR_VER%.%FB_REV_NO%
+set FBBUILD_FB_CUR_VER=%FBBUILD_FB40_CUR_VER%
+set FBBUILD_FB_LAST_VER=%FBBUILD_FB30_CUR_VER%
 
 :: Now set some version strings of our legacy releases.
 :: This helps us copy the correct documentation,
@@ -204,7 +204,8 @@ set FBBUILD_FB_LAST_VER=%FBBUILD_FB25_CUR_VER%
 set FBBUILD_FB15_CUR_VER=1.5.6
 set FBBUILD_FB20_CUR_VER=2.0.7
 set FBBUILD_FB21_CUR_VER=2.1.7
-set FBBUILD_FB25_CUR_VER=2.5.5
+set FBBUILD_FB25_CUR_VER=2.5.7
+set FBBUILD_FB30_CUR_VER=3.0.2
 
 :: Now fix up the major.minor version strings in the readme files.
 :: We place output in %FB_GEN_DIR%\readmes
@@ -216,6 +217,8 @@ set FBBUILD_FB25_CUR_VER=2.5.5
 @echo s/\$MAJOR/%FB_MAJOR_VER%/g >  %temp%.\b$4.txt
 @echo s/\$MINOR/%FB_MINOR_VER%/g >> %temp%.\b$4.txt
 @echo s/\$RELEASE/%FB_REV_NO%/g  >> %temp%.\b$4.txt
+@echo %FBBUILD_PROD_STATUS% release. Copying Readme_%FBBUILD_PROD_STATUS%.txt Readme.txt 
+@copy Readme_%FBBUILD_PROD_STATUS%.txt Readme.txt 
 @for %%f in (Readme.txt installation_readme.txt After_Installation.url) do (
 	@echo   Processing version strings in %%f
 	@sed -f  %temp%.\b$4.txt %%f > %FB_GEN_DIR%\readmes\%%f
@@ -382,8 +385,8 @@ for /R %FB_OUTPUT_DIR%\doc %%v in (.) do (
 :: This requires WiX 3.0 to be installed
 ::============
 :: This is only relevent if we are shipping packages built with Visual Studio 2010 (MSVC10)
-:: for Firebird 3.0 there are no plans to ship oficial builds with other MSVC runtimes. But we could.
-if %MSVC_VERSION% EQU 10 (
+:: for Firebird 3.0 there are no plans to ship official builds with other MSVC runtimes. But we could.
+if %MSVC_VERSION% EQU 12 (
 if not exist %FB_OUTPUT_DIR%\system32\vccrt%MSVC_VERSION%_%FB_TARGET_PLATFORM%.msi (
     "%WIX%\bin\candle.exe" -v -sw1091 %FB_ROOT_PATH%\builds\win32\msvc%MSVC_VERSION%\VCCRT_%FB_TARGET_PLATFORM%.wxs -out %FB_GEN_DIR%\vccrt_%FB_TARGET_PLATFORM%.wixobj
     "%WIX%\bin\light.exe" -sw1076 %FB_GEN_DIR%\vccrt_%FB_TARGET_PLATFORM%.wixobj -out %FB_OUTPUT_DIR%\system32\vccrt%MSVC_VERSION%_%FB_TARGET_PLATFORM%.msi
@@ -475,17 +478,18 @@ copy %FB_ROOT_PATH%\builds\install\misc\databases.conf.in %FB_OUTPUT_DIR%\databa
 :GEN_ZIP
 ::======
 if %FBBUILD_ZIP_PACK% EQU 0 goto :EOF
-:: Generate the directory tree to be zipped
+@echo     Generate the directory tree to be zipped
 set FBBUILD_ZIP_PACK_ROOT=%FB_ROOT_PATH%\builds\zip_pack_%FB_TARGET_PLATFORM%
 if not exist %FBBUILD_ZIP_PACK_ROOT% @mkdir %FBBUILD_ZIP_PACK_ROOT% 2>nul
 @del /s /q %FBBUILD_ZIP_PACK_ROOT%\ > nul
 @copy /Y %FB_OUTPUT_DIR% %FBBUILD_ZIP_PACK_ROOT% > nul
-for %%v in (doc doc\sql.extensions help include intl lib udf misc misc\upgrade misc\upgrade\ib_udf misc\upgrade\security misc\upgrade\metadata system32 plugins ) do (
+for %%v in (doc doc\sql.extensions help include intl lib udf misc misc\upgrade\security plugins system32 ) do (
     @mkdir %FBBUILD_ZIP_PACK_ROOT%\%%v 2>nul
     @dir /A-D %FB_OUTPUT_DIR%\%%v\*.* > nul 2>nul
     if not ERRORLEVEL 1 @copy /Y %FB_OUTPUT_DIR%\%%v\*.* %FBBUILD_ZIP_PACK_ROOT%\%%v\ > nul
 )
 
+@echo     Add examples to zip tree
 @if %FB2_EXAMPLES% equ 1 for %%v in (examples examples\api examples\build_win32 examples\dbcrypt examples\empbuild examples\include examples\interfaces examples\package examples\stat examples\udf examples\udr ) do (
     @mkdir %FBBUILD_ZIP_PACK_ROOT%\%%v 2>nul
     dir %FB_OUTPUT_DIR%\%%v\*.* > nul 2>nul
@@ -493,9 +497,9 @@ for %%v in (doc doc\sql.extensions help include intl lib udf misc misc\upgrade m
 )
 
 
-:: Now remove stuff that is not needed.
+@echo Now remove stuff from zip tree that is not needed.
 setlocal
-set FB_RM_FILE_LIST=doc\installation_readme.txt bin\gpre_boot.exe bin\gpre_static.exe bin\gpre_embed.exe bin\gbak_embed.exe bin\isql_embed.exe bin\gds32.dll bin\btyacc.exe
+set FB_RM_FILE_LIST=doc\installation_readme.txt icudt52l_empty.dat
 for %%v in ( %FB_RM_FILE_LIST% ) do (
   @del %FBBUILD_ZIP_PACK_ROOT%\%%v > nul 2>&1
 )

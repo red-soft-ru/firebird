@@ -169,7 +169,7 @@ private:
 	Firebird::RWLock renameLock;
 
 	UnicodeCollationHolder unicodeCollation;
-	typedef Firebird::SimilarToMatcher <ULONG, Jrd::UpcaseConverter<Jrd::CanonicalConverter<> > >
+	typedef Firebird::SimilarToMatcher<ULONG, Jrd::UpcaseConverter<Jrd::CanonicalConverter<> > >
 		TraceSimilarToMatcher;
 	Firebird::AutoPtr<TraceSimilarToMatcher> include_matcher, exclude_matcher;
 

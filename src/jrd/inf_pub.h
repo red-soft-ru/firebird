@@ -142,12 +142,14 @@ enum db_info_types
 
 	fb_info_crypt_state = 126,
 
-	fb_info_statement_timeout_db,
-	fb_info_statement_timeout_att,
+	fb_info_statement_timeout_db = 127,
+	fb_info_statement_timeout_att = 128,
 
-	fb_info_ses_idle_timeout_db,
-	fb_info_ses_idle_timeout_att,
-	fb_info_ses_idle_timeout_run,
+	fb_info_ses_idle_timeout_db = 129,
+	fb_info_ses_idle_timeout_att = 130,
+	fb_info_ses_idle_timeout_run = 131,
+
+	fb_info_conn_flags = 132,
 
 	isc_info_db_last_value   /* Leave this LAST! */
 };

@@ -194,14 +194,6 @@ SHRLIB_FOREIGN_EXT=	$(SHRLIB_EXT)
 # Include file with version variable definitions
 
 include $(ROOT)/gen/Make.Version
-#MajorVer = 2
-#MinorVer = 5
-#RevNo = 0
-#BuildNum = 28678
-#BuildType = T
-#BuildSuffix = Firebird 3.0 Unstable
-#PackageVersion = Unstable
-#FirebirdVersion = 2.5.0
 
 # Add windows dll to library patterns
 

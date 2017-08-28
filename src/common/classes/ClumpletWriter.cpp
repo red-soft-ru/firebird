@@ -266,6 +266,11 @@ void ClumpletWriter::insertString(UCHAR tag, const char* str, FB_SIZE_T length)
 	insertBytesLengthCheck(tag, str, length);
 }
 
+void ClumpletWriter::insertData(UCHAR tag, const UCharBuffer& data)
+{
+	insertBytesLengthCheck(tag, data.begin(), data.getCount());
+}
+
 void ClumpletWriter::insertPath(UCHAR tag, const PathName& str)
 {
 	insertString(tag, str.c_str(), str.length());
