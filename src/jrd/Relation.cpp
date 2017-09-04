@@ -539,12 +539,12 @@ jrd_idx::jrd_idx(thread_db* tdbb, jrd_rel* relation, USHORT id)
 	lock->setKey((relation->rel_id << 16) | id);
 }
 
-void jrd_idx::setDeleted(bool flag)
+void jrd_idx::setDeletion(bool flag)
 {
 	idx_deletion = flag;
 }
 
-bool jrd_idx::isDeleted()
+bool jrd_idx::isDeletion()
 {
 	return idx_deletion;
 }
@@ -561,8 +561,13 @@ USHORT jrd_idx::inc()
 
 USHORT jrd_idx::dec(thread_db* tdbb)
 {
-	if (!--idx_count && idx_deletion)
+	if (idx_count > 0)
+		idx_count--;
+	if (!idx_count && idx_deletion)
+	{
 		LCK_release(tdbb, idx_lock);
+		this->idx_deletion = false;
+	}
 	return idx_count;
 }
 

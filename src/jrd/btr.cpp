@@ -372,7 +372,23 @@ USHORT BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescAlloc** csb_idx, Rel
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
 		if (BTR_description(tdbb, relation, root, &buffer[count], i))
+		{
+			jrd_idx* idx = MET_get_index_lock(tdbb, relation, i);
+			if (idx != NULL)
+			{
+				if (idx->isDeletion())
+					continue;
+				idx->inc();
+				if (idx->count() == 1 && !LCK_lock(tdbb, idx->idx_lock, LCK_SR, LCK_NO_WAIT))
+				{
+					fb_utils::init_status(tdbb->tdbb_status_vector);
+					idx->dec(tdbb);
+					continue;
+				}
+				idx->setDeletion(false);
+			}
 			count++;
+		}
 	}
 
 	CCH_RELEASE(tdbb, &window);

@@ -4311,7 +4311,7 @@ static int blocking_ast_index(void* ast_object)
 			Database* const dbb = index->idx_lock->lck_dbb;
 			AsyncContextHolder tdbb(dbb, FB_FUNCTION, index->idx_lock);
 			if (index->count())
-				index->setDeleted(true);
+				index->setDeletion(true);
 			else
 				LCK_release(tdbb, index->idx_lock);
 		}

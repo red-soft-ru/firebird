@@ -9817,13 +9817,12 @@ void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 	if (idx_id != -1)
 	{
 		jrd_rel* relation = MET_lookup_relation_id(tdbb, rel_id, true);
-		// notify others through AST to mark as deleted
-		AutoPtr<Lock> temp_lock(FB_NEW_RPT(*tdbb->getDefaultPool(), sizeof(SLONG))
-			Lock(tdbb, sizeof(SLONG), LCK_idx_exist));
-		temp_lock->setKey(relation->rel_id << 16 | idx_id);
-
-		if (LCK_lock(tdbb, temp_lock, LCK_EX, LCK_WAIT))
-			LCK_release(tdbb, temp_lock);
+		jrd_idx* temp_lock = MET_get_index_lock(tdbb, relation, idx_id);
+		temp_lock->idx_lock->lck_ast = NULL;
+		temp_lock->idx_lock->lck_object = NULL;
+		temp_lock->setDeletion(true);
+		// notify others through AST to mark index as deletion
+		LCK_lock(tdbb, temp_lock->idx_lock, LCK_EX, LCK_WAIT);
 	}
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)

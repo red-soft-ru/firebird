@@ -510,8 +510,8 @@ public:
 
 	explicit jrd_idx(thread_db*, jrd_rel*, USHORT);
 
-	void setDeleted(bool);
-	bool isDeleted();
+	void setDeletion(bool);
+	bool isDeletion();
 	USHORT count();
 	USHORT inc();
 	USHORT dec(thread_db*);

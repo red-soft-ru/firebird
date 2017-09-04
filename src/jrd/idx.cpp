@@ -540,7 +540,7 @@ void IDX_create_index(thread_db* tdbb,
 			if (index->count() == 1)
 			{
 				LCK_lock(tdbb, index->idx_lock, LCK_SR, LCK_WAIT);
-				index->setDeleted(false);
+				index->setDeletion(false);
 			}
 		}
 	}
