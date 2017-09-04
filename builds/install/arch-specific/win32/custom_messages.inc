@@ -80,3 +80,11 @@ en.initSecurityDb=Adding SYSDBA to security database.
 en.SYSDBAPasswordMismatch=Password entry mismatch. Please re-enter the SYSDBA password.
 en.SYSDBAPasswordEmpty=Password is empty. You must enter a password for SYSDBA.
 en.EnableLegacyClientAuth=Enable a&uthorization for legacy Firebird clients?
+en.CreateSYSDBAPassword=Create a password for the Database System Administrator
+en.ClickThroughPWCreation=Or click through to use the default password of masterkey.
+en.PasswordNote=*** Note - in Firebird 3 masterkey and masterke are different passwords. ***
+en.SYSDBAPassword=SYSDBA Password:
+en.RetypeSYSDBAPassword=Retype SYSDBA Password:
+en.InstallingMSVC32runtimes=Installing MSVC 32-bit runtime libraries to system directory
+en.InstallingMSVC64runtimes=Installing MSVC 64-bit runtime libraries to system directory
+

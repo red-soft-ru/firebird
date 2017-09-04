@@ -85,7 +85,7 @@ fr.CreateSYSDBAPassword=Créer un mot de passe pour l'Administrateur Système
 fr.ClickThroughPWCreation=Ou cliquer pour utiliser le mote de passe par défaut masterkey.
 fr.PasswordNote=*** Note - avec Firebird 3 masterkey et masterke sont des mots de passe différents. ***
 fr.SYSDBAPassword=Mot de passe SYSDBA:
-fr.RetypeSYSDBAPassword=Confirmer le mote de passe SYSDBA:
+fr.RetypeSYSDBAPassword=Confirmer le mot de passe SYSDBA:
 fr.InstallingMSVC32runtimes=Installer les bibliothèques MSVC 32-bit dans le répertoire système
 fr.InstallingMSVC64runtimes=Installer les bibliothèques MSVC 64-bit dans le répertoire système
 

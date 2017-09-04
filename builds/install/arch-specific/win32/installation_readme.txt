@@ -36,9 +36,6 @@ this package. It is especially important to verify that
 fbclient.dll and gds32.dll are removed from <system32>.
 See the UNINSTALL section below for more info on this.
 
-If you have installed a beta or alpha version of Firebird $MAJOR.$MINOR
-the installer will rename firebird.conf and security4.fdb as
-these files are no longer compatible.
 
 
 Deployment of gds32.dll
@@ -51,7 +48,7 @@ available. However it remains an option at install
 time, along with system deployment of fbclient.dll.
 
 Be sure to check that your target system has the 
-appropriate MSVC10 runtimes if you use these options.
+appropriate MSVC12 runtimes if you use these options.
 
 
 Installation of the Guardian

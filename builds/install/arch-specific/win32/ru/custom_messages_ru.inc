@@ -79,4 +79,10 @@ ru.initSecurityDb=Добавляем SYSDBA в базу данных безоп�
 ru.SYSDBAPasswordMismatch=Несовпадение пароля. Повторите ввод пароля для SYSDBA.
 ru.SYSDBAPasswordEmpty=Пароль не задан. Вы должны ввести пароль для SYSDBA.
 ru.EnableLegacyClientAuth=Разрешить авторизацию предыдущих версий клиента Firebird?
-
+ru.CreateSYSDBAPassword=Создать пароль администратора
+ru.ClickThroughPWCreation=Либо пропустите этот шаг если хотите использовать пароль 'masterkey'.
+ru.PasswordNote=*** Обратите внимание: в Firebird 3 'masterkey' и 'masterke' это разные пароли. ***
+ru.SYSDBAPassword=Пароль SYSDBA:
+ru.RetypeSYSDBAPassword=Повторите пароль:
+ru.InstallingMSVC32runtimes=Устанавливаются библиотеки MSVC 32-bit runtime
+ru.InstallingMSVC64runtimes=Устанавливаются библиотеки MSVC 64-bit runtime

@@ -57,7 +57,6 @@ ba.IconUninstall=Deinstalacija Firebird-a %1
 ba.ReleaseNotes= release notes. (Potreban je Acrobat Reader.)
 ba.InstallationGuide= installation guide. (Potreban je Acrobat Reader.)
 ba.BugFixes= bug fixes. (Potreban je Acrobat Reader.)
-
 ba.Uninstall=Deinstalacija Firebird-a %1
 ba.Winsock2Web1=Winsock 2 nije instaliran.
 ba.Winsock2Web2=Želite li da posjetite Winsock 2 Update Home Page?
@@ -81,4 +80,10 @@ ba.initSecurityDb=Dodavanje SYSDBA u security database.
 ba.SYSDBAPasswordMismatch=Lozinke se ne slažu. Molimo ponovo unesite lozinku za SYSDBA korisnika.
 ba.SYSDBAPasswordEmpty=Lozinka je prazna. Morate unijeti lozinku za SYSDBA korisnika.
 ba.EnableLegacyClientAuth=Omogući a&utorizaciju za stare (legacy) Firebird klijente?
-
+ba.CreateSYSDBAPassword=Postavite lozinku za Database System Administrator-a
+ba.ClickThroughPWCreation=Ili samo kliknite da koristite default lozinku masterkey.
+ba.PasswordNote=*** Vazno - u Firebird-u 3 masterkey i masterke su razlicite lozinke. ***
+ba.SYSDBAPassword=SYSDBA lozinka:
+ba.RetypeSYSDBAPassword=Ponovite SYSDBA lozinku:
+ba.InstallingMSVC32runtimes=Instaliram MSVC 32-bit runtime biblioteke u system directory
+ba.InstallingMSVC64runtimes=Instaliram MSVC 64-bit runtime biblioteke u system directory

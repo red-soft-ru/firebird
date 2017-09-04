@@ -51,7 +51,7 @@
 
 ;Hard code some defaults to aid debugging and running script standalone.
 ;In practice, these values are set in the environment and we use the env vars.
-#define MajorVer "3"
+#define MajorVer "4"
 #define MinorVer "0"
 #define PointRelease "0"
 #define BuildNumber "0"
@@ -203,8 +203,8 @@
 #endif
 #define msvc_version 12
 
-;BaseVer should be used for all v2.5.n installs.
-;This allows us to upgrade silently from 2.5.m to 2.5.n
+;BaseVer should be used for all MajorVer.MinorVer installs.
+;This allows us to upgrade silently from MajorVer.MinorVer.m to MajorVer.MinorVer.n
 #define BaseVer MajorVer + "_" + MinorVer
 #define AppVer MajorVer + "_" + MinorVer
 #define GroupnameVer MajorVer + "." + MinorVer
@@ -310,12 +310,12 @@ Name: en; MessagesFile: compiler:Default.isl; InfoBeforeFile: {#GenDir}\installa
 Name: ba; MessagesFile: compiler:Languages\Bosnian.isl; InfoBeforeFile: {#GenDir}\ba\Instalacija_ProcitajMe.txt; InfoAfterFile: {#GenDir}\ba\ProcitajMe.txt;
 Name: cz; MessagesFile: compiler:Languages\Czech.isl; InfoBeforeFile: {#GenDir}\cz\instalace_ctime.txt; InfoAfterFile: {#GenDir}\cz\ctime.txt;
 Name: fr; MessagesFile: compiler:Languages\French.isl; InfoBeforeFile: {#GenDir}\fr\installation_lisezmoi.txt; InfoAfterFile: {#GenDir}\fr\lisezmoi.txt;
-Name: de; MessagesFile: compiler:Languages\German.isl; InfoBeforeFile: {#GenDir}\de\installation_liesmich.txt; InfoAfterFile: {#GenDir}\de\liesmich.txt;
-Name: es; MessagesFile: compiler:Languages\Spanish.isl; InfoBeforeFile: {#GenDir}\es\leame_instalacion.txt; InfoAfterFile: {#GenDir}\es\leame.txt;
-Name: hu; MessagesFile: compiler:Languages\Hungarian.isl; InfoBeforeFile: {#GenDir}\hu\telepitesi_segedlet.txt; InfoAfterFile: {#GenDir}\hu\olvass_el.txt;
-Name: it; MessagesFile: compiler:Languages\Italian.isl; InfoBeforeFile: {#GenDir}\it\leggimi_installazione.txt; InfoAfterFile: {#GenDir}\it\leggimi.txt
-Name: pl; MessagesFile: compiler:Languages\Polish.isl; InfoBeforeFile: {#GenDir}\pl\instalacja_czytajto.txt; InfoAfterFile: {#GenDir}\pl\czytajto.txt;
-Name: pt; MessagesFile: compiler:Languages\Portuguese.isl; InfoBeforeFile: {#GenDir}\pt\instalacao_leia-me.txt; InfoAfterFile: {#GenDir}\pt\leia-me.txt
+;Name: de; MessagesFile: compiler:Languages\German.isl; InfoBeforeFile: {#GenDir}\de\installation_liesmich.txt; InfoAfterFile: {#GenDir}\de\liesmich.txt;
+;Name: es; MessagesFile: compiler:Languages\Spanish.isl; InfoBeforeFile: {#GenDir}\es\leame_instalacion.txt; InfoAfterFile: {#GenDir}\es\leame.txt;
+;Name: hu; MessagesFile: compiler:Languages\Hungarian.isl; InfoBeforeFile: {#GenDir}\hu\telepitesi_segedlet.txt; InfoAfterFile: {#GenDir}\hu\olvass_el.txt;
+;Name: it; MessagesFile: compiler:Languages\Italian.isl; InfoBeforeFile: {#GenDir}\it\leggimi_installazione.txt; InfoAfterFile: {#GenDir}\it\leggimi.txt
+;Name: pl; MessagesFile: compiler:Languages\Polish.isl; InfoBeforeFile: {#GenDir}\pl\instalacja_czytajto.txt; InfoAfterFile: {#GenDir}\pl\czytajto.txt;
+;Name: pt; MessagesFile: compiler:Languages\Portuguese.isl; InfoBeforeFile: {#GenDir}\pt\instalacao_leia-me.txt; InfoAfterFile: {#GenDir}\pt\leia-me.txt
 Name: ru; MessagesFile: compiler:Languages\Russian.isl; InfoBeforeFile: {#GenDir}\ru\installation_readme.txt; InfoAfterFile: {#GenDir}\ru\readme.txt;
 ;Name: si; MessagesFile: compiler:Languages\Slovenian.isl; InfoBeforeFile: {#GenDir}\si\instalacija_precitajMe.txt; InfoAfterFile: {#GenDir}\readme.txt;
 #endif
@@ -342,18 +342,20 @@ Name: ru; MessagesFile: compiler:Languages\Russian.isl; InfoBeforeFile: {#GenDir
 #include "ba\custom_messages_ba.inc"
 #include "cz\custom_messages_cz.inc"
 #include "fr\custom_messages_fr.inc"
-#include "de\custom_messages_de.inc"
-#include "es\custom_messages_es.inc"
-#include "hu\custom_messages_hu.inc"
-#include "it\custom_messages_it.inc"
-#include "pl\custom_messages_pl.inc"
-#include "pt\custom_messages_pt.inc"
+;#include "de\custom_messages_de.inc"
+;#include "es\custom_messages_es.inc"
+;#include "hu\custom_messages_hu.inc"
+;#include "it\custom_messages_it.inc"
+;#include "pl\custom_messages_pl.inc"
+;#include "pt\custom_messages_pt.inc"
 #include "ru\custom_messages_ru.inc"
 ;#include "si\custom_messages_si.inc"
 #endif
 
 #ifdef iss_debug
-; *** Note - this comment section needs revision - only aplicable to ansi installer???
+; *** Note - this comment section needs revision or deletion. 
+; It is only applicable to the ansi installer, which is no longer
+; supported for Firebird 3
 ; By default, the languages available at runtime depend on the user's
 ; code page. A user with the Western European code page set will not
 ; even see that we support installation with the czech language
@@ -378,17 +380,17 @@ Name: ClientComponent; Description: {cm:ClientComponent}; Types: ServerInstall D
 
 [Tasks]
 ;Server tasks
-Name: UseClassicServerTask; Description: {cm:RunCS}; GroupDescription: {cm:ServerTaskDescription}; Components: ServerComponent; MinVersion: 4.0,4.0; Flags: exclusive; Check: ConfigureFirebird;
-Name: UseSuperClassicTask; Description: {cm:RunSC}; GroupDescription: {cm:ServerTaskDescription}; Components: ServerComponent; MinVersion: 4.0,4.0; Flags: exclusive; Check: ConfigureFirebird;
-Name: UseSuperClassicTask\UseGuardianTask; Description: {cm:UseGuardianTask}; Components: ServerComponent; MinVersion: 4.0,4.0; Flags: unchecked dontinheritcheck;Check: ConfigureFirebird;
+Name: UseClassicServerTask; Description: {cm:RunCS}; GroupDescription: {cm:ServerTaskDescription}; Components: ServerComponent; MinVersion: 4.0,4.0; Flags: exclusive unchecked; Check: ConfigureFirebird;
+Name: UseSuperClassicTask; Description: {cm:RunSC}; GroupDescription: {cm:ServerTaskDescription}; Components: ServerComponent; MinVersion: 4.0,4.0; Flags: exclusive unchecked; Check: ConfigureFirebird;
+Name: UseSuperClassicTask\UseGuardianTask; Description: {cm:UseGuardianTask}; Components: ServerComponent; MinVersion: 4.0,4.0; Flags: unchecked dontinheritcheck; Check: ConfigureFirebird;
 Name: UseSuperServerTask; Description: {cm:RunSS}; GroupDescription: {cm:ServerTaskDescription}; Components: ServerComponent; MinVersion: 4.0,4.0; Flags: exclusive; Check: ConfigureFirebird;
 Name: UseSuperServerTask\UseGuardianTask; Description: {cm:UseGuardianTask}; Components: ServerComponent; MinVersion: 4.0,4.0; Flags: unchecked dontinheritcheck; Check: ConfigureFirebird;
-Name: UseApplicationTask; Description: {cm:UseApplicationTaskMsg}; GroupDescription: {cm:TaskGroupDescription}; Components: ServerComponent; MinVersion: 4,4; Flags: exclusive; Check: ConfigureFirebird;
+Name: UseApplicationTask; Description: {cm:UseApplicationTaskMsg}; GroupDescription: {cm:TaskGroupDescription}; Components: ServerComponent; MinVersion: 4,4; Flags: exclusive unchecked; Check: ConfigureFirebird;
 Name: UseServiceTask; Description: {cm:UseServiceTask}; GroupDescription: {cm:TaskGroupDescription}; Components: ServerComponent; MinVersion: 0,4; Flags: exclusive; Check: ConfigureFirebird;
 Name: AutoStartTask; Description: {cm:AutoStartTask}; Components: ServerComponent; MinVersion: 4,4; Check: ConfigureFirebird;
 ;Name: MenuGroupTask; Description: Create a Menu &Group; Components: DevAdminComponent; MinVersion: 4,4
 ;Copying of client libs to <sys>
-Name: CopyFbClientToSysTask; Description: {cm:CopyFbClientToSysTask}; Components: ClientComponent; MinVersion: 4,4; Flags: Unchecked; Check: ShowCopyFbClientLibTask;
+Name: CopyFbClientToSysTask; Description: {cm:CopyFbClientToSysTask}; Components: ClientComponent; MinVersion: 4,4; Check: ShowCopyFbClientLibTask;
 Name: CopyFbClientAsGds32Task; Description: {cm:CopyFbClientAsGds32Task}; Components: ClientComponent; MinVersion: 4,4; Flags: Unchecked; Check: ShowCopyGds32Task;
 Name: EnableLegacyClientAuth; Description: {cm:EnableLegacyClientAuth}; Components: ClientComponent; MinVersion: 4,4; Flags: Unchecked; Check: ConfigureAuthentication;
 
@@ -438,7 +440,7 @@ Name: {group}\Firebird Server; Filename: {app}\firebird.exe; Parameters: {code:S
 Name: {group}\Firebird Guardian; Filename: {app}\fbguard.exe; Parameters: {code:StartAppParams}; Flags: runminimized; MinVersion: 4.0,4.0;  Check: InstallGuardianIcon; IconIndex: 1; Components: ServerComponent; Comment: Run Firebird Server (with guardian); 
 Name: {group}\Firebird ISQL Tool; Filename: {app}\isql.exe; Parameters: -z; WorkingDir: {app}; MinVersion: 4.0,4.0;  Comment: {cm:RunISQL}
 Name: {group}\Firebird {#FB_cur_ver} Release Notes; Filename: {app}\doc\Firebird_v{#FB_cur_ver}.ReleaseNotes.pdf; MinVersion: 4.0,4.0; Comment: {#MyAppName} {cm:ReleaseNotes}
-;Name: {group}\Firebird {#GroupnameVer} Quick Start Guide; Filename: {app}\doc\Firebird-2.5-QuickStart.pdf; MinVersion: 4.0,4.0; Comment: {#MyAppName} {#FB_cur_ver}
+;Name: {group}\Firebird {#GroupnameVer} Quick Start Guide; Filename: {app}\doc\Firebird-{#MajorVer}-QuickStart.pdf; MinVersion: 4.0,4.0; Comment: {#MyAppName} {#FB_cur_ver}
 Name: "{group}\After Installation"; Filename: "{app}\doc\After_Installation.url"; Comment: "New User? Here's a quick guide to what you should do next."
 Name: "{group}\Firebird Web-site"; Filename: "{app}\doc\firebirdsql.org.url"
 ;Always install the original english version
@@ -462,12 +464,12 @@ Source: {#GenDir}\readme.txt; DestDir: {app}; Components: DevAdminComponent; Fla
 Source: {#GenDir}\ba\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: ba;
 Source: {#GenDir}\cz\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: cz;
 Source: {#GenDir}\fr\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: fr;
-Source: {#GenDir}\de\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: de;
-Source: {#GenDir}\es\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: es;
-Source: {#GenDir}\hu\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: hu;
-Source: {#GenDir}\it\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: it;
-Source: {#GenDir}\pl\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: pl;
-Source: {#GenDir}\pt\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: pt;
+;Source: {#GenDir}\de\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: de;
+;Source: {#GenDir}\es\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: es;
+;Source: {#GenDir}\hu\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: hu;
+;Source: {#GenDir}\it\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: it;
+;Source: {#GenDir}\pl\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: pl;
+;Source: {#GenDir}\pt\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: pt;
 Source: {#GenDir}\ru\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: ru;
 ;Source: {#GenDir}\si\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: si;
 #endif
@@ -546,7 +548,7 @@ Source: {#FilesDir}\doc\sql.extensions\*.*; DestDir: {app}\doc\sql.extensions; C
 
 ;Other stuff
 Source: {#FilesDir}\help\*.*; DestDir: {app}\help; Components: DevAdminComponent; Flags: ignoreversion;
-Source: {#FilesDir}\include\*.*; DestDir: {app}\include; Components: DevAdminComponent; Flags: ignoreversion;
+Source: {#FilesDir}\include\*.*; DestDir: {app}\include; Components: DevAdminComponent; Flags: ignoreversion recursesubdirs createallsubdirs;
 Source: {#FilesDir}\intl\fbintl.dll; DestDir: {app}\intl; Components: ServerComponent; Flags: sharedfile ignoreversion;
 Source: {#FilesDir}\intl\fbintl.conf; DestDir: {app}\intl; Components: ServerComponent; Flags: onlyifdoesntexist
 Source: {#FilesDir}\lib\*.*; DestDir: {app}\lib; Components: DevAdminComponent; Flags: ignoreversion;
@@ -558,6 +560,7 @@ Source: {#FilesDir}\UDF\fbudf.dll; DestDir: {app}\UDF; Components: ServerCompone
 Source: {#FilesDir}\UDF\*.sql; DestDir: {app}\UDF; Components: ServerComponent; Flags: ignoreversion;
 Source: {#FilesDir}\UDF\*.txt; DestDir: {app}\UDF; Components: ServerComponent; Flags: ignoreversion;
 
+Source: {#FilesDir}\plugins.conf; DestDir: {app}; Components: ServerComponent; Flags: ignoreversion;
 Source: {#FilesDir}\plugins\*.dll; DestDir: {app}\plugins; Components: ServerComponent; Flags: ignoreversion;
 Source: {#FilesDir}\plugins\*.conf; DestDir: {app}\plugins; Components: ServerComponent; Flags: ignoreversion;
 
@@ -629,20 +632,11 @@ Var
                                 // no other working installation is found (unless we are installing
                                 // over the same version)
 
-  //These three command-line options change the default behaviour
-  // during a scripted install
-  // They also control whether their associated task checkboxes are displayed
-  // during an interactive install
-  NoCPL: Boolean;                   // pass /nocpl on command-line.
-  NoGdsClient: Boolean;             // pass /nogds32 on command line.
-  CopyFbClient: Boolean;            // pass /copyfbclient on command line.
-
   // Options for scripted uninstall.
   CleanUninstall: Boolean;      // If /clean is passed to the uninstaller it will delete
                                 // user config files - firebird.conf, firebird.log,
                                 // databases.conf, fbtrace.conf and the security database.
 
-  SYSDBAName: String;           // Name of SYSDBA
   SYSDBAPassword: String;       // SYSDBA password
 
 #ifdef setuplogging
@@ -667,17 +661,14 @@ begin
 
   { Create a page to grab the new SYSDBA password }
   AdminUserPage := CreateInputQueryPage(wpSelectTasks,
-      'Create a password for the Database System Administrator'
-    , 'Or click through to use the default password of ''masterkey''. '
-    , ''
-    );
-  AdminUserPage.Add('SYSDBA Name:', False);
-  AdminUserPage.Add('Password:', True);
-  AdminUserPage.Add('Retype Password:', True);
+      ExpandConstant( '{cm:CreateSYSDBAPassword}' )
+    , ExpandConstant( '{cm:ClickThroughPWCreation}' ) + #13#10 +
+      ExpandConstant( '{cm:PasswordNote}' ) , '' );
+  AdminUserPage.Add( ExpandConstant( '{cm:SYSDBAPassword}' ), True);
+  AdminUserPage.Add( ExpandConstant( '{cm:RetypeSYSDBAPassword}' ), True);
 
-  AdminUserPage.Values[0] := SYSDBAName;
+  AdminUserPage.Values[0] := SYSDBAPassword;
   AdminUserPage.Values[1] := SYSDBAPassword;
-  AdminUserPage.Values[2] := SYSDBAPassword;
 
 end;
 
@@ -694,9 +685,11 @@ begin
   CommandLine:=GetCmdTail;
 
   if ((pos('HELP',Uppercase(CommandLine)) > 0) or
-    (pos('--',Uppercase(CommandLine)) > 0) or
-    (pos('/?',Uppercase(CommandLine)) > 0) or
-    (pos('/H',Uppercase(CommandLine)) > 0) ) then begin
+    (pos('--',Uppercase(CommandLine)) > 0) )
+//	or
+//    (pos('/?',Uppercase(CommandLine)) > 0) or		// InnoSetup displays its own help if these switches are passed.
+//    (pos('/H',Uppercase(CommandLine)) > 0) ) 		// Note also that our help scren only appears after the Choose Language dialogue :-(
+	then begin
     ShowHelpDlg;
     result := False;
     Exit;
@@ -706,21 +699,10 @@ begin
   if pos('FORCE',Uppercase(CommandLine)) > 0 then
     ForceInstall:=True;
 
-// For now we disable installation of the cpl applet until it is fixed.
-//  if pos('NOCPL', Uppercase(CommandLine)) > 0 then
-    NoCPL := True;
-
-  if pos('NOGDS32', Uppercase(CommandLine)) > 0 then
-    NoGdsClient := True;
-
-  if pos('COPYFBCLIENT', Uppercase(CommandLine)) > 0 then
-    CopyFbClient := True;
 
     cmdParams := TStringList.create;
     for i:=0 to ParamCount do begin
       cmdParams.add(ParamStr(i));
-      if pos('SYSDBANAME', Uppercase(ParamStr(i)) ) > 0 then
-        SYSDBAName := Copy(ParamStr(i),Length('/SYSDBANAME=')+1,Length(ParamStr(i))-Length('/SYSDBANAME=') );
       if pos('SYSDBAPASSWORD', Uppercase(ParamStr(i)) ) > 0 then
         SYSDBAPassword := Copy(ParamStr(i),Length('/SYSDBAPASSWORD=')+1,Length(ParamStr(i))-Length('/SYSDBAPASSWORD=') );
     end;
@@ -865,15 +847,13 @@ end;
 
 function GetAdminUserName: String;
 begin
-    Result := AdminUserPage.Values[0];
-    if Result = '' then
-      Result := 'SYSDBA';
+  Result := 'SYSDBA';
 end;
 
 
 function GetAdminUserPassword: String;
 begin
-    Result := AdminUserPage.Values[1];
+    Result := AdminUserPage.Values[0];
     if Result = '' then
       Result := 'masterkey';
 end;
@@ -886,10 +866,10 @@ var
   AStringList: TStringList;
   TempDir: String;
 	ResultCode: Integer;
-  TempStr: string;
+	CmdStr: string;
 begin
 	TempDir := ExpandConstant( '{tmp}' );
-  TempStr := ExpandConstant( '{app}\isql.exe' );
+	CmdStr := ExpandConstant( '{app}\isql.exe' );
 	AStringList := TStringList.create;
 	with AStringList do begin
 		Add( 'create user ' + GetAdminUserName + ' password ''' + GetAdminUserPassword + ''' using plugin Srp;' );
@@ -900,7 +880,7 @@ begin
 		Add( 'exit;' );
 		SaveToFile( Tempdir +'\temp.sql' );
 	end;
-	Result := Exec( ExpandConstant( '{app}\isql.exe' ) , ' -m -m2 -user SYSDBA -i ' + TempDir + '\temp.sql -o ' + TempDir + '\temp.sql.txt employee ' , TempDir, SW_HIDE, ewWaitUntilTerminated, ResultCode );
+	Result := Exec( CmdStr , ' -m -m2 -user SYSDBA -i ' + TempDir + '\temp.sql -o ' + TempDir + '\temp.sql.txt employee ' , TempDir, SW_HIDE, ewWaitUntilTerminated, ResultCode );
 	DeleteFile( TempDir + +'\temp.sql ');
 end;
 
@@ -1062,7 +1042,7 @@ var
 begin
    case CurStep of
     ssInstall: begin
-      RenamePreFB3RC1Files;
+//      RenamePreFB3RC1Files;
       SetupSharedFilesArray;
       GetSharedLibCountBeforeCopy;
       end;
@@ -1234,30 +1214,18 @@ function NextButtonClick(CurPageID: Integer): Boolean;
 var
 	i: integer;
 begin
-  { check user has entered sysdba password correctly. }
-	Result := True;
+  Result := True;
   case CurPageID of
     AdminUserPage.ID : begin
-      if not (AdminUserPage.Values[0] = '') and (AdminUserPage.Values[1] = '') then begin
-        Result := False;
-        MsgBox(ExpandConstant('{cm:SYSDBAPasswordEmpty}'), mbError, MB_OK);
-      end;
-      i := CompareStr(AdminUserPage.Values[1],AdminUserPage.Values[2]);
+	  { check user has entered new sysdba password correctly. }
+      i := CompareStr(AdminUserPage.Values[0],AdminUserPage.Values[1]);
       If  not (i = 0) then begin
         Result := False;
+        AdminUserPage.Values[0] :='';
         AdminUserPage.Values[1] :='';
-        AdminUserPage.Values[2] :='';
         MsgBox(ExpandConstant('{cm:SYSDBAPasswordMismatch}'), mbError, MB_OK);
       end;
     end;
-  
-(*    wpSelectDir :    begin 
-      if PreFB3RC1InstallDetected then begin
-        MsgBox(ExpandConstant('{cm:PreFB3RC1VersionInstalled}'), mbError, MB_OK)
-        Result := false;
-      end;
-    end;
-*)
   end;
 end;
 	

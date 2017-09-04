@@ -1,13 +1,11 @@
 
-=====================================================
-Firebird $MAJOR.$MINOR.$RELEASE    (Alpha/Beta Windows Build)
-=====================================================
+====================================
+Firebird $MAJOR.$MINOR.$RELEASE     (Alpha/Beta Windows Build)
+====================================
 
 
 o Introduction
 o Intended Users
-o Features in this release (all platforms)
-o Installation
 o Reporting Bugs
 
 
@@ -30,49 +28,24 @@ considered ready for use in production.
 
  o Please make sure you read the installation
    readme and the release notes.
-
-
-Features in this release
-========================
-
-Please see the Release Notes for details of new
-features.
-
-
-Installation
-============
-
-Installation issues are covered in detail in the
-Installation Guide available in the doc directory 
-after install. A brief summary of installation issues 
-can also be found in the installation_readme.txt, also
-available from the doc directory after installation.
-
-
 Reporting Bugs
 ==============
 
-Before you report a bug:
+This is an experimental version.
 
- o Check you know how Firebird works.
-   Maybe it is not a bug at all.
+DO NOT REPORT A BUG IN THIS RELEASE
+unless you really know what you are doing.
 
- o Perhaps someone has already reported this? Browse
-   existing bug reports here:
+Check first on the firebird-devel list. If you 
+don't know where the firebird-devel list is then 
+you shouldn't be using this version of Firebird!
 
-    http://tracker.firebirdsql.org/browse/CORE
-
- o If in doubt why not discuss the problem on the
-   Firebird-devel list? You can subscribe here:
-
-    http://lists.sourceforge.net/lists/listinfo/firebird-devel
-
-   and the list is viewable via a newsgroup interface
-   here:
-
-    news://news.atkin.com/
+Please don't use the Firebird-devel list for 
+technical support unless the question specifically 
+relates to a new feature in Firebird $MAJOR.$MINOR
 
 
+Happy Testing!
 
 From the Firebird team.
 
