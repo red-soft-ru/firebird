@@ -66,7 +66,7 @@ $(SRC_ROOT)/gpre/gpre_meta.cpp:  $(SRC_ROOT)/gpre/gpre_meta.epp
 #$(SRC_ROOT)/qli/help.cpp:        help.fdb
 
 # Explicit dependence on generated header (parser)
-$(OBJ)/dsql/Parser.o $(OBJ)/yvalve/keywords.o $(OBJ)/dsql/dsql.o:	$(SRC_ROOT)/include/gen/parse.h
+$(OBJ)/dsql/Parser.o $(OBJ)/common/keywords.o $(OBJ)/dsql/dsql.o:	$(SRC_ROOT)/include/gen/parse.h
 
 # Special cases for building cpp from epp
 $(OBJ)/dsql/metd.cpp: $(SRC_ROOT)/dsql/metd.epp
