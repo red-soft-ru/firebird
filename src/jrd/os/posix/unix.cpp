@@ -540,7 +540,7 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 	Database* const dbb = tdbb->getDatabase();
 
 	int i;
-	FB_UINT64 bytes;
+	SINT64 bytes;
 
 	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	jrd_file* file = pageSpace->file;
@@ -550,7 +550,7 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 
 	for (i = 0; i < IO_RETRY; i++)
 	{
-		if ((bytes = pread(file->fil_desc, address, length, 0)) == (FB_UINT64) -1)
+		if ((bytes = pread(file->fil_desc, address, length, 0)) < 0)
 		{
 			if (SYSCALL_INTERRUPTED(errno))
 				continue;
@@ -633,7 +633,7 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 			write_pages = leftPages;
 
 		SLONG to_write = write_pages * dbb->dbb_page_size;
-		SLONG written;
+		SINT64 written;
 
 		for (int r = 0; r < IO_RETRY; r++)
 		{
@@ -641,7 +641,7 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 				return false;
 			if ((written = pwrite(file->fil_desc, zero_buff, to_write, LSEEK_OFFSET_CAST offset)) == to_write)
 				break;
-			if (written == (SLONG) -1 && !SYSCALL_INTERRUPTED(errno))
+			if (written < 0 && !SYSCALL_INTERRUPTED(errno))
 				return unix_error("write", file, isc_io_write_err, status_vector);
 		}
 
@@ -748,7 +748,8 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
  *
  **************************************/
 	int i;
-	FB_UINT64 bytes, offset;
+	SINT64 bytes;
+	FB_UINT64 offset;
 
 	if (file->fil_desc == -1)
 		return unix_error("read", file, isc_io_read_err, status_vector);
@@ -765,7 +766,7 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 			return false;
 		if ((bytes = pread(file->fil_desc, page, size, LSEEK_OFFSET_CAST offset)) == size)
 			break;
-		if (bytes == -1U && !SYSCALL_INTERRUPTED(errno))
+		if (bytes < 0 && !SYSCALL_INTERRUPTED(errno))
 			return unix_error("read", file, isc_io_read_err, status_vector);
 	}
 
@@ -806,8 +807,8 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
  *
  **************************************/
 	int i;
-	SLONG bytes;
-    FB_UINT64 offset;
+	SINT64 bytes;
+	FB_UINT64 offset;
 
 	if (file->fil_desc == -1)
 		return unix_error("write", file, isc_io_write_err, status_vector);
@@ -824,7 +825,7 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 			return false;
 		if ((bytes = pwrite(file->fil_desc, page, size, LSEEK_OFFSET_CAST offset)) == size)
 			break;
-		if (bytes == (SLONG) -1 && !SYSCALL_INTERRUPTED(errno))
+		if (bytes < 0 && !SYSCALL_INTERRUPTED(errno))
 			return unix_error("write", file, isc_io_write_err, status_vector);
 	}
 
