@@ -1613,6 +1613,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				dbb->dbb_backup_manager->initializeAlloc(tdbb);
 				dbb->dbb_crypto_manager = FB_NEW_POOL(*dbb->dbb_permanent) CryptoManager(tdbb);
 				dbb->dbb_monitoring_data = FB_NEW_POOL(*dbb->dbb_permanent) MonitoringData(dbb);
+				dbb->dbb_sweeper = FB_NEW_POOL(*dbb->dbb_permanent) Sweeper(dbb);
 
 				PAG_init2(tdbb, 0);
 				PAG_header(tdbb, false);
@@ -2710,6 +2711,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			dbb->dbb_backup_manager->dbCreating = true;
 			dbb->dbb_crypto_manager = FB_NEW_POOL(*dbb->dbb_permanent) CryptoManager(tdbb);
 			dbb->dbb_monitoring_data = FB_NEW_POOL(*dbb->dbb_permanent) MonitoringData(dbb);
+			dbb->dbb_sweeper = FB_NEW_POOL(*dbb->dbb_permanent) Sweeper(dbb);
 
 			PAG_format_header(tdbb);
 			INI_init2(tdbb);
@@ -6451,16 +6453,19 @@ static void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 	attachment->mergeStats();
 
 	// avoid races with crypt thread
-	Mutex dummyMutex;
+	Mutex dummyMutex, dummyMutex2;
 	MutexEnsureUnlock cryptGuard(dbb->dbb_crypto_manager ? dbb->dbb_crypto_manager->cryptAttMutex :
 		dummyMutex, FB_FUNCTION);
 	cryptGuard.enter();
 
+	MutexEnsureUnlock guard(dbb->dbb_sweeper ? dbb->dbb_sweeper->mutex : dummyMutex2, FB_FUNCTION);
+	guard.enter();
 	Sync sync(&dbb->dbb_sync, "jrd.cpp: release_attachment");
 	sync.lock(SYNC_EXCLUSIVE);
 
 	// stop the crypt thread if we release last regular attachment
 	Jrd::Attachment* crypt_att = NULL;
+	Jrd::Attachment* sweep_att = NULL;
 	bool other = false;
 	CRYPT_DEBUG(fprintf(stderr, "\nrelease attachment=%p\n", attachment));
 	for (Jrd::Attachment* att = dbb->dbb_attachments; att; att = att->att_next)
@@ -6477,7 +6482,13 @@ static void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 			CRYPT_DEBUG(fprintf(stderr, "found crypt_att=%p\n", crypt_att));
 			continue;
 		}
+		if (att->att_flags & ATT_sweep_thread)
+		{
+			sweep_att = att;
+			continue;
+		}
 		crypt_att = NULL;
+		sweep_att = NULL;
 		other = true;
 		CRYPT_DEBUG(fprintf(stderr, "other\n"));
 		break;
@@ -6487,6 +6498,7 @@ static void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 		dbb->dbb_crypto_manager->terminateCryptThread(tdbb, false);
 
 	cryptGuard.leave();
+	guard.leave();
 
 	if (crypt_att)
 	{
@@ -6496,6 +6508,13 @@ static void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 		fb_assert(dbb->dbb_crypto_manager);
 		dbb->dbb_crypto_manager->terminateCryptThread(tdbb, true);
 
+		sync.lock(SYNC_EXCLUSIVE);
+	}
+
+	if (dbb->dbb_sweeper && (sweep_att || !(sweep_att || other)))
+	{
+		sync.unlock();
+		dbb->dbb_sweeper->stop();
 		sync.lock(SYNC_EXCLUSIVE);
 	}
 
@@ -6725,6 +6744,9 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 
 	delete dbb->dbb_crypto_manager;
 	dbb->dbb_crypto_manager = NULL;
+
+	delete dbb->dbb_sweeper;
+	dbb->dbb_sweeper = NULL;
 
 	LCK_fini(tdbb, LCK_OWNER_database);
 
