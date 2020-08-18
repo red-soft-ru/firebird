@@ -1983,6 +1983,10 @@ COMMIT WORK;
 (NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 307, NULL, 'Exception @1 does not exist', NULL, NULL);
 (NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 308, NULL, 'Generator/Sequence @1 does not exist', NULL, NULL);
 (NULL, 'GrantRevokeNode::grantRevoke', 'DdlNodes.epp', NULL, 8, 309, NULL, 'Field @1 of table @2 does not exist', NULL, NULL);
+('dyn_dup_domain',  'CreateDomainNode::execute', 'dyn.c', NULL, 8, 310, NULL, 'Domain @1 already exists',  NULL, NULL);
+('dyn_dup_trigger', 'CreateAlterTriggerNode::executeCreate', 'dyn.c', NULL, 8, 311, NULL, 'Trigger @1 already exists', NULL, NULL);
+('dyn_dup_package', 'CreateAlterPackageNode::executeCreate', 'dyn.c', NULL, 8, 312, NULL, 'Package @1 already exists', NULL, NULL);
+('dyn_dup_filter',  'CreateFilterNode::execute', 'dyn.c', NULL, 8, 313, NULL, 'Filter @1 already exists',  NULL, NULL);
 COMMIT WORK;
 -- TEST
 (NULL, 'main', 'test.c', NULL, 11, 0, NULL, 'This is a modified text message', NULL, NULL);

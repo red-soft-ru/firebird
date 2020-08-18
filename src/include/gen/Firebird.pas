@@ -4470,6 +4470,10 @@ const
 	isc_dyn_cant_use_zero_increment      = 336068896;
 	isc_dyn_cant_use_in_foreignkey       = 336068897;
 	isc_dyn_defvaldecl_package_func      = 336068898;
+	isc_dyn_dup_domain                   = 336068918;
+	isc_dyn_dup_trigger                  = 336068919;
+	isc_dyn_dup_package                  = 336068920;
+	isc_dyn_dup_filter                   = 336068921;
 	isc_gbak_unknown_switch              = 336330753;
 	isc_gbak_page_size_missing           = 336330754;
 	isc_gbak_page_size_toobig            = 336330755;

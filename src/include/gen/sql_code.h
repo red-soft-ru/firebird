@@ -951,6 +951,10 @@ static const struct {
 	{336068896, -901}, /* 288 dyn_cant_use_zero_increment */
 	{336068897, -901}, /* 289 dyn_cant_use_in_foreignkey */
 	{336068898, -901}, /* 290 dyn_defvaldecl_package_func */
+	{336068918, -901}, /* 310 dyn_dup_domain */
+	{336068919, -901}, /* 311 dyn_dup_trigger */
+	{336068920, -901}, /* 312 dyn_dup_package */
+	{336068921, -901}, /* 313 dyn_dup_filter */
 	{336330753, -901}, /*   1 gbak_unknown_switch */
 	{336330754, -901}, /*   2 gbak_page_size_missing */
 	{336330755, -901}, /*   3 gbak_page_size_toobig */

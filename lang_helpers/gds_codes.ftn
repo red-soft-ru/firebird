@@ -1912,6 +1912,14 @@ C --
       PARAMETER (GDS__dyn_cant_use_in_foreignkey       = 336068897)
       INTEGER*4 GDS__dyn_defvaldecl_package_func     
       PARAMETER (GDS__dyn_defvaldecl_package_func      = 336068898)
+      INTEGER*4 GDS__dyn_dup_domain                  
+      PARAMETER (GDS__dyn_dup_domain                   = 336068918)
+      INTEGER*4 GDS__dyn_dup_trigger                 
+      PARAMETER (GDS__dyn_dup_trigger                  = 336068919)
+      INTEGER*4 GDS__dyn_dup_package                 
+      PARAMETER (GDS__dyn_dup_package                  = 336068920)
+      INTEGER*4 GDS__dyn_dup_filter                  
+      PARAMETER (GDS__dyn_dup_filter                   = 336068921)
       INTEGER*4 GDS__gbak_unknown_switch             
       PARAMETER (GDS__gbak_unknown_switch              = 336330753)
       INTEGER*4 GDS__gbak_page_size_missing          

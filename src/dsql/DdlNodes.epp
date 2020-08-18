@@ -3530,6 +3530,8 @@ void CreateAlterTriggerNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_TRIGGER,
 		name, NULL);
 
+	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_trigger);
+
 	store(tdbb, dsqlScratch, transaction);
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_TRIGGER,
@@ -4217,6 +4219,8 @@ void CreateDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_DOMAIN, nameType->name, NULL);
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, nameType->name, obj_domains);
 
 	storeGlobalField(tdbb, transaction, nameType->name, type);
 
@@ -9754,6 +9758,8 @@ void CreateFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_DECLARE_FILTER,
 		name, NULL);
 	***/
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_filters);
 
 	AutoCacheRequest request(tdbb, drq_s_filters, DYN_REQUESTS);
 
