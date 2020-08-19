@@ -520,7 +520,7 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_PACKAGE, name, NULL);
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_packages);
+	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_package_header);
 
 	AutoCacheRequest requestHandle(tdbb, drq_s_pkg, DYN_REQUESTS);
 

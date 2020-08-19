@@ -175,7 +175,7 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
 
 			break;
 
-		case obj_domains:
+		case obj_field:
 			request.reset(tdbb, drq_domain_exist, DYN_REQUESTS);
 
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -199,7 +199,7 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
 
 			break;
 
-		case obj_packages:
+		case obj_package_header:
 			request.reset(tdbb, drq_package_exist, DYN_REQUESTS);
 
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -211,7 +211,7 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
 
 			break;
 
-		case obj_filters:
+		case obj_blob_filter:
 			request.reset(tdbb, drq_filter_exist, DYN_REQUESTS);
 
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
