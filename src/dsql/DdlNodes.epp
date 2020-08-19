@@ -3530,9 +3530,19 @@ void CreateAlterTriggerNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_TRIGGER,
 		name, NULL);
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_trigger);
-
-	store(tdbb, dsqlScratch, transaction);
+	try
+	{
+		store(tdbb, dsqlScratch, transaction);
+	}
+	catch (status_exception& ex)
+	{
+		if (ex.value()[1] == isc_unique_key_violation)
+		{
+			DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_trigger);
+		}
+		else
+			throw ex;
+	}
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_TRIGGER,
 		name, NULL);
@@ -4220,9 +4230,19 @@ void CreateDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_DOMAIN, nameType->name, NULL);
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, nameType->name, obj_field);
-
-	storeGlobalField(tdbb, transaction, nameType->name, type);
+	try
+	{
+		storeGlobalField(tdbb, transaction, nameType->name, type);
+	}
+	catch (status_exception& ex)
+	{
+		if ( ex.value()[1] == isc_unique_key_violation)
+		{
+			DYN_UTIL_check_unique_name(tdbb, transaction, nameType->name, obj_field);
+		}
+		else
+			throw ex;
+	}
 
 	if (nameType->defaultClause || check || notNull)
 	{
@@ -9759,48 +9779,58 @@ void CreateFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 		name, NULL);
 	***/
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_blob_filter);
-
 	AutoCacheRequest request(tdbb, drq_s_filters, DYN_REQUESTS);
 
-	STORE(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		X IN RDB$FILTERS
+	try
 	{
-		strcpy(X.RDB$FUNCTION_NAME, name.c_str());
-		strcpy(X.RDB$OWNER_NAME, ownerName.c_str());
-		X.RDB$SYSTEM_FLAG = 0;
-		moduleName.copyTo(X.RDB$MODULE_NAME, sizeof(X.RDB$MODULE_NAME));
-		entryPoint.copyTo(X.RDB$ENTRYPOINT, sizeof(X.RDB$ENTRYPOINT));
-
-		if (inputFilter->name.hasData())
+		STORE(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			X IN RDB$FILTERS
 		{
-			if (!METD_get_type(transaction, inputFilter->name, "RDB$FIELD_SUB_TYPE",
-					&X.RDB$INPUT_SUB_TYPE))
-			{
-				status_exception::raise(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					Arg::Gds(isc_dsql_datatype_err) <<
-					Arg::Gds(isc_dsql_blob_type_unknown) << inputFilter->name);
-			}
-		}
-		else
-			X.RDB$INPUT_SUB_TYPE = inputFilter->number;
+			strcpy(X.RDB$FUNCTION_NAME, name.c_str());
+			strcpy(X.RDB$OWNER_NAME, ownerName.c_str());
+			X.RDB$SYSTEM_FLAG = 0;
+			moduleName.copyTo(X.RDB$MODULE_NAME, sizeof(X.RDB$MODULE_NAME));
+			entryPoint.copyTo(X.RDB$ENTRYPOINT, sizeof(X.RDB$ENTRYPOINT));
 
-		if (outputFilter->name.hasData())
-		{
-			if (!METD_get_type(transaction, outputFilter->name, "RDB$FIELD_SUB_TYPE",
-					&X.RDB$OUTPUT_SUB_TYPE))
+			if (inputFilter->name.hasData())
 			{
-				status_exception::raise(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					Arg::Gds(isc_dsql_datatype_err) <<
-					Arg::Gds(isc_dsql_blob_type_unknown) << outputFilter->name);
+				if (!METD_get_type(transaction, inputFilter->name, "RDB$FIELD_SUB_TYPE",
+						&X.RDB$INPUT_SUB_TYPE))
+				{
+					status_exception::raise(
+						Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+						Arg::Gds(isc_dsql_datatype_err) <<
+						Arg::Gds(isc_dsql_blob_type_unknown) << inputFilter->name);
+				}
 			}
+			else
+				X.RDB$INPUT_SUB_TYPE = inputFilter->number;
+
+			if (outputFilter->name.hasData())
+			{
+				if (!METD_get_type(transaction, outputFilter->name, "RDB$FIELD_SUB_TYPE",
+						&X.RDB$OUTPUT_SUB_TYPE))
+				{
+					status_exception::raise(
+						Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+						Arg::Gds(isc_dsql_datatype_err) <<
+						Arg::Gds(isc_dsql_blob_type_unknown) << outputFilter->name);
+				}
+			}
+			else
+				X.RDB$OUTPUT_SUB_TYPE = outputFilter->number;
 		}
-		else
-			X.RDB$OUTPUT_SUB_TYPE = outputFilter->number;
+		END_STORE
 	}
-	END_STORE
+	catch (status_exception& ex)
+	{
+		if ( ex.value()[1] == isc_unique_key_violation)
+		{
+			DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_blob_filter);
+		}
+		else
+			throw ex;
+	}
 
 	/***
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DECLARE_FILTER,

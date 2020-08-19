@@ -520,26 +520,36 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_PACKAGE, name, NULL);
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_package_header);
-
 	AutoCacheRequest requestHandle(tdbb, drq_s_pkg, DYN_REQUESTS);
 
-	STORE (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
-		PKG IN RDB$PACKAGES USING
+	try
 	{
-		PKG.RDB$PACKAGE_NAME.NULL = FALSE;
-		strcpy(PKG.RDB$PACKAGE_NAME, name.c_str());
+		STORE (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+			PKG IN RDB$PACKAGES USING
+		{
+			PKG.RDB$PACKAGE_NAME.NULL = FALSE;
+			strcpy(PKG.RDB$PACKAGE_NAME, name.c_str());
 
-		PKG.RDB$SYSTEM_FLAG.NULL = FALSE;
-		PKG.RDB$SYSTEM_FLAG = 0;
+			PKG.RDB$SYSTEM_FLAG.NULL = FALSE;
+			PKG.RDB$SYSTEM_FLAG = 0;
 
-		PKG.RDB$OWNER_NAME.NULL = FALSE;
-		strcpy(PKG.RDB$OWNER_NAME, userName.c_str());
+			PKG.RDB$OWNER_NAME.NULL = FALSE;
+			strcpy(PKG.RDB$OWNER_NAME, userName.c_str());
 
-		PKG.RDB$PACKAGE_HEADER_SOURCE.NULL = FALSE;
-		attachment->storeMetaDataBlob(tdbb, transaction, &PKG.RDB$PACKAGE_HEADER_SOURCE, source);
+			PKG.RDB$PACKAGE_HEADER_SOURCE.NULL = FALSE;
+			attachment->storeMetaDataBlob(tdbb, transaction, &PKG.RDB$PACKAGE_HEADER_SOURCE, source);
+		}
+		END_STORE
 	}
-	END_STORE
+	catch (status_exception& ex)
+	{
+		if ( ex.value()[1] == isc_unique_key_violation)
+		{
+			DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_package_header);
+		}
+		else
+			throw ex;
+	}
 
 	storePrivileges(tdbb, transaction, name, obj_package_header, EXEC_PRIVILEGES);
 
