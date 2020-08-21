@@ -1913,8 +1913,10 @@ const
 	gds_dyn_dup_trigger                  = 336068919;
 	isc_dyn_dup_package                  = 336068920;
 	gds_dyn_dup_package                  = 336068920;
-	isc_dyn_dup_filter                   = 336068921;
-	gds_dyn_dup_filter                   = 336068921;
+	isc_dyn_dup_filter_name              = 336068921;
+	gds_dyn_dup_filter_name              = 336068921;
+	isc_dyn_dup_filter_inout_type        = 336068922;
+	gds_dyn_dup_filter_inout_type        = 336068922;
 	isc_gbak_unknown_switch              = 336330753;
 	gds_gbak_unknown_switch              = 336330753;
 	isc_gbak_page_size_missing           = 336330754;

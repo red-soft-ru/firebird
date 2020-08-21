@@ -3537,7 +3537,7 @@ void CreateAlterTriggerNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 	catch (status_exception& ex)
 	{
 		if (ex.value()[1] == isc_unique_key_violation)
-			status_exception::raise(Arg::PrivateDyn(311) << name.c_str());
+			status_exception::raise(Arg::Gds(isc_dyn_dup_trigger) << name.c_str());
 		else
 			throw ex;
 	}
@@ -4235,7 +4235,7 @@ void CreateDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	catch (status_exception& ex)
 	{
 		if ( ex.value()[1] == isc_unique_key_violation)
-			status_exception::raise(Arg::PrivateDyn(310) << nameType->name.c_str());
+			status_exception::raise(Arg::Gds(isc_dyn_dup_domain) << nameType->name.c_str());
 		else
 			throw ex;
 	}
@@ -9821,7 +9821,15 @@ void CreateFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 	catch (status_exception& ex)
 	{
 		if ( ex.value()[1] == isc_unique_key_violation)
-			status_exception::raise(Arg::PrivateDyn(313) << name.c_str());
+		{
+			string s;
+			s.assign((TEXT*)ex.value()[9]);
+
+			if (s.find("(\"RDB$FUNCTION_NAME\"") == 0)
+				status_exception::raise(Arg::Gds(isc_dyn_dup_filter_name) << name.c_str());
+			else
+				status_exception::raise(Arg::Gds(isc_dyn_dup_filter_inout_type) << s.c_str());
+		}
 		else
 			throw ex;
 	}

@@ -1918,8 +1918,10 @@ C --
       PARAMETER (GDS__dyn_dup_trigger                  = 336068919)
       INTEGER*4 GDS__dyn_dup_package                 
       PARAMETER (GDS__dyn_dup_package                  = 336068920)
-      INTEGER*4 GDS__dyn_dup_filter                  
-      PARAMETER (GDS__dyn_dup_filter                   = 336068921)
+      INTEGER*4 GDS__dyn_dup_filter_name             
+      PARAMETER (GDS__dyn_dup_filter_name              = 336068921)
+      INTEGER*4 GDS__dyn_dup_filter_inout_type       
+      PARAMETER (GDS__dyn_dup_filter_inout_type        = 336068922)
       INTEGER*4 GDS__gbak_unknown_switch             
       PARAMETER (GDS__gbak_unknown_switch              = 336330753)
       INTEGER*4 GDS__gbak_page_size_missing          

@@ -1986,7 +1986,8 @@ COMMIT WORK;
 ('dyn_dup_domain',  'CreateDomainNode::execute', 'dyn.c', NULL, 8, 310, NULL, 'Domain @1 already exists',  NULL, NULL);
 ('dyn_dup_trigger', 'CreateAlterTriggerNode::executeCreate', 'dyn.c', NULL, 8, 311, NULL, 'Trigger @1 already exists', NULL, NULL);
 ('dyn_dup_package', 'CreateAlterPackageNode::executeCreate', 'dyn.c', NULL, 8, 312, NULL, 'Package @1 already exists', NULL, NULL);
-('dyn_dup_filter',  'CreateFilterNode::execute', 'dyn.c', NULL, 8, 313, NULL, 'Filter @1 already exists',  NULL, NULL);
+('dyn_dup_filter_name', 'CreateFilterNode::execute', 'dyn.c', NULL, 8, 313, NULL, 'Filter with name @1 already exists',  NULL, NULL);
+('dyn_dup_filter_inout_type', 'CreateFilterNode::execute', 'dyn.c', NULL, 8, 314, NULL, 'Filter with @1 already exists',  NULL, NULL);
 COMMIT WORK;
 -- TEST
 (NULL, 'main', 'test.c', NULL, 11, 0, NULL, 'This is a modified text message', NULL, NULL);

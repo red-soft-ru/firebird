@@ -943,7 +943,8 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (-901, '42', '000', 8, 310, 'dyn_dup_domain', NULL, NULL)
 (-901, '42', '000', 8, 311, 'dyn_dup_trigger', NULL, NULL)
 (-901, '42', '000', 8, 312, 'dyn_dup_package', NULL, NULL)
-(-901, '42', '000', 8, 313, 'dyn_dup_filter', NULL, NULL)
+(-901, '42', '000', 8, 313, 'dyn_dup_filter_name', NULL, NULL)
+(-901, '42', '000', 8, 314, 'dyn_dup_filter_inout_type', NULL, NULL)
 --  GBAK
 (-901, '00', '000', 12, 1, 'gbak_unknown_switch', NULL, NULL)
 (-901, '00', '000', 12, 2, 'gbak_page_size_missing', NULL, NULL)

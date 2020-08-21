@@ -544,7 +544,7 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 	catch (status_exception& ex)
 	{
 		if ( ex.value()[1] == isc_unique_key_violation)
-			status_exception::raise(Arg::PrivateDyn(312) << name.c_str());
+			status_exception::raise(Arg::Gds(isc_dyn_dup_package) << name.c_str());
 		else
 			throw ex;
 	}

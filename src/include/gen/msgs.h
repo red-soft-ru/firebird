@@ -958,7 +958,8 @@ Data source : @4"},		/* eds_statement */
 	{336068918, "Domain @1 already exists"},		/* dyn_dup_domain */
 	{336068919, "Trigger @1 already exists"},		/* dyn_dup_trigger */
 	{336068920, "Package @1 already exists"},		/* dyn_dup_package */
-	{336068921, "Filter @1 already exists"},		/* dyn_dup_filter */
+	{336068921, "Filter with name @1 already exists"},		/* dyn_dup_filter_name */
+	{336068922, "Filter with @1 already exists"},		/* dyn_dup_filter_inout_type */
 	{336330753, "found unknown switch"},		/* gbak_unknown_switch */
 	{336330754, "page size parameter missing"},		/* gbak_page_size_missing */
 	{336330755, "Page size specified (@1) greater than limit (16384 bytes)"},		/* gbak_page_size_toobig */

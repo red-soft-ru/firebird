@@ -954,7 +954,8 @@ static const struct {
 	{336068918, "42000"}, // 310 dyn_dup_domain
 	{336068919, "42000"}, // 311 dyn_dup_trigger
 	{336068920, "42000"}, // 312 dyn_dup_package
-	{336068921, "42000"}, // 313 dyn_dup_filter
+	{336068921, "42000"}, // 313 dyn_dup_filter_name
+	{336068922, "42000"}, // 314 dyn_dup_filter_inout_type
 	{336330753, "00000"}, //   1 gbak_unknown_switch
 	{336330754, "00000"}, //   2 gbak_page_size_missing
 	{336330755, "00000"}, //   3 gbak_page_size_toobig
