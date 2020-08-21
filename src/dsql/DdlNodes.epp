@@ -3537,9 +3537,7 @@ void CreateAlterTriggerNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 	catch (status_exception& ex)
 	{
 		if (ex.value()[1] == isc_unique_key_violation)
-		{
-			DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_trigger);
-		}
+			status_exception::raise(Arg::PrivateDyn(311) << name.c_str());
 		else
 			throw ex;
 	}
@@ -4237,9 +4235,7 @@ void CreateDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	catch (status_exception& ex)
 	{
 		if ( ex.value()[1] == isc_unique_key_violation)
-		{
-			DYN_UTIL_check_unique_name(tdbb, transaction, nameType->name, obj_field);
-		}
+			status_exception::raise(Arg::PrivateDyn(310) << nameType->name.c_str());
 		else
 			throw ex;
 	}
@@ -9825,9 +9821,7 @@ void CreateFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 	catch (status_exception& ex)
 	{
 		if ( ex.value()[1] == isc_unique_key_violation)
-		{
-			DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_blob_filter);
-		}
+			status_exception::raise(Arg::PrivateDyn(313) << name.c_str());
 		else
 			throw ex;
 	}

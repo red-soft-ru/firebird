@@ -175,54 +175,6 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
 
 			break;
 
-		case obj_field:
-			request.reset(tdbb, drq_domain_exist, DYN_REQUESTS);
-
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-				EFLD IN RDB$FIELDS WITH EFLD.RDB$FIELD_NAME EQ object_name.c_str()
-			{
-				error_code = 310;
-			}
-			END_FOR
-
-			break;
-
-		case obj_trigger:
-			request.reset(tdbb, drq_trigger_exist, DYN_REQUESTS);
-
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-				ETRG IN RDB$TRIGGERS WITH ETRG.RDB$TRIGGER_NAME EQ object_name.c_str()
-			{
-				error_code = 311;
-			}
-			END_FOR
-
-			break;
-
-		case obj_package_header:
-			request.reset(tdbb, drq_package_exist, DYN_REQUESTS);
-
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-				EPKG IN RDB$PACKAGES WITH EPKG.RDB$PACKAGE_NAME EQ object_name.c_str()
-			{
-				error_code = 312;
-			}
-			END_FOR
-
-			break;
-
-		case obj_blob_filter:
-			request.reset(tdbb, drq_filter_exist, DYN_REQUESTS);
-
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-				EFLR IN RDB$FILTERS WITH EFLR.RDB$FUNCTION_NAME EQ object_name.c_str()
-			{
-				error_code = 313;
-			}
-			END_FOR
-
-			break;
-
 		default:
 			fb_assert(false);
 	}
