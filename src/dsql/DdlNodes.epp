@@ -9822,10 +9822,7 @@ void CreateFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 	{
 		if ( ex.value()[1] == isc_unique_key_violation)
 		{
-			string s;
-			s.assign((TEXT*)ex.value()[3]);
-
-			if (s.find("RDB$INDEX_45") == 0)
+			if (strcmp((TEXT*)ex.value()[3], "RDB$INDEX_45") == 0)
 				status_exception::raise(Arg::Gds(isc_dyn_dup_filter_name) << name.c_str());
 			else
 				status_exception::raise(Arg::Gds(isc_dyn_dup_filter_inout_type) << (TEXT*)ex.value()[9]);
