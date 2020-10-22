@@ -468,13 +468,16 @@ private:
 
 	void flashBatch()
 	{
-		setBlobAlignment();
-		alignBlobBuffer(blobAlign);
-		ULONG size = blobStream - blobStreamBuffer;
-		if (size)
+		if (blobPolicy != BLOB_NONE)
 		{
-			sendBlobPacket(size, blobStreamBuffer);
-			blobStream = blobStreamBuffer;
+			setBlobAlignment();
+			alignBlobBuffer(blobAlign);
+			ULONG size = blobStream - blobStreamBuffer;
+			if (size)
+			{
+				sendBlobPacket(size, blobStreamBuffer);
+				blobStream = blobStreamBuffer;
+			}
 		}
 
 		if (messageStream)
