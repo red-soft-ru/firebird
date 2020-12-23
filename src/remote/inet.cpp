@@ -576,6 +576,7 @@ static int		send_partial(rem_port*, PACKET *);
 static int		xdrinet_create(XDR*, rem_port*, UCHAR *, USHORT, enum xdr_op);
 static bool		setNoNagleOption(rem_port*);
 static bool		setFastLoopbackOption(rem_port*, SOCKET s = INVALID_SOCKET);
+static bool		setKeepAlive(SOCKET);
 static FPTR_INT	tryStopMainThread = 0;
 
 
@@ -1031,12 +1032,8 @@ rem_port* INET_connect(const TEXT* name,
 			return listener_socket(port, flag, pai);
 
 		// client
-		int optval = 1;
-		n = setsockopt(port->port_handle, SOL_SOCKET, SO_KEEPALIVE, (SCHAR*) &optval, sizeof(optval));
-		if (n == -1)
-		{
+		if (!setKeepAlive(port->port_handle))
 			gds__log("setsockopt: error setting SO_KEEPALIVE");
-		}
 
 		if (!setNoNagleOption(port))
 			gds__log("setsockopt: error setting TCP_NODELAY");
@@ -1129,6 +1126,13 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 		if (n == -1)
 		{
 			inet_error(true, port, "setsockopt LINGER", isc_net_connect_listen_err, INET_ERRNO);
+		}
+	}
+	else
+	{
+		if (! setKeepAlive(port->port_handle))
+		{
+			inet_error(true, port, "setsockopt SO_KEEPALIVE", isc_net_connect_listen_err, INET_ERRNO);
 		}
 	}
 
@@ -1255,9 +1259,7 @@ rem_port* INET_reconnect(SOCKET handle)
 	port->port_flags |= PORT_server;
 	port->port_server_flags |= SRVR_server;
 
-	int n = 0, optval = TRUE;
-	n = setsockopt(port->port_handle, SOL_SOCKET, SO_KEEPALIVE, (SCHAR*) &optval, sizeof(optval));
-	if (n == -1) {
+	if (! setKeepAlive(port->port_handle)) {
 		gds__log("inet server err: setting KEEPALIVE socket option \n");
 	}
 
@@ -1287,9 +1289,7 @@ rem_port* INET_server(SOCKET sock)
 	port->port_server_flags |= SRVR_server;
 	port->port_handle = sock;
 
-	int optval = 1;
-	n = setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (SCHAR*) &optval, sizeof(optval));
-	if (n == -1) {
+	if (! setKeepAlive(port->port_handle)) {
 		gds__log("inet server err: setting KEEPALIVE socket option \n");
 	}
 
@@ -1583,8 +1583,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 		inet_error(false, port, "socket", isc_net_event_connect_err, savedError);
 	}
 
-	int optval = 1;
-	setsockopt(n, SOL_SOCKET, SO_KEEPALIVE, (SCHAR*) &optval, sizeof(optval));
+	setKeepAlive(n);
 	setFastLoopbackOption(new_port, n);
 
 	status = address.connect(n);
@@ -2182,8 +2181,7 @@ static rem_port* select_accept( rem_port* main_port)
 		inet_error(true, port, "accept", isc_net_connect_err, INET_ERRNO);
 	}
 
-	int optval = 1;
-	setsockopt(port->port_handle, SOL_SOCKET, SO_KEEPALIVE, (SCHAR*) &optval, sizeof(optval));
+	setKeepAlive(port->port_handle);
 
 	port->port_flags |= PORT_server;
 
@@ -3378,6 +3376,25 @@ bool setFastLoopbackOption(rem_port* port, SOCKET s)
 	}
 #endif
 	return false;
+}
+
+static bool setKeepAlive(SOCKET s)
+{
+/**************************************
+ *
+ *      s e t K e e p A l i v e
+ *
+ **************************************
+ *
+ * Functional description
+ *      Set SO_KEEPALIVE, return false
+ *		in case of unexpected error
+ *
+ **************************************/
+	int optval = 1;
+	int n = setsockopt(s, SOL_SOCKET, SO_KEEPALIVE,
+					   (SCHAR*) &optval, sizeof(optval));
+	return n != -1;
 }
 
 void setStopMainThread(FPTR_INT func)
