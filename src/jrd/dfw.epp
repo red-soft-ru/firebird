@@ -721,6 +721,8 @@ namespace
 					if (!routine)
 						return false;
 
+					routine->flags &= ~Routine::FLAG_BEING_ALTERED;
+
 					if (routine->existenceLock)
 						LCK_convert(tdbb, routine->existenceLock, LCK_SR, transaction->getLockWait());
 
