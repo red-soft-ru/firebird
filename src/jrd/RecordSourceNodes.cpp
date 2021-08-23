@@ -479,7 +479,7 @@ RelationSourceNode* RelationSourceNode::parse(thread_db* tdbb, CompilerScratch* 
 				PAR_name(csb, *aliasString);
 			}
 
-			if (!(node->relation = MET_lookup_relation_id(tdbb, id, false)))
+			if (!(node->relation = MET_lookup_relation_id(tdbb, id, false, false)))
 				name.printf("id %d", id);
 
 			break;
@@ -496,7 +496,7 @@ RelationSourceNode* RelationSourceNode::parse(thread_db* tdbb, CompilerScratch* 
 				PAR_name(csb, *aliasString);
 			}
 
-			node->relation = MET_lookup_relation(tdbb, name);
+			node->relation = MET_lookup_relation(tdbb, name, false);
 			break;
 		}
 
