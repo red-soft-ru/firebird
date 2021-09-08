@@ -200,7 +200,7 @@ void ERR_post_warning(const Arg::StatusVector& v)
 		return;
 	}
 
-	const ISC_STATUS* oldVector = statusVector->getErrors();
+	const ISC_STATUS* oldVector = statusVector->getWarnings();
 	unsigned lenOld = fb_utils::statusLength(oldVector);
 
 	// check for duplicated error code
