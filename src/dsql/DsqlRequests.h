@@ -241,6 +241,11 @@ public:
 		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton) override;
 
+	bool isDml() const override
+	{
+		return true;
+	}
+
 private:
 	NestConst<TransactionNode> node;
 };
