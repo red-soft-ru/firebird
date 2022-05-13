@@ -368,7 +368,7 @@ struct index_root_page
 	{
 	private:
 		friend struct index_root_page; // to allow offset check for private members
-		USHORT irt_page_space_id;	// page space of index root
+		ULONG irt_page_space_id;	// page space of index root
 		ULONG irt_root;				// page number of index root if irt_in_progress is NOT set, or
 									// highest 32 bit of transaction if irt_in_progress is set
 		ULONG irt_transaction;		// transaction in progress (lowest 32 bits)
