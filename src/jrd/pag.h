@@ -62,8 +62,9 @@ class PageControl : public pool_alloc<type_pgc>
 // INVALID_PAGE_SPACE is to ???
 const ULONG INVALID_PAGE_SPACE	= 0;
 const ULONG DB_PAGE_SPACE		= 1;
-// .. here all tablespace IDs. Keep TRANS_PAGE_SPACE right after DB_PAGE_SPACE
-const ULONG TRANS_PAGE_SPACE	= 0x10000;	// is not used for tablespace id
+// .. here all tablespace IDs. Keep TRANS_PAGE_SPACE right after DB_PAGE_SPACE.
+// Note that the max tablespace ID should be MAX_SSHORT as long as set_metadata_id returns SSHORT.
+const ULONG TRANS_PAGE_SPACE	= MAX_SSHORT + 1;	// is not used for tablespace id
 const ULONG TEMP_PAGE_SPACE		= TRANS_PAGE_SPACE + 1;
 const ULONG MAX_PAGE_SPACE_ID	= MAX_ULONG;
 
