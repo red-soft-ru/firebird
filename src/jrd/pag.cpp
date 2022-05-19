@@ -2531,12 +2531,12 @@ void PageManager::initTempPageSpace(thread_db* tdbb)
 		if (!attachment->att_temp_pg_lock)
 		{
 			Lock* const lock = FB_NEW_RPT(*attachment->att_pool, 0)
-				Lock(tdbb, sizeof(SLONG), LCK_page_space);
+				Lock(tdbb, sizeof(ULONG), LCK_page_space);
 
 			while (true)
 			{
 				const double tmp = rand() * (MAX_PAGE_SPACE_ID - TEMP_PAGE_SPACE - 1.0) / (RAND_MAX + 1.0);
-				lock->setKey(static_cast<SLONG>(tmp) + TEMP_PAGE_SPACE + 1);
+				lock->setKey(static_cast<ULONG>(tmp) + TEMP_PAGE_SPACE + 1);
 				if (LCK_lock(tdbb, lock, LCK_write, LCK_NO_WAIT))
 					break;
 				fb_utils::init_status(tdbb->tdbb_status_vector);
