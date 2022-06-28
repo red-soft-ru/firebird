@@ -1005,5 +1005,4 @@ FB_IMPL_MSG(JRD, 1005, jis_range_symbol_expected, -901, "22", "000", "")
 FB_IMPL_MSG(JRD, 1006, jis_string_or_end_expected, -901, "22", "000", "")
 FB_IMPL_MSG(JRD, 1007, jis_colon_expected, -901, "22", "000", "")
 FB_IMPL_MSG(JRD, 1008, jis_comma_or_end_expected, -901, "22", "000", "")
-FB_IMPL_MSG(JRD, 1008, jis_comma_or_end_expected, -901, "22", "000", "")
 

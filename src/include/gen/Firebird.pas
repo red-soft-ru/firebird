@@ -5174,10 +5174,10 @@ const
 	 isc_bad_loctab_num = 335545277;
 	 isc_quoted_str_bad = 335545278;
 	 isc_quoted_str_miss = 335545279;
-	 isc_jfunk_non_scalar = 335545280;
-	 isc_jfunk_more_than_one = 335545281;
-	 isc_jfunk_missing_wrapper_scalar = 335545282;
-	 isc_jfunk_missing_wrapper_several = 335545283;
+	 isc_jret_non_scalar = 335545280;
+	 isc_jret_more_than_one = 335545281;
+	 isc_jret_missing_wrapper_scalar = 335545282;
+	 isc_jret_missing_wrapper_several = 335545283;
 	 isc_jdyn_type_invalid_token = 335545284;
 	 isc_jdyn_type_unknown_token = 335545285;
 	 isc_jdyn_double_func_invalid_token = 335545286;
