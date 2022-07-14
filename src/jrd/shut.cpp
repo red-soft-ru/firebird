@@ -279,7 +279,8 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 		}
 	}
 
-	dbb->dbb_ast_flags &= ~(DBB_shut_force | DBB_shut_attach | DBB_shut_tran);
+	dbb->dbb_ast_flags &= ~(DBB_shut_force | DBB_shut_attach | DBB_shut_tran |
+							DBB_shutdown | DBB_shutdown_single | DBB_shutdown_full);
 
 	WIN window(HEADER_PAGE_NUMBER);
 	Ods::header_page* const header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
@@ -292,12 +293,15 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 		break;
 	case isc_dpb_shut_multi:
 		header->hdr_flags |= Ods::hdr_shutdown_multi;
+		dbb->dbb_ast_flags |= DBB_shutdown;
 		break;
 	case isc_dpb_shut_single:
 		header->hdr_flags |= Ods::hdr_shutdown_single;
+		dbb->dbb_ast_flags |= DBB_shutdown | DBB_shutdown_single;
 		break;
 	case isc_dpb_shut_full:
 		header->hdr_flags |= Ods::hdr_shutdown_full;
+		dbb->dbb_ast_flags |= DBB_shutdown | DBB_shutdown_full;
 		break;
 	default:
 		fb_assert(false);
