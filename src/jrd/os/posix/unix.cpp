@@ -480,7 +480,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
  **************************************/
 
 	if (file->fil_desc == -1)
-		unix_error("fstat", file, isc_io_access_err);
+		unix_error("PIO_get_number_of_pages", file, isc_io_access_err);
 
 	struct STAT statistics;
 	if (os_utils::fstat(file->fil_desc, &statistics))
@@ -752,7 +752,7 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 	FB_UINT64 offset;
 
 	if (file->fil_desc == -1)
-		return unix_error("read", file, isc_io_read_err, status_vector);
+		return unix_error("PIO_read", file, isc_io_read_err, status_vector);
 
 	Database* const dbb = tdbb->getDatabase();
 
@@ -804,7 +804,7 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 	FB_UINT64 offset;
 
 	if (file->fil_desc == -1)
-		return unix_error("write", file, isc_io_write_err, status_vector);
+		return unix_error("PIO_write", file, isc_io_write_err, status_vector);
 
 	Database* const dbb = tdbb->getDatabase();
 
@@ -860,7 +860,7 @@ static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
 
 	if (file->fil_desc == -1)
 	{
-		unix_error("lseek", file, isc_io_access_err, status_vector);
+		unix_error("seek_file", file, isc_io_access_err, status_vector);
 		return 0;
 	}
 
