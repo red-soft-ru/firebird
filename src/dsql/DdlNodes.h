@@ -1102,6 +1102,7 @@ public:
 		  alter(false),
 		  legacy(false),
 		  restartSpecified(false),
+		  startWithSpecified(false),
 		  name(pool, aName)
 	{
 		// Unfortunately, line/column carry no useful information here.
@@ -1146,6 +1147,7 @@ public:
 	bool alter;
 	bool legacy;
 	bool restartSpecified;
+	bool startWithSpecified;
 	const MetaName name;
 	BaseNullable<SINT64> value;
 	Nullable<SLONG> step;
