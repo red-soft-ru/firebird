@@ -2026,9 +2026,9 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: accept_connection: calls createPluginsItr\n"));
 			port->port_srv_auth_block->createPluginsItr();
 
-			if (port->port_srv_auth_block->plugins)		// We have all required data and iterator was created
+			AuthServerPlugins* const plugins = port->port_srv_auth_block->plugins;
+			if (plugins && plugins->hasData())		// We have all required data and iterator was created
 			{
-				AuthServerPlugins* const plugins = port->port_srv_auth_block->plugins;
 				NoCaseString clientPluginName(port->port_srv_auth_block->getPluginName());
 				// If there is plugin matching client's one it will be
 				HANDSHAKE_DEBUG(fprintf(stderr, "Srv: accept_connection: client plugin='%s' server='%s'\n",
