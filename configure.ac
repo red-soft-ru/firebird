@@ -661,8 +661,9 @@ if test "$STD_EDITLINE" = "true"; then
       AC_CHECK_LIB(readline, readline, [READLINE=readline EDITLINE_FLG=Y],
         [STD_EDITLINE=false
          if test "$EDITLINE_FLG" = "Y"; then
-           AC_MSG_WARN([[[--with-system-editline specified, not found. Using bundled editline]]])])))
+           AC_MSG_WARN([[[--with-system-editline specified, not found. Using bundled editline]]])
 		 fi
+           ])))
 fi
 XE_RESTORE_ENV()
 
