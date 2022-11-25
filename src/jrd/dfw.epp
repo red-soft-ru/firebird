@@ -2646,10 +2646,9 @@ static bool grant_privileges(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	switch (phase)
 	{
 	case 1:
-	case 2:
 		return true;
 
-	case 3:
+	case 2:
 		GRANT_privileges(tdbb, work->dfw_name, work->dfw_id, transaction);
 		break;
 
