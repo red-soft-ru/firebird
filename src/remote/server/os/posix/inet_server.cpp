@@ -133,12 +133,15 @@ static void logSecurityDatabaseError(const char* path, ISC_STATUS* status)
 	if (fb_utils::containsErrorCode(status, isc_io_error))
 		return;
 
-	const int SHUTDOWN_TIMEOUT = 5000;  // 5 sec
-
-	gds__log_status(path, status);
-	gds__put_error(path);
-	gds__print_status(status);
 	Firebird::Syslog::Record(Firebird::Syslog::Error, "Security database error");
+	gds__log_status(path, status);
+	if (isatty(2))
+	{
+		gds__put_error(path);
+		gds__print_status(status);
+	}
+
+	const int SHUTDOWN_TIMEOUT = 5000;  // 5 sec
 	fb_shutdown(SHUTDOWN_TIMEOUT, fb_shutrsn_exit_called);
 	exit(STARTUP_ERROR);
 }
