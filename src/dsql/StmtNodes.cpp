@@ -8032,6 +8032,7 @@ void SetRoleNode::execute(thread_db* tdbb, dsql_req* request, jrd_tra** transact
 		user->usr_sql_role_name = roleName.c_str();
 	}
 
+	user->usr_flags |= USR_newrole;
 	if (SCL_admin_role(tdbb, user->usr_sql_role_name.c_str()))
 		user->usr_flags |= USR_dba;
 	else
