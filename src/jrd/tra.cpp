@@ -1864,6 +1864,25 @@ void TRA_sweep(thread_db* tdbb)
 		TraNumber transaction_oldest_active = transaction->tra_oldest_active;
 		tdbb->setTransaction(transaction);
 
+		// Check if we have dead transactions between OIT and OAT
+		// because it helps to determine if the server has been
+		// crashing recently. If it has, then the database might have
+		// pointer pages with flags which are not consistent with
+		// flags on data pages. If ppg_dp_swept is set for a data page
+		// which does not actually have dpg_swept set, then records on
+		// this page won't be garbage-collected, and they will become
+		// visible after OIT is advanced at the end of the sweep.
+		// Therefore, we cannot trust ppg_dp_swept in this case.
+		// Note that TRA_cleanup has already been called, and dead
+		// transactions are marked as tra_dead.
+		int oldest_state = 0;
+		const TraNumber oldest_dead =
+			TPC_find_states(tdbb, transaction->tra_oldest, transaction_oldest_active,
+				1 << tra_dead, oldest_state);
+
+		if (oldest_dead)
+			tdbb->tdbb_flags |= TDBB_dont_trust_swept_flag;
+
 		// The garbage collector runs asynchronously with respect to
 		// our database sweep. This isn't good enough since we must
 		// be absolutely certain that all dead transactions have been

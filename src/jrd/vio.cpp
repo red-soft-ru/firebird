@@ -191,6 +191,7 @@ class SweepTask : public Task
 
 public:
 	SweepTask(thread_db* tdbb, MemoryPool* pool, TraceSweepEvent* traceSweep) : Task(),
+		m_dontTrustSweptFlag(tdbb->tdbb_flags & TDBB_dont_trust_swept_flag),
 		m_pool(pool),
 		m_dbb(NULL),
 		m_items(*m_pool),
@@ -309,6 +310,9 @@ public:
 			tdbb->setTransaction(m_tra);
 			tdbb->tdbb_flags |= TDBB_sweeper;
 
+			if (getSweepTask()->m_dontTrustSweptFlag)
+				tdbb->tdbb_flags |= TDBB_dont_trust_swept_flag;
+
 			return true;
 		}
 
@@ -341,6 +345,8 @@ public:
 	{
 		return m_items.getCount();
 	}
+
+	bool m_dontTrustSweptFlag;
 
 private:
 	// item is handled, get next portion of work and update RelInfo

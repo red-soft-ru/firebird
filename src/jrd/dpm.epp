@@ -1780,7 +1780,8 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 			const UCHAR* bits = (UCHAR*) (ppage->ppg_page + dbb->dbb_dp_per_pp);
 			if (page_number && !PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary) &&
 				!PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty) &&
-				(!sweeper || !PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept)) )
+				(!sweeper || tdbb->tdbb_flags & TDBB_dont_trust_swept_flag ||
+				 !PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept)) )
 			{
 #ifdef SUPERSERVER_V2
 				// Perform sequential prefetch of relation's data pages.
@@ -2454,7 +2455,9 @@ static void check_swept(thread_db* tdbb, record_param* rpb)
 
 	const UCHAR* bits = (UCHAR*) (ppage->ppg_page + dbb->dbb_dp_per_pp);
 	if (slot >= ppage->ppg_count || !ppage->ppg_page[slot] ||
-		PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary | ppg_dp_swept))
+		PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary) ||
+		(!(tdbb->tdbb_flags & TDBB_dont_trust_swept_flag) &&
+		 PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept)) )
 	{
 		CCH_RELEASE(tdbb, window);
 		return;

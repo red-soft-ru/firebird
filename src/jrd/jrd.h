@@ -498,6 +498,7 @@ const ULONG TDBB_reset_stack			= 2048;		// stack should be reset after stack ove
 const ULONG TDBB_dfw_cleanup			= 4096;		// DFW cleanup phase is active
 const ULONG TDBB_repl_in_progress		= 8192;		// Prevent recursion in replication
 const ULONG TDBB_replicator				= 16384;	// Replicator
+const ULONG TDBB_dont_trust_swept_flag	= 32768;	// DB in a state when we cannot trust ppg_dp_swept flag (see TRA_sweep)
 
 class thread_db : public Firebird::ThreadData
 {
@@ -830,7 +831,7 @@ public:
 
 	~ThreadSweepGuard()
 	{
-		m_tdbb->tdbb_flags &= ~TDBB_sweeper;
+		m_tdbb->tdbb_flags &= ~(TDBB_sweeper | TDBB_dont_trust_swept_flag);
 	}
 
 private:
