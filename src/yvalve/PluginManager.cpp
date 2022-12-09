@@ -296,15 +296,29 @@ namespace
 	struct RegisteredPlugin
 	{
 		RegisteredPlugin(IPluginFactory* f, const char* nm, unsigned int t)
-			: factory(f), name(nm), type(t)
-		{ }
+			: factory(f), type(t)
+		{
+			if (nm)
+			{
+				if (strlen(nm) >= sizeof(name))
+				{
+					fatal_exception::raiseFmt("Size of plugin registration name should not exceed %d bytes",
+						sizeof(name) - 1);
+				}
+				strcpy(name, nm);
+			}
+			else
+				name[0] = 0;
+		}
 
 		RegisteredPlugin()
-			: factory(NULL), name(NULL), type(0)
-		{ }
+			: factory(NULL), type(0)
+		{
+			name[0] = 0;
+		}
 
 		IPluginFactory* factory;
-		const char* name;
+		char name[32];
 		unsigned int type;
 	};
 
