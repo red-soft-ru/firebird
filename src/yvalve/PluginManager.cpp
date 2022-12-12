@@ -31,6 +31,8 @@
 
 #include "../common/os/path_utils.h"
 #include "../jrd/err_proto.h"
+#include "../common/os/fbsyslog.h"
+#include "../common/StatusArg.h"
 #include "../common/isc_proto.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/init.h"
@@ -42,6 +44,7 @@
 #include "../common/classes/GenericMap.h"
 #include "../common/db_alias.h"
 #include "../common/dllinst.h"
+#include "../common/file_params.h"
 
 #include "../yvalve/config/os/config_root.h"
 
@@ -270,6 +273,7 @@ namespace
 	{
 		LocalStatus ls;
 		CheckStatusWrapper s(&ls);
+
 		if (pluginLoaderConfig)
 		{
 			const ConfigFile::Parameter* p = pluginLoaderConfig->findParameter("Config");
@@ -292,33 +296,32 @@ namespace
 
 
 	// Plugins registered when loading plugin module.
-	// This is POD object - no dtor, only simple data types inside.
 	struct RegisteredPlugin
 	{
 		RegisteredPlugin(IPluginFactory* f, const char* nm, unsigned int t)
-			: factory(f), type(t)
+			: factory(f), name(nm), type(t)
+		{ }
+
+		RegisteredPlugin(MemoryPool& p, IPluginFactory* f, const char* nm, unsigned int t)
+			: factory(f), name(p), type(t)
 		{
-			if (nm)
-			{
-				if (strlen(nm) >= sizeof(name))
-				{
-					fatal_exception::raiseFmt("Size of plugin registration name should not exceed %d bytes",
-						sizeof(name) - 1);
-				}
-				strcpy(name, nm);
-			}
-			else
-				name[0] = 0;
+			name = nm;
 		}
 
 		RegisteredPlugin()
-			: factory(NULL), type(0)
-		{
-			name[0] = 0;
-		}
+			: factory(NULL), name(), type(0)
+		{ }
+
+		RegisteredPlugin(MemoryPool& p)
+			: factory(NULL), name(p), type(0)
+		{ }
+
+		RegisteredPlugin(MemoryPool& p, const RegisteredPlugin& from)
+			: factory(from.factory), name(p, from.name), type(from.type)
+		{ }
 
 		IPluginFactory* factory;
-		char name[32];
+		PathName name;
 		unsigned int type;
 	};
 
@@ -429,7 +432,7 @@ namespace
 		PathName name;
 		Firebird::AutoPtr<ModuleLoader::Module> module;
 		Firebird::IPluginModule* cleanup;
-		HalfStaticArray<RegisteredPlugin, 2> regPlugins;
+		ObjectsArray<RegisteredPlugin> regPlugins;
 		PluginModule* next;
 		PluginModule** prev;
 	};
@@ -853,8 +856,8 @@ namespace
 		{
 			namesList.assign(pnamesList);
 			namesList.alltrim(" \t");
-			Firebird::LocalStatus s;
-			Firebird::CheckStatusWrapper statusWrapper(&s);
+			LocalStatus ls;
+			CheckStatusWrapper statusWrapper(&ls);
 			next(&statusWrapper);
 			check(&statusWrapper);
 		}
@@ -1058,26 +1061,56 @@ PluginManager::PluginManager()
 
 void PluginManager::registerPluginFactory(unsigned int interfaceType, const char* defaultName, IPluginFactory* factory)
 {
-	MutexLockGuard g(plugins->mutex, FB_FUNCTION);
-
-	if (!current)
+	try
 	{
-		// not good time to call this function - ignore request
-		gds__log("Unexpected call to register plugin %s, type %d - ignored\n", defaultName, interfaceType);
-		return;
+		MutexLockGuard g(plugins->mutex, FB_FUNCTION);
+
+		if (!current)
+		{
+			// not good time to call this function - ignore request
+			gds__log("Unexpected call to register plugin %s, type %d - ignored\n", defaultName, interfaceType);
+			return;
+		}
+
+		unsigned int r = current->addPlugin(RegisteredPlugin(factory, defaultName, interfaceType));
+
+		if (current == builtin)
+		{
+			PathName plugConfigFile = fb_utils::getPrefix(IConfigManager::DIR_PLUGINS, defaultName);
+			changeExtension(plugConfigFile, "conf");
+
+			ConfiguredPlugin* p = FB_NEW ConfiguredPlugin(RefPtr<PluginModule>(builtin), r,
+				findInPluginsConf("Plugin", defaultName), plugConfigFile, defaultName);
+			p->addRef();  // Will never be unloaded
+			plugins->put(MapKey(interfaceType, defaultName), p);
+		}
 	}
-
-	unsigned int r = current->addPlugin(RegisteredPlugin(factory, defaultName, interfaceType));
-
-	if (current == builtin)
+	catch(const Exception& ex)
 	{
-		PathName plugConfigFile = fb_utils::getPrefix(IConfigManager::DIR_PLUGINS, defaultName);
-		changeExtension(plugConfigFile, "conf");
+		// looks like something gone seriously wrong - therefore add more error handling here
+		try
+		{
+			LocalStatus ls;
+			CheckStatusWrapper s(&ls);
+			ex.stuffException(&s);
+			char text[256];
+			UtilInterfacePtr()->formatStatus(text, sizeof(text), &s);
+			Syslog::Record(Syslog::Error, text);
 
-		ConfiguredPlugin* p = FB_NEW ConfiguredPlugin(RefPtr<PluginModule>(builtin), r,
-									findInPluginsConf("Plugin", defaultName), plugConfigFile, defaultName);
-		p->addRef();  // Will never be unloaded
-		plugins->put(MapKey(interfaceType, defaultName), p);
+			iscLogException("Plugin registration error", ex);
+		}
+		catch(const BadAlloc&)
+		{
+			Syslog::Record(Syslog::Error, "Plugin registration error - out of memory");
+		}
+		catch(...)
+		{
+			Syslog::Record(Syslog::Error, "Double fault during plugin registration");
+		}
+
+#ifdef DEV_BUILD
+		abort();
+#endif
 	}
 }
 
