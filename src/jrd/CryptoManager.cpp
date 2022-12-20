@@ -393,38 +393,35 @@ namespace Jrd {
 			}
 			else
 			{
-				if (!keyName.isEmpty())
+				for (GetPlugins<IKeyHolderPlugin> keyControl(IPluginManager::TYPE_KEY_HOLDER, dbb.dbb_config);
+						keyControl.hasData(); keyControl.next())
 				{
-					for (GetPlugins<IKeyHolderPlugin> keyControl(IPluginManager::TYPE_KEY_HOLDER, dbb.dbb_config);
-							keyControl.hasData(); keyControl.next())
+					// check does keyHolder want to provide a key for us
+					IKeyHolderPlugin* keyHolder = keyControl.plugin();
+
+					FbLocalStatus st;
+					int keyCallbackRc = keyHolder->keyCallback(&st, tdbb->getAttachment()->att_crypt_callback);
+					st.check();
+					if (!keyCallbackRc)
+						continue;
+
+					// validate a key
+					AutoPlugin<IDbCryptPlugin> crypt(checkFactory->makeInstance());
+					setDbInfo(crypt);
+					crypt->setKey(&st, 1, &keyHolder, keyName.c_str());
+
+
+					string valid;
+					calcValidation(valid, crypt);
+					if (hc.find(Ods::HDR_crypt_hash))
 					{
-						// check does keyHolder want to provide a key for us
-						IKeyHolderPlugin* keyHolder = keyControl.plugin();
-
-						FbLocalStatus st;
-						int keyCallbackRc = keyHolder->keyCallback(&st, tdbb->getAttachment()->att_crypt_callback);
-						st.check();
-						if (!keyCallbackRc)
-							continue;
-
-						// validate a key
-						AutoPlugin<IDbCryptPlugin> crypt(checkFactory->makeInstance());
-						setDbInfo(crypt);
-						crypt->setKey(&st, 1, &keyHolder, keyName.c_str());
-
-
-						string valid;
-						calcValidation(valid, crypt);
-						if (hc.find(Ods::HDR_crypt_hash))
+						hc.getString(hash);
+						if (hash == valid)
 						{
-							hc.getString(hash);
-							if (hash == valid)
-							{
-								// unload old plugin and set new one
-								PluginManagerInterfacePtr()->releasePlugin(cryptPlugin);
-								cryptPlugin = NULL;
-								cryptPlugin = crypt.release();
-							}
+							// unload old plugin and set new one
+							PluginManagerInterfacePtr()->releasePlugin(cryptPlugin);
+							cryptPlugin = NULL;
+							cryptPlugin = crypt.release();
 						}
 					}
 				}
