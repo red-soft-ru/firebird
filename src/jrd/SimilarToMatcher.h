@@ -1732,7 +1732,7 @@ public:
 		const UCHAR* originalPatternPos = originalPatternStr;
 
 		const CharType* lastStart = reinterpret_cast<const CharType*>(patternStr);
-		const CharType* end = lastStart + patternLen;
+		const CharType* end = reinterpret_cast<const CharType*>(patternStr + patternLen);
 		unsigned lengths[3];
 		unsigned lengthsNum = 0;
 		UCHAR dummy[sizeof(ULONG) * 2];
