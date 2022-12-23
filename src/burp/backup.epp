@@ -1631,6 +1631,7 @@ void put_data(burp_rel* relation)
 		}
 		if (alignment)
 			offset = FB_ALIGN(offset, alignment);
+
 		field->fld_offset = offset;
 		field->fld_parameter = count++;
 		offset += length;
@@ -1656,7 +1657,15 @@ void put_data(burp_rel* relation)
 	SSHORT eof_parameter = count++;
 	RCRD_OFFSET record_length = offset;
 	RCRD_OFFSET eof_offset = FB_ALIGN(offset, sizeof(SSHORT));
+
 	// To be used later for the buffer size to receive data
+	if (eof_offset + sizeof(SSHORT) > MAX_USHORT)
+	{
+		Firebird::string msg;
+		msg.printf("implementation limit exceeded: required for table %s message length %d is more than supported max of 65535",
+			relation->rel_name, eof_offset + sizeof(SSHORT));
+		(Firebird::Arg::Gds(isc_random) << msg).raise();
+	}
 	const FLD_LENGTH length = (USHORT) (eof_offset + sizeof(SSHORT));
 
 	// Build FOR loop, body, and eof handler
