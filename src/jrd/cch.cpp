@@ -2094,7 +2094,7 @@ bool CCH_rollover_to_shadow(thread_db* tdbb, Database* dbb, jrd_file* file, cons
 }
 
 
-void CCH_shutdown(thread_db* tdbb)
+void CCH_shutdown(thread_db* tdbb, bool bugcheck)
 {
 /**************************************
  *
@@ -2144,7 +2144,7 @@ void CCH_shutdown(thread_db* tdbb)
 	bcb_repeat* tail = bcb->bcb_rpt;
 	const bcb_repeat* const end = tail + bcb->bcb_count;
 
-	if (tail && tail->bcb_bdb)
+	if (tail && tail->bcb_bdb && !bugcheck)
 	{
 		try
 		{

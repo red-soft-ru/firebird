@@ -101,7 +101,7 @@ void ERR_bugcheck_msg(const TEXT* msg)
 	iscDbLogStatus(dbb->dbb_filename.nullStr(), &status);
 
 	dbb->dbb_flags |= DBB_bugcheck;
-	CCH_shutdown(tdbb);
+	CCH_shutdown(tdbb, true);
 
 	if (Config::getBugcheckAbort())
 		abort();
