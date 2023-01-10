@@ -238,6 +238,14 @@ void TRA_detach_request(Jrd::jrd_req* request)
 
 	// Release stored looper savepoints
 	Savepoint::destroy(request->req_savepoints);
+	fb_assert(!request->req_savepoints);
+
+	// Release procedure savepoints used by this request
+	if (request->req_proc_sav_point && (request->req_flags & req_proc_fetch))
+	{
+		Savepoint::destroy(request->req_proc_sav_point);
+		fb_assert(!request->req_proc_sav_point);
+	}
 
 	// Remove request from the doubly linked list
 	if (request->req_tra_next)

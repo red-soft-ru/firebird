@@ -5920,9 +5920,12 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 							defaultRequest->validateTimeStamp();
 
-							TRA_attach_request(transaction, defaultRequest);
-							dsc* result = EVL_expr(tdbb, defaultRequest, defaultNode);
-							TRA_detach_request(defaultRequest);
+							dsc* result = nullptr;
+							{ // scope
+								Firebird::Cleanup detach([&defaultRequest] {TRA_detach_request(defaultRequest);});
+								TRA_attach_request(transaction, defaultRequest);
+								result = EVL_expr(tdbb, defaultRequest, defaultNode);
+							}
 
 							if (result)
 							{
