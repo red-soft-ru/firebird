@@ -236,16 +236,30 @@ Applier* Applier::create(thread_db* tdbb)
 	if (!attachment->locksmith(tdbb, REPLICATE_INTO_DATABASE))
 		status_exception::raise(Arg::Gds(isc_miss_prvlg) << "REPLICATE_INTO_DATABASE");
 
+	jrd_req* request = nullptr;
 	const auto req_pool = attachment->createPool();
-	Jrd::ContextPoolHolder context(tdbb, req_pool);
-	AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*req_pool) CompilerScratch(*req_pool));
 
-	const auto request = JrdStatement::makeRequest(tdbb, csb, true);
-	request->validateTimeStamp();
-	request->req_attachment = attachment;
+	try
+	{
+		Jrd::ContextPoolHolder context(tdbb, req_pool);
+		AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*req_pool) CompilerScratch(*req_pool));
 
-	auto& att_pool = *attachment->att_pool;
-	const auto applier = FB_NEW_POOL(att_pool) Applier(att_pool, dbb->dbb_filename, request);
+		request = JrdStatement::makeRequest(tdbb, csb, true);
+		request->validateTimeStamp();
+		request->req_attachment = attachment;
+	}
+	catch (const Exception&)
+	{
+		if (request)
+			CMP_release(tdbb, request);
+		else
+			attachment->deletePool(req_pool);
+
+		throw;
+	}
+
+	const auto applier = FB_NEW_POOL(*attachment->att_pool)
+		Applier(*attachment->att_pool, dbb->dbb_filename, request);
 
 	attachment->att_repl_appliers.add(applier);
 	return applier;
