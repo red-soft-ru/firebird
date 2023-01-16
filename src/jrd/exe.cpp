@@ -195,7 +195,6 @@ void StatusXcp::as_sqlstate(char* sqlstate) const
 static void execute_looper(thread_db*, jrd_req*, jrd_tra*, const StmtNode*, jrd_req::req_s);
 static void looper_seh(thread_db*, jrd_req*, const StmtNode*);
 static void release_blobs(thread_db*, jrd_req*);
-static void release_proc_save_points(jrd_req*);
 static void trigger_failure(thread_db*, jrd_req*);
 static void stuff_stack_trace(const jrd_req*);
 
@@ -700,7 +699,7 @@ void EXE_receive(thread_db* tdbb,
 			Savepoint* const save_sav_point = transaction->tra_save_point;
 			transaction->tra_save_point = request->req_proc_sav_point;
 			request->req_proc_sav_point = save_sav_point;
-			release_proc_save_points(request);
+			EXE_release_proc_save_points(request);
 		}
 		throw;
 	}
@@ -939,7 +938,7 @@ void EXE_unwind(thread_db* tdbb, jrd_req* request)
 	request->req_sorts.unlinkAll();
 
 	if (request->req_proc_sav_point && (request->req_flags & req_proc_fetch))
-		release_proc_save_points(request);
+		EXE_release_proc_save_points(request);
 
 	TRA_detach_request(request);
 
@@ -1481,18 +1480,18 @@ static void release_blobs(thread_db* tdbb, jrd_req* request)
 }
 
 
-static void release_proc_save_points(jrd_req* request)
+void EXE_release_proc_save_points(jrd_req* request)
 {
-/**************************************
+/************************************************************
  *
- *	r e l e a s e _ p r o c _ s a v e _ p o i n t s
+ *	E X E _ r e l e a s e _ p r o c _ s a v e _ p o i n t s
  *
- **************************************
+ ************************************************************
  *
  * Functional description
  *	Release savepoints used by this request.
  *
- **************************************/
+ ************************************************************/
 	Savepoint* sav_point = request->req_proc_sav_point;
 
 	if (request->req_transaction)

@@ -5900,9 +5900,26 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 							defaultRequest->req_timestamp.validate();
 
-							TRA_attach_request(transaction, defaultRequest);
-							dsc* result = EVL_expr(tdbb, defaultRequest, defaultNode);
-							TRA_detach_request(defaultRequest);
+							dsc* result = NULL;
+							{ // scope
+								class LocalClean
+								{
+								public:
+									LocalClean(jrd_req* const def)
+										: defaultRequest(def)
+									{ }
+									~LocalClean()
+									{
+										TRA_detach_request(defaultRequest);
+									}
+								private:
+									jrd_req* const defaultRequest;
+								};
+
+								LocalClean detach(defaultRequest);
+								TRA_attach_request(transaction, defaultRequest);
+								result = EVL_expr(tdbb, defaultRequest, defaultNode);
+							}
 
 							if (result)
 							{

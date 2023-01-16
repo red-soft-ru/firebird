@@ -147,6 +147,14 @@ void TRA_detach_request(Jrd::jrd_req* request)
 	if (!request->req_transaction)
 		return;
 
+	// Release procedure savepoints used by this request
+	if (request->req_proc_sav_point)
+	{
+		fb_assert(request->req_flags & req_proc_fetch);
+		EXE_release_proc_save_points(request);
+		fb_assert(!request->req_proc_sav_point);
+	}
+
 	// Remove request from the doubly linked list
 	if (request->req_tra_next)
 	{
