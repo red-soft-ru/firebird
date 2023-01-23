@@ -1675,6 +1675,10 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_funs:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
 			EVL_field(0, rpb->rpb_record, f_fun_name, &desc);
+
+			if (EVL_field(0, rpb->rpb_record, f_fun_pkg_name, &desc2))
+				MOV_get_metaname(tdbb, &desc2, package_name);
+
 			EVL_field(0, rpb->rpb_record, f_fun_id, &desc2);
 			id = MOV_get_long(tdbb, &desc2, 0);
 
