@@ -257,6 +257,7 @@ static const UCHAR db_items[] =
 	fb_info_wire_crypt,
 	fb_info_creation_timestamp_tz,
 	isc_info_creation_date,
+	fb_info_replica_mode,
 	isc_info_end
 };
 
@@ -579,9 +580,9 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				struct tm time;
 				isc_decode_timestamp(&ts, &time);
 
-				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d\n",
+				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d%s",
 					FB_SHORT_MONTHS[time.tm_mon], time.tm_mday, time.tm_year + 1900,
-					time.tm_hour, time.tm_min, time.tm_sec);
+					time.tm_hour, time.tm_min, time.tm_sec, separator);
 			}
 			break;
 
@@ -606,9 +607,9 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				if (ISQL_errmsg(fbStatus))
 					break;
 
-				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d %s\n",
+				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d %s%s",
 					FB_SHORT_MONTHS[month - 1], day, year,
-					hours, minutes, seconds, timeZone);
+					hours, minutes, seconds, timeZone, separator);
 
 				crdatePrinted = true;
 			}
@@ -642,6 +643,18 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			}
 			break;
 #endif
+
+		case fb_info_replica_mode:
+			{
+				value_out = p.getInt();
+				const char* mode =
+					(value_out == fb_info_replica_none) ? "NONE" :
+					(value_out == fb_info_replica_read_only) ? "READ_ONLY" :
+					(value_out == fb_info_replica_read_write) ? "READ_WRITE" :
+					"unknown";
+				sprintf(info, "Replica mode: %s%s", mode, separator);
+			}
+			break;
 
 		case isc_info_truncated:
 			return info > info_buf; // If we got some items, we are (partially) successful.
