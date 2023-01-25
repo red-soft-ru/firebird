@@ -299,7 +299,11 @@ Config* Config::get(const PathName& lookupName)
 
 		if (config->journalDirectory.hasData() || config->syncReplicas.hasData())
 		{
-			// If log_directory is specified, then replication is enabled
+			// If either journal_directory or sync_replicas is specified,
+			// then replication is enabled
+
+			if (config->dbName.isEmpty())
+				config->dbName = lookupName;
 
 			if (config->filePrefix.isEmpty())
 			{
