@@ -5718,6 +5718,7 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 						FLD IN RDB$FIELDS WITH
 						RFR.RDB$RELATION_NAME EQ work->dfw_name.c_str() AND
 						RFR.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME
+						SORTED BY RFR.RDB$FIELD_POSITION
 				{
 					// Update RFR to reflect new fields id
 
