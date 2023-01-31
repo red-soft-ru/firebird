@@ -164,6 +164,21 @@ private:
 
 class jrd_req : public pool_alloc<type_req>
 {
+	// Context data saved/restored with every new autonomous transaction
+
+	struct AutoTranCtx
+	{
+		AutoTranCtx() : m_transaction(NULL), m_savepoints(NULL)
+		{}
+
+		AutoTranCtx(jrd_tra* tran, Savepoint* save) :
+			m_transaction(tran), m_savepoints(save)
+		{}
+
+		jrd_tra* m_transaction;
+		Savepoint* m_savepoints;
+	};
+
 public:
 	jrd_req(Attachment* attachment, /*const*/ JrdStatement* aStatement,
 			Firebird::MemoryStats* parent_stats)
@@ -263,7 +278,7 @@ public:
 	ULONG req_src_column;
 
 	dsc*			req_domain_validation;	// Current VALUE for constraint validation
-	Firebird::Stack<jrd_tra*> req_auto_trans;	// Autonomous transactions
+	Firebird::Stack<AutoTranCtx> req_auto_trans;	// Autonomous transactions
 	SortOwner req_sorts;
 	Firebird::Array<record_param> req_rpb;	// record parameter blocks
 	Firebird::Array<UCHAR> impureArea;		// impure area
@@ -293,6 +308,24 @@ public:
 			req_caller->req_stats.adjust(req_base_stats, req_stats);
 		}
 		req_base_stats.assign(req_stats);
+	}
+
+	// Save context when switching to the autonomous transaction
+	void pushTransaction(jrd_tra* const transaction)
+	{
+		req_auto_trans.push(AutoTranCtx(transaction, req_proc_sav_point));
+		req_proc_sav_point = NULL;
+	}
+
+	// Restore context
+	jrd_tra* popTransaction()
+	{
+		fb_assert(!req_transaction); // must be detached
+
+		const AutoTranCtx tmp = req_auto_trans.pop();
+		req_proc_sav_point = tmp.m_savepoints;
+
+		return tmp.m_transaction;
 	}
 };
 
