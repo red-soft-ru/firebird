@@ -1481,11 +1481,12 @@ void CVT_move_common(const dsc* from, dsc* to, Callbacks* cb)
 					ptr += sizeof(USHORT);
 
 				Jrd::CharSet* charSet = cb->getToCharset(to->getCharSet());
+				UCHAR maxBytesPerChar = charSet ? charSet->maxBytesPerChar() : 1;
 
-				if (len / charSet->maxBytesPerChar() < from->dsc_length)
+				if (len / maxBytesPerChar < from->dsc_length)
 				{
 					cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
-						Arg::Gds(isc_trunc_limits) << Arg::Num(len / charSet->maxBytesPerChar()) <<
+						Arg::Gds(isc_trunc_limits) << Arg::Num(len / maxBytesPerChar) <<
 						Arg::Num(from->dsc_length));
 				}
 
@@ -1825,6 +1826,8 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
 		message = "ARRAY";
 	else if (desc->dsc_dtype == dtype_boolean)
 		message = "BOOLEAN";
+	else if (desc->dsc_dtype == dtype_dbkey)
+		message = "DBKEY";
 	else
 	{
 		// CVC: I don't have access here to JRD_get_thread_data())->tdbb_status_vector
