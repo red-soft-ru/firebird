@@ -4023,7 +4023,6 @@ const StmtNode* InAutonomousTransactionNode::execute(thread_db* tdbb, jrd_req* r
 		jrd_tra* const org_transaction = request->req_transaction;
 		fb_assert(tdbb->getTransaction() == org_transaction);
 
-
 		ULONG transaction_flags = org_transaction->tra_flags;
 
 		// Replace Read Consistency by Concurrecy isolation mode
@@ -4034,6 +4033,7 @@ const StmtNode* InAutonomousTransactionNode::execute(thread_db* tdbb, jrd_req* r
 											   org_transaction->tra_lock_timeout,
 											   org_transaction);
 
+		request->pushTransaction();
 		TRA_attach_request(transaction, request);
 		tdbb->setTransaction(transaction);
 
@@ -4044,12 +4044,13 @@ const StmtNode* InAutonomousTransactionNode::execute(thread_db* tdbb, jrd_req* r
 		}
 		catch (Exception&)
 		{
+			TRA_detach_request(request);
+			request->popTransaction();
 			TRA_attach_request(org_transaction, request);
 			tdbb->setTransaction(org_transaction);
 			throw;
 		}
 
-		request->pushTransaction(org_transaction);
 		impure->traNumber = transaction->tra_number;
 
 		const Savepoint* const savepoint = transaction->startSavepoint();
@@ -4155,6 +4156,10 @@ const StmtNode* InAutonomousTransactionNode::execute(thread_db* tdbb, jrd_req* r
 	}
 
 	impure->traNumber = impure->savNumber = 0;
+
+	// Normally request is detached by commit/rollback, but they may fail.
+	// It should be done before request->popTransaction().
+	TRA_detach_request(request);
 	transaction = request->popTransaction();
 
 	TRA_attach_request(transaction, request);
