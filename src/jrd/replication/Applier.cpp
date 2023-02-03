@@ -284,6 +284,8 @@ void Applier::shutdown(thread_db* tdbb)
 		m_interface->resetHandle();
 		m_interface = nullptr;
 	}
+
+	delete this;
 }
 
 void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)

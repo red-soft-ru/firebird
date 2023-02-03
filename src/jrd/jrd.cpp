@@ -6442,9 +6442,8 @@ void JReplicator::freeEngineData(Firebird::CheckStatusWrapper* user_status)
 
 		try
 		{
-			AutoPtr<Applier> cleanupApplier(applier);
-			cleanupApplier->shutdown(tdbb);
-			fb_assert(!applier);
+			applier->shutdown(tdbb);
+			applier = nullptr;
 		}
 		catch (const Exception& ex)
 		{
@@ -7583,10 +7582,7 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 	attachment->att_replicator = nullptr;
 
 	while (attachment->att_repl_appliers.hasData())
-	{
-		AutoPtr<Applier> cleanupApplier(attachment->att_repl_appliers.pop());
-		cleanupApplier->shutdown(tdbb);
-	}
+		attachment->att_repl_appliers.pop()->shutdown(tdbb);
 
 	if (dbb->dbb_crypto_manager)
 		dbb->dbb_crypto_manager->detach(tdbb, attachment);
