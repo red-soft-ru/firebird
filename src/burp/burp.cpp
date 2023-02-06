@@ -94,7 +94,6 @@ const char switch_char = '-';
 
 
 const char* const output_suppress	= "SUPPRESS";
-const int burp_msg_fac				= 12;
 const int MIN_VERBOSE_INTERVAL		= 100;
 
 enum gbak_action

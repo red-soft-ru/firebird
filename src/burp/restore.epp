@@ -61,6 +61,7 @@
 #include "../auth/trusted/AuthSspi.h"
 #include "../common/dsc_proto.h"
 #include "../common/ThreadStart.h"
+#include "../common/msg_encode.h"
 
 using MsgFormat::SafeArg;
 using Firebird::FbLocalStatus;
@@ -96,8 +97,6 @@ const int DEFERRED_ACTIVE		= 3;	// RDB$INDEX_INACTIVE setting for Foreign Keys
 										// "inactive" state of ALL indices (gbak -i)
 										// -bsriram, 11-May-1999      BUG: 10016
 
-
-const int burp_msg_fac				= 12;
 
 enum scan_attr_t
 {
@@ -589,10 +588,12 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 
 	if (!tdgbl->flag_on_line)
 	{
-		BURP_print(false, 246);
-		// msg 246 Database is not online due to failure to activate one or more indices.
-		BURP_print(false, 247);
-		// msg 247 Run gfix -online to bring database online without active indices.
+		FbLocalStatus st;
+		(Arg::Gds(ENCODE_ISC_MSG(246, burp_msg_fac)) << Arg::Gds(ENCODE_ISC_MSG(247, burp_msg_fac))).copyTo(&st);
+			// msg 246 Database is not online due to failure to activate one or more indices.
+			// msg 247 Run gfix -online to bring database online without active indices.
+		BURP_print_status(true, &st);
+
 		return FINI_DB_NOT_ONLINE;
 	}
 
