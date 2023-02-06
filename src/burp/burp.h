@@ -59,6 +59,8 @@ enum redirect_vals {
 	NOOUTPUT = 2
 };
 
+static const int burp_msg_fac = 12;
+
 // Record types in backup file
 
 enum rec_type {

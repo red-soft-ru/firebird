@@ -90,9 +90,6 @@ static inline void put(BurpGlobals* tdgbl, UCHAR c)
 static UCHAR debug_on = 0;		// able to turn this on in debug mode
 #endif
 
-const int burp_msg_fac = 12;
-
-
 static void  bad_attribute(int, USHORT);
 static void  file_not_empty();
 static SLONG get_numeric();
