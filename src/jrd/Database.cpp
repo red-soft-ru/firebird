@@ -452,8 +452,8 @@ namespace Jrd
 
 	void Database::initGlobalObjects()
 	{
-		dbb_gblobj_holder =
-			GlobalObjectHolder::init(getUniqueFileId(), dbb_filename, dbb_config);
+		dbb_gblobj_holder.assignRefNoIncr(GlobalObjectHolder::init(getUniqueFileId(),
+			dbb_filename, dbb_config));
 	}
 
 	// Database::Linger class implementation
@@ -516,6 +516,7 @@ namespace Jrd
 			g_hashTable->add(entry);
 		}
 
+		entry->holder->addRef();
 		return entry->holder;
 	}
 
