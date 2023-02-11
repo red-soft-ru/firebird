@@ -28,6 +28,7 @@
 #include "../jrd/exe_proto.h"
 #include "../jrd/par_proto.h"
 #include "RecordSource.h"
+#include <exception>
 
 using namespace Firebird;
 using namespace Jrd;
@@ -842,7 +843,7 @@ bool WindowedStream::WindowStream::getRecord(thread_db* tdbb) const
 				record->clearNull(id);
 			}
 
-			window.moveWithinPartition(0);
+			window.restore();
 		}
 	}
 
@@ -1054,19 +1055,20 @@ SlidingWindow::SlidingWindow(thread_db* aTdbb, const BaseBufferedStream* aStream
 	  partitionStart(aPartitionStart),
 	  partitionEnd(aPartitionEnd),
 	  frameStart(aFrameStart),
-	  frameEnd(aFrameEnd),
-	  moved(false)
+	  frameEnd(aFrameEnd)
 {
 	savedPosition = stream->getPosition(request) - 1;
 }
 
 SlidingWindow::~SlidingWindow()
 {
-	if (!moved)
-		return;
-
-	// Position the stream where we received it.
-	moveWithinPartition(0);
+#ifdef DEV_BUILD
+#if __cpp_lib_uncaught_exceptions >= 201411L
+	fb_assert(!moved || std::uncaught_exceptions());
+#else
+	fb_assert(!moved || std::uncaught_exception());
+#endif
+#endif
 }
 
 // Move in the window without pass partition boundaries.
@@ -1077,7 +1079,7 @@ bool SlidingWindow::moveWithinPartition(SINT64 delta)
 	if (newPosition < partitionStart || newPosition > partitionEnd)
 		return false;
 
-	moved = true;
+	moved = delta != 0;
 
 	stream->locate(tdbb, newPosition);
 

@@ -670,6 +670,15 @@ namespace Jrd
 			return savedPosition;
 		}
 
+		void restore()
+		{
+			if (!moved)
+				return;
+
+			// Position the stream where we received it.
+			moveWithinPartition(0);
+		}
+
 		bool moveWithinPartition(SINT64 delta);
 		bool moveWithinFrame(SINT64 delta);
 
@@ -681,7 +690,7 @@ namespace Jrd
 		FB_UINT64 frameStart;
 		FB_UINT64 frameEnd;
 		FB_UINT64 savedPosition;
-		bool moved;
+		bool moved = false;
 	};
 
 	template <typename ThisType, typename NextType>
