@@ -6722,6 +6722,10 @@ static void receive_packet_with_callback(rem_port* port, PACKET* packet)
 		case op_crypt_key_callback:
 			{
 				P_CRYPT_CALLBACK* cc = &packet->p_cc;
+				Cleanup ccData([&cc]() {
+					cc->p_cc_data.cstr_length = 0;
+					cc->p_cc_data.cstr_address = nullptr;
+				});
 
 				if (port->port_client_crypt_callback)
 				{
