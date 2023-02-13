@@ -6720,12 +6720,8 @@ static void receive_packet_with_callback(rem_port* port, PACKET* packet)
 		switch (packet->p_operation)
 		{
 		case op_crypt_key_callback:
-			{
+			try {
 				P_CRYPT_CALLBACK* cc = &packet->p_cc;
-				Cleanup ccData([&cc]() {
-					cc->p_cc_data.cstr_length = 0;
-					cc->p_cc_data.cstr_address = nullptr;
-				});
 
 				if (port->port_client_crypt_callback)
 				{
@@ -6750,6 +6746,14 @@ static void receive_packet_with_callback(rem_port* port, PACKET* packet)
 				packet->p_operation = op_crypt_key_callback;
 				cc->p_cc_reply = 0;
 				port->send(packet);
+
+				cc->p_cc_data.cstr_length = 0;
+				cc->p_cc_data.cstr_address = NULL;
+			}
+			catch (const Exception&)
+			{
+				packet->p_cc.p_cc_data.cstr_length = 0;
+				packet->p_cc.p_cc_data.cstr_address = NULL;
 			}
 			break;
 		default:
