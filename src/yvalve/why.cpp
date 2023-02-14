@@ -83,7 +83,6 @@ using namespace Why;
 static void badHandle(ISC_STATUS code);
 static bool isNetworkError(const IStatus* status);
 static void nullCheck(const FB_API_HANDLE* ptr, ISC_STATUS code);
-//static void saveErrorString(ISC_STATUS* status);
 static void badSqldaVersion(const short version);
 static void sqldaDescribeParameters(XSQLDA* sqlda, IMessageMetadata* parameters);
 static ISC_STATUS openOrCreateBlob(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle,
@@ -5882,6 +5881,10 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 	return NULL;
 }
 
+static AtomicCounter shutdownWaiters(0);
+static const SLONG SHUTDOWN_COMPLETE = 1;
+static const SLONG SHUTDOWN_STEP = 2;
+
 void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, const int reason)
 {
 	// set "process exiting" state
@@ -5890,6 +5893,32 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 
 	// can't syncronize with already killed threads, just exit
 	if (MasterInterfacePtr()->getProcessExiting())
+		return;
+
+	class LocalCleanup
+	{
+	public:
+		LocalCleanup(AtomicCounter& sw)
+			: shutdownWaiters(sw)
+		{ }
+
+		~LocalCleanup()
+		{
+			// wait for other threads that were waiting for shutdown
+			// that should not take too long due to shutdown complete bit
+			shutdownWaiters -= SHUTDOWN_STEP;
+			while (shutdownWaiters > SHUTDOWN_STEP - 1)
+				Thread::yield();
+		}
+
+	private:
+		AtomicCounter& shutdownWaiters;
+	};
+	LocalCleanup cleanShutCnt(shutdownWaiters);
+
+	// atomically increase shutdownWaiters & check for SHUTDOWN_STARTED
+	SLONG state = shutdownWaiters.exchangeAdd(SHUTDOWN_STEP);
+	if (state & SHUTDOWN_COMPLETE)
 		return;
 
 	try
@@ -6045,6 +6074,9 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 		e.stuffException(userStatus);
 		iscLogStatus(NULL, userStatus);
 	}
+
+	// no more attempts to run shutdown code even in case of error
+	shutdownWaiters |= SHUTDOWN_COMPLETE;
 }
 
 void Dispatcher::setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback)
