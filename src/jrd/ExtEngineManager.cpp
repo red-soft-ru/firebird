@@ -1247,25 +1247,28 @@ void ExtEngineManager::closeAttachment(thread_db* tdbb, Attachment* attachment)
 				FbLocalStatus status;
 				engine->closeAttachment(&status, attInfo->context);	//// FIXME: log status
 
-				// Check whether the engine is used by other attachments.
+				// Check whether a non-SYSTEM engine is used by other attachments.
 				// If no one uses, release it.
-				bool close = true;
-				WriteLockGuard writeGuard(enginesLock, FB_FUNCTION);
-
-				EnginesAttachmentsMap::Accessor ea_accessor(&enginesAttachments);
-				for (bool ea_found = ea_accessor.getFirst(); ea_found; ea_found = ea_accessor.getNext())
+				if (engine != SystemEngine::INSTANCE)
 				{
-					if (ea_accessor.current()->first.engine == engine)
+					bool close = true;
+					WriteLockGuard writeGuard(enginesLock, FB_FUNCTION);
+
+					EnginesAttachmentsMap::Accessor ea_accessor(&enginesAttachments);
+					for (bool ea_found = ea_accessor.getFirst(); ea_found; ea_found = ea_accessor.getNext())
 					{
-						close = false; // engine is in use, no need to release
-						break;
+						if (ea_accessor.current()->first.engine == engine)
+						{
+							close = false; // engine is in use, no need to release
+							break;
+						}
 					}
-				}
 
-				if (close)
-				{
-					if (engines.remove(accessor.current()->first)) // If engine has already been deleted - nothing to do
-						PluginManagerInterfacePtr()->releasePlugin(engine);
+					if (close)
+					{
+						if (engines.remove(accessor.current()->first)) // If engine has already been deleted - nothing to do
+							PluginManagerInterfacePtr()->releasePlugin(engine);
+					}
 				}
 			}
 
