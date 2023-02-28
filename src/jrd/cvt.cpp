@@ -280,7 +280,7 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 		((value < 0) && (sign != -1)))) // MAX_SINT64+1 wrapped around
 	{
 		// convert to double
-		*(double*) ptr = CVT_get_double(&desc, 0, ERR_post, &over);
+		*(double*) ptr = CVT_get_double(&desc, 0, ERR_post, &over, scale);
 		if (!over)
 			return dtype_double;
 	}

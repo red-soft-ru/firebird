@@ -1268,7 +1268,7 @@ bool CVT_get_boolean(const dsc* desc, ErrorFunction err)
 }
 
 
-double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, bool* getNumericOverflow)
+double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, bool* getNumericOverflow, SSHORT* descScale)
 {
 /**************************************
  *
@@ -1492,6 +1492,9 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 
 				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 			}
+
+			if (descScale)
+				*descScale = static_cast<SSHORT>(scale);
 		}
 		return value;
 
@@ -1517,6 +1520,9 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 		value *= CVT_power_of_ten(dscale);
 	else if (dscale < 0)
 		value /= CVT_power_of_ten(-dscale);
+
+	if (descScale)
+		*descScale = static_cast<SSHORT>(dscale);
 
 	return value;
 }

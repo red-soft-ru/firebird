@@ -89,7 +89,7 @@ void CVT_conversion_error(const dsc*, ErrorFunction);
 double CVT_power_of_ten(const int);
 SLONG CVT_get_long(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
 bool CVT_get_boolean(const dsc*, ErrorFunction);
-double CVT_get_double(const dsc*, Firebird::DecimalStatus, ErrorFunction, bool* getNumericOverflow = nullptr);
+double CVT_get_double(const dsc*, Firebird::DecimalStatus, ErrorFunction, bool* getNumericOverflow = nullptr, SSHORT* = nullptr);
 Firebird::Decimal64 CVT_get_dec64(const dsc*, Firebird::DecimalStatus, ErrorFunction);
 Firebird::Decimal128 CVT_get_dec128(const dsc*, Firebird::DecimalStatus, ErrorFunction);
 Firebird::Int128 CVT_get_int128(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
