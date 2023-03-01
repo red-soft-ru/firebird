@@ -1244,7 +1244,6 @@ bool makeBlobAppendBlob(dsc* result, const dsc* arg, bid* blob_id = nullptr)
 	if (arg->isBlob())
 	{
 		result->makeBlob(arg->getBlobSubType(), arg->getTextType(), ptr);
-		result->setNullable(true);
 		return true;
 	}
 
@@ -1264,7 +1263,6 @@ bool makeBlobAppendBlob(dsc* result, const dsc* arg, bid* blob_id = nullptr)
 		result->makeBlob(isc_blob_text, ttype_ascii, ptr);
 	}
 
-	result->setNullable(true);
 	return true;
 }
 
@@ -1274,21 +1272,28 @@ void makeBlobAppend(DataTypeUtilBase* dataTypeUtil, const SysFunction* function,
 {
 	fb_assert(argsCount >= function->minArgCount);
 
-	if (argsCount > 0)
-	{
-		const dsc** ppArg = args;
-		const dsc** const end = args + argsCount;
-
-		for (; ppArg < end; ppArg++)
-		{
-			if (makeBlobAppendBlob(result, *ppArg))
-				return;
-		}
-	}
-
-	// All args are NULL's
 	result->makeBlob(isc_blob_untyped, ttype_binary);
 	result->setNullable(true);
+
+	if (argsCount > 0)
+	{
+		for (int i = 0; i < argsCount; ++i)
+		{
+			if (makeBlobAppendBlob(result, args[i]))
+				break;
+		}
+
+		result->setNullable(true);
+
+		for (int i = 0; i < argsCount; ++i)
+		{
+			if (!args[i]->isNullable())
+			{
+				result->setNullable(false);
+				break;
+			}
+		}
+	}
 }
 
 
