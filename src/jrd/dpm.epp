@@ -3373,13 +3373,28 @@ static rhd* locate_space(thread_db* tdbb,
 		{
 			if (slot < ppage->ppg_count && ((dp_primary = ppage->ppg_page[slot])) )
 			{
-				CCH_HANDOFF(tdbb, window, dp_primary, LCK_write, pag_data);
-				UCHAR* space = find_space(tdbb, rpb, size, stack, record, type);
-				if (space)
-					return (rhd*) space;
+				data_page* dpage = (data_page*) CCH_HANDOFF(tdbb, window, dp_primary, LCK_write, pag_data);
 
-				if (!window->win_page.isTemporary())
-					CCH_get_related(tdbb, window->win_page, lowPages);
+				if (dpage->dpg_count > 0)
+				{
+					// The non-empty primary data page is expected here but there is a case where
+					// it can be empty or non-empty secondary. See "case tra_us" in prepare_update.
+					// Updating of rpb_number before DPM_store call is missed there but fixing it
+					// doesn't make much sense because if the temp record was not stored on the
+					// primary data page on the first attempt, there is a very small chance that it
+					// will be stored there on the second attempt. Anyway, it's safer to handle all
+					// cases here.
+					const bool primary = !(dpage->dpg_header.pag_flags & dpg_secondary);
+					UCHAR* space = find_space(tdbb, rpb, size, stack, record, type);
+
+					if (space)
+						return (rhd*) space;
+
+					if (!window->win_page.isTemporary() && primary)
+						CCH_get_related(tdbb, window->win_page, lowPages);
+				}
+				else
+					CCH_RELEASE(tdbb, window);
 			}
 			else
 				CCH_RELEASE(tdbb, window);
