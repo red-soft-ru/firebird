@@ -2987,7 +2987,9 @@ static void extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window, con
 		ppage->ppg_page[slot + i] = firstPage.getPageNum() + i;
 
 		PPG_DP_BIT_CLEAR(bits, slot + i, PPG_DP_ALL_BITS);
-		PPG_DP_BIT_SET(bits, slot + i, ppg_dp_empty);
+
+		if (type != DPM_primary)
+			PPG_DP_BIT_SET(bits, slot + i, ppg_dp_empty);
 	}
 
 	if (type == DPM_primary)
@@ -3608,9 +3610,15 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 		return;
 	}
 
-	CCH_precedence(tdbb, &pp_window, rpb->getWindow(tdbb).win_page);
-	CCH_MARK(tdbb, &pp_window);
+	if ((flags & (dpg_large | dpg_swept | dpg_secondary)) !=
+			(bit_large_set | bit_swept_set | bit_scnd_set) ||
+		(dpEmpty != bit_empty_set))
+	{
+		fb_assert(!(bit_swept_set && !(flags & dpg_swept) || bit_empty_set && !dpEmpty));
+		CCH_precedence(tdbb, &pp_window, rpb->getWindow(tdbb).win_page);
+	}
 
+	CCH_MARK(tdbb, &pp_window);
 
 	UCHAR bit = PPG_DP_BIT_MASK(slot, ppg_dp_full);
 	if (flags & dpg_full)
