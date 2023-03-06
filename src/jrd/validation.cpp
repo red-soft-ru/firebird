@@ -848,7 +848,8 @@ const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 	{true, isc_info_ppage_errors,	"Data page %" ULONGFORMAT" is not in PP (%" ULONGFORMAT"). Slot (%d) is not found"},
 	{true, isc_info_ppage_errors,	"Data page %" ULONGFORMAT" is not in PP (%" ULONGFORMAT"). Slot (%d) has value %" ULONGFORMAT},
 	{true, isc_info_ppage_errors,	"Pointer page is not found for data page %" ULONGFORMAT". dpg_sequence (%" ULONGFORMAT") is invalid"},
-	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} marked as secondary but contains primary record versions"}
+	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} marked as secondary but contains primary record versions"},
+	{true, isc_info_ppage_errors,	"Pointer page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} bits {0x%02X %s} are not consistent with data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} state {0x%02X %s}"}
 };
 
 Validation::Validation(thread_db* tdbb, UtilSvc* uSvc)
@@ -2647,13 +2648,24 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 			if (*pages)
 			{
 				UCHAR &pp_bits = PPG_DP_BITS_BYTE(bits, slot);
-				if (pp_bits != new_pp_bits)
+
+				const bool bitsOk = pp_bits == new_pp_bits ||
+					(pp_bits ^ new_pp_bits) == ppg_dp_swept && !(pp_bits & ppg_dp_swept);
+
+				if (!bitsOk)
 				{
 					Firebird::string s_pp, s_dp;
 					explain_pp_bits(pp_bits, s_pp);
 					explain_pp_bits(new_pp_bits, s_dp);
 
-					corrupt(VAL_P_PAGE_WRONG_BITS, relation,
+					// Check if flags are in a dangerous state in terms of the database consistency.
+					// Such cases are not supposed to happen, so they should be reported as errors.
+					const bool swept_flag_err = (pp_bits & ppg_dp_swept) && !(new_pp_bits & ppg_dp_swept);
+
+					const int code = swept_flag_err ?
+						VAL_P_PAGE_WRONG_BITS_ERR : VAL_P_PAGE_WRONG_BITS;
+
+					corrupt(code, relation,
 						page->ppg_header.pag_pageno, sequence, pp_bits, s_pp.c_str(),
 						*pages, seq, new_pp_bits, s_dp.c_str());
 
