@@ -3422,10 +3422,10 @@ static rhd* locate_space(thread_db* tdbb,
 				// Note, when ppg_dp_swept or ppg_dp_empty flag is cleared, precedence must
 				// be set to write DP after PP.
 
-				//if (dp_is_empty)
-				//	CCH_precedence(tdbb, window, dp_number);
-				//else
-				stack.push(window->win_page);
+				if (dp_is_empty && type != DPM_primary)
+					CCH_precedence(tdbb, window, dp_number);
+				else
+					stack.push(window->win_page);
 
 				CCH_MARK(tdbb, window);
 
