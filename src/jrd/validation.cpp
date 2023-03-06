@@ -2570,7 +2570,12 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 			if (*pages)
 			{
 				UCHAR &pp_bits = PPG_DP_BITS_BYTE(bits, slot);
-				if (pp_bits != new_pp_bits)
+
+				const bool bitsOk = pp_bits == new_pp_bits ||
+					(pp_bits ^ new_pp_bits) == ppg_dp_swept && !(pp_bits & ppg_dp_swept) ||
+					(pp_bits ^ new_pp_bits) == ppg_dp_empty && !(pp_bits & (ppg_dp_empty | ppg_dp_secondary));
+
+				if (!bitsOk)
 				{
 					Firebird::string s_pp, s_dp;
 					explain_pp_bits(pp_bits, s_pp);
