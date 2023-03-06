@@ -845,7 +845,8 @@ const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 	{true, isc_info_ppage_errors,	"Data page %" ULONGFORMAT" is not in PP (%" ULONGFORMAT"). Slot (%d) is not found"},
 	{true, isc_info_ppage_errors,	"Data page %" ULONGFORMAT" is not in PP (%" ULONGFORMAT"). Slot (%d) has value %" ULONGFORMAT},
 	{true, isc_info_ppage_errors,	"Pointer page is not found for data page %" ULONGFORMAT". dpg_sequence (%" ULONGFORMAT") is invalid"},
-	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} marked as secondary but contains primary record versions"}
+	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} marked as secondary but contains primary record versions"},
+	{true, isc_info_ppage_errors,	"Pointer page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} bits {0x%02X %s} are not consistent with data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} state {0x%02X %s}"}
 };
 
 Validation::Validation(thread_db* tdbb, UtilSvc* uSvc) :
@@ -2581,11 +2582,29 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 					explain_pp_bits(pp_bits, s_pp);
 					explain_pp_bits(new_pp_bits, s_dp);
 
-					corrupt(VAL_P_PAGE_WRONG_BITS, relation,
+					bool swept_flag_err = false, empty_flag_err = false, secondary_flag_err = false;
+
+					if (!(new_pp_bits & (ppg_dp_empty | ppg_dp_secondary)))
+					{
+						// Check if the non-empty primary data page has incorrect flags
+						// on the pointer page which may break the database consistency.
+						// Such cases should be reported as errors.
+						swept_flag_err = (pp_bits & ppg_dp_swept) && !(new_pp_bits & (ppg_dp_swept));
+						empty_flag_err = (pp_bits & ppg_dp_empty);
+						secondary_flag_err = (pp_bits & ppg_dp_secondary);
+					}
+
+					const int code = swept_flag_err || empty_flag_err || secondary_flag_err ?
+						VAL_P_PAGE_WRONG_BITS_ERR : VAL_P_PAGE_WRONG_BITS;
+
+					corrupt(code, relation,
 						page->ppg_header.pag_pageno, sequence, pp_bits, s_pp.c_str(),
 						*pages, seq, new_pp_bits, s_dp.c_str());
 
-					if ((vdr_flags & VDR_update))
+					// Do not clear ppg_dp_empty and ppg_dp_secondary flags on the pointer page
+					// for non-empty primary data pages because it will make uncommitted records
+					// visible if the database sweep was executed recently.
+					if ((vdr_flags & VDR_update) && !empty_flag_err && !secondary_flag_err)
 					{
 						if (!marked)
 						{
