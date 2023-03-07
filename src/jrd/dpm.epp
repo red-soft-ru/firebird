@@ -79,7 +79,7 @@ static USHORT compress(thread_db*, data_page*);
 static void delete_tail(thread_db*, rhdf*, const USHORT, USHORT);
 static void fragment(thread_db*, record_param*, SSHORT, const Compressor&, SSHORT, const jrd_tra*);
 static void extend_relation(thread_db*, jrd_rel*, WIN*, const Jrd::RecordStorageType type);
-static UCHAR* find_space(thread_db*, record_param*, SSHORT, PageStack&, Record*, const Jrd::RecordStorageType type);
+static UCHAR* find_space(thread_db*, record_param*, SSHORT, PageStack&, Record*, const Jrd::RecordStorageType type, const bool empty_dp_expected = false, WIN* pp_window = NULL);
 static bool get_header(WIN*, USHORT, record_param*);
 static pointer_page* get_pointer_page(thread_db*, jrd_rel*, RelationPages*, WIN*, ULONG, USHORT);
 static rhd* locate_space(thread_db*, record_param*, SSHORT, PageStack&, Record*, const Jrd::RecordStorageType type);
@@ -3021,7 +3021,9 @@ static UCHAR* find_space(thread_db*	tdbb,
 						 SSHORT	size,
 						 PageStack&	stack,
 						 Record*	record,
-						 const Jrd::RecordStorageType type)
+						 const Jrd::RecordStorageType type,
+						 const bool empty_dp_expected,
+						 WIN* pp_window)
 {
 /**************************************
  *
@@ -3045,6 +3047,33 @@ static UCHAR* find_space(thread_db*	tdbb,
 
 	const SSHORT aligned_size = ROUNDUP(size, ODS_ALIGNMENT);
 	data_page* page = (data_page*) rpb->getWindow(tdbb).win_buffer;
+
+	if (pp_window)
+	{
+		if (empty_dp_expected && page->dpg_count > 0 && !(page->dpg_header.pag_flags & dpg_secondary))
+		{
+			// We just cleared ppg_dp_empty flag from the pointer page in locate_space but the data
+			// page is actually primary. There is a risk that the last sweep run skipped this page so
+			// we have to set ppg_dp_empty flag back and leave the page.
+			const pointer_page* ppage = (const pointer_page*) pp_window->win_buffer;
+			UCHAR* bits = (UCHAR *) (ppage->ppg_page + dbb->dbb_dp_per_pp);
+
+			USHORT slot;
+			ULONG pp_sequence;
+			DECOMPOSE(page->dpg_sequence, dbb->dbb_dp_per_pp, pp_sequence, slot);
+			fb_assert(rpb->getWindow(tdbb).win_page.getPageNum() == ppage->ppg_page[slot]);
+			fb_assert(!PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty | ppg_dp_swept));
+			fb_assert(type == DPM_primary || PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary));
+
+			PPG_DP_BIT_SET(bits, slot, ppg_dp_empty);
+
+			CCH_RELEASE(tdbb, pp_window);
+			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
+			return NULL;
+		}
+
+		CCH_RELEASE(tdbb, pp_window);
+	}
 
 	if ((page->dpg_count > 0) && (type == DPM_primary) && (page->dpg_header.pag_flags & dpg_secondary))
 	{
@@ -3410,7 +3439,7 @@ static rhd* locate_space(thread_db* tdbb,
 			// hvlad: if data page is empty, we could change its primary\secondary
 			// type as needed (i.e. to be same as "type" passed). Also, we must clear
 			// ppg_dp_empty bit. To do it, we need to re-fetch PP with write lock.
-			bool dp_is_empty = PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty);
+			const bool dp_is_empty = PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty);
 			bool dp_is_secondary = PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary);
 
 			// If we going to store primary record on swept data page, we must clear
@@ -3466,18 +3495,21 @@ static rhd* locate_space(thread_db* tdbb,
 
 			if ((type == DPM_primary) ^ dp_is_secondary)
 			{
+				WIN pp_window = *window;
+				window->win_page = dp_number;
 				data_page* dpage = NULL;
+
 				if (tries && (slot + 1 < ppage->ppg_count))
 				{
-					dpage = (data_page*) CCH_HANDOFF_TIMEOUT(tdbb, window, dp_number, LCK_write, pag_data, 0);
+					dpage = (data_page*) CCH_FETCH_TIMEOUT(tdbb, window, LCK_write, pag_data, 0);
 					tries--;
 				}
 				else
-					dpage = (data_page*) CCH_HANDOFF(tdbb, window, dp_number, LCK_write, pag_data);
+					dpage = (data_page*) CCH_FETCH(tdbb, window, LCK_write, pag_data);
 
 				if (dpage)
 				{
-					UCHAR* space = find_space(tdbb, rpb, size, stack, record, type);
+					UCHAR* space = find_space(tdbb, rpb, size, stack, record, type, dp_is_empty, &pp_window);
 					if (space)
 					{
 						if (type == DPM_primary)
@@ -3486,6 +3518,8 @@ static rhd* locate_space(thread_db* tdbb,
 						return (rhd*)space;
 					}
 				}
+				else
+					CCH_RELEASE(tdbb, &pp_window);
 
 				ppLock = LCK_read;
 				window->win_page = pp_number;
@@ -3617,9 +3651,13 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 	const UCHAR bit_scnd_set  = ((*byte & PPG_DP_BIT_MASK(slot, ppg_dp_secondary)) == 0) ? 0 : dpg_secondary;
 	const bool bit_empty_set  = ((*byte & PPG_DP_BIT_MASK(slot, ppg_dp_empty)) != 0);
 
+	// Don't do anything if flags are equal or in a dangerous state in
+	// terms of the database consistency. See comments in walk_pointer_page
+	// and find_space.
 	if ((flags & (dpg_full | dpg_large | dpg_swept | dpg_secondary)) ==
 			(bit_full_set | bit_large_set | bit_swept_set | bit_scnd_set) &&
-		(dpEmpty == bit_empty_set))
+		(dpEmpty == bit_empty_set) ||
+		!dpEmpty && !(flags & dpg_secondary) && (bit_empty_set || bit_scnd_set))
 	{
 		CCH_RELEASE(tdbb, &pp_window);
 		return;
@@ -3629,7 +3667,7 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 			(bit_large_set | bit_swept_set | bit_scnd_set) ||
 		(dpEmpty != bit_empty_set))
 	{
-		fb_assert(!(bit_swept_set && !(flags & dpg_swept) || bit_empty_set && !dpEmpty));
+		fb_assert(!(bit_swept_set && !(flags & dpg_swept)));
 		CCH_precedence(tdbb, &pp_window, rpb->getWindow(tdbb).win_page);
 	}
 
