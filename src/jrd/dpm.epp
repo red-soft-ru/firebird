@@ -3663,8 +3663,11 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 		return;
 	}
 
-	if ((flags & (dpg_large | dpg_swept | dpg_secondary)) !=
-			(bit_large_set | bit_swept_set | bit_scnd_set) ||
+	// Don't set the precedence when only dpg_full or dpg_large is set or cleared.
+	// It doesn't affect the database consistency and removes extra write of the
+	// pointer page if ppg_dp_empty was cleared recently in locate_space.
+	if ((flags & (dpg_swept | dpg_secondary)) !=
+			(bit_swept_set | bit_scnd_set) ||
 		(dpEmpty != bit_empty_set))
 	{
 		fb_assert(!(bit_swept_set && !(flags & dpg_swept)));
