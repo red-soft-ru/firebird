@@ -2456,6 +2456,14 @@ static void check_swept(thread_db* tdbb, record_param* rpb)
 	data_page* dpage = (data_page*)
 		CCH_HANDOFF(tdbb, window, ppage->ppg_page[slot], LCK_write, pag_data);
 
+	if (dpage->dpg_count == 0 || dpage->dpg_header.pag_flags & (dpg_secondary | dpg_swept))
+	{
+		// The non-empty primary data page without dpg_swept flag is expected.
+		// But if it's not the case, fix flags on the pointer page and return.
+		mark_full(tdbb, rpb);
+		return;
+	}
+
 	for (USHORT line = 0; line < dpage->dpg_count; ++line)
 	{
 		const data_page::dpg_repeat* index = &dpage->dpg_rpt[line];
