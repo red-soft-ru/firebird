@@ -3168,6 +3168,8 @@ static UCHAR* find_space(thread_db*	tdbb,
 
 	if (page->dpg_count == 1)
 	{
+		page->dpg_header.pag_flags &= ~dpg_swept;
+
 		if (type == DPM_primary)
 			page->dpg_header.pag_flags &= ~dpg_secondary;
 		else
