@@ -1831,6 +1831,8 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 					}
 				}
 
+				const USHORT count = dpage->dpg_count;
+
 				// Prevent large relations from emptying cache. When scrollable
 				// cursors are surfaced, this logic may need to be revisited.
 
@@ -1845,7 +1847,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, bool onepage
 				else
 					CCH_RELEASE(tdbb, window);
 
-				if (sweeper)
+				if (sweeper && count)
 				{
 					// The last record at data page was not returned to caller.
 					// It is time now to check if this data page was swept.
