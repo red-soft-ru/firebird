@@ -8773,7 +8773,7 @@ static void release_request( Rrq* request)
 }
 
 
-static void release_statement( Rsr** statement)
+static void release_statement( Rsr** statementPtr)
 {
 /**************************************
  *
@@ -8786,18 +8786,20 @@ static void release_statement( Rsr** statement)
  *
  **************************************/
 
-	delete (*statement)->rsr_bind_format;
-	if ((*statement)->rsr_user_select_format &&
-		(*statement)->rsr_user_select_format != (*statement)->rsr_select_format)
-	{
-		delete (*statement)->rsr_user_select_format;
-	}
-	delete (*statement)->rsr_select_format;
-	(*statement)->releaseException();
+	Rsr* statement = *statementPtr;
+	*statementPtr = NULL;
 
-	REMOTE_release_messages((*statement)->rsr_message);
-	delete *statement;
-	*statement = NULL;
+	delete statement->rsr_bind_format;
+	if (statement->rsr_user_select_format &&
+		statement->rsr_user_select_format != statement->rsr_select_format)
+	{
+		delete statement->rsr_user_select_format;
+	}
+	delete statement->rsr_select_format;
+	statement->releaseException();
+	REMOTE_release_messages(statement->rsr_message);
+
+	delete statement;
 }
 
 
