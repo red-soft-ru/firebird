@@ -8701,35 +8701,10 @@ ValueExprNode* DerivedFieldNode::dsqlFieldRemapper(FieldRemapper& visitor)
 
 void DerivedFieldNode::setParameterName(dsql_par* parameter) const
 {
-	const dsql_ctx* context = NULL;
-	const FieldNode* fieldNode = NULL;
-	const RecordKeyNode* dbKeyNode = NULL;
-
-	const DerivedFieldNode* drvField = nodeAs<DerivedFieldNode>(value);
-
-	while (drvField)
-	{
-		if ((fieldNode = nodeAs<FieldNode>(drvField->value)))
-			break;
-
-		if ((dbKeyNode = nodeAs<RecordKeyNode>(drvField->value)))
-			break;
-
-		drvField = nodeAs<DerivedFieldNode>(drvField->value);
-	}
-
-	if (fieldNode || (fieldNode = nodeAs<FieldNode>(value)))
-	{
-		parameter->par_name = fieldNode->dsqlField->fld_name.c_str();
-		context = fieldNode->dsqlContext;
-	}
-	else if (dbKeyNode || (dbKeyNode = nodeAs<RecordKeyNode>(value)))
-		dbKeyNode->setParameterName(parameter);
+	value->setParameterName(parameter);
 
 	parameter->par_alias = name;
-	setParameterInfo(parameter, context);
-
-	parameter->par_rel_alias = this->context->ctx_alias;
+	parameter->par_rel_alias = context->ctx_alias;
 }
 
 void DerivedFieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)
