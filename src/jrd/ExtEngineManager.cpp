@@ -705,15 +705,26 @@ void* ExtEngineManager::ExternalContextImpl::setInfo(int code, void* value)
 //---------------------
 
 
-ExtEngineManager::Function::Function(thread_db* tdbb, ExtEngineManager* aExtManager,
-		IExternalEngine* aEngine, RoutineMetadata* aMetadata, IExternalFunction* aFunction,
-		const Jrd::Function* aUdf)
+ExtEngineManager::ExtRoutine::ExtRoutine(thread_db* tdbb, ExtEngineManager* aExtManager,
+		IExternalEngine* aEngine, RoutineMetadata* aMetadata)
 	: extManager(aExtManager),
 	  engine(aEngine),
 	  metadata(aMetadata),
-	  function(aFunction),
-	  udf(aUdf),
 	  database(tdbb->getDatabase())
+{
+	engine->addRef();
+}
+
+
+//---------------------
+
+
+ExtEngineManager::Function::Function(thread_db* tdbb, ExtEngineManager* aExtManager,
+		IExternalEngine* aEngine, RoutineMetadata* aMetadata, IExternalFunction* aFunction,
+		const Jrd::Function* aUdf)
+	: ExtRoutine(tdbb, aExtManager, aEngine, aMetadata),
+	  function(aFunction),
+	  udf(aUdf)
 {
 }
 
@@ -747,12 +758,9 @@ void ExtEngineManager::Function::execute(thread_db* tdbb, UCHAR* inMsg, UCHAR* o
 ExtEngineManager::Procedure::Procedure(thread_db* tdbb, ExtEngineManager* aExtManager,
 	    IExternalEngine* aEngine, RoutineMetadata* aMetadata, IExternalProcedure* aProcedure,
 		const jrd_prc* aPrc)
-	: extManager(aExtManager),
-	  engine(aEngine),
-	  metadata(aMetadata),
+	: ExtRoutine(tdbb, aExtManager, aEngine, aMetadata),
 	  procedure(aProcedure),
-	  prc(aPrc),
-	  database(tdbb->getDatabase())
+	  prc(aPrc)
 {
 }
 
@@ -835,15 +843,12 @@ bool ExtEngineManager::ResultSet::fetch(thread_db* tdbb)
 ExtEngineManager::Trigger::Trigger(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 			ExtEngineManager* aExtManager, IExternalEngine* aEngine, RoutineMetadata* aMetadata,
 			IExternalTrigger* aTrigger, const Jrd::Trigger* aTrg)
-	: computedStatements(pool),
-	  extManager(aExtManager),
-	  engine(aEngine),
-	  metadata(aMetadata),
+	: ExtRoutine(tdbb, aExtManager, aEngine, aMetadata),
+	  computedStatements(pool),
 	  trigger(aTrigger),
 	  trg(aTrg),
 	  fieldsPos(pool),
 	  varDecls(pool),
-	  database(tdbb->getDatabase()),
 	  computedCount(0)
 {
 	jrd_rel* relation = trg->relation;
