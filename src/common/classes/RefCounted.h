@@ -140,22 +140,12 @@ namespace Firebird
 			return assign(r.ptr);
 		}
 
-		operator T*()
+		operator T*() const
 		{
 			return ptr;
 		}
 
-		T* operator->()
-		{
-			return ptr;
-		}
-
-		operator const T*() const
-		{
-			return ptr;
-		}
-
-		const T* operator->() const
+		T* operator->() const
 		{
 			return ptr;
 		}
