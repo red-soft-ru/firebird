@@ -117,22 +117,12 @@ public:
 		return *this;
 	}
 
-	operator Where*()
+	Where* get() const
 	{
 		return ptr;
 	}
 
-	Where* get()
-	{
-		return ptr;
-	}
-
-	operator const Where*() const
-	{
-		return ptr;
-	}
-
-	const Where* get() const
+	operator Where*() const
 	{
 		return ptr;
 	}
@@ -147,12 +137,7 @@ public:
 		return ptr != NULL;
 	}
 
-	Where* operator->()
-	{
-		return ptr;
-	}
-
-	const Where* operator->() const
+	Where* operator->() const
 	{
 		return ptr;
 	}
