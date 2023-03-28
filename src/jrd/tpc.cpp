@@ -364,16 +364,16 @@ int TipCache::snapshotState(thread_db* tdbb, TraNumber number)
 		Lock temp_lock(tdbb, sizeof(TraNumber), LCK_tra);
 		temp_lock.lck_key.lck_long = number;
 
-		// If we can't get a lock on the transaction, it must be active.
-
-		if (!LCK_lock(tdbb, &temp_lock, LCK_read, LCK_NO_WAIT))
 		{
-			fb_utils::init_status(tdbb->tdbb_status_vector);
-			return tra_active;
-		}
+			ThreadStatusGuard tempStatus(tdbb);
 
-		fb_utils::init_status(tdbb->tdbb_status_vector);
-		LCK_release(tdbb, &temp_lock);
+			// If we can't get a lock on the transaction, it must be active.
+
+			if (!LCK_lock(tdbb, &temp_lock, LCK_read, LCK_NO_WAIT))
+				return tra_active;
+
+			LCK_release(tdbb, &temp_lock);
+		}
 
 		// as a last resort we must look at the TIP page to see
 		// whether the transaction is committed or dead; to minimize

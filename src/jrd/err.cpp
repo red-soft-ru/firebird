@@ -359,7 +359,8 @@ void ERR_warning(const Arg::StatusVector& v)
 
 	v.copyTo(s);
 	DEBUG;
-	tdbb->getRequest()->req_flags |= req_warning;
+	if (jrd_req* request = tdbb->getRequest())
+		request->req_flags |= req_warning;
 }
 
 
