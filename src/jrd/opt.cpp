@@ -721,7 +721,9 @@ RecordSource* OPT_compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 				csb->csb_rpt[*i].activate();
 		}
 
-		fb_assert(opt->compileStreams.getCount() != 1 || csb->csb_rpt[opt->compileStreams[0]].csb_relation != 0);
+		StreamList joinStreams(opt->compileStreams);
+
+		fb_assert(joinStreams.getCount() != 1 || csb->csb_rpt[joinStreams[0]].csb_relation != 0);
 
 		while (true)
 		{
@@ -731,7 +733,7 @@ RecordSource* OPT_compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 			// currently active rivers. Where in the new cross river
 			// a stream depends (index) on the active rivers.
 			StreamList dependent_streams, free_streams;
-			find_index_relationship_streams(tdbb, opt, opt->compileStreams, dependent_streams, free_streams);
+			find_index_relationship_streams(tdbb, opt, joinStreams, dependent_streams, free_streams);
 
 			// If we have dependent and free streams then we can't rely on
 			// the sort node to be used for index navigation.
@@ -744,7 +746,7 @@ RecordSource* OPT_compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 			if (dependent_streams.getCount())
 			{
 				// copy free streams
-				opt->compileStreams.assign(free_streams);
+				joinStreams.assign(free_streams);
 
 				// Make rivers from the dependent streams
 				gen_join(tdbb, opt, dependent_streams, rivers, &sort, rse->rse_plan);
@@ -771,7 +773,7 @@ RecordSource* OPT_compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		}
 
 		// attempt to form joins in decreasing order of desirability
-		gen_join(tdbb, opt, opt->compileStreams, rivers, &sort, rse->rse_plan);
+		gen_join(tdbb, opt, joinStreams, rivers, &sort, rse->rse_plan);
 
 		// If there are multiple rivers, try some hashing or sort/merging
 		while (gen_equi_join(tdbb, opt, rivers))
