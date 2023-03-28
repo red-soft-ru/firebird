@@ -1013,10 +1013,15 @@ static void check_indices(const CompilerScratch::csb_repeat* csb_tail)
 	// if there were no indices fetched at all but the
 	// user specified some, error out using the first index specified
 
-	if (!csb_tail->csb_indices && plan->accessType && !tdbb->getAttachment()->isGbak())
+	const bool isGbak = tdbb->getAttachment()->isGbak();
+
+	if (!csb_tail->csb_indices && plan->accessType)
 	{
 		// index %s cannot be used in the specified plan
-		ERR_post(Arg::Gds(isc_index_unused) << plan->accessType->items[0].indexName);
+		if (isGbak)
+			ERR_post_warning(Arg::Warning(isc_index_unused) << plan->accessType->items[0].indexName);
+		else
+			ERR_post(Arg::Gds(isc_index_unused) << plan->accessType->items[0].indexName);
 	}
 
 	// check to make sure that all indices are either used or marked not to be used,
@@ -1036,7 +1041,10 @@ static void check_indices(const CompilerScratch::csb_repeat* csb_tail)
 				index_name = "";
 
 			// index %s cannot be used in the specified plan
-			ERR_post(Arg::Gds(isc_index_unused) << Arg::Str(index_name));
+			if (isGbak)
+				ERR_post_warning(Arg::Warning(isc_index_unused) << Arg::Str(index_name));
+			else
+				ERR_post(Arg::Gds(isc_index_unused) << Arg::Str(index_name));
 		}
 
 		++idx;

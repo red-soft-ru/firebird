@@ -1694,17 +1694,7 @@ void PAR_warning(const Arg::StatusVector& v)
  *
  **************************************/
 	fb_assert(v.value()[0] == isc_arg_warning);
-
-	thread_db* tdbb = JRD_get_thread_data();
-
-	// Make sure that the [1] position is 0 indicating that no error has occurred
-	Arg::Gds p(FB_SUCCESS);
-
-	// Now place your warning messages
-	p.append(v);
-
-	// Save into tdbb
-	p.copyTo(tdbb->tdbb_status_vector);
+	ERR_post_warning(v);
 }
 
 
