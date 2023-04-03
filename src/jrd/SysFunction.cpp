@@ -2431,7 +2431,7 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 	{
 		// "Invalid namespace name %s passed to %s"
 		ERR_post(Arg::Gds(isc_ctx_namespace_invalid) <<
-			Arg::Str(nameStr) << Arg::Str(RDB_SET_CONTEXT));
+			Arg::Str(nameSpaceStr) << Arg::Str(RDB_SET_CONTEXT));
 	}
 
 	string valueStr;
