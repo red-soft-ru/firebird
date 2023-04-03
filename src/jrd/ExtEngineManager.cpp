@@ -1135,7 +1135,7 @@ namespace
 		}
 
 	public:
-		virtual int release() override
+		int release() override
 		{
 			// Never delete static instance of SystemEngine
 			return 1;
