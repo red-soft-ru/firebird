@@ -3915,6 +3915,13 @@ static void store_big_record(thread_db* tdbb,
 		header->rhdf_b_page, header->rhdf_b_line);
 #endif
 
+	// Swept flag on PP was cleared earlier by locate_space()
+
+	/*fb_assert(!(page->dpg_header.pag_flags & dpg_secondary) || page->dpg_header.pag_flags & dpg_swept);*/
+
+	if (page->dpg_header.pag_flags & dpg_swept && type == DPM_primary)
+		page->dpg_header.pag_flags &= ~dpg_swept;
+
 	if (!(page->dpg_header.pag_flags & dpg_large))
 	{
 		page->dpg_header.pag_flags |= dpg_large;
