@@ -529,6 +529,8 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 		new_rpb->rpb_f_line, new_rpb->rpb_flags);
 #endif
 
+	fb_assert(!(page->dpg_header.pag_flags & dpg_secondary));
+
 	// PP is already marked as non-swept by DPM_get() above
 	if (page->dpg_header.pag_flags & dpg_swept)
 		page->dpg_header.pag_flags &= ~dpg_swept;
@@ -1512,7 +1514,8 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 			break;
 
 		UCHAR* bits = (UCHAR*) (page->ppg_page + dbb->dbb_dp_per_pp);
-		if (!PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept))
+		if (!PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept) ||
+			PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty | ppg_dp_secondary))
 			break;
 
 		if (lck == LCK_read)
@@ -1811,9 +1814,12 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 		{
 			const ULONG page_number = ppage->ppg_page[slot];
 			const UCHAR* bits = (UCHAR*) (ppage->ppg_page + dbb->dbb_dp_per_pp);
-			if (page_number && !PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary) &&
-				!PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty) &&
-				(!sweeper || !PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept)) )
+			/*fb_assert(PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty) ||
+				!PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary) ||
+				PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept));*/
+
+			if (page_number && (sweeper ? !PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept) :
+				!PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty | ppg_dp_secondary)) )
 			{
 #ifdef SUPERSERVER_V2
 				// Perform sequential prefetch of relation's data pages.
@@ -1838,53 +1844,67 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 					}
 				}
 #endif
-				dpSequence = ppage->ppg_sequence * dbb->dbb_dp_per_pp + slot;
-				relPages->setDPNumber(dpSequence, page_number);
 				const data_page* dpage = (data_page*) CCH_HANDOFF(tdbb, window,
 									page_number, lock_type, pag_data);
 
-				for (; line < dpage->dpg_count; ++line)
+				if (sweeper && dpage->dpg_header.pag_flags & dpg_swept)
 				{
-					if (get_header(window, line, rpb) &&
-						!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
-					{
-						if (sweeper && !rpb->rpb_b_page && !(rpb->rpb_flags & rpb_deleted) && rpb->rpb_transaction_nr <= oldest)
-							continue;
-
-						rpb->rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp,
-												line, slot, pp_sequence);
-						return true;
-					}
-				}
-
-				// Prevent large relations from emptying cache. When scrollable
-				// cursors are surfaced, this logic may need to be revisited.
-
-				if (window->win_flags & WIN_large_scan)
-					CCH_RELEASE_TAIL(tdbb, window);
-				else if (window->win_flags & WIN_garbage_collector &&
-						 window->win_flags & WIN_garbage_collect)
-				{
-					CCH_RELEASE_TAIL(tdbb, window);
-					window->win_flags &= ~WIN_garbage_collect;
+					mark_full(tdbb, rpb);
 				}
 				else
-					CCH_RELEASE(tdbb, window);
-
-				if (sweeper)
 				{
-					// The last record at data page was not returned to caller.
-					// It is time now to check if this data page was swept.
+					if (dpage->dpg_count > 0 && !(dpage->dpg_header.pag_flags & dpg_secondary))
+					{
+						dpSequence = ppage->ppg_sequence * dbb->dbb_dp_per_pp + slot;
+						relPages->setDPNumber(dpSequence, page_number); // Currently this DP map is used only for primary DPs
 
-					const RecordNumber saveRecNo = rpb->rpb_number;
-					rpb->rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp,
-											line, slot, pp_sequence);
+						for (; line < dpage->dpg_count; ++line)
+						{
+							if (get_header(window, line, rpb) &&
+								!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
+							{
+								if (sweeper && !rpb->rpb_b_page && !(rpb->rpb_flags & rpb_deleted) && rpb->rpb_transaction_nr <= oldest)
+									continue;
 
-					rpb->rpb_number.decrement();
-					check_swept(tdbb, rpb);
-					rpb->rpb_number = saveRecNo;
+								rpb->rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp,
+														line, slot, pp_sequence);
+								return true;
+							}
+						}
+					}
 
-					tdbb->checkCancelState();
+					// Prevent large relations from emptying cache. When scrollable
+					// cursors are surfaced, this logic may need to be revisited.
+
+					if (window->win_flags & WIN_large_scan)
+						CCH_RELEASE_TAIL(tdbb, window);
+					else if (window->win_flags & WIN_garbage_collector &&
+							 window->win_flags & WIN_garbage_collect)
+					{
+						CCH_RELEASE_TAIL(tdbb, window);
+						window->win_flags &= ~WIN_garbage_collect;
+					}
+					else
+						CCH_RELEASE(tdbb, window);
+
+					if (sweeper)
+					{
+						// The last record at data page was not returned to caller.
+						// It is time now to check if this data page was swept.
+
+						const RecordNumber saveRecNo = rpb->rpb_number;
+						rpb->rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp,
+												line, slot, pp_sequence);
+
+						// Make sure check_swept won't go to the previous page
+						if (line)
+							rpb->rpb_number.decrement();
+
+						check_swept(tdbb, rpb);
+						rpb->rpb_number = saveRecNo;
+
+						tdbb->checkCancelState();
+					}
 				}
 
 				if (scope == DPM_next_data_page)
@@ -2187,12 +2207,10 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 	// Swept flag on PP was cleared earlier by locate_space()
 
 	Ods::pag* page = rpb->getWindow(tdbb).win_buffer;
-	if (page->pag_flags & dpg_swept)
-	{
-		fb_assert(!(page->pag_flags & dpg_secondary));
-		if (type == DPM_primary)
-			page->pag_flags &= ~dpg_swept;
-	}
+	/*fb_assert(!(page->pag_flags & dpg_secondary) || page->pag_flags & dpg_swept);*/
+
+	if (page->pag_flags & dpg_swept && type == DPM_primary)
+		page->pag_flags &= ~dpg_swept;
 
 	CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 }
@@ -2448,6 +2466,8 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	if (fill)
 		memset(data + size, 0, fill);
 
+	fb_assert(!(page->dpg_header.pag_flags & dpg_secondary));
+
 	if (page->dpg_header.pag_flags & dpg_swept)
 		page->dpg_header.pag_flags &= ~dpg_swept;
 
@@ -2487,7 +2507,7 @@ static void check_swept(thread_db* tdbb, record_param* rpb)
 
 	const UCHAR* bits = (UCHAR*) (ppage->ppg_page + dbb->dbb_dp_per_pp);
 	if (slot >= ppage->ppg_count || !ppage->ppg_page[slot] ||
-		PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary | ppg_dp_swept | ppg_dp_empty))
+		PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept))
 	{
 		CCH_RELEASE(tdbb, window);
 		return;
@@ -2496,18 +2516,27 @@ static void check_swept(thread_db* tdbb, record_param* rpb)
 	data_page* dpage = (data_page*)
 		CCH_HANDOFF(tdbb, window, ppage->ppg_page[slot], LCK_write, pag_data);
 
-	for (USHORT line = 0; line < dpage->dpg_count; ++line)
+	if (dpage->dpg_header.pag_flags & dpg_swept)
 	{
-		const data_page::dpg_repeat* index = &dpage->dpg_rpt[line];
-		if (index->dpg_offset)
+		mark_full(tdbb, rpb);
+		return;
+	}
+
+	if (dpage->dpg_count > 0 && !(dpage->dpg_header.pag_flags & dpg_secondary))
+	{
+		for (USHORT line = 0; line < dpage->dpg_count; ++line)
 		{
-			rhd* header = (rhd*) ((SCHAR*) dpage + index->dpg_offset);
-			if (Ods::getTraNum(header) > transaction->tra_oldest ||
-				(header->rhd_flags & (rpb_blob | rpb_chained | rpb_fragment | rpb_deleted)) ||
-				header->rhd_b_page)
+			const data_page::dpg_repeat* index = &dpage->dpg_rpt[line];
+			if (index->dpg_offset)
 			{
-				CCH_RELEASE_TAIL(tdbb, window);
-				return;
+				rhd* header = (rhd*) ((SCHAR*) dpage + index->dpg_offset);
+				if (Ods::getTraNum(header) > transaction->tra_oldest ||
+					(header->rhd_flags & (rpb_blob | rpb_chained | rpb_fragment | rpb_deleted)) ||
+					header->rhd_b_page)
+				{
+					CCH_RELEASE_TAIL(tdbb, window);
+					return;
+				}
 			}
 		}
 	}
@@ -2865,6 +2894,8 @@ static void fragment(thread_db* tdbb,
 		header->rhdf_b_line);
 #endif
 
+	fb_assert(!(page->dpg_header.pag_flags & dpg_secondary));
+
 	if (page->dpg_header.pag_flags & dpg_swept)
 		page->dpg_header.pag_flags &= ~dpg_swept;
 
@@ -2993,7 +3024,7 @@ static void extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window, con
 	dpage->dpg_relation = relation->rel_id;
 	dpage->dpg_header.pag_type = pag_data;
 	if (type != DPM_primary) {
-		dpage->dpg_header.pag_flags |= dpg_secondary;
+		dpage->dpg_header.pag_flags |= dpg_secondary | dpg_swept;
 	}
 	CCH_RELEASE(tdbb, window);
 
@@ -3021,7 +3052,7 @@ static void extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window, con
 	PPG_DP_BIT_CLEAR(bits, slot, PPG_DP_ALL_BITS);
 
 	if (type != DPM_primary)
-		PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary);
+		PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary | ppg_dp_swept);
 
 	for (unsigned i = 1; i < cntAlloc; i++)
 	{
@@ -3182,7 +3213,7 @@ static UCHAR* find_space(thread_db*	tdbb,
 		if (type == DPM_primary)
 			page->dpg_header.pag_flags &= ~dpg_secondary;
 		else
-			page->dpg_header.pag_flags |= dpg_secondary;
+			page->dpg_header.pag_flags |= dpg_secondary | dpg_swept;
 	}
 
 	return (UCHAR*) page + space;
@@ -3455,7 +3486,7 @@ static rhd* locate_space(thread_db* tdbb,
 			// If we going to store primary record on swept data page, we must clear
 			// ppg_dp_swept flag from PP first.
 			const bool dp_is_swept = PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept);
-			const bool must_clear_swept = dp_is_swept && (type == DPM_primary);
+			const bool must_clear_swept = dp_is_swept && (type == DPM_primary) && (dp_is_empty || !dp_is_secondary);
 
 			if (dp_is_empty || must_clear_swept)
 			{
@@ -3473,24 +3504,24 @@ static rhd* locate_space(thread_db* tdbb,
 					continue;
 				}
 
-				// Note, when ppg_dp_swept or ppg_dp_empty flag is cleared, precedence must
+				// Note, when ppg_dp_swept flag is cleared, precedence must
 				// be set to write DP after PP.
 
-				//if (dp_is_empty)
-				//	CCH_precedence(tdbb, window, dp_number);
-				//else
-				stack.push(window->win_page);
+				if (must_clear_swept)
+					stack.push(window->win_page);
+				else
+					CCH_precedence(tdbb, window, dp_number);
 
 				CCH_MARK(tdbb, window);
 
 				if (dp_is_empty)
 				{
-					PPG_DP_BIT_CLEAR(bits, slot, ppg_dp_empty | ppg_dp_swept);
+					PPG_DP_BIT_CLEAR(bits, slot, ppg_dp_empty);
 
 					if (type == DPM_primary)
-						PPG_DP_BIT_CLEAR(bits, slot, ppg_dp_secondary);
+						PPG_DP_BIT_CLEAR(bits, slot, ppg_dp_secondary | ppg_dp_swept);
 					else
-						PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary);
+						PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary/* | ppg_dp_swept*/);
 
 					dp_is_secondary = !(type == DPM_primary);
 				}
@@ -3673,9 +3704,15 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 		return;
 	}
 
-	CCH_precedence(tdbb, &pp_window, rpb->getWindow(tdbb).win_page);
-	CCH_MARK(tdbb, &pp_window);
+	if ((flags & (dpg_large | dpg_swept | dpg_secondary)) !=
+			(bit_large_set | bit_swept_set | bit_scnd_set) ||
+		(dpEmpty != bit_empty_set))
+	{
+		fb_assert(!(bit_swept_set && !(flags & dpg_swept)));
+		CCH_precedence(tdbb, &pp_window, rpb->getWindow(tdbb).win_page);
+	}
 
+	CCH_MARK(tdbb, &pp_window);
 
 	UCHAR bit = PPG_DP_BIT_MASK(slot, ppg_dp_full);
 	if (flags & dpg_full)
