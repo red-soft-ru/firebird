@@ -6247,6 +6247,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 				temp->rpb_flags |= rpb->rpb_flags & rpb_delta;
 				temp->rpb_transaction_nr = rpb->rpb_transaction_nr;
 
+				temp->rpb_number = rpb->rpb_number;
 				DPM_store(tdbb, temp, stack, DPM_secondary);
 				continue;
 			}
