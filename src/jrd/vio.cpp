@@ -2901,9 +2901,9 @@ bool VIO_get(thread_db* tdbb, record_param* rpb, jrd_tra* transaction, MemoryPoo
 	// lock. This saves an upward conversion to a write lock when
 	// refetching the page in the context of the output stream.
 
-	const USHORT lock_type = (rpb->rpb_stream_flags & RPB_s_update) ? LCK_write : LCK_read;
+	//const USHORT lock_type = (rpb->rpb_stream_flags & RPB_s_update) ? LCK_write : LCK_read;
 
-	if (!DPM_get(tdbb, rpb, lock_type) ||
+	if (!DPM_get(tdbb, rpb, /*lock_type*/LCK_read) ||
 		!VIO_chase_record_version(tdbb, rpb, transaction, pool, false, false))
 	{
 		return false;
@@ -2933,6 +2933,8 @@ bool VIO_get(thread_db* tdbb, record_param* rpb, jrd_tra* transaction, MemoryPoo
 		}
 		else
 			VIO_data(tdbb, rpb, pool);
+
+		fb_assert(rpb->getWindow(tdbb).win_bdb == NULL);
 	}
 
 	tdbb->bumpRelStats(RuntimeStatistics::RECORD_IDX_READS, rpb->rpb_relation->rel_id);
@@ -3738,7 +3740,7 @@ bool VIO_next_record(thread_db* tdbb,
 	// lock. This saves an upward conversion to a write lock when
 	// refetching the page in the context of the output stream.
 
-	const USHORT lock_type = (rpb->rpb_stream_flags & RPB_s_update) ? LCK_write : LCK_read;
+	//const USHORT lock_type = (rpb->rpb_stream_flags & RPB_s_update) ? LCK_write : LCK_read;
 
 #ifdef VIO_DEBUG
 	jrd_rel* relation = rpb->rpb_relation;
@@ -3756,7 +3758,7 @@ bool VIO_next_record(thread_db* tdbb,
 #endif
 
 	do {
-		if (!DPM_next(tdbb, rpb, lock_type, scope))
+		if (!DPM_next(tdbb, rpb, /*lock_type*/LCK_read, scope))
 		{
 			return false;
 		}
@@ -3777,6 +3779,8 @@ bool VIO_next_record(thread_db* tdbb,
 		}
 		else
 			VIO_data(tdbb, rpb, pool);
+
+		fb_assert(rpb->getWindow(tdbb).win_bdb == NULL);
 	}
 
 #ifdef VIO_DEBUG
