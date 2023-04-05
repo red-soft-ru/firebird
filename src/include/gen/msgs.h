@@ -544,8 +544,8 @@ static const struct {
 	{335544840, "cannot update"},		/* no_update */
 	{335544841, "Cursor is already open"},		/* cursor_already_open */
 	{335544842, "@1"},		/* stack_trace */
-	{335544843, "Context variable @1 is not found in namespace @2"},		/* ctx_var_not_found */
-	{335544844, "Invalid namespace name @1 passed to @2"},		/* ctx_namespace_invalid */
+	{335544843, "Context variable '@1' is not found in namespace '@2'"},		/* ctx_var_not_found */
+	{335544844, "Invalid namespace name '@1' passed to @2"},		/* ctx_namespace_invalid */
 	{335544845, "Too many context variables"},		/* ctx_too_big */
 	{335544846, "Invalid argument passed to @1"},		/* ctx_bad_argument */
 	{335544847, "BLR syntax error. Identifier @1... is too long"},		/* identifier_too_long */
