@@ -2392,11 +2392,11 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 	request->req_flags &= ~req_null;
 	const dsc* nameSpace = EVL_expr(tdbb, request, args[0]);
 	if (request->req_flags & req_null)	// Complain if namespace is null
-		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_GET_CONTEXT));
+		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_SET_CONTEXT));
 
 	const dsc* name = EVL_expr(tdbb, request, args[1]);
 	if (request->req_flags & req_null)	// Complain if variable name is null
-		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_GET_CONTEXT));
+		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_SET_CONTEXT));
 
 	const dsc* value = EVL_expr(tdbb, request, args[2]);
 
