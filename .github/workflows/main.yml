@@ -10,17 +10,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macOS-latest, ubuntu-20.04]
-        platform: [x64, x86]
         include:
           - os: ubuntu-20.04
             platform: x64
-            container: alpine
-        exclude:
-          - os: macOS-latest
-            platform: x86
           - os: ubuntu-20.04
-            platform: x86
+            platform: x64
+            container: alpine
+          - os: macOS-latest
+            platform: x64
 
     steps:
     - uses: actions/checkout@v1
