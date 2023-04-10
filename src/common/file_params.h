@@ -44,6 +44,9 @@ static const char* const SNAPSHOTS_FILE	= "fb_snap_%s";
 
 static const char* const TRACE_FILE		= "fb" COMMON_FILE_PREFIX "_trace";
 static const char* const USER_MAP_FILE	= "fb" COMMON_FILE_PREFIX "_user_mapping";
+static const char* const SHARED_EVENT	= "fb" COMMON_FILE_PREFIX "_process%u_signal%d";
+static const char* const SHARED_EVENT_OLD	= "_firebird_process%u_signal%d";
+
 static const char* const FB_TRACE_LOG_MUTEX = "fb_trace_log_mutex";
 
 #ifdef UNIX
