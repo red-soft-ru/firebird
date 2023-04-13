@@ -198,13 +198,13 @@ static ULONG fast_load(thread_db*, IndexCreation&, SelectivityList&);
 
 static index_root_page* fetch_root(thread_db*, WIN*, const jrd_rel*, const RelationPages*);
 static UCHAR* find_node_start_point(btree_page*, temporary_key*, UCHAR*, USHORT*,
-									bool, bool, bool = false, RecordNumber = NO_VALUE);
+									bool, int, bool = false, RecordNumber = NO_VALUE);
 
 static UCHAR* find_area_start_point(btree_page*, const temporary_key*, UCHAR*,
-									USHORT*, bool, bool, RecordNumber = NO_VALUE);
+									USHORT*, bool, int, RecordNumber = NO_VALUE);
 
 static ULONG find_page(btree_page*, const temporary_key*, const index_desc*, RecordNumber = NO_VALUE,
-					   bool = false);
+					   int = 0);
 
 static contents garbage_collect(thread_db*, WIN*, ULONG);
 static void generate_jump_nodes(thread_db*, btree_page*, JumpNodeList*, USHORT,
@@ -655,28 +655,36 @@ static void checkForLowerKeySkip(bool& skipLowerKey,
 	}
 	else
 	{
-		// Check if we have a duplicate node (for the same page)
-		if (node.prefix < lower.key_length)
+		if ((lower.key_length == node.prefix + node.length) ||
+			((lower.key_length <= node.prefix + node.length) && partLower))
 		{
-			if (node.prefix + node.length == lower.key_length)
-				skipLowerKey = (memcmp(node.data, lower.key_data + node.prefix, node.length) == 0);
-			else
-				skipLowerKey = false;
-		}
-		else if ((node.prefix == lower.key_length) && node.length)
-		{
-			// In case of multi-segment check segment-number else
-			// it's a different key
-			if (partLower)
+			const UCHAR* p = node.data, *q = lower.key_data + node.prefix;
+			const UCHAR* const end = lower.key_data + lower.key_length;
+			while (q < end)
 			{
-				const USHORT segnum = idx.idx_count - (UCHAR)((idx.idx_flags & idx_descending) ?
-					(*node.data) ^ -1 : *node.data);
+				if (*p++ != *q++)
+				{
+					skipLowerKey = false;
+					break;
+				}
+			}
+
+			if ((q >= end) && (p < node.data + node.length) && skipLowerKey && partLower)
+			{
+				const bool descending = idx.idx_flags & idx_descending;
+
+				// since key length always is multiplier of (STUFF_COUNT + 1) (for partial
+				// compound keys) and we passed lower key completely then p pointed
+				// us to the next segment number and we can use this fact to calculate
+				// how many segments is equal to lower key
+				const USHORT segnum = idx.idx_count - (UCHAR) (descending ? ((*p) ^ -1) : *p);
 
 				if (segnum < retrieval->irb_lower_count)
 					skipLowerKey = false;
 			}
-			else
-				skipLowerKey = false;
+		}
+		else {
+			skipLowerKey = false;
 		}
 	}
 }
@@ -747,35 +755,7 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 			{
 				IndexNode node;
 				node.readNode(pointer, true);
-
-				if ((lower->key_length == node.prefix + node.length) ||
-					((lower->key_length <= node.prefix + node.length) && partLower))
-				{
-					const UCHAR* p = node.data, *q = lower->key_data + node.prefix;
-					const UCHAR* const end = lower->key_data + lower->key_length;
-					while (q < end)
-					{
-						if (*p++ != *q++)
-						{
-							skipLowerKey = false;
-							break;
-						}
-					}
-
-					if ((q >= end) && (p < node.data + node.length) && skipLowerKey && partLower)
-					{
-						// since key length always is multiplier of (STUFF_COUNT + 1) (for partial
-						// compound keys) and we passed lower key completely then p pointed
-						// us to the next segment number and we can use this fact to calculate
-						// how many segments is equal to lower key
-						const USHORT segnum = idx.idx_count - (UCHAR) (descending ? ((*p) ^ -1) : *p);
-
-						if (segnum < retrieval->irb_lower_count)
-							skipLowerKey = false;
-					}
-				}
-				else
-					skipLowerKey = false;
+				checkForLowerKeySkip(skipLowerKey, partLower, node, *lower, idx, retrieval);
 			}
 		}
 		else
@@ -860,7 +840,7 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 
 
 UCHAR* BTR_find_leaf(btree_page* bucket, temporary_key* key, UCHAR* value,
-					 USHORT* return_value, bool descending, bool retrieval)
+					 USHORT* return_value, bool descending, int retrieval)
 {
 /**************************************
  *
@@ -4243,7 +4223,7 @@ static index_root_page* fetch_root(thread_db* tdbb, WIN* window, const jrd_rel* 
 static UCHAR* find_node_start_point(btree_page* bucket, temporary_key* key,
 									UCHAR* value,
 									USHORT* return_value, bool descending,
-									bool retrieval, bool pointer_by_marker,
+									int retrieval, bool pointer_by_marker,
 									RecordNumber find_record_number)
 {
 /**************************************
@@ -4319,8 +4299,20 @@ static UCHAR* find_node_start_point(btree_page* bucket, temporary_key* key,
 			{
 				while (true)
 				{
-					if (q == nodeEnd || (retrieval && p == key_end))
+					if (q == nodeEnd)
 						goto done;
+
+					if (retrieval && p == key_end)
+					{
+						if ((retrieval & irb_partial) && !(retrieval & irb_starting))
+						{
+							// check segment
+							const bool sameSegment = ((p - STUFF_COUNT > key->key_data) && p[-(STUFF_COUNT + 1)] == *q);
+							if (sameSegment)
+								break;
+						}
+						goto done;
+					}
 
 					if (p == key_end || *p > *q)
 						break;
@@ -4381,7 +4373,7 @@ done:
 static UCHAR* find_area_start_point(btree_page* bucket, const temporary_key* key,
 									UCHAR* value,
 									USHORT* return_prefix, bool descending,
-									bool retrieval, RecordNumber find_record_number)
+									int retrieval, RecordNumber find_record_number)
 {
 /**************************************
  *
@@ -4487,7 +4479,17 @@ static UCHAR* find_area_start_point(btree_page* bucket, const temporary_key* key
 
 				if (retrieval && keyPointer == keyEnd)
 				{
-					done = true;
+					if ((retrieval & irb_partial) && !(retrieval & irb_starting))
+					{
+						// check segment
+						const bool sameSegment = ((keyPointer - STUFF_COUNT > key->key_data) && keyPointer[-(STUFF_COUNT + 1)] == *q);
+						if (!sameSegment)
+							done = true;
+					}
+					else
+					{
+						done = true;
+					}
 					break;
 				}
 
@@ -4594,7 +4596,7 @@ static UCHAR* find_area_start_point(btree_page* bucket, const temporary_key* key
 
 static ULONG find_page(btree_page* bucket, const temporary_key* key,
 					   const index_desc* idx, RecordNumber find_record_number,
-					   bool retrieval)
+					   int retrieval)
 {
 /**************************************
  *
@@ -6416,7 +6418,6 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 	// stuff the key to the stuff boundary
 	ULONG count;
 	USHORT flag = retrieval->irb_generic;
-	bool partialEquality = false;
 
 	if ((flag & irb_partial) && (flag & irb_equality) &&
 		!(flag & irb_starting) && !(flag & irb_descending))
@@ -6427,7 +6428,6 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 			key->key_data[key->key_length + i] = 0;
 
 		count += key->key_length;
-		partialEquality = true;
 	}
 	else
 		count = key->key_length;
@@ -6437,13 +6437,13 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 	count -= key->key_length;
 
 	const bool descending = (flag & irb_descending);
+	const bool equality = (flag & irb_equality);
 	const bool ignoreNulls = (flag & irb_ignore_null_value_key) && (idx->idx_count == 1);
 	bool done = false;
 	bool ignore = false;
 	const bool skipUpperKey = (flag & irb_exclude_upper);
 	const bool partLower = (retrieval->irb_lower_count < idx->idx_count);
 	const bool partUpper = (retrieval->irb_upper_count < idx->idx_count);
-	USHORT upperPrefix = prefix;
 
 	// reset irb_equality flag passed for optimization
 	flag &= ~(irb_equality | irb_ignore_null_value_key);
@@ -6485,7 +6485,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 		else if (node.prefix <= prefix)
 		{
 			prefix = node.prefix;
-			upperPrefix = prefix;
+			USHORT byteInSegment = prefix % (STUFF_COUNT + 1);
 			p = key->key_data + prefix;
 			const UCHAR* q = node.data;
 			USHORT l = node.length;
@@ -6493,49 +6493,52 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 			{
 				if (skipUpperKey && partUpper)
 				{
-					if (upperPrefix >= key->key_length)
+					if (p >= end_key && byteInSegment == 0)
 					{
 						const USHORT segnum =
 							idx->idx_count - (UCHAR)(descending ? ((*q) ^ -1) : *q) + 1;
 
-						if (segnum >= retrieval->irb_upper_count)
+						if (segnum > retrieval->irb_upper_count)
+							return false;
+
+						if (segnum == retrieval->irb_upper_count && !descending)
 							return false;
 					}
 
-					if (*p == *q)
-						upperPrefix++;
+					if (++byteInSegment > STUFF_COUNT)
+						byteInSegment = 0;
 				}
 
 				if (p >= end_key)
 				{
 					if (flag)
 					{
-						if (partialEquality)
+						// Check if current node bytes is from the same segment as
+						// last byte of the key. If not, we have equality at that
+						// segment. Else, for ascending index, node is greater than
+						// the key and scan should be stopped.
+						// For descending index, the node is less than the key and
+						// scan shoud be continued.
+
+						if ((flag & irb_partial) && !(flag & irb_starting))
 						{
-							// node have no more data, it is equality
-							if (q >= node.data + node.length)
-								break;
+							if ((p - STUFF_COUNT > key->key_data) && (p[-(STUFF_COUNT + 1)] == *q))
+							{
+								if (descending)
+									break;
 
-							// node contains more bytes than a key, check numbers
-							// of last key segment and current node segment.
-
-							fb_assert(!descending);
-							fb_assert(p - STUFF_COUNT - 1 >= key->key_data);
-
-							const USHORT keySeg = idx->idx_count - p[-STUFF_COUNT - 1];
-							const USHORT nodeSeg = idx->idx_count - *q;
-
-							fb_assert(keySeg <= nodeSeg);
-
-							// If current segment at node is the same as last segment
-							// of the key then node > key.
-							if (keySeg == nodeSeg)
 								return false;
+							}
 
-							// If node segment belongs to the key segments then key contains
-							// null or empty string and node contains some data.
-							if (nodeSeg < retrieval->irb_upper_count)
-								return false;
+							if (equality)
+							{
+								const USHORT nodeSeg = idx->idx_count - (UCHAR) (descending ? ((*q) ^ -1) : *q);
+
+								// If node segment belongs to the key segments then key contains
+								// null or empty string and node contains some data.
+								if (nodeSeg < retrieval->irb_upper_count)
+									return false;
+							}
 						}
 						break;
 					}
