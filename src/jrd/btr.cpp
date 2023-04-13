@@ -6407,6 +6407,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 	count -= key->key_length;
 
 	const bool descending = (flag & irb_descending);
+	const bool equality = (flag & irb_equality);
 	const bool ignoreNulls = (flag & irb_ignore_null_value_key) && (idx->idx_count == 1);
 	bool done = false;
 	bool ignore = false;
@@ -6489,15 +6490,26 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 						// For descending index, the node is less than the key and
 						// scan shoud be continued.
 
-						if ((flag & irb_partial) && !(flag & irb_starting) &&
-							(p - STUFF_COUNT > key->key_data) && (p[-(STUFF_COUNT + 1)] == *q))
+						if ((flag & irb_partial) && !(flag & irb_starting))
 						{
-							if (descending)
-								break;
+							if ((p - STUFF_COUNT > key->key_data) && (p[-(STUFF_COUNT + 1)] == *q))
+							{
+								if (descending)
+									break;
 
-							return false;
+								return false;
+							}
+
+							if (equality)
+							{
+								const USHORT nodeSeg = idx->idx_count - (UCHAR)(descending ? ((*q) ^ -1) : *q);
+
+								// If node segment belongs to the key segments then key contains
+								// null or empty string and node contains some data.
+								if (nodeSeg < retrieval->irb_upper_count)
+									return false;
+							}
 						}
-
 						break;
 					}
 
