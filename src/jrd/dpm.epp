@@ -926,6 +926,8 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 		}
 	}
 
+	const ULONG dpSequence = ppage->ppg_sequence * dbb->dbb_dp_per_pp;
+
 	if (extent && !empty)
 	{
 		CCH_RELEASE(tdbb, window);
@@ -937,6 +939,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 		PPG_DP_BIT_CLEAR(bits, slot, ppg_dp_full);
 
 		CCH_RELEASE(tdbb, &pwindow);
+		relPages->setDPNumber(dpSequence + slot, 0);
 		return;
 	}
 
@@ -956,7 +959,6 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 
 	CCH_MARK(tdbb, &pwindow);
 
-	const ULONG dpSequence = ppage->ppg_sequence * dbb->dbb_dp_per_pp;
 	s = extent ? firstSlot : slot;
 	for (i = 0; i < pages.getCount(); i++, s++)
 	{
