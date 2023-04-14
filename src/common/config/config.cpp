@@ -286,7 +286,7 @@ void Config::loadValues(const ConfigFile& file)
 		const ConfigEntry& entry = entries[i];
 		const ConfigFile::Parameter* par = file.findParameter(entry.key);
 
-		if (par)
+		if (par && (par->hasValue || par->sub))
 		{
 			// Assign the actual value
 
@@ -505,8 +505,8 @@ int Config::getDummyPacketInterval() const
 int Config::getLockMemSize() const
 {
 	int size = get<int>(KEY_LOCK_MEM_SIZE);
-	if (size < 64 * 1024)
-		size = 64 * 1024;
+	if (size < 256 * 1024)
+		size = 256 * 1024;
 	return size;
 }
 
