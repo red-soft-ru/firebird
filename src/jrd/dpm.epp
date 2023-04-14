@@ -1472,19 +1472,22 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 	RelationPages* relPages = rpb->rpb_relation->getPages(tdbb);
 
 	const ULONG dpSequence = rpb->rpb_number.getValue() / dbb->dbb_max_records;
-	ULONG page_number = 0;
+	ULONG page_number = relPages->getDPNumber(dpSequence);
 
-	if ((lock_type == LCK_read) && (page_number = relPages->getDPNumber(dpSequence)))
+	if (page_number)
 	{
 		window->win_page = page_number;
 		data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, lock_type, pag_undefined);
 
-		const bool pageOk =
+		const bool valid_primary =
 			dpage->dpg_header.pag_type == pag_data &&
 			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_orphan)) &&
 			dpage->dpg_relation == rpb->rpb_relation->rel_id &&
 			dpage->dpg_sequence == dpSequence &&
 			(dpage->dpg_count > 0);
+
+		const bool pageOk = valid_primary &&
+			(lock_type == LCK_read || !(dpage->dpg_header.pag_flags & dpg_swept));
 
 		if (pageOk && get_header(window, line, rpb) &&
 			!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
@@ -1496,12 +1499,17 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 
 		if (pageOk)
 			return false;
+
+		if (!valid_primary)
+			relPages->setDPNumber(dpSequence, 0);
 	}
 
 	// Find the pointer page, data page, and record
 	PageNumber ppNum;
 	pointer_page* page = nullptr;
 	USHORT lck = LCK_read;
+	bool pp_swept;
+
 	while (true)
 	{
 		page = get_pointer_page(tdbb, rpb->rpb_relation,
@@ -1511,12 +1519,10 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 			return false;
 
 		page_number = page->ppg_page[slot];
-
-		if (lock_type != LCK_write || !page_number)
-			break;
-
 		UCHAR* bits = (UCHAR*) (page->ppg_page + dbb->dbb_dp_per_pp);
-		if (!PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept) ||
+		pp_swept = PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept);
+
+		if (lock_type != LCK_write || !page_number || !pp_swept ||
 			PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty | ppg_dp_secondary))
 			break;
 
@@ -1530,6 +1536,7 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 			ppNum = window->win_page;
 			CCH_MARK(tdbb, window);
 			PPG_DP_BIT_CLEAR(bits, slot, ppg_dp_swept);
+			pp_swept = false;
 			break;
 		}
 	}
@@ -1539,20 +1546,28 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 		"    record  %" ULONGFORMAT":%d\n", page->ppg_page[slot], line);
 #endif
 
-	relPages->setDPNumber(dpSequence, page_number);
-
 	if (page_number)
 	{
-		CCH_HANDOFF(tdbb, window, page_number, lock_type, pag_data);
+		const data_page* dpage = (data_page*) CCH_HANDOFF(tdbb, window, page_number, lock_type, pag_data);
 
 		// If PP was modified, make DP to be written after PP
 		if (ppNum.getPageNum())
 			CCH_precedence(tdbb, window, ppNum);
 
-		if (get_header(window, line, rpb) &&
-			!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
+		if (dpage->dpg_count > 0 && !(dpage->dpg_header.pag_flags & dpg_secondary))
 		{
-			return true;
+			if (!pp_swept || dpage->dpg_header.pag_flags & dpg_swept)
+			{
+				// Insert the data page into the DP map if it's primary
+				// and the swept flag is in a safe state.
+				relPages->setDPNumber(dpSequence, page_number);
+			}
+
+			if (get_header(window, line, rpb) &&
+				!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
+			{
+				return true;
+			}
 		}
 	}
 
@@ -1799,6 +1814,8 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 				}
 			}
 		}
+		else
+			relPages->setDPNumber(dpSequence, 0);
 
 		CCH_RELEASE(tdbb, window);
 	}
@@ -1816,11 +1833,12 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 		{
 			const ULONG page_number = ppage->ppg_page[slot];
 			const UCHAR* bits = (UCHAR*) (ppage->ppg_page + dbb->dbb_dp_per_pp);
+			const bool pp_swept = PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept);
 			/*fb_assert(PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty) ||
 				!PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary) ||
-				PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept));*/
+				pp_swept);*/
 
-			if (page_number && (sweeper ? !PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept) :
+			if (page_number && (sweeper ? !pp_swept :
 				!PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty | ppg_dp_secondary)) )
 			{
 #ifdef SUPERSERVER_V2
@@ -1858,7 +1876,13 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 					if (dpage->dpg_count > 0 && !(dpage->dpg_header.pag_flags & dpg_secondary))
 					{
 						dpSequence = ppage->ppg_sequence * dbb->dbb_dp_per_pp + slot;
-						relPages->setDPNumber(dpSequence, page_number); // Currently this DP map is used only for primary DPs
+
+						if (!pp_swept || dpage->dpg_header.pag_flags & dpg_swept)
+						{
+							// Insert the data page into the DP map if it's primary
+							// and the swept flag is in a safe state. See DPM_get.
+							relPages->setDPNumber(dpSequence, page_number);
+						}
 
 						for (; line < dpage->dpg_count; ++line)
 						{
