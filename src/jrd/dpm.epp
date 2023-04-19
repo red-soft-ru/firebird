@@ -1486,7 +1486,8 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 			break;
 
 		UCHAR* bits = (UCHAR*) (page->ppg_page + dbb->dbb_dp_per_pp);
-		if (!PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept))
+		if (!PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept) ||
+			PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty | ppg_dp_secondary))
 			break;
 
 		if (lck == LCK_read)
@@ -3455,7 +3456,7 @@ static rhd* locate_space(thread_db* tdbb,
 			// If we going to store primary record on swept data page, we must clear
 			// ppg_dp_swept flag from PP first.
 			const bool dp_is_swept = PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept);
-			const bool must_clear_swept = dp_is_swept && (type == DPM_primary);
+			const bool must_clear_swept = dp_is_swept && (type == DPM_primary) && !dp_is_secondary;
 
 			if (dp_is_empty || must_clear_swept)
 			{
