@@ -3351,16 +3351,12 @@ static rhd* locate_space(thread_db* tdbb,
 			if (slot < ppage->ppg_count && ((dp_primary = ppage->ppg_page[slot])) )
 			{
 				data_page* dpage = (data_page*) CCH_HANDOFF(tdbb, window, dp_primary, LCK_write, pag_data);
+				fb_assert(dpage->dpg_count > 0 && !(dpage->dpg_header.pag_flags & dpg_secondary));
 
+				// The non-empty primary data page is expected here as long as rpb_number is
+				// correctly set before DPM_store call. But it's still safer to handle all cases.
 				if (dpage->dpg_count > 0)
 				{
-					// The non-empty primary data page is expected here but there is a case where
-					// it can be empty or non-empty secondary. See "case tra_us" in prepare_update.
-					// Updating of rpb_number before DPM_store call is missed there but fixing it
-					// doesn't make much sense because if the temp record was not stored on the
-					// primary data page on the first attempt, there is a very small chance that it
-					// will be stored there on the second attempt. Anyway, it's safer to handle all
-					// cases here.
 					const bool primary = !(dpage->dpg_header.pag_flags & dpg_secondary);
 					UCHAR* space = find_space(tdbb, rpb, size, stack, record, type);
 
