@@ -1482,12 +1482,19 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 
 		page_number = page->ppg_page[slot];
 
-		if (lock_type != LCK_write || !page_number)
+		if (!page_number)
 			break;
 
 		UCHAR* bits = (UCHAR*) (page->ppg_page + dbb->dbb_dp_per_pp);
-		if (!PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept) ||
-			PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty | ppg_dp_secondary))
+
+		if (PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty | ppg_dp_secondary))
+		{
+			relPages->setDPNumber(dpSequence, 0);
+			CCH_RELEASE(tdbb, window);
+			return false;
+		}
+
+		if (lock_type != LCK_write || !PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept))
 			break;
 
 		if (lck == LCK_read)
