@@ -1480,7 +1480,9 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 		if (!page)
 			return false;
 
-		if (lock_type != LCK_write)
+		page_number = page->ppg_page[slot];
+
+		if (lock_type != LCK_write || !page_number)
 			break;
 
 		UCHAR* bits = (UCHAR*) (page->ppg_page + dbb->dbb_dp_per_pp);
@@ -1506,18 +1508,18 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 		"    record  %" ULONGFORMAT":%d\n", page->ppg_page[slot], line);
 #endif
 
-	page_number = page->ppg_page[slot];
 	relPages->setDPNumber(dpSequence, page_number);
 	if (page_number)
 	{
 		CCH_HANDOFF(tdbb, window, page_number, lock_type, pag_data);
+
+		// If PP was modified, make DP to be written after PP
+		if (ppNum.getPageNum())
+			CCH_precedence(tdbb, window, ppNum);
+
 		if (get_header(window, line, rpb) &&
 			!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
 		{
-			// If PP was modified, make DP to be written after PP
-			if (ppNum.getPageNum())
-				CCH_precedence(tdbb, window, ppNum);
-
 			return true;
 		}
 	}
