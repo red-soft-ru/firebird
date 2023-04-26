@@ -261,6 +261,38 @@ namespace Jrd {
 		AutoPtr<UCHAR, ArrayDelete> buffer;
 	};
 
+	// Ensures that at least one of attachment's syncs (main or async) is locked
+	class AttachmentAnySyncHolder : public EnsureUnlock<StableAttachmentPart::Sync, NotRefCounted>
+	{
+	public:
+		AttachmentAnySyncHolder(StableAttachmentPart* sAtt)
+			: EnsureUnlock(*(sAtt->getSync(true, true)), FB_FUNCTION),
+			  att(sAtt->getHandle())
+		{
+			if (!sAtt->getSync()->locked())
+				enter();
+		}
+
+		bool hasData()
+		{
+			return att;
+		}
+
+		Attachment* operator->()
+		{
+			return att;
+		}
+
+		operator Attachment*()
+		{
+			return att;
+		}
+
+	private:
+		Attachment* att;
+	};
+
+
 	CryptoManager::CryptoManager(thread_db* tdbb)
 		: PermanentStorage(*tdbb->getDatabase()->dbb_permanent),
 		  sync(this),
@@ -482,7 +514,7 @@ namespace Jrd {
 				if (!keyPlugin->useOnlyOwnKeys(&st))
 				{
 					MutexLockGuard g(holdersMutex, FB_FUNCTION);
-					keyProviders.push(tdbb->getAttachment());
+					keyProviders.add(tdbb->getAttachment()->getStable());
 				}
 				fLoad = true;
 				break;
@@ -617,6 +649,20 @@ namespace Jrd {
 
 		try
 		{
+			// Create local copy of existing attachments
+			Sync dSync(&dbb.dbb_sync, FB_FUNCTION);
+			dSync.lock(SYNC_EXCLUSIVE);
+
+			AttachmentsRefHolder existing;
+			{
+				MutexLockGuard g(holdersMutex, FB_FUNCTION);
+				for (Attachment* att = dbb.dbb_attachments; att; att = att->att_next)
+					existing.add(att->getStable());
+			}
+
+			dSync.unlock();
+
+			// Disable cache I/O
 			BarSync::LockGuard writeGuard(tdbb, sync);
 
 			// header scope
@@ -679,22 +725,16 @@ namespace Jrd {
 
 				if (checkFactory)
 				{
-					// Create local copy of existing attachments
-					AttVector existing;
+					// Loop through attachments
+					for (AttachmentsRefHolder::Iterator iter(existing); *iter; ++iter)
 					{
-						SyncLockGuard dsGuard(&dbb.dbb_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
-						for (Attachment* att = dbb.dbb_attachments; att; att = att->att_next)
-							existing.push(att);
+						AttachmentAnySyncHolder a(*iter);
+						if (a.hasData())
+							validateAttachment(tdbb, a, true);
 					}
 
-					// Loop through attachments
-					MutexLockGuard g(holdersMutex, FB_FUNCTION);
-
-					for (unsigned n = 0; n < existing.getCount(); ++n)
-						validateAttachment(tdbb, existing[n], true);
-
 					// In case of missing providers close consumers
-					if (keyProviders.getCount() == 0)
+					if (!keyProviders.hasData())
 						shutdownConsumers(tdbb);
 				}
 			}
@@ -771,8 +811,12 @@ namespace Jrd {
 	{
 		MutexLockGuard g(holdersMutex, FB_FUNCTION);
 
-		for (unsigned i = 0; i < keyConsumers.getCount(); ++i)
-			keyConsumers[i]->signalShutdown(isc_db_crypt_key);
+		for (AttachmentsRefHolder::Iterator iter(keyConsumers); *iter; ++iter)
+		{
+			AttachmentAnySyncHolder a(*iter);
+			if (a.hasData())
+				a->signalShutdown(isc_db_crypt_key);
+		}
 
 		keyConsumers.clear();
 	}
@@ -830,11 +874,12 @@ namespace Jrd {
 		}
 
 		// Apply results
+		MutexLockGuard g(holdersMutex, FB_FUNCTION);
 
 		if (fProvide)
-			keyProviders.push(att);
+			keyProviders.add(att->getStable());
 		else if (consume && !fLoad)
-			keyConsumers.push(att);
+			keyConsumers.add(att->getStable());
 
 		return fLoad;
 	}
@@ -843,14 +888,13 @@ namespace Jrd {
 	{
 		if (checkFactory)
 		{
-			MutexLockGuard g(holdersMutex, FB_FUNCTION);
-
 			if (!validateAttachment(tdbb, att, false))
 			{
-				if (keyProviders.getCount() == 0)
-					Arg::Gds(isc_db_crypt_key).raise();
+				MutexLockGuard g(holdersMutex, FB_FUNCTION);
 
-				keyConsumers.push(att);
+				if (!keyProviders.hasData())
+					Arg::Gds(isc_db_crypt_key).raise();
+				keyConsumers.add(att->getStable());
 			}
 		}
 
@@ -863,21 +907,25 @@ namespace Jrd {
 			return;
 
 		MutexLockGuard g(holdersMutex, FB_FUNCTION);
-		for (unsigned n = 0; n < keyConsumers.getCount(); ++n)
+		for (AttachmentsRefHolder::Iterator iter(keyConsumers); *iter; ++iter)
 		{
-			if (keyConsumers[n] == att)
+			StableAttachmentPart* const sAtt = *iter;
+
+			if (sAtt->getHandle() == att)
 			{
-				keyConsumers.remove(n);
+				iter.remove();
 				return;
 			}
 		}
 
-		for (unsigned n = 0; n < keyProviders.getCount(); ++n)
+		for (AttachmentsRefHolder::Iterator iter(keyProviders); *iter; ++iter)
 		{
-			if (keyProviders[n] == att)
+			StableAttachmentPart* const sAtt = *iter;
+
+			if (sAtt->getHandle() == att)
 			{
-				keyProviders.remove(n);
-				if (keyProviders.getCount() == 0)
+				iter.remove();
+				if (!keyProviders.hasData())
 					shutdownConsumers(tdbb);
 				return;
 			}
