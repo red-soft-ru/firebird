@@ -39,6 +39,8 @@ namespace Jrd {
 	class StmtNode;
 	class ValueExprNode;
 	class ValueListNode;
+
+	using NodeParseFunc = DmlNode* (*)(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 }
 
 struct dsc;
@@ -74,14 +76,11 @@ Jrd::SortNode*	PAR_sort(Jrd::thread_db*, Jrd::CompilerScratch*, UCHAR, bool);
 Jrd::SortNode*	PAR_sort_internal(Jrd::thread_db*, Jrd::CompilerScratch*, bool, USHORT);
 SLONG			PAR_symbol_to_gdscode(const Firebird::string&);
 
-typedef Jrd::DmlNode* (*NodeParseFunc)(Jrd::thread_db* tdbb, MemoryPool& pool,
-	Jrd::CompilerScratch* csb, const UCHAR blrOp);
-
 Jrd::BoolExprNode* PAR_parse_boolean(Jrd::thread_db* tdbb, Jrd::CompilerScratch* csb);
 Jrd::ValueExprNode* PAR_parse_value(Jrd::thread_db* tdbb, Jrd::CompilerScratch* csb);
 Jrd::StmtNode* PAR_parse_stmt(Jrd::thread_db* tdbb, Jrd::CompilerScratch* csb);
 Jrd::DmlNode* PAR_parse_node(Jrd::thread_db* tdbb, Jrd::CompilerScratch* csb);
-void PAR_register(UCHAR blr, NodeParseFunc parseFunc);
+void PAR_register(UCHAR blr, Jrd::NodeParseFunc parseFunc);
 void PAR_syntax_error(Jrd::CompilerScratch* csb, const TEXT* string);
 void PAR_warning(const Firebird::Arg::StatusVector& v);
 
