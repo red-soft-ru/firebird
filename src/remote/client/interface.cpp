@@ -2077,9 +2077,17 @@ ResultSet* Statement::openCursor(CheckStatusWrapper* status, Firebird::ITransact
 		sqldata->p_sqldata_out_blr.cstr_address = const_cast<UCHAR*>(out_blr);
 		sqldata->p_sqldata_out_message_number = 0;	// out_msg_type
 
-		send_partial_packet(port, packet);
-		defer_packet(port, packet, true);
-		message->msg_address = NULL;
+		if (statement->rsr_flags.test(Rsr::DEFER_EXECUTE))
+		{
+			send_partial_packet(port, packet);
+			defer_packet(port, packet, true);
+		}
+		else
+		{
+			send_packet(rdb->rdb_port, packet);
+			message->msg_address = NULL;
+			receive_response(status, rdb, packet);
+		}
 
 		ResultSet* rs = FB_NEW ResultSet(this, outFormat);
 		rs->addRef();
