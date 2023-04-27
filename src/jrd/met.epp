@@ -685,109 +685,66 @@ void MET_clear_cache(thread_db* tdbb)
 		}
 	}
 
+	const auto walkProcFunc = [&att](std::function<void (Routine*)> func)
+	{
+		for (const auto routine : att->att_procedures)
+		{
+			if (routine)
+				func(routine);
+		}
+
+		for (const auto routine : att->att_functions)
+		{
+			if (routine)
+				func(routine);
+		}
+	};
+
 	// Walk routines and calculate internal dependencies.
 
-	for (jrd_prc** iter = att->att_procedures.begin(); iter != att->att_procedures.end(); ++iter)
+	walkProcFunc([](Routine* routine)
 	{
-		Routine* const routine = *iter;
-
-		if (routine && routine->getStatement() &&
+		if (routine->getStatement() &&
 			!(routine->flags & Routine::FLAG_OBSOLETE) )
 		{
 			inc_int_use_count(routine->getStatement());
 		}
-	}
-
-	for (Function** iter = att->att_functions.begin(); iter != att->att_functions.end(); ++iter)
-	{
-		Function* const routine = *iter;
-
-		if (routine && routine->getStatement() &&
-			!(routine->flags & Routine::FLAG_OBSOLETE) )
-		{
-			inc_int_use_count(routine->getStatement());
-		}
-	}
+	});
 
 	// Walk routines again and adjust dependencies for routines which will not be removed.
 
-	for (jrd_prc** iter = att->att_procedures.begin(); iter != att->att_procedures.end(); ++iter)
+	walkProcFunc([](Routine* routine)
 	{
-		Routine* const routine = *iter;
-
-		if (routine && routine->getStatement() &&
+		if (routine->getStatement() &&
 			!(routine->flags & Routine::FLAG_OBSOLETE) &&
 			routine->useCount != routine->intUseCount )
 		{
 			adjust_dependencies(routine);
 		}
-	}
-
-	for (Function** iter = att->att_functions.begin(); iter != att->att_functions.end(); ++iter)
-	{
-		Function* const routine = *iter;
-
-		if (routine && routine->getStatement() &&
-			!(routine->flags & Routine::FLAG_OBSOLETE) &&
-			routine->useCount != routine->intUseCount )
-		{
-			adjust_dependencies(routine);
-		}
-	}
+	});
 
 	// Deallocate all used requests.
 
-	for (jrd_prc** iter = att->att_procedures.begin(); iter != att->att_procedures.end(); ++iter)
+	walkProcFunc([&tdbb](Routine* routine)
 	{
-		Routine* const routine = *iter;
-
-		if (routine)
+		if (routine->getStatement() && !(routine->flags & Routine::FLAG_OBSOLETE) &&
+			routine->intUseCount >= 0 &&
+			routine->useCount == routine->intUseCount)
 		{
-			if (routine->getStatement() && !(routine->flags & Routine::FLAG_OBSOLETE) &&
-				routine->intUseCount >= 0 &&
-				routine->useCount == routine->intUseCount)
-			{
-				routine->releaseStatement(tdbb);
+			routine->releaseStatement(tdbb);
 
-				if (routine->existenceLock)
-					LCK_release(tdbb, routine->existenceLock);
-				routine->existenceLock = NULL;
-				routine->flags |= Routine::FLAG_OBSOLETE;
-			}
-
-			// Leave it in state 0 to avoid extra pass next time to clear it
-			// Note: we need to adjust intUseCount for all routines
-			// in cache because any of them may have been affected from
-			// dependencies earlier. Even routines that were not scanned yet !
-			routine->intUseCount = 0;
+			if (routine->existenceLock)
+				LCK_release(tdbb, routine->existenceLock);
+			routine->existenceLock = NULL;
+			routine->flags |= Routine::FLAG_OBSOLETE;
 		}
-	}
 
-	for (Function** iter = att->att_functions.begin(); iter != att->att_functions.end(); ++iter)
-	{
-		Function* const routine = *iter;
-
-		if (routine)
-		{
-			if (routine->getStatement() && !(routine->flags & Routine::FLAG_OBSOLETE) &&
-				routine->intUseCount >= 0 &&
-				routine->useCount == routine->intUseCount)
-			{
-				routine->releaseStatement(tdbb);
-
-				if (routine->existenceLock)
-					LCK_release(tdbb, routine->existenceLock);
-				routine->existenceLock = NULL;
-				routine->flags |= Routine::FLAG_OBSOLETE;
-			}
-
-			// Leave it in state 0 to avoid extra pass next time to clear it
-			// Note: we need to adjust intUseCount for all routines
-			// in cache because any of them may have been affected from
-			// dependencies earlier. Even routines that were not scanned yet !
-			routine->intUseCount = 0;
-		}
-	}
+		// Leave it in state 0 to avoid extra pass next time to clear it
+		// Note: we need to adjust intUseCount for all routines
+		// in cache because any of them may have been affected from
+		// dependencies earlier. Even routines that were not scanned yet !
+		routine->intUseCount = 0;
+	});
 
 #ifdef DEV_BUILD
 	MET_verify_cache(tdbb);
