@@ -352,7 +352,7 @@ void TraceManager::update_session(const TraceSession& session)
 
 		t_role.upper();
 		if (s_user != DBA_USER_NAME && t_role != ADMIN_ROLE &&
-			s_user != curr_user && (!priv.test(TRACE_ANY_ATTACHMENT)))
+			(!curr_user || s_user != curr_user) && (!priv.test(TRACE_ANY_ATTACHMENT)))
 		{
 			return;
 		}
