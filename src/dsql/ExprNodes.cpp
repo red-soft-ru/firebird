@@ -12920,11 +12920,10 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 				node->function = declareNode->routine;
 		}
 	}
+	else if (!node->function)
+		node->function = Function::lookup(tdbb, name, false);
 
 	Function* function = node->function;
-
-	if (!function)
-		function = node->function = Function::lookup(tdbb, name, false);
 
 	if (function)
 	{
