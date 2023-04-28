@@ -327,17 +327,17 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		{
 			// try to force core files creation
 			raiseLimit(RLIMIT_CORE);
+		}
 
 #ifdef LINUX
-			// instruct kernel to include shared memory regions into core dump
-			FILE* coreproc = fopen("/proc/self/coredump_filter", "r+");
-			if (coreproc)
-			{
-				fprintf(coreproc, "0x3f\n");
-				fclose(coreproc);
-			}
-#endif
+		// instruct kernel to include shared memory regions into core dump
+		FILE* coreproc = fopen("/proc/self/coredump_filter", "r+");
+		if (coreproc)
+		{
+			fprintf(coreproc, "0x3f\n");
+			fclose(coreproc);
 		}
+#endif
 
 #if (defined SOLARIS || defined HPUX || defined LINUX)
 		if (super)
