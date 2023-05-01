@@ -538,25 +538,68 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 		if (count > procedure->prc_in_count ||
 			count < procedure->prc_in_count - procedure->prc_def_count)
 		{
-			ERRD_post(Arg::Gds(isc_prcmismat) << Arg::Str(procNode->dsqlName.toString()));
+			ERRD_post(Arg::Gds(isc_prcmismat) << procNode->dsqlName.toString());
 		}
 
 		if (count)
 		{
-			// Initialize this stack variable, and make it look like a node
-			dsc desc_node;
 			auto inputList = context->ctx_proc_inputs;
-			auto input = inputList->items.begin();
 
-			for (dsql_fld* field = procedure->prc_inputs;
-				 input != inputList->items.end();
-				 ++input, field = field->fld_next)
+			if (procNode->dsqlInputArgNames)
 			{
-				DEV_BLKCHK(field, dsql_type_fld);
-				DsqlDescMaker::fromField(&desc_node, field);
-				PASS1_set_parameter_type(dsqlScratch, *input,
-					[&] (dsc* desc) { *desc = desc_node; },
-					false);
+				fb_assert(procNode->dsqlInputArgNames->getCount() == inputList->items.getCount());
+
+				LeftPooledMap<MetaName, const dsql_fld*> argsByName;
+
+				for (const auto* field = procedure->prc_inputs; field; field = field->fld_next)
+					argsByName.put(field->fld_name, field);
+
+				bool mismatchError = false;
+				Arg::StatusVector mismatchStatus;
+				mismatchStatus << Arg::Gds(isc_prcmismat) << procNode->dsqlName.toString();
+
+				auto argIt = inputList->items.begin();
+
+				for (const auto& argName : *procNode->dsqlInputArgNames)
+				{
+					if (const auto field = argsByName.get(argName))
+					{
+						dsc descNode;
+						DsqlDescMaker::fromField(&descNode, *field);
+
+						PASS1_set_parameter_type(dsqlScratch, *argIt,
+							[&] (dsc* desc) { *desc = descNode; },
+							false);
+					}
+					else
+					{
+						mismatchError = true;
+						mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
+					}
+
+					++argIt;
+				}
+
+				if (mismatchError)
+					status_exception::raise(mismatchStatus);
+			}
+			else
+			{
+				// Initialize this stack variable, and make it look like a node
+				dsc descNode;
+
+				auto ptr = inputList->items.begin();
+				const auto end = inputList->items.end();
+
+				for (const dsql_fld* field = procedure->prc_inputs; ptr != end; ++ptr, field = field->fld_next)
+				{
+					DEV_BLKCHK(field, dsql_type_fld);
+					DEV_BLKCHK(*ptr, dsql_type_nod);
+					DsqlDescMaker::fromField(&descNode, field);
+					PASS1_set_parameter_type(dsqlScratch, *ptr,
+						[&] (dsc* desc) { *desc = descNode; },
+						false);
+				}
 			}
 		}
 	}
