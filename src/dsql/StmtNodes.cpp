@@ -3226,7 +3226,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 				  Arg::Gds(isc_dsql_procedure_err) <<
 				  Arg::Gds(isc_random) <<
-				  Arg::Str(dsqlName.toString()));
+				  dsqlName.toString());
 	}
 
 	if (!dsqlScratch->isPsql())
@@ -3257,7 +3257,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		bool mismatchError = false;
 		Arg::StatusVector mismatchStatus;
-		mismatchStatus << Arg::Gds(isc_prcmismat) << Arg::Str(dsqlName.toString());
+		mismatchStatus << Arg::Gds(isc_prcmismat) << dsqlName.toString();
 
 		auto argIt = node->inputSources->items.begin();
 
