@@ -987,7 +987,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 
 						inArgCount = blrReader.getWord();
 						node->inputSources = PAR_args(tdbb, csb, inArgCount,
-							(inArgNames ? inArgCount : MAX(inArgCount, node->procedure->getInputFields().getCount())));
+							MAX(inArgCount, node->procedure->getInputFields().getCount()));
 						break;
 
 					case blr_invsel_procedure_context:
@@ -1069,6 +1069,14 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 			fb_assert(false);
 	}
 
+	if (inArgNames && inArgNames->getCount() > node->inputSources->items.getCount())
+	{
+		blrReader.setPos(inArgNamesPos);
+		PAR_error(csb,
+			Arg::Gds(isc_random) <<
+			"blr_invsel_procedure_in_arg_names count cannot be greater than blr_invsel_procedure_in_args");
+	}
+
 	if (!node->procedure)
 	{
 		blrReader.setPos(blrStartPos);
@@ -1119,21 +1127,9 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 		if (!node->inputSources)
 			node->inputSources = FB_NEW_POOL(pool) ValueListNode(pool);
 
-		if (inArgNames && inArgNames->getCount() != node->inputSources->items.getCount())
-		{
-			blrReader.setPos(inArgNamesPos);
-			PAR_error(csb,
-				Arg::Gds(isc_random) <<
-				"blr_invsel_procedure_in_arg_names count differs from blr_invsel_procedure_in_args");
-		}
-
-		Arg::StatusVector mismatchStatus;
-		mismatchStatus << Arg::Gds(isc_prcmismat) << node->procedure->getName().toString();
-		const auto mismatchInitialLength = mismatchStatus.length();
-
 		node->inputTargets = FB_NEW_POOL(pool) ValueListNode(pool, node->procedure->getInputFields().getCount());
 
-		mismatchStatus << CMP_procedure_arguments(
+		Arg::StatusVector mismatchStatus= CMP_procedure_arguments(
 			tdbb,
 			csb,
 			node->procedure,
@@ -1144,8 +1140,8 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 			node->inputTargets,
 			node->inputMessage);
 
-		if (mismatchStatus.length() > mismatchInitialLength)
-			status_exception::raise(mismatchStatus);
+		if (mismatchStatus.hasData())
+			status_exception::raise(Arg::Gds(isc_prcmismat) << node->procedure->getName().toString() << mismatchStatus);
 
 		if (csb->collectingDependencies() && !node->procedure->isSubRoutine())
 		{

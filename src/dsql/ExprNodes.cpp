@@ -12976,7 +12976,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 					predateCheck(node->function, "blr_invoke_function_type", "blr_invoke_function_args");
 
 					argCount = blrReader.getWord();
-					node->args = PAR_args(tdbb, csb, argCount, (argNames ? argCount : MAX(argCount, node->function->fun_inputs)));
+					node->args = PAR_args(tdbb, csb, argCount, MAX(argCount, node->function->fun_inputs));
 					break;
 
 				default:
@@ -13013,6 +13013,14 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 		node->args = PAR_args(tdbb, csb, argCount, node->function->fun_inputs);
 	}
 
+	if (argNames && argNames->getCount() > argCount)
+	{
+		blrReader.setPos(argNamesPos);
+		PAR_error(csb,
+			Arg::Gds(isc_random) <<
+			"blr_invoke_function_arg_names count cannot be greater than blr_invoke_function_args");
+	}
+
 	if (!node->function)
 	{
 		blrReader.setPos(startPos);
@@ -13038,91 +13046,71 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 	node->isSubRoutine = node->function->isSubRoutine();
 
 	Arg::StatusVector mismatchStatus;
-	mismatchStatus << Arg::Gds(isc_fun_param_mismatch) << name.toString();
-	const auto mismatchInitialLength = mismatchStatus.length();
 
 	if (!node->args)
 		node->args = FB_NEW_POOL(pool) ValueListNode(pool);
 
-	if (argNames && argNames->getCount() != node->args->items.getCount())
+	const auto positionalArgCount = argNames ? argCount - argNames->getCount() : argCount;
+	auto argIt = node->args->items.begin();
+	LeftPooledMap<MetaName, NestConst<ValueExprNode>> argsByName;
+
+	if (positionalArgCount)
 	{
-		blrReader.setPos(argNamesPos);
-		PAR_error(csb,
-			Arg::Gds(isc_random) << "blr_invoke_function_arg_names count differs from blr_invoke_function_args");
+		if (argCount > node->function->fun_inputs)
+			mismatchStatus << Arg::Gds(isc_wronumarg);
+
+		for (auto pos = 0; pos < positionalArgCount; ++pos)
+		{
+			if (pos < node->function->fun_inputs)
+			{
+				const auto& parameter = node->function->getInputFields()[pos];
+
+				if (argsByName.put(parameter->prm_name, *argIt))
+					mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << parameter->prm_name;
+			}
+
+			++argIt;
+		}
 	}
 
 	if (argNames)
 	{
-		LeftPooledMap<MetaName, NestConst<ValueExprNode>> argsByName;
-		auto argIt = node->args->items.begin();
-
 		for (const auto& argName : *argNames)
 		{
 			if (argsByName.put(argName, *argIt++))
 				mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << argName;
 		}
-
-		node->args->items.resize(node->function->getInputFields().getCount());
-		argIt = node->args->items.begin();
-
-		for (auto& parameter : node->function->getInputFields())
-		{
-			if (const auto argValue = argsByName.get(parameter->prm_name))
-			{
-				*argIt = *argValue;
-				argsByName.remove(parameter->prm_name);
-			}
-			else
-			{
-				if (parameter->prm_default_value)
-					*argIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
-				else
-					mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
-			}
-
-			++argIt;
-		}
-
-		if (argsByName.hasData())
-		{
-			for (const auto& argPair : argsByName)
-				mismatchStatus << Arg::Gds(isc_param_not_exist) << argPair.first;
-		}
 	}
-	else
+
+	node->args->items.resize(node->function->getInputFields().getCount());
+	argIt = node->args->items.begin();
+
+	for (auto& parameter : node->function->getInputFields())
 	{
-		// Check to see if the argument count matches.
-
-		if (argCount > node->function->fun_inputs)
-			mismatchStatus << Arg::Gds(isc_wronumarg);
-		else if (argCount < node->function->fun_inputs - node->function->getDefaultCount())
+		if (const auto argValue = argsByName.get(parameter->prm_name))
 		{
-			unsigned pos = 0;
-
-			for (auto& parameter : node->function->getInputFields())
-			{
-				if (++pos <= argCount)
-					continue;
-
-				mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
-
-				if (pos >= node->function->fun_inputs - node->function->getDefaultCount())
-					break;
-			}
+			*argIt = *argValue;
+			argsByName.remove(parameter->prm_name);
 		}
 		else
 		{
-			for (unsigned pos = argCount; pos < node->function->getInputFields().getCount(); ++pos)
-			{
-				auto parameter = node->function->getInputFields()[pos];
-				fb_assert(parameter->prm_default_value);
-				node->args->items[pos] = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
-			}
+			if (parameter->prm_default_value)
+				*argIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+			else
+				mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
 		}
+
+		++argIt;
 	}
 
-	if (mismatchStatus.length() > mismatchInitialLength)
-		status_exception::raise(mismatchStatus);
+	if (argsByName.hasData())
+	{
+		for (const auto& argPair : argsByName)
+			mismatchStatus << Arg::Gds(isc_param_not_exist) << argPair.first;
+	}
+
+	if (mismatchStatus.hasData())
+		status_exception::raise(Arg::Gds(isc_fun_param_mismatch) << name.toString() << mismatchStatus);
 
 	// CVC: I will track ufds only if a function is not being dropped.
 	if (!node->function->isSubRoutine() && csb->collectingDependencies())
@@ -13589,20 +13577,31 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				  Arg::Gds(isc_random) << Arg::Str(name.toString()));
 	}
 
+	auto argIt = node->args->items.begin();
+	unsigned pos = 0;
+
+	while (pos < node->args->items.getCount() - (node->dsqlArgNames ? node->dsqlArgNames->getCount() : 0))
+	{
+		if (pos < node->dsqlFunction->udf_arguments.getCount())
+		{
+			PASS1_set_parameter_type(dsqlScratch, *argIt++,
+				[&] (dsc* desc) { *desc = node->dsqlFunction->udf_arguments[pos].desc; },
+				false);
+		}
+
+		++pos;
+	}
+
 	if (node->dsqlArgNames)
 	{
-		fb_assert(node->dsqlArgNames->getCount() == node->args->items.getCount());
+		fb_assert(node->dsqlArgNames->getCount() <= node->args->items.getCount());
 
 		LeftPooledMap<MetaName, const dsc*> argsByName;
 
 		for (const auto& arg : node->dsqlFunction->udf_arguments)
 			argsByName.put(arg.name, &arg.desc);
 
-		bool mismatchError = false;
 		Arg::StatusVector mismatchStatus;
-		mismatchStatus << Arg::Gds(isc_fun_param_mismatch) << Arg::Str(name.toString());
-
-		auto argIt = node->args->items.begin();
 
 		for (const auto& argName : *node->dsqlArgNames)
 		{
@@ -13613,32 +13612,13 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					false);
 			}
 			else
-			{
-				mismatchError = true;
 				mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
-			}
 
 			++argIt;
 		}
 
-		if (mismatchError)
-			status_exception::raise(mismatchStatus);
-	}
-	else
-	{
-		unsigned pos = 0;
-
-		for (auto& arg : node->args->items)
-		{
-			if (pos < node->dsqlFunction->udf_arguments.getCount())
-			{
-				PASS1_set_parameter_type(dsqlScratch, arg,
-					[&] (dsc* desc) { *desc = node->dsqlFunction->udf_arguments[pos].desc; },
-					false);
-			}
-
-			++pos;
-		}
+		if (mismatchStatus.hasData())
+			status_exception::raise(Arg::Gds(isc_fun_param_mismatch) << name.toString() << mismatchStatus);
 	}
 
 	return node;

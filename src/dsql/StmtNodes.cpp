@@ -3003,7 +3003,7 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 						predateCheck(node->procedure, "blr_invsel_procedure_type", "blr_invsel_procedure_in_args");
 						inArgCount = blrReader.getWord();
 						node->inputSources = PAR_args(tdbb, csb, inArgCount,
-							(inArgNames ? inArgCount : MAX(inArgCount, node->procedure->getInputFields().getCount())));
+							MAX(inArgCount, node->procedure->getInputFields().getCount()));
 						break;
 
 					case blr_invsel_procedure_out_arg_names:
@@ -3071,6 +3071,14 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 			break;
 	}
 
+	if (inArgNames && inArgNames->getCount() > node->inputSources->items.getCount())
+	{
+		blrReader.setPos(inArgNamesPos);
+		PAR_error(csb,
+			Arg::Gds(isc_random) <<
+			"blr_invsel_procedure_in_arg_names count cannot be greater than blr_invsel_procedure_in_args");
+	}
+
 	if (!node->procedure)
 	{
 		blrReader.setPos(blrStartPos);
@@ -3091,14 +3099,6 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 
 	if (!node->outputTargets)
 		node->outputTargets = FB_NEW_POOL(pool) ValueListNode(pool);
-
-	if (inArgNames && inArgNames->getCount() != node->inputSources->items.getCount())
-	{
-		blrReader.setPos(inArgNamesPos);
-		PAR_error(csb,
-			Arg::Gds(isc_random) <<
-			"blr_invsel_procedure_in_arg_names count differs from blr_invsel_procedure_in_args");
-	}
 
 	if (outArgNames && outArgNames->getCount() != node->outputTargets->items.getCount())
 	{
@@ -3125,13 +3125,9 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 		}
 	}
 
-	Arg::StatusVector mismatchStatus;
-	mismatchStatus << Arg::Gds(isc_prcmismat) << node->procedure->getName().toString();
-	const auto mismatchInitialLength = mismatchStatus.length();
-
 	node->inputTargets = FB_NEW_POOL(pool) ValueListNode(pool, node->procedure->getInputFields().getCount());
 
-	mismatchStatus << CMP_procedure_arguments(
+	Arg::StatusVector mismatchStatus = CMP_procedure_arguments(
 		tdbb,
 		csb,
 		node->procedure,
@@ -3153,8 +3149,8 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 		node->outputSources,
 		node->outputMessage);
 
-	if (mismatchStatus.length() > mismatchInitialLength)
-		status_exception::raise(mismatchStatus);
+	if (mismatchStatus.hasData())
+		status_exception::raise(Arg::Gds(isc_prcmismat) << node->procedure->getName().toString() << mismatchStatus);
 
 	if (csb->collectingDependencies() && !node->procedure->isSubRoutine())
 	{
@@ -3246,63 +3242,59 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	// Handle input parameters.
 
-	if (node->dsqlInputArgNames)
+	if (inputSources && inputSources->items.hasData())
 	{
-		fb_assert(node->dsqlInputArgNames->getCount() == node->inputSources->items.getCount());
+		auto sourceArgIt = node->inputSources->items.begin();
+		const auto sourceArgEnd = node->inputSources->items.end();
+		const auto positionalArgCount = node->inputSources->items.getCount() -
+			(node->dsqlInputArgNames ? node->dsqlInputArgNames->getCount() : 0);
+		const auto* field = procedure->prc_inputs;
+		unsigned pos = 0;
 
-		LeftPooledMap<MetaName, const dsql_fld*> argsByName;
-
-		for (const auto* field = procedure->prc_inputs; field; field = field->fld_next)
-			argsByName.put(field->fld_name, field);
-
-		bool mismatchError = false;
-		Arg::StatusVector mismatchStatus;
-		mismatchStatus << Arg::Gds(isc_prcmismat) << dsqlName.toString();
-
-		auto argIt = node->inputSources->items.begin();
-
-		for (const auto& argName : *node->dsqlInputArgNames)
+		while (pos < positionalArgCount && field && sourceArgIt != sourceArgEnd)
 		{
-			if (const auto field = argsByName.get(argName))
-			{
-				dsc descNode;
-				DsqlDescMaker::fromField(&descNode, *field);
+			dsc descNode;
+			DsqlDescMaker::fromField(&descNode, field);
 
-				PASS1_set_parameter_type(dsqlScratch, *argIt,
-					[&] (dsc* desc) { *desc = descNode; },
-					false);
-			}
-			else
-			{
-				mismatchError = true;
-				mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
-			}
+			PASS1_set_parameter_type(dsqlScratch, *sourceArgIt,
+				[&] (dsc* desc) { *desc = descNode; },
+				false);
 
-			++argIt;
+			field = field->fld_next;
+			++pos;
+			++sourceArgIt;
 		}
 
-		if (mismatchError)
-			status_exception::raise(mismatchStatus);
-	}
-	else
-	{
-		if (inputSources && inputSources->items.hasData())
+		if (node->dsqlInputArgNames)
 		{
-			// Initialize this stack variable, and make it look like a node.
-			dsc descNode;
+			fb_assert(node->dsqlInputArgNames->getCount() <= node->inputSources->items.getCount());
 
-			auto ptr = node->inputSources->items.begin();
-			const auto end = node->inputSources->items.end();
+			LeftPooledMap<MetaName, const dsql_fld*> argsByName;
 
-			for (const dsql_fld* field = procedure->prc_inputs; field && ptr != end; ++ptr, field = field->fld_next)
+			for (const auto* field = procedure->prc_inputs; field; field = field->fld_next)
+				argsByName.put(field->fld_name, field);
+
+			Arg::StatusVector mismatchStatus;
+
+			for (const auto& argName : *node->dsqlInputArgNames)
 			{
-				DEV_BLKCHK(field, dsql_type_fld);
-				DEV_BLKCHK(*ptr, dsql_type_nod);
-				DsqlDescMaker::fromField(&descNode, field);
-				PASS1_set_parameter_type(dsqlScratch, *ptr,
-					[&] (dsc* desc) { *desc = descNode; },
-					false);
+				if (const auto field = argsByName.get(argName))
+				{
+					dsc descNode;
+					DsqlDescMaker::fromField(&descNode, *field);
+
+					PASS1_set_parameter_type(dsqlScratch, *sourceArgIt,
+						[&] (dsc* desc) { *desc = descNode; },
+						false);
+				}
+				else
+					mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
+
+				++sourceArgIt;
 			}
+
+			if (mismatchStatus.hasData())
+				status_exception::raise(Arg::Gds(isc_prcmismat) << dsqlName.toString() << mismatchStatus);
 		}
 	}
 

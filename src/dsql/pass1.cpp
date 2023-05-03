@@ -544,21 +544,38 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 		if (count)
 		{
 			auto inputList = context->ctx_proc_inputs;
+			auto argIt = inputList->items.begin();
+			const auto argEnd = inputList->items.end();
+
+			const auto positionalArgCount = inputList->items.getCount() -
+				(procNode->dsqlInputArgNames ? procNode->dsqlInputArgNames->getCount() : 0);
+			const auto* field = procedure->prc_inputs;
+			unsigned pos = 0;
+
+			while (pos < positionalArgCount && field && argIt != argEnd)
+			{
+				dsc descNode;
+				DsqlDescMaker::fromField(&descNode, field);
+
+				PASS1_set_parameter_type(dsqlScratch, *argIt,
+					[&] (dsc* desc) { *desc = descNode; },
+					false);
+
+				field = field->fld_next;
+				++pos;
+				++argIt;
+			}
 
 			if (procNode->dsqlInputArgNames)
 			{
-				fb_assert(procNode->dsqlInputArgNames->getCount() == inputList->items.getCount());
+				fb_assert(procNode->dsqlInputArgNames->getCount() <= inputList->items.getCount());
 
 				LeftPooledMap<MetaName, const dsql_fld*> argsByName;
 
 				for (const auto* field = procedure->prc_inputs; field; field = field->fld_next)
 					argsByName.put(field->fld_name, field);
 
-				bool mismatchError = false;
 				Arg::StatusVector mismatchStatus;
-				mismatchStatus << Arg::Gds(isc_prcmismat) << procNode->dsqlName.toString();
-
-				auto argIt = inputList->items.begin();
 
 				for (const auto& argName : *procNode->dsqlInputArgNames)
 				{
@@ -572,34 +589,13 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 							false);
 					}
 					else
-					{
-						mismatchError = true;
 						mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
-					}
 
 					++argIt;
 				}
 
-				if (mismatchError)
-					status_exception::raise(mismatchStatus);
-			}
-			else
-			{
-				// Initialize this stack variable, and make it look like a node
-				dsc descNode;
-
-				auto ptr = inputList->items.begin();
-				const auto end = inputList->items.end();
-
-				for (const dsql_fld* field = procedure->prc_inputs; ptr != end; ++ptr, field = field->fld_next)
-				{
-					DEV_BLKCHK(field, dsql_type_fld);
-					DEV_BLKCHK(*ptr, dsql_type_nod);
-					DsqlDescMaker::fromField(&descNode, field);
-					PASS1_set_parameter_type(dsqlScratch, *ptr,
-						[&] (dsc* desc) { *desc = descNode; },
-						false);
-				}
+				if (mismatchStatus.hasData())
+					status_exception::raise(Arg::Gds(isc_prcmismat) << procNode->dsqlName.toString() << mismatchStatus);
 			}
 		}
 	}
