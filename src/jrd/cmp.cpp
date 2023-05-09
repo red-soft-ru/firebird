@@ -592,8 +592,7 @@ Arg::StatusVector CMP_procedure_arguments(
 				mismatchStatus << Arg::Gds(isc_param_not_exist) << argPair.first;
 		}
 	}
-
-	if (isInput && !argNames)
+	else if (isInput && !argNames)
 	{
 		if (argCount > fields.getCount())
 			mismatchStatus << Arg::Gds(isc_wronumarg);
