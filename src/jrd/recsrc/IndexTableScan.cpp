@@ -186,8 +186,6 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 	const IndexRetrieval* const retrieval = m_index->retrieval;
 	const USHORT flags = retrieval->irb_generic & (irb_descending | irb_partial | irb_starting);
 
-	IndexKey recordKey(tdbb, m_relation, idx);
-
 	do
 	{
 		UCHAR* nextPointer = getPosition(tdbb, impure, &window);
@@ -207,6 +205,8 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 			upper.key_length = impure->irsb_nav_upper_length;
 			memcpy(upper.key_data, impure->irsb_nav_data + m_length, upper.key_length);
 		}
+
+		IndexKey recordKey(tdbb, m_relation, idx);
 
 		// Find the next interesting node. If necessary, skip to the next page.
 		RecordNumber number;

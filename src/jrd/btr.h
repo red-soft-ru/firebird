@@ -376,14 +376,16 @@ public:
 		: m_tdbb(tdbb), m_relation(relation), m_index(idx),
 		  m_keyType((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT),
 		  m_segments(idx->idx_count), m_expression(tdbb, idx)
-	{}
+	{
+		fb_assert(m_index->idx_count);
+	}
 
 	IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx,
 			 USHORT keyType, USHORT segments)
 		: m_tdbb(tdbb), m_relation(relation), m_index(idx),
 		  m_keyType(keyType), m_segments(segments), m_expression(tdbb, idx)
 	{
-		fb_assert(m_segments && m_segments <= idx->idx_count);
+		fb_assert(m_index->idx_count && m_segments && m_segments <= m_index->idx_count);
 	}
 
 	IndexKey(const IndexKey& other)
