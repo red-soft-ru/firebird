@@ -503,6 +503,7 @@ dsc* IndexExpression::evaluate(Record* record) const
 	return result;
 }
 
+// IndexKey class
 
 idx_e IndexKey::compose(Record* record)
 {
@@ -668,6 +669,7 @@ idx_e IndexKey::compose(Record* record)
 
 	return idx_e_ok;
 }
+
 
 void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, RelationPages* relPages)
 {

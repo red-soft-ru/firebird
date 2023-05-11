@@ -333,6 +333,11 @@ class IndexCondition
 {
 public:
 	IndexCondition(thread_db* tdbb, index_desc* idx);
+
+	IndexCondition(const IndexCondition& other)
+		: m_tdbb(other.m_tdbb), m_condition(other.m_condition), m_request(other.m_request)
+	{}
+
 	~IndexCondition();
 
 	bool evaluate(Record* record) const;
@@ -347,6 +352,11 @@ class IndexExpression
 {
 public:
 	IndexExpression(thread_db* tdbb, index_desc* idx);
+
+	IndexExpression(const IndexExpression& other)
+		: m_tdbb(other.m_tdbb), m_expression(other.m_expression), m_request(other.m_request)
+	{}
+
 	~IndexExpression();
 
 	dsc* evaluate(Record* record) const;
@@ -374,6 +384,12 @@ public:
 		  m_keyType(keyType), m_segments(segments), m_expression(tdbb, idx)
 	{
 		fb_assert(m_segments && m_segments <= idx->idx_count);
+	}
+
+	IndexKey(const IndexKey& other)
+		: m_tdbb(other.m_tdbb), m_relation(other.m_relation), m_index(other.m_index),
+		  m_keyType(other.m_keyType), m_segments(other.m_segments), m_expression(other.m_expression)
+	{
 	}
 
 	idx_e compose(Record* record);
