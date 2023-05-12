@@ -535,7 +535,10 @@ idx_e IndexKey::compose(Record* record)
 
 			if (m_index->idx_flags & idx_expression)
 			{
-				desc_ptr = m_expression.evaluate(record);
+				if (!m_expression)
+					m_expression = FB_NEW_POOL(*m_tdbb->getDefaultPool()) IndexExpression(m_tdbb, m_index);
+
+				desc_ptr = m_expression->evaluate(record);
 				// Multi-byte text descriptor is returned already adjusted.
 			}
 			else
