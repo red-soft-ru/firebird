@@ -1143,7 +1143,8 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 			IndexErrorContext context(rpb->rpb_relation, &idx);
 			IndexCondition condition(tdbb, &idx);
 
-			IndexKey key1(tdbb, rpb->rpb_relation, &idx), key2(key1);
+			AutoIndexExpression expression;
+			IndexKey key1(tdbb, rpb->rpb_relation, &idx, expression), key2(key1);
 
 			for (RecordStack::iterator stack1(going); stack1.hasData(); ++stack1)
 			{
@@ -1263,7 +1264,8 @@ void IDX_modify(thread_db* tdbb,
 		IndexErrorContext context(new_rpb->rpb_relation, &idx);
 		idx_e error_code;
 
-		IndexKey newKey(tdbb, new_rpb->rpb_relation, &idx), orgKey(newKey);
+		AutoIndexExpression expression;
+		IndexKey newKey(tdbb, new_rpb->rpb_relation, &idx, expression), orgKey(newKey);
 
 		if ( (error_code = newKey.compose(new_rpb->rpb_record)) )
 		{
@@ -1339,7 +1341,8 @@ void IDX_modify_check_constraints(thread_db* tdbb,
 		IndexErrorContext context(new_rpb->rpb_relation, &idx);
 		idx_e error_code;
 
-		IndexKey newKey(tdbb, new_rpb->rpb_relation, &idx), orgKey(newKey);
+		AutoIndexExpression expression;
+		IndexKey newKey(tdbb, new_rpb->rpb_relation, &idx, expression), orgKey(newKey);
 
 		if ( (error_code = newKey.compose(new_rpb->rpb_record)) )
 		{
@@ -1487,7 +1490,6 @@ void IDX_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		idx_e error_code;
 
 		IndexKey key(tdbb, rpb->rpb_relation, &idx);
-
 		if ( (error_code = key.compose(rpb->rpb_record)) )
 		{
 			CCH_RELEASE(tdbb, &window);

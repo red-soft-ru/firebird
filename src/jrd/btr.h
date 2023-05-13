@@ -367,6 +367,8 @@ private:
 	Request* m_request = nullptr;
 };
 
+typedef Firebird::AutoPtr<IndexExpression> AutoIndexExpression;
+
 // Index key wrapper
 
 class IndexKey
@@ -375,7 +377,15 @@ public:
 	IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
 		: m_tdbb(tdbb), m_relation(relation), m_index(idx),
 		  m_keyType((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT),
-		  m_segments(idx->idx_count)
+		  m_segments(idx->idx_count), m_expression(m_localExpression)
+	{
+		fb_assert(m_index->idx_count);
+	}
+
+	IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx, AutoIndexExpression& expr)
+		: m_tdbb(tdbb), m_relation(relation), m_index(idx),
+		  m_keyType((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT),
+		  m_segments(idx->idx_count), m_expression(expr)
 	{
 		fb_assert(m_index->idx_count);
 	}
@@ -383,7 +393,15 @@ public:
 	IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx,
 			 USHORT keyType, USHORT segments)
 		: m_tdbb(tdbb), m_relation(relation), m_index(idx),
-		  m_keyType(keyType), m_segments(segments)
+		  m_keyType(keyType), m_segments(segments), m_expression(m_localExpression)
+	{
+		fb_assert(m_index->idx_count && m_segments && m_segments <= m_index->idx_count);
+	}
+
+	IndexKey(thread_db* tdbb, jrd_rel* relation, index_desc* idx,
+			 USHORT keyType, USHORT segments, AutoIndexExpression& expr)
+		: m_tdbb(tdbb), m_relation(relation), m_index(idx),
+		  m_keyType(keyType), m_segments(segments), m_expression(expr)
 	{
 		fb_assert(m_index->idx_count && m_segments && m_segments <= m_index->idx_count);
 	}
@@ -445,7 +463,8 @@ private:
 	const USHORT m_keyType;
 	const USHORT m_segments;
 	temporary_key m_key;
-	Firebird::AutoPtr<IndexExpression> m_expression;
+	AutoIndexExpression& m_expression;
+	AutoIndexExpression m_localExpression;
 };
 
 } //namespace Jrd
