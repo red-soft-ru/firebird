@@ -1279,6 +1279,8 @@ void IDX_modify(thread_db* tdbb,
 			context.raise(tdbb, error_code, org_rpb->rpb_record);
 		}
 
+		expression.reset();
+
 		if (newKey != orgKey)
 		{
 			insertion.iib_key = newKey;
@@ -1355,6 +1357,8 @@ void IDX_modify_check_constraints(thread_db* tdbb,
 			CCH_RELEASE(tdbb, &window);
 			context.raise(tdbb, error_code, org_rpb->rpb_record);
 		}
+
+		expression.reset();
 
 		if (newKey != orgKey)
 		{
