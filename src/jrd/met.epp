@@ -2749,8 +2749,21 @@ void MET_lookup_index_expression(thread_db* tdbb, jrd_rel* relation, index_desc*
 }
 
 
-bool MET_lookup_index_expression_blr(thread_db* tdbb, const MetaName& index_name, bid& blob_id)
+bool MET_lookup_index_expr_cond_blr(thread_db* tdbb, const MetaName& index_name, bid& expr_blob_id, bid& cond_blob_id)
 {
+/**************************************
+ *
+ *      M E T _ l o o k u p _ i n d e x _ e x p r _ c o n d _ b l r
+ *
+ **************************************
+ *
+ * Functional description
+ *		Lookup index expression and\or condition blob ID to use it later by many
+ *		attachments and avoid of run of same lookup queries by all of them.
+ *		Used by parallel index creation code.
+ *
+ **************************************/
+
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
 
@@ -2761,8 +2774,9 @@ bool MET_lookup_index_expression_blr(thread_db* tdbb, const MetaName& index_name
 		IDX IN RDB$INDICES WITH
 		IDX.RDB$INDEX_NAME EQ index_name.c_str()
 	{
-		found = !IDX.RDB$EXPRESSION_BLR.NULL;
-		blob_id = IDX.RDB$EXPRESSION_BLR;
+		found = !IDX.RDB$EXPRESSION_BLR.NULL || !IDX.RDB$CONDITION_BLR.NULL;
+		expr_blob_id = IDX.RDB$EXPRESSION_BLR;
+		cond_blob_id = IDX.RDB$CONDITION_BLR;
 	}
 	END_FOR;
 

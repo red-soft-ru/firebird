@@ -230,6 +230,7 @@ public:
 			m_flags |= IS_GBAK;
 
 		m_exprBlob.clear();
+		m_condBlob.clear();
 
 		int workers = 1;
 		if (att->att_parallel_workers > 0)
@@ -254,8 +255,8 @@ public:
 
 			m_countPP = m_creation->relation->getPages(tdbb)->rel_pages->count();
 
-			if ((m_creation->index->idx_flags & idx_expression) && (workers > 1))
-				MET_lookup_index_expression_blr(tdbb, m_creation->index_name, m_exprBlob);
+			if ((m_creation->index->idx_flags & (idx_expression | idx_condition)) && (workers > 1))
+				MET_lookup_index_expr_cond_blr(tdbb, m_creation->index_name, m_exprBlob, m_condBlob);
 		}
 	}
 
@@ -365,6 +366,8 @@ public:
 				{
 					m_idx.idx_expression = NULL;
 					m_idx.idx_expression_statement = NULL;
+					m_idx.idx_condition = NULL;
+					m_idx.idx_condition_statement = NULL;
 					m_idx.idx_foreign_indexes = NULL;
 					m_idx.idx_foreign_primaries = NULL;
 					m_idx.idx_foreign_relations = NULL;
@@ -427,6 +430,7 @@ private:
 	IndexCreation* m_creation;
 	SortOwner m_sorts;
 	bid m_exprBlob;
+	bid m_condBlob;
 
 	Mutex m_mutex;
 	HalfStaticArray<Item*, 8> m_items;
@@ -531,6 +535,19 @@ bool IndexCreateTask::handler(WorkItem& _item)
 
 		idx->idx_expression = static_cast<ValueExprNode*> (MET_parse_blob(tdbb, relation, &m_exprBlob,
 			&csb, &idx->idx_expression_statement, false, false));
+
+		delete csb;
+	}
+
+	if ((idx->idx_flags & idx_condition) && (idx->idx_condition == NULL))
+	{
+		fb_assert(!m_condBlob.isEmpty());
+
+		CompilerScratch* csb = NULL;
+		Jrd::ContextPoolHolder context(tdbb, attachment->createPool());
+
+		idx->idx_condition = static_cast<BoolExprNode*> (MET_parse_blob(tdbb, relation, &m_condBlob,
+			&csb, &idx->idx_condition_statement, false, false));
 
 		delete csb;
 	}
