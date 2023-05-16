@@ -865,16 +865,50 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 	}
 	idx->idx_selectivity = idx_desc->idx_selectivity;
 
+	ISC_STATUS error = 0;
 	if (idx->idx_flags & idx_expression)
 	{
 		MET_lookup_index_expression(tdbb, relation, idx);
-		fb_assert(idx->idx_expression);
+
+		if (!idx->idx_expression)
+		{
+			if (tdbb->tdbb_flags & TDBB_sweeper)
+				return false;
+
+			// Definition of index expression is not found for index @1
+			error = isc_idx_expr_not_found;
+		}
 	}
 
-	if (idx->idx_flags & idx_condition)
+	if (!error && idx->idx_flags & idx_condition)
 	{
 		MET_lookup_index_condition(tdbb, relation, idx);
-		fb_assert(idx->idx_condition);
+
+		if (!idx->idx_condition)
+		{
+			if (tdbb->tdbb_flags & TDBB_sweeper)
+				return false;
+
+			// Definition of index condition is not found for index @1
+			error = isc_idx_cond_not_found;
+		}
+	}
+
+	if (error)
+	{
+		MetaName indexName;
+		MET_lookup_index(tdbb, indexName, relation->rel_name, idx->idx_id + 1);
+
+		Arg::StatusVector status;
+
+		if (indexName.hasData())
+			status.assign(Arg::Gds(error) << indexName);
+		else
+			// there is no index in table @1 with id @2
+			status.assign(Arg::Gds(isc_indexnotdefined) << relation->rel_name << Arg::Num(idx->idx_id));
+
+		ERR_post_nothrow(status);
+		CCH_unwind(tdbb, true);
 	}
 
 	return true;

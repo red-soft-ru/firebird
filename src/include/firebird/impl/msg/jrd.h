@@ -965,3 +965,5 @@ FB_IMPL_MSG(JRD, 963, invalid_blob_util_handle, -402, "42", "000", "Invalid RDB$
 FB_IMPL_MSG(JRD, 964, bad_temp_blob_id, -402, "42", "000", "Invalid temporary BLOB ID")
 FB_IMPL_MSG(JRD, 965, ods_upgrade_err, -901, "HY", "000", "ODS upgrade failed while adding new system %s")
 FB_IMPL_MSG(JRD, 966, bad_par_workers, -924, "HY", "000", "Wrong parallel workers value @1, valid range are from 1 to @2")
+FB_IMPL_MSG(JRD, 967, idx_expr_not_found, -902, "42", "000", "Definition of index expression is not found for index @1")
+FB_IMPL_MSG(JRD, 968, idx_cond_not_found, -902, "42", "000", "Definition of index condition is not found for index @1")
