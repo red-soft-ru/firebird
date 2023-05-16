@@ -6077,13 +6077,13 @@ parenthesized_joined_table
 
 %type <selectExprNode> derived_table
 derived_table
-	: '(' select_expr ')' as_noise correlation_name derived_column_list
+	: '(' select_expr ')' correlation_name_opt derived_column_list
 		{
 			$$ = $2;
 			$$->dsqlFlags |= RecordSourceNode::DFLAG_DERIVED;
-			if ($5)
-				$$->alias = $5->c_str();
-			$$->columns = $6;
+			if ($4)
+				$$->alias = $4->c_str();
+			$$->columns = $5;
 		}
 	;
 
@@ -6096,10 +6096,11 @@ lateral_derived_table
 		}
 	;
 
-%type <metaNamePtr> correlation_name
-correlation_name
-	: /* nothing */				{ $$ = NULL; }
+%type <metaNamePtr> correlation_name_opt
+correlation_name_opt
+	: /* nothing */					{ $$ = nullptr; }
 	| symbol_table_alias_name
+	| AS symbol_table_alias_name	{ $$ = $2; }
 	;
 
 %type <metaNameArray> derived_column_list
