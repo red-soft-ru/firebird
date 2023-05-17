@@ -115,6 +115,7 @@ PAS_ROOT=$(MISC)/pascal
 PASCAL_SOURCES=$(wildcard $(PAS_ROOT)/*)
 TMP_FUNCS=$(TMP_ROOT)/func.pas
 XPB_CONSTS=$(SRC_ROOT)/include/firebird/impl/consts_pub.h
+INF_CONSTS=$(SRC_ROOT)/include/firebird/impl/inf_pub.h
 ERR_CONSTS=$(ROOT)/lang_helpers/gds_codes.pas
 RPL_AWK=$(GEN_ROOT)/def_awk
 RPL_AWK_SRC=$(MISC)/def_awk.c
@@ -142,9 +143,10 @@ $(RPL_AWK):	$(RPL_AWK_SRC)
 $(RPL_GREP): $(RPL_GREP_SRC)
 	$(CC) -o $@ $^
 
-$(TMP_FUNCS): $(PASCAL_SOURCES) $(XPB_CONSTS) $(ERR_CONSTS) $(RPL_AWK) $(RPL_GREP)
+$(TMP_FUNCS): $(PASCAL_SOURCES) $(XPB_CONSTS) $(INF_CONSTS) $(ERR_CONSTS) $(RPL_AWK) $(RPL_GREP)
 	cp $(PAS_ROOT)/fb_get_master_interface.pas $(TMP_FUNCS)
 	$(RPL_AWK) <$(XPB_CONSTS) >>$(TMP_FUNCS)
+	$(RPL_AWK) <$(INF_CONSTS) >>$(TMP_FUNCS)
 	$(RPL_GREP) <$(ERR_CONSTS) >>$(TMP_FUNCS)
 
 $(API_PAS_FILE): $(IDL_FILE) $(PASCAL_SOURCES) $(TMP_FUNCS)
