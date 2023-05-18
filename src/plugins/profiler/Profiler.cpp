@@ -44,6 +44,8 @@ namespace
 
 class ProfilerPlugin;
 
+constexpr unsigned MAX_ACCESS_PATH_CHAR_LEN = 255;
+
 auto& defaultPool()
 {
 	return *getDefaultMemoryPool();
@@ -416,7 +418,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 		(FB_INTEGER, cursorId)
 		(FB_INTEGER, recordSourceId)
 		(FB_INTEGER, parentRecordSourceId)
-		(FB_INTL_VARCHAR(1024 * 4, CS_UTF8), accessPath)
+		(FB_INTL_VARCHAR(MAX_ACCESS_PATH_CHAR_LEN * 4, CS_UTF8), accessPath)
 	) recSrcMessage(status, MasterInterfacePtr());
 	recSrcMessage.clear();
 
@@ -998,7 +1000,7 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		    cursor_id integer not null,
 		    record_source_id integer not null,
 		    parent_record_source_id integer,
-		    access_path varchar(1024) character set utf8 not null,
+		    access_path varchar(255) character set utf8 not null,
 		    constraint plg$prof_record_sources_pk
 		        primary key (profile_id, statement_id, cursor_id, record_source_id)
 		        using index plg$prof_record_sources_profile_statement_cursor_recsource,
@@ -1400,8 +1402,6 @@ void Session::defineRecordSource(SINT64 statementId, unsigned cursorId, unsigned
 		return;
 
 	recSource->accessPath = accessPath;
-
-	constexpr unsigned MAX_ACCESS_PATH_CHAR_LEN = 1024;
 
 	if (unsigned len = recSource->accessPath.length(); len > MAX_ACCESS_PATH_CHAR_LEN)
 	{
