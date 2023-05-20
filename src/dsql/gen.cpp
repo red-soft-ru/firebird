@@ -156,6 +156,7 @@ void GEN_expr(DsqlCompilerScratch* dsqlScratch, ExprNode* node)
 void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 {
 	thread_db* tdbb = JRD_get_thread_data();
+	const bool binaryOrNoneConnectionCharSet = tdbb->getCharSet() == CS_NONE || tdbb->getCharSet() == CS_BINARY;
 
 	dsqlScratch->appendUChar(blr_message);
 	dsqlScratch->appendUChar(message->msg_number);
@@ -174,8 +175,7 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 		const USHORT toCharSet = (fromCharSet == CS_NONE || fromCharSet == CS_BINARY) ?
 			fromCharSet : tdbb->getCharSet();
 
-		if (parameter->par_desc.dsc_dtype <= dtype_any_text &&
-			tdbb->getCharSet() != CS_NONE && tdbb->getCharSet() != CS_BINARY)
+		if (parameter->par_desc.dsc_dtype <= dtype_any_text)
 		{
 			USHORT adjust = 0;
 			if (parameter->par_desc.dsc_dtype == dtype_varying)
@@ -185,11 +185,16 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 
 			parameter->par_desc.dsc_length -= adjust;
 
-			const USHORT fromCharSetBPC = METD_get_charset_bpc(dsqlScratch->getTransaction(), fromCharSet);
-			const USHORT toCharSetBPC = METD_get_charset_bpc(dsqlScratch->getTransaction(), toCharSet);
+			const USHORT fromCharSetBPC = binaryOrNoneConnectionCharSet ?
+				1 : METD_get_charset_bpc(dsqlScratch->getTransaction(), fromCharSet);
+			const USHORT toCharSetBPC = binaryOrNoneConnectionCharSet ?
+				1 : METD_get_charset_bpc(dsqlScratch->getTransaction(), toCharSet);
 
-			parameter->par_desc.setTextType(INTL_CS_COLL_TO_TTYPE(toCharSet,
-				(fromCharSet == toCharSet ? INTL_GET_COLLATE(&parameter->par_desc) : 0)));
+			if (!binaryOrNoneConnectionCharSet)
+			{
+				parameter->par_desc.setTextType(INTL_CS_COLL_TO_TTYPE(toCharSet,
+					(fromCharSet == toCharSet ? INTL_GET_COLLATE(&parameter->par_desc) : 0)));
+			}
 
 			parameter->par_desc.dsc_length = UTLD_char_length_to_byte_length(
 				parameter->par_desc.dsc_length / fromCharSetBPC, toCharSetBPC, adjust);
@@ -198,7 +203,7 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 		}
 		else if (parameter->par_desc.dsc_dtype == dtype_blob &&
 			parameter->par_desc.dsc_sub_type == isc_blob_text &&
-			tdbb->getCharSet() != CS_NONE && tdbb->getCharSet() != CS_BINARY)
+			!binaryOrNoneConnectionCharSet)
 		{
 			if (fromCharSet != toCharSet)
 				parameter->par_desc.setTextType(toCharSet);
