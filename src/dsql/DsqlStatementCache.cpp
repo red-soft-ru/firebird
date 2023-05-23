@@ -197,18 +197,20 @@ void DsqlStatementCache::purge(thread_db* tdbb, bool releaseLock)
 		inactiveStatementList.clear();
 
 		cacheSize = 0;
-
-		if (!releaseLock)
-		{
-			ThreadStatusGuard tempStatus(tdbb);
-
-			const bool ret = LCK_convert(tdbb, lock, LCK_SR, LCK_NO_WAIT); // never fails
-			fb_assert(ret);
-		}
 	}
 
-	if (releaseLock && lock)
+	if (!lock)
+		return;
+
+	if (releaseLock)
 		LCK_release(tdbb, lock);
+	else
+	{
+		ThreadStatusGuard tempStatus(tdbb);
+
+		const bool ret = LCK_convert(tdbb, lock, LCK_SR, LCK_NO_WAIT); // never fails
+		fb_assert(ret);
+	}
 }
 
 void DsqlStatementCache::purgeAllAttachments(thread_db* tdbb)
