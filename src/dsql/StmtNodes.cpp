@@ -7723,26 +7723,26 @@ const StmtNode* UserSavepointNode::execute(thread_db* tdbb, jrd_req* request, Ex
 	if (request->req_operation == jrd_req::req_evaluate &&
 		!(transaction->tra_flags & TRA_system))
 	{
+		Savepoint* savepoint = nullptr, *previous = transaction->tra_save_point;
+
 		// Skip the savepoint created by EXE_start
-		Savepoint* const previous = transaction->tra_save_point;
-
-		// Find savepoint
-		Savepoint* savepoint = NULL;
-
-		for (Savepoint::Iterator iter(previous); *iter; ++iter)
+		if (const auto start = previous ? previous->getNext() : nullptr)
 		{
-			Savepoint* const current = *iter;
-
-			if (current == previous)
-				continue;
-
-			if (current->isSystem())
-				break;
-
-			if (current->getName() == name)
+			// Find savepoint
+			for (Savepoint::Iterator iter(start); *iter; ++iter)
 			{
-				savepoint = current;
-				break;
+				const auto current = *iter;
+
+				if (current->isSystem())
+					break;
+
+				if (current->getName() == name)
+				{
+					savepoint = current;
+					break;
+				}
+
+				previous = current;
 			}
 		}
 
