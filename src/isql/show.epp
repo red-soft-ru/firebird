@@ -910,7 +910,6 @@ processing_state SHOW_grants2 (const SCHAR* object,
 	char priv_string[MAX_PRIV_LIST] = "";
 	string col_string;
 	char with_option[19] = "";
-	SSHORT prev_field_null = -1;
 	USHORT priv_flags = 0;
 
 	if (obj_type == obj_relation || obj_type == obj_any)
@@ -982,7 +981,6 @@ processing_state SHOW_grants2 (const SCHAR* object,
 
 				strcpy (prev_user, PRV.RDB$USER);
 				prev_grant_option = PRV.RDB$GRANT_OPTION;
-				prev_field_null = PRV.RDB$FIELD_NAME.NULL;
 				strcpy (prev_grantor, PRV.RDB$GRANTOR);
 
 				switch (PRV.RDB$USER_TYPE)
