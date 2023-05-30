@@ -8228,8 +8228,8 @@ bool get_sql_roles(BurpGlobals* tdgbl)
 			X.RDB$ROLE_NAME.NULL = TRUE;
 			X.RDB$OWNER_NAME.NULL = TRUE;
 			X.RDB$DESCRIPTION.NULL = TRUE;
+			memset(X.RDB$SYSTEM_PRIVILEGES, 0, sizeof(X.RDB$SYSTEM_PRIVILEGES));
 			X.RDB$SYSTEM_FLAG = 0;
-			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 
 			skip_init(&scan_next_attr);
 			while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
