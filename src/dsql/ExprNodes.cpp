@@ -12771,10 +12771,11 @@ void UdfCallNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 	// pointer.
 	desc->setNullable(true);
 
-	if (desc->dsc_dtype <= dtype_any_text)
-		desc->dsc_ttype() = dsqlFunction->udf_character_set_id;
-	else
+	if (!desc->isText())
 		desc->dsc_ttype() = dsqlFunction->udf_sub_type;
+
+	if (desc->isText() || (desc->isBlob() && desc->getBlobSubType() == isc_blob_text))
+		desc->setTextType(dsqlFunction->udf_character_set_id);
 }
 
 void UdfCallNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* desc)
