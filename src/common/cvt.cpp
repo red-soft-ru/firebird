@@ -140,6 +140,7 @@ static void integer_to_text(const dsc*, dsc*, Callbacks*);
 static void int128_to_text(const dsc*, dsc*, Callbacks* cb);
 static void localError(const Firebird::Arg::StatusVector&);
 static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err);
+static void make_null_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
 
 class DummyException {};
 
@@ -2129,6 +2130,20 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
 			const USHORT length =
 				CVT_make_string(desc, ttype_ascii, &p, &s, sizeof(s), 0, localError);
 			message.assign(p, length);
+
+			// Convert to \xDD surely non-printable characters
+			for (FB_SIZE_T n = 0; n < message.getCount(); ++n)
+			{
+				if (message[n] == '\\')
+					message.insert(n++, 1, '\\');
+				else if (message[n] < ' ')
+				{
+					string hex;
+					hex.printf("\\x%02x", UCHAR(message[n]));
+					message.replace(n, 1, hex);
+					n += (hex.length() - 1);
+				}
+			}
 		}
 		/*
 		catch (status_exception& e)
@@ -2300,13 +2315,13 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 }
 
 
-void CVT_make_null_string(const dsc*    desc,
-						  USHORT        to_interp,
-						  const char**  address,
-						  vary*         temp,
-						  USHORT        length,
-						  DecimalStatus decSt,
-						  ErrorFunction err)
+void make_null_string(const dsc*    desc,
+					  USHORT        to_interp,
+					  const char**  address,
+					  vary*         temp,
+					  USHORT        length,
+					  DecimalStatus decSt,
+					  ErrorFunction err)
 {
 /**************************************
  *
@@ -2339,6 +2354,12 @@ void CVT_make_null_string(const dsc*    desc,
 
 	fb_assert(temp->vary_length == len);
 	temp->vary_string[len] = 0;
+
+	for (USHORT n = 0; n < len; ++n)
+	{
+		if (!temp->vary_string[n])		// \0 in the middle of a string
+			CVT_conversion_error(desc, err);
+	}
 }
 
 
@@ -2960,6 +2981,15 @@ USHORT CVT_get_string_ptr_common(const dsc* desc, USHORT* ttype, UCHAR** address
 }
 
 
+static void checkForIndeterminant(const Exception& e, const dsc* desc, ErrorFunction err)
+{
+	StaticStatusVector st;
+	e.stuffException(st);
+	if (fb_utils::containsErrorCode(st.begin(), isc_decfloat_invalid_operation))
+		CVT_conversion_error(desc, err);
+}
+
+
 static inline void SINT64_to_SQUAD(const SINT64 input, const SQUAD& value)
 {
 	((SLONG*) &value)[LOW_WORD] = (SLONG) (input & 0xffffffff);
@@ -3008,8 +3038,16 @@ Decimal64 CVT_get_dec64(const dsc* desc, DecimalStatus decSt, ErrorFunction err)
 		case dtype_varying:
 		case dtype_cstring:
 		case dtype_text:
-			CVT_make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
-			return d64.set(buffer.vary_string, decSt);
+			make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
+			try
+			{
+				return d64.set(buffer.vary_string, decSt);
+			}
+			catch (const Exception& e)
+			{
+				checkForIndeterminant(e, desc, err);
+				throw;
+			}
 
 		case dtype_real:
 			return d64.set(*((float*) p), decSt);
@@ -3084,8 +3122,16 @@ Decimal128 CVT_get_dec128(const dsc* desc, DecimalStatus decSt, ErrorFunction er
 		case dtype_varying:
 		case dtype_cstring:
 		case dtype_text:
-			CVT_make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
-			return d128.set(buffer.vary_string, decSt);
+			make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
+			try
+			{
+				return d128.set(buffer.vary_string, decSt);
+			}
+			catch (const Exception& e)
+			{
+				checkForIndeterminant(e, desc, err);
+				throw;
+			}
 
 		case dtype_real:
 			return d128.set(*((float*) p), decSt);
