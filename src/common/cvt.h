@@ -85,7 +85,7 @@ class Int128;
 } // namespace Firebird
 
 
-void CVT_conversion_error(const dsc*, ErrorFunction);
+void CVT_conversion_error(const dsc*, ErrorFunction, const Firebird::Exception* = nullptr);
 double CVT_power_of_ten(const int);
 SLONG CVT_get_long(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
 bool CVT_get_boolean(const dsc*, ErrorFunction);

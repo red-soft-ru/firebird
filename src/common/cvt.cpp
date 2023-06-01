@@ -57,6 +57,7 @@
 #include "../common/dsc_proto.h"
 #include "../common/utils_proto.h"
 #include "../common/StatusArg.h"
+#include "../common/status.h"
 
 
 #ifdef HAVE_SYS_TYPES_H
@@ -2083,7 +2084,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 }
 
 
-void CVT_conversion_error(const dsc* desc, ErrorFunction err)
+void CVT_conversion_error(const dsc* desc, ErrorFunction err, const Exception* original)
 {
 /**************************************
  *
@@ -2134,12 +2135,10 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
 			// Convert to \xDD surely non-printable characters
 			for (FB_SIZE_T n = 0; n < message.getCount(); ++n)
 			{
-				if (message[n] == '\\')
-					message.insert(n++, 1, '\\');
-				else if (message[n] < ' ')
+				if (message[n] < ' ')
 				{
 					string hex;
-					hex.printf("\\x%02x", UCHAR(message[n]));
+					hex.printf("#x%02x", UCHAR(message[n]));
 					message.replace(n, 1, hex);
 					n += (hex.length() - 1);
 				}
@@ -2166,7 +2165,11 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
 	}
 
 	//// TODO: Need access to transliterate here to convert message to metadata charset.
-	err(Arg::Gds(isc_convert_error) << message);
+	Arg::StatusVector vector;
+	if (original)
+		vector.assign(*original);
+	vector << Arg::Gds(isc_convert_error) << message;
+	err(vector);
 }
 
 
@@ -2986,7 +2989,7 @@ static void checkForIndeterminant(const Exception& e, const dsc* desc, ErrorFunc
 	StaticStatusVector st;
 	e.stuffException(st);
 	if (fb_utils::containsErrorCode(st.begin(), isc_decfloat_invalid_operation))
-		CVT_conversion_error(desc, err);
+		CVT_conversion_error(desc, err, &e);
 }
 
 
