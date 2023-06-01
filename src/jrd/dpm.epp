@@ -3543,14 +3543,6 @@ static rhd* locate_space(thread_db* tdbb,
 					continue;
 				}
 
-				// Note, when ppg_dp_swept flag is cleared, precedence must
-				// be set to write DP after PP.
-
-				if (must_clear_swept)
-					stack.push(window->win_page);
-				else
-					CCH_precedence(tdbb, window, dp_number);
-
 				CCH_MARK(tdbb, window);
 
 				if (dp_is_empty)
@@ -3586,6 +3578,13 @@ static rhd* locate_space(thread_db* tdbb,
 
 				if (dpage)
 				{
+					// Note, when ppg_dp_swept flag is cleared, the precedence must be set to write DP after PP.
+					// We have to do it now even if this DP won't be modified by find_space below.
+					// Otherwise the precedence can be lost for future updates of records on this DP because
+					// it's not going to be set in a case when ppg_dp_swept flag is already cleared.
+					if (must_clear_swept)
+						CCH_precedence(tdbb, window, pp_number);
+
 					UCHAR* space = find_space(tdbb, rpb, size, stack, record, type);
 					if (space)
 					{
