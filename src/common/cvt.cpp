@@ -3123,15 +3123,16 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 {
 /**************************************
  *
- *      C V T _ g e t _ d e c 1 2 8
+ *      C V T _ g e t _ i n t 1 2 8
  *
  **************************************
  *
  * Functional description
- *      Convert something arbitrary to a DecFloat(34) / (128 bit).
+ *      Convert something arbitrary to an INT128 (128 bit integer)
+ *      of given scale.
  *
  **************************************/
-	VaryStr<1024> buffer;			// represents unreasonably long decfloat literal in ASCII
+	VaryStr<1024> buffer;			// represents unreasonably INT128 literal in ASCII
 	Int128 int128;
 	Decimal128 tmp;
 	double d, eps;
