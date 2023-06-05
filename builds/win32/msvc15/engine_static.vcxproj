@@ -172,6 +172,7 @@
     <ClCompile Include="..\..\..\src\jrd\trace\TraceManager.cpp" />
     <ClCompile Include="..\..\..\src\jrd\trace\TraceObjects.cpp" />
     <ClCompile Include="..\..\..\src\jrd\trace\TraceService.cpp" />
+    <ClCompile Include="..\..\..\src\utilities\strace\ServerTraceManager.cpp" />
     <ClCompile Include="..\..\..\src\jrd\UserManagement.cpp" />
     <ClCompile Include="..\..\..\src\jrd\validation.cpp" />
     <ClCompile Include="..\..\..\src\jrd\vio.cpp" />

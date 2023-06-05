@@ -204,6 +204,9 @@
     <ClCompile Include="..\..\..\src\jrd\trace\TraceService.cpp">
       <Filter>JRD files\Trace</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\utilities\strace\ServerTraceManager.cpp">
+      <Filter>JRD files\Trace</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\VirtualTable.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>

@@ -50,68 +50,32 @@ namespace
 
 namespace Jrd {
 
-GlobalPtr<StorageInstance, InstanceControl::PRIORITY_DELETE_FIRST> TraceManager::storageInstance;
-TraceManager::Factories* TraceManager::factories = NULL;
-GlobalPtr<RWLock> TraceManager::init_factories_lock;
-volatile bool TraceManager::init_factories;
-
-
-bool TraceManager::check_result(ITracePlugin* plugin, const char* module, const char* function,
-	bool result)
-{
-	if (result)
-		return true;
-
-	if (!plugin)
-	{
-		gds__log("Trace plugin %s returned error on call %s, "
-			"did not create plugin and provided no additional details on reasons of failure",
-			module, function);
-		return false;
-	}
-
-	const char* errorStr = plugin->trace_get_error();
-
-	if (!errorStr)
-	{
-		gds__log("Trace plugin %s returned error on call %s, "
-			"but provided no additional details on reasons of failure", module, function);
-		return false;
-	}
-
-	gds__log("Trace plugin %s returned error on call %s.\n\tError details: %s",
-		module, function, errorStr);
-	return false;
-}
 
 TraceManager::TraceManager(Attachment* in_att) :
+	ServerTraceManager(NULL, *in_att->att_pool),
 	attachment(in_att),
 	service(NULL),
-	filename(NULL),
 	callback(NULL),
-	trace_sessions(*in_att->att_pool),
 	active(false)
 {
 	init();
 }
 
 TraceManager::TraceManager(Service* in_svc) :
+	ServerTraceManager(NULL, in_svc->getPool()),
 	attachment(NULL),
 	service(in_svc),
-	filename(NULL),
 	callback(NULL),
-	trace_sessions(in_svc->getPool()),
 	active(true)
 {
 	init();
 }
 
 TraceManager::TraceManager(const char* in_filename, ICryptKeyCallback* cb, bool failed) :
+	ServerTraceManager(in_filename, *getDefaultMemoryPool()),
 	attachment(NULL),
 	service(NULL),
-	filename(in_filename),
 	callback(cb),
-	trace_sessions(*getDefaultMemoryPool()),
 	active(true),
 	failedAttach(failed)
 {
@@ -130,49 +94,6 @@ void TraceManager::init()
 	changeNumber = 0;
 }
 
-void TraceManager::load_plugins()
-{
-	// Initialize all trace needs to false
-	trace_needs = 0;
-
-	if (init_factories)
-		return;
-
-	WriteLockGuard guard(init_factories_lock, FB_FUNCTION);
-	if (init_factories)
-		return;
-
-	factories = FB_NEW_POOL(*getDefaultMemoryPool()) TraceManager::Factories(*getDefaultMemoryPool());
-	for (GetPlugins<ITraceFactory> traceItr(IPluginManager::TYPE_TRACE); traceItr.hasData(); traceItr.next())
-	{
-		FactoryInfo info;
-		info.factory = traceItr.plugin();
-		info.factory->addRef();
-		string name(traceItr.name());
-		name.copyTo(info.name, sizeof(info.name));
-		factories->add(info);
-	}
-
-	init_factories = true;
-}
-
-
-void TraceManager::shutdown()
-{
-	if (init_factories)
-	{
-		WriteLockGuard guard(init_factories_lock, FB_FUNCTION);
-
-		if (init_factories)
-		{
-			init_factories = false;
-			delete factories;
-			factories = NULL;
-		}
-	}
-
-	getStorage()->shutdown();
-}
 
 
 void TraceManager::update_sessions()
@@ -182,48 +103,10 @@ void TraceManager::update_sessions()
 		return;
 
 	MemoryPool& pool = *getDefaultMemoryPool();
-	SortedArray<ULONG, InlineStorage<ULONG, 64> > liveSessions(pool);
 	HalfStaticArray<TraceSession*, 64> newSessions(pool);
 
-	{	// scope
-		ConfigStorage* storage = getStorage();
+	reload_sessions_lists(newSessions);
 
-		StorageGuard guard(storage);
-		storage->restart();
-
-		TraceSession session(pool);
-		while (storage->getNextSession(session, ConfigStorage::FLAGS))
-		{
-			if ((session.ses_flags & trs_active) && !(session.ses_flags & trs_log_full))
-			{
-				FB_SIZE_T pos;
-				if (trace_sessions.find(session.ses_id, pos))
-					liveSessions.add(session.ses_id);
-				else
-				{
-					storage->getSession(session, ConfigStorage::ALL);
-					newSessions.add(FB_NEW_POOL(pool) TraceSession(pool, session));
-				}
-			}
-		}
-
-		changeNumber = storage->getChangeNumber();
-	}
-
-	// remove sessions not present in storage
-	FB_SIZE_T i = 0;
-	while (i < trace_sessions.getCount())
-	{
-		FB_SIZE_T pos;
-		if (liveSessions.find(trace_sessions[i].ses_id, pos)) {
-			i++;
-		}
-		else
-		{
-			trace_sessions[i].plugin->release();
-			trace_sessions.remove(i);
-		}
-	}
 
 	// add new sessions
 	new_needs = trace_needs;
@@ -447,37 +330,6 @@ void TraceManager::event_dsql_restart(Attachment* att, jrd_tra* transaction,
 											   (unsigned) number);
 }
 
-#define EXECUTE_HOOKS(METHOD, PARAMS) \
-	FB_SIZE_T i = 0; \
-	while (i < trace_sessions.getCount()) \
-	{ \
-		SessionInfo* plug_info = &trace_sessions[i]; \
-		if (check_result(plug_info->plugin, plug_info->factory_info->name, #METHOD, \
-			plug_info->plugin->METHOD PARAMS)) \
-		{ \
-			i++; /* Move to next plugin */ \
-		} \
-		else { \
-			trace_sessions.remove(i); /* Remove broken plugin from the list */ \
-		} \
-	}
-
-
-void TraceManager::event_attach(ITraceDatabaseConnection* connection,
-		bool create_db, ntrace_result_t att_result)
-{
-	EXECUTE_HOOKS(trace_attach,
-		(connection, create_db, att_result));
-
-	trace_needs &= ~(FB_CONST64(1) << ITraceFactory::TRACE_EVENT_ATTACH);
-}
-
-void TraceManager::event_detach(ITraceDatabaseConnection* connection, bool drop_db)
-{
-	EXECUTE_HOOKS(trace_detach, (connection, drop_db));
-
-	trace_needs &= ~(FB_CONST64(1) << ITraceFactory::TRACE_EVENT_DETACH);
-}
 
 void TraceManager::event_transaction_start(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, unsigned tpb_length, const ntrace_byte_t* tpb,
