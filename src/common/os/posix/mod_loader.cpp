@@ -37,6 +37,9 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifdef HAVE_RTLD_DI_LINKMAP
+#include <link.h>
+#endif
 #include <dlfcn.h>
 
 /// This is the POSIX (dlopen) implementation of the mod_loader abstraction.
@@ -46,14 +49,20 @@ class DlfcnModule : public ModuleLoader::Module
 public:
 	DlfcnModule(MemoryPool& pool, const Firebird::PathName& aFileName, void* m)
 		: ModuleLoader::Module(pool, aFileName),
-		  module(m)
-	{}
+		  module(m),
+		  realPath(pool)
+	{
+		getRealPath("", realPath);
+	}
 
 	~DlfcnModule();
 	void* findSymbol(const Firebird::string&);
 
+	bool getRealPath(const Firebird::string& anySymbol, Firebird::PathName& path);
+
 private:
 	void* module;
+	Firebird::PathName realPath;
 };
 
 bool ModuleLoader::isLoadableModule(const Firebird::PathName& module)
@@ -149,19 +158,93 @@ void* DlfcnModule::findSymbol(const Firebird::string& symName)
 	if (!dladdr(result, &info))
 		return NULL;
 
-	if (PathUtils::isRelative(fileName) || PathUtils::isRelative(info.dli_fname))
+	const Firebird::PathName& libraryPath = realPath.isEmpty() ? fileName : realPath;
+
+	char symbolPathBuffer[PATH_MAX];
+	const char* symbolPath = symbolPathBuffer;
+
+	if (!realpath(info.dli_fname, symbolPathBuffer))
+		symbolPath = info.dli_fname;
+
+	if (PathUtils::isRelative(libraryPath) || PathUtils::isRelative(symbolPath))
 	{
 		// check only name (not path) of the library
 		Firebird::PathName dummyDir, nm1, nm2;
-		PathUtils::splitLastComponent(dummyDir, nm1, fileName);
-		PathUtils::splitLastComponent(dummyDir, nm2, info.dli_fname);
+		PathUtils::splitLastComponent(dummyDir, nm1, libraryPath);
+		PathUtils::splitLastComponent(dummyDir, nm2, symbolPath);
 		if (nm1 != nm2)
 			return NULL;
 	}
-	else if (fileName != info.dli_fname)
+	else if (libraryPath != symbolPath)
 		return NULL;
 #endif
 
 	return result;
 }
 
+bool DlfcnModule::getRealPath(const Firebird::string& anySymbol, Firebird::PathName& path)
+{
+/*	if (realPath.hasData())
+	{
+		path = realPath;
+		return true;
+	}
+ */
+	char buffer[PATH_MAX];
+
+#ifdef HAVE_DLINFO
+#ifdef HAVE_RTLD_DI_ORIGIN
+	if (dlinfo(module, RTLD_DI_ORIGIN, buffer) == 0)
+	{
+		path = buffer;
+		path += '/';
+		path += fileName;
+
+		if (realpath(path.c_str(), buffer))
+		{
+			path = buffer;
+			return true;
+		}
+	}
+#endif
+
+#ifdef HAVE_RTLD_DI_LINKMAP
+	struct link_map* lm;
+	if (dlinfo(module, RTLD_DI_LINKMAP, &lm) == 0)
+	{
+		if (realpath(lm->l_name, buffer))
+		{
+			path = buffer;
+			return true;
+		}
+	}
+#endif
+
+#endif
+
+#ifdef HAVE_DLADDR
+	if (anySymbol.hasData())
+	{
+		void* symbolPtr = dlsym(module, anySymbol.c_str());
+
+		if (!symbolPtr)
+			symbolPtr = dlsym(module, ('_' + anySymbol).c_str());
+
+		if (symbolPtr)
+		{
+			Dl_info info;
+			if (dladdr(symbolPtr, &info))
+			{
+				if (realpath(info.dli_fname, buffer))
+				{
+					path = buffer;
+					return true;
+				}
+			}
+		}
+	}
+#endif	// HAVE_DLADDR
+
+	path.erase();
+	return false;
+}
