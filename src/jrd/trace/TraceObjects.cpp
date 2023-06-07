@@ -514,7 +514,7 @@ ITraceLogWriter* TraceInitInfoImpl::getLogWriter()
 {
 	if (!m_logWriter && !m_session.ses_logfile.empty())
 	{
-		m_logWriter = ServerTraceManager::createSessionLogWriter(m_session);
+		m_logWriter = TraceManager::createSessionLogWriter(m_session);
 	}
 	if (m_logWriter)
 	{

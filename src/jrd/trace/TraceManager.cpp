@@ -1,6 +1,6 @@
 /*
  *	PROGRAM:	JRD Access Method
- *	MODULE:		TraceManager.cpp
+ *	MODULE:		JrdTraceManager.cpp
  *	DESCRIPTION:	Trace API manager
  *
  *  The contents of this file are subject to the Initial
@@ -51,8 +51,8 @@ namespace
 namespace Jrd {
 
 
-TraceManager::TraceManager(Attachment* in_att) :
-	ServerTraceManager(NULL, *in_att->att_pool),
+JrdTraceManager::JrdTraceManager(Attachment* in_att) :
+	TraceManager(NULL, *in_att->att_pool),
 	attachment(in_att),
 	service(NULL),
 	callback(NULL),
@@ -61,8 +61,8 @@ TraceManager::TraceManager(Attachment* in_att) :
 	init();
 }
 
-TraceManager::TraceManager(Service* in_svc) :
-	ServerTraceManager(NULL, in_svc->getPool()),
+JrdTraceManager::JrdTraceManager(Service* in_svc) :
+	TraceManager(NULL, in_svc->getPool()),
 	attachment(NULL),
 	service(in_svc),
 	callback(NULL),
@@ -71,8 +71,8 @@ TraceManager::TraceManager(Service* in_svc) :
 	init();
 }
 
-TraceManager::TraceManager(const char* in_filename, ICryptKeyCallback* cb, bool failed) :
-	ServerTraceManager(in_filename, *getDefaultMemoryPool()),
+JrdTraceManager::JrdTraceManager(const char* in_filename, ICryptKeyCallback* cb, bool failed) :
+	TraceManager(in_filename, *getDefaultMemoryPool()),
 	attachment(NULL),
 	service(NULL),
 	callback(cb),
@@ -82,11 +82,11 @@ TraceManager::TraceManager(const char* in_filename, ICryptKeyCallback* cb, bool 
 	init();
 }
 
-TraceManager::~TraceManager()
+JrdTraceManager::~JrdTraceManager()
 {
 }
 
-void TraceManager::init()
+void JrdTraceManager::init()
 {
 	// ensure storage is initialized
 	getStorage();
@@ -96,7 +96,7 @@ void TraceManager::init()
 
 
 
-void TraceManager::update_sessions()
+void JrdTraceManager::update_sessions()
 {
 	// Let be inactive until database is creating
 	if (attachment && (attachment->att_database->dbb_flags & DBB_creating))
@@ -129,7 +129,7 @@ void TraceManager::update_sessions()
 	}
 }
 
-void TraceManager::update_session(const TraceSession& session)
+void JrdTraceManager::update_session(const TraceSession& session)
 {
 	// if this session is already known, nothing to do
 	FB_SIZE_T pos;
@@ -275,22 +275,22 @@ void TraceManager::update_session(const TraceSession& session)
 	}
 }
 
-bool TraceManager::need_dsql_prepare(Attachment* att)
+bool JrdTraceManager::need_dsql_prepare(Attachment* att)
 {
 	return att->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_DSQL_PREPARE);
 }
 
-bool TraceManager::need_dsql_free(Attachment* att)
+bool JrdTraceManager::need_dsql_free(Attachment* att)
 {
 	return att->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_DSQL_FREE);
 }
 
-bool TraceManager::need_dsql_execute(Attachment* att)
+bool JrdTraceManager::need_dsql_execute(Attachment* att)
 {
 	return att->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_DSQL_EXECUTE);
 }
 
-void TraceManager::event_dsql_prepare(Attachment* att, jrd_tra* transaction,
+void JrdTraceManager::event_dsql_prepare(Attachment* att, jrd_tra* transaction,
 		ITraceSQLStatement* statement,
 		ntrace_counter_t time_millis, ntrace_result_t req_result)
 {
@@ -301,7 +301,7 @@ void TraceManager::event_dsql_prepare(Attachment* att, jrd_tra* transaction,
 											   time_millis, req_result);
 }
 
-void TraceManager::event_dsql_free(Attachment* att,	ITraceSQLStatement* statement,
+void JrdTraceManager::event_dsql_free(Attachment* att,	ITraceSQLStatement* statement,
 		unsigned short option)
 {
 	TraceConnectionImpl conn(att);
@@ -309,7 +309,7 @@ void TraceManager::event_dsql_free(Attachment* att,	ITraceSQLStatement* statemen
 	att->att_trace_manager->event_dsql_free(&conn, statement, option);
 }
 
-void TraceManager::event_dsql_execute(Attachment* att, jrd_tra* transaction,
+void JrdTraceManager::event_dsql_execute(Attachment* att, jrd_tra* transaction,
 	ITraceSQLStatement* statement, bool started, ntrace_result_t req_result)
 {
 	TraceConnectionImpl conn(att);
@@ -319,7 +319,7 @@ void TraceManager::event_dsql_execute(Attachment* att, jrd_tra* transaction,
 											   started, req_result);
 }
 
-void TraceManager::event_dsql_restart(Attachment* att, jrd_tra* transaction,
+void JrdTraceManager::event_dsql_restart(Attachment* att, jrd_tra* transaction,
 	DsqlRequest* statement, int number)
 {
 	TraceConnectionImpl conn(att);
@@ -331,7 +331,7 @@ void TraceManager::event_dsql_restart(Attachment* att, jrd_tra* transaction,
 }
 
 
-void TraceManager::event_transaction_start(ITraceDatabaseConnection* connection,
+void JrdTraceManager::event_transaction_start(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, unsigned tpb_length, const ntrace_byte_t* tpb,
 		ntrace_result_t tra_result)
 {
@@ -339,7 +339,7 @@ void TraceManager::event_transaction_start(ITraceDatabaseConnection* connection,
 		(connection, transaction, tpb_length, tpb, tra_result));
 }
 
-void TraceManager::event_transaction_end(ITraceDatabaseConnection* connection,
+void JrdTraceManager::event_transaction_end(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, bool commit, bool retain_context,
 		ntrace_result_t tra_result)
 {
@@ -347,35 +347,35 @@ void TraceManager::event_transaction_end(ITraceDatabaseConnection* connection,
 		(connection, transaction, commit, retain_context, tra_result));
 }
 
-void TraceManager::event_set_context(ITraceDatabaseConnection* connection,
+void JrdTraceManager::event_set_context(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, ITraceContextVariable* variable)
 {
 	EXECUTE_HOOKS(trace_set_context,
 		(connection, transaction, variable));
 }
 
- void TraceManager::event_proc_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
+ void JrdTraceManager::event_proc_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
 		ITraceProcedure* procedure, bool started, ntrace_result_t proc_result)
 {
 	EXECUTE_HOOKS(trace_proc_execute,
 		(connection, transaction, procedure, started, proc_result));
 }
 
-void TraceManager::event_func_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
+void JrdTraceManager::event_func_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
 		ITraceFunction* function, bool started, ntrace_result_t func_result)
 {
 	EXECUTE_HOOKS(trace_func_execute,
 		(connection, transaction, function, started, func_result));
 }
 
-void TraceManager::event_trigger_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
+void JrdTraceManager::event_trigger_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
 		ITraceTrigger* trigger, bool started, ntrace_result_t trig_result)
 {
 	EXECUTE_HOOKS(trace_trigger_execute,
 		(connection, transaction, trigger, started, trig_result));
 }
 
-void TraceManager::event_dsql_prepare(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
+void JrdTraceManager::event_dsql_prepare(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
 		ITraceSQLStatement* statement, ntrace_counter_t time_millis, ntrace_result_t req_result)
 {
 	EXECUTE_HOOKS(trace_dsql_prepare,
@@ -383,28 +383,28 @@ void TraceManager::event_dsql_prepare(ITraceDatabaseConnection* connection, ITra
 		 time_millis, req_result));
 }
 
-void TraceManager::event_dsql_free(ITraceDatabaseConnection* connection,
+void JrdTraceManager::event_dsql_free(ITraceDatabaseConnection* connection,
 		ITraceSQLStatement* statement, unsigned short option)
 {
 	EXECUTE_HOOKS(trace_dsql_free,
 		(connection, statement, option));
 }
 
-void TraceManager::event_dsql_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
+void JrdTraceManager::event_dsql_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
 		ITraceSQLStatement* statement, bool started, ntrace_result_t req_result)
 {
 	EXECUTE_HOOKS(trace_dsql_execute,
 		(connection, transaction, statement, started, req_result));
 }
 
-void TraceManager::event_dsql_restart(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
+void JrdTraceManager::event_dsql_restart(ITraceDatabaseConnection* connection, ITraceTransaction* transaction,
 		ITraceSQLStatement* statement, unsigned number)
 {
 	EXECUTE_HOOKS(trace_dsql_restart,
 		(connection, transaction, statement, number));
 }
 
-void TraceManager::event_blr_compile(ITraceDatabaseConnection* connection,
+void JrdTraceManager::event_blr_compile(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, ITraceBLRStatement* statement,
 		ntrace_counter_t time_millis, ntrace_result_t req_result)
 {
@@ -413,7 +413,7 @@ void TraceManager::event_blr_compile(ITraceDatabaseConnection* connection,
 		 time_millis, req_result));
 }
 
-void TraceManager::event_blr_execute(ITraceDatabaseConnection* connection,
+void JrdTraceManager::event_blr_execute(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, ITraceBLRStatement* statement,
 		ntrace_result_t req_result)
 {
@@ -421,7 +421,7 @@ void TraceManager::event_blr_execute(ITraceDatabaseConnection* connection,
 		(connection, transaction, statement, req_result));
 }
 
-void TraceManager::event_dyn_execute(ITraceDatabaseConnection* connection,
+void JrdTraceManager::event_dyn_execute(ITraceDatabaseConnection* connection,
 		ITraceTransaction* transaction, ITraceDYNRequest* request,
 		ntrace_counter_t time_millis, ntrace_result_t req_result)
 {
@@ -430,13 +430,13 @@ void TraceManager::event_dyn_execute(ITraceDatabaseConnection* connection,
 			req_result));
 }
 
-void TraceManager::event_service_attach(ITraceServiceConnection* service, ntrace_result_t att_result)
+void JrdTraceManager::event_service_attach(ITraceServiceConnection* service, ntrace_result_t att_result)
 {
 	EXECUTE_HOOKS(trace_service_attach,
 		(service, att_result));
 }
 
-void TraceManager::event_service_start(ITraceServiceConnection* service,
+void JrdTraceManager::event_service_start(ITraceServiceConnection* service,
 		unsigned switches_length, const char* switches,
 		ntrace_result_t start_result)
 {
@@ -444,7 +444,7 @@ void TraceManager::event_service_start(ITraceServiceConnection* service,
 		(service, switches_length, switches, start_result));
 }
 
-void TraceManager::event_service_query(ITraceServiceConnection* service,
+void JrdTraceManager::event_service_query(ITraceServiceConnection* service,
 		unsigned send_item_length, const ntrace_byte_t* send_items,
 		unsigned recv_item_length, const ntrace_byte_t* recv_items,
 		ntrace_result_t query_result)
@@ -454,20 +454,20 @@ void TraceManager::event_service_query(ITraceServiceConnection* service,
 		 recv_item_length, recv_items, query_result));
 }
 
-void TraceManager::event_service_detach(ITraceServiceConnection* service, ntrace_result_t detach_result)
+void JrdTraceManager::event_service_detach(ITraceServiceConnection* service, ntrace_result_t detach_result)
 {
 	EXECUTE_HOOKS(trace_service_detach,
 		(service, detach_result));
 }
 
-void TraceManager::event_error(ITraceConnection* connection, ITraceStatusVector* status, const char* function)
+void JrdTraceManager::event_error(ITraceConnection* connection, ITraceStatusVector* status, const char* function)
 {
 	EXECUTE_HOOKS(trace_event_error,
 		(connection, status, function));
 }
 
 
-void TraceManager::event_sweep(ITraceDatabaseConnection* connection, ITraceSweepInfo* sweep,
+void JrdTraceManager::event_sweep(ITraceDatabaseConnection* connection, ITraceSweepInfo* sweep,
 		ntrace_process_state_t sweep_state)
 {
 	EXECUTE_HOOKS(trace_event_sweep,

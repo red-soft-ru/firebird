@@ -1,6 +1,6 @@
 /*
  *	PROGRAM:	Server Access Methods
- *	MODULE:		ServerTraceManager.h
+ *	MODULE:		TraceManager.h
  *	DESCRIPTION:	Trace API manager
  *
  *  The contents of this file are subject to the Initial
@@ -38,16 +38,16 @@
 #include "../../jrd/trace/TraceConfigStorage.h"
 #include "../../jrd/trace/TraceSession.h"
 
-class ServerTraceManager
+class TraceManager
 {
 public:
 	/* Initializes plugins. */
-	explicit ServerTraceManager(Firebird::ITraceDatabaseConnection* conn, const char* in_filename);
-	explicit ServerTraceManager(const char* in_filename, MemoryPool& pool);
+	explicit TraceManager(Firebird::ITraceDatabaseConnection* conn, const char* in_filename);
+	explicit TraceManager(const char* in_filename, MemoryPool& pool);
 	void initServerTrace();
 
 	/* Finalize plugins. Called when database is closed by the engine */
-	~ServerTraceManager();
+	~TraceManager();
 
 	static Jrd::ConfigStorage* getStorage()
 	{ return storageInstance->getStorage(); }

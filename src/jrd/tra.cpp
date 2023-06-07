@@ -4181,7 +4181,7 @@ TraceSweepEvent::TraceSweepEvent(thread_db* tdbb)
 		m_sweep_info.getOST(),
 		m_sweep_info.getNext());
 
-	TraceManager* trace_mgr = att->att_trace_manager;
+	JrdTraceManager* trace_mgr = att->att_trace_manager;
 
 	m_start_clock = fb_utils::query_performance_counter();
 	m_need_trace = trace_mgr->needs(ITraceFactory::TRACE_EVENT_SWEEP);
@@ -4248,7 +4248,7 @@ void TraceSweepEvent::endSweepRelation(jrd_rel* relation)
 	m_sweep_info.setPerf(stats.getPerf());
 
 	TraceConnectionImpl conn(att);
-	TraceManager* trace_mgr = att->att_trace_manager;
+	JrdTraceManager* trace_mgr = att->att_trace_manager;
 	trace_mgr->event_sweep(&conn, &m_sweep_info, ITracePlugin::SWEEP_STATE_PROGRESS);
 }
 
@@ -4280,7 +4280,7 @@ void TraceSweepEvent::report(ntrace_process_state_t state)
 		return;
 
 	Database* dbb = m_tdbb->getDatabase();
-	TraceManager* trace_mgr = att->att_trace_manager;
+	JrdTraceManager* trace_mgr = att->att_trace_manager;
 
 	TraceConnectionImpl conn(att);
 

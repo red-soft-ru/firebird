@@ -1415,7 +1415,7 @@ void traceFailedConnection(const rem_port* port, const char* dbPath, const strin
 
 	connection.setFilename(expandedName.c_str());
 
-	ServerTraceManager tempMgr(&connection, expandedName.c_str());
+	TraceManager tempMgr(&connection, expandedName.c_str());
 	tempMgr.initServerTrace();
 	if (tempMgr.needs(ITraceFactory::TRACE_EVENT_ATTACH))
 	{
@@ -7423,7 +7423,7 @@ void Worker::shutdown()
 
 static int shut_server(const int, const int, void*)
 {
-	ServerTraceManager::shutdown(); // This storage is separate from the jrd one
+	TraceManager::shutdown(); // This storage is separate from the jrd one
 	server_shutdown = true;
 	return 0;
 }

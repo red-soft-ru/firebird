@@ -1,6 +1,6 @@
 /*
  *	PROGRAM:	JRD Access Method
- *	MODULE:		TraceManager.cpp
+ *	MODULE:		JrdTraceManager.cpp
  *	DESCRIPTION:	Trace API manager
  *
  *  The contents of this file are subject to the Initial
@@ -67,7 +67,7 @@ public:
 		if (!m_log.isFull())
 			return written;
 
-		Jrd::ConfigStorage* storage = ServerTraceManager::getStorage();
+		Jrd::ConfigStorage* storage = TraceManager::getStorage();
 		Jrd::StorageGuard guard(storage);
 
 		TraceSession session(*getDefaultMemoryPool());
@@ -168,13 +168,13 @@ private:
 };
 
 
-GlobalPtr<Jrd::StorageInstance, InstanceControl::PRIORITY_DELETE_FIRST> ServerTraceManager::storageInstance;
-ServerTraceManager::Factories* ServerTraceManager::factories = NULL;
-GlobalPtr<Firebird::RWLock> ServerTraceManager::init_factories_lock;
-volatile bool ServerTraceManager::init_factories;
+GlobalPtr<Jrd::StorageInstance, InstanceControl::PRIORITY_DELETE_FIRST> TraceManager::storageInstance;
+TraceManager::Factories* TraceManager::factories = NULL;
+GlobalPtr<Firebird::RWLock> TraceManager::init_factories_lock;
+volatile bool TraceManager::init_factories;
 
 
-bool ServerTraceManager::check_result(ITracePlugin* plugin, const char* module, const char* function,
+bool TraceManager::check_result(ITracePlugin* plugin, const char* module, const char* function,
 	bool result)
 {
 	if (result)
@@ -203,7 +203,7 @@ bool ServerTraceManager::check_result(ITracePlugin* plugin, const char* module, 
 }
 
 
-ServerTraceManager::ServerTraceManager(ITraceDatabaseConnection* conn, const char* in_filename) :
+TraceManager::TraceManager(ITraceDatabaseConnection* conn, const char* in_filename) :
 	filename(in_filename),
 	trace_needs(0),
 	new_needs(0),
@@ -213,7 +213,7 @@ ServerTraceManager::ServerTraceManager(ITraceDatabaseConnection* conn, const cha
 {
 }
 
-ServerTraceManager::ServerTraceManager(const char* in_filename, MemoryPool& pool) :
+TraceManager::TraceManager(const char* in_filename, MemoryPool& pool) :
 	filename(in_filename),
 	trace_needs(0),
 	new_needs(0),
@@ -222,11 +222,11 @@ ServerTraceManager::ServerTraceManager(const char* in_filename, MemoryPool& pool
 	changeNumber(0)
 { }
 
-ServerTraceManager::~ServerTraceManager()
+TraceManager::~TraceManager()
 {
 }
 
-void ServerTraceManager::initServerTrace()
+void TraceManager::initServerTrace()
 {
 	// ensure storage is initialized
 
@@ -238,7 +238,7 @@ void ServerTraceManager::initServerTrace()
 	changeNumber = 0;
 }
 
-void ServerTraceManager::load_plugins()
+void TraceManager::load_plugins()
 {
 	// Initialize all trace needs to false
 	trace_needs = 0;
@@ -250,7 +250,7 @@ void ServerTraceManager::load_plugins()
 	if (init_factories)
 		return;
 
-	factories = FB_NEW_POOL(*getDefaultMemoryPool()) ServerTraceManager::Factories(*getDefaultMemoryPool());
+	factories = FB_NEW_POOL(*getDefaultMemoryPool()) TraceManager::Factories(*getDefaultMemoryPool());
 	for (GetPlugins<ITraceFactory> traceItr(IPluginManager::TYPE_TRACE); traceItr.hasData(); traceItr.next())
 	{
 		FactoryInfo info;
@@ -264,7 +264,7 @@ void ServerTraceManager::load_plugins()
 	init_factories = true;
 }
 
-void ServerTraceManager::shutdown()
+void TraceManager::shutdown()
 {
 	if (init_factories)
 	{
@@ -281,12 +281,12 @@ void ServerTraceManager::shutdown()
 	getStorage()->shutdown();
 }
 
-ITraceLogWriter* ServerTraceManager::createSessionLogWriter(const TraceSession& session)
+ITraceLogWriter* TraceManager::createSessionLogWriter(const TraceSession& session)
 {
 	return FB_NEW TraceLogWriterImpl(session);
 }
 
-void ServerTraceManager::reload_sessions_lists(HalfStaticArray<TraceSession*, 64>& newSessions)
+void TraceManager::reload_sessions_lists(HalfStaticArray<TraceSession*, 64>& newSessions)
 {
 	MemoryPool& pool = *getDefaultMemoryPool();
 	SortedArray<ULONG, InlineStorage<ULONG, 64> > liveSessions(pool);
@@ -332,7 +332,7 @@ void ServerTraceManager::reload_sessions_lists(HalfStaticArray<TraceSession*, 64
 	}
 }
 
-void ServerTraceManager::update_sessions()
+void TraceManager::update_sessions()
 {
 	MemoryPool& pool = *getDefaultMemoryPool();
 	HalfStaticArray<TraceSession*, 64> newSessions(pool);
@@ -360,7 +360,7 @@ void ServerTraceManager::update_sessions()
 	}
 }
 
-void ServerTraceManager::update_session(const TraceSession& session)
+void TraceManager::update_session(const TraceSession& session)
 {
 	// if this session is already known, nothing to do
 	FB_SIZE_T pos;
@@ -400,7 +400,7 @@ void ServerTraceManager::update_session(const TraceSession& session)
 	}
 }
 
-void ServerTraceManager::event_attach(Firebird::ITraceDatabaseConnection* connection, bool create_db,
+void TraceManager::event_attach(Firebird::ITraceDatabaseConnection* connection, bool create_db,
 		ntrace_result_t att_result)
 {
 	EXECUTE_HOOKS(trace_attach,
@@ -409,7 +409,7 @@ void ServerTraceManager::event_attach(Firebird::ITraceDatabaseConnection* connec
 	trace_needs &= ~(FB_CONST64(1) << ITraceFactory::TRACE_EVENT_ATTACH);
 }
 
-void ServerTraceManager::event_detach(ITraceDatabaseConnection* connection, bool drop_db)
+void TraceManager::event_detach(ITraceDatabaseConnection* connection, bool drop_db)
 {
 	EXECUTE_HOOKS(trace_detach, (connection, drop_db));
 

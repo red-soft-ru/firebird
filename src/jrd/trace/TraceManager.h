@@ -1,6 +1,6 @@
 /*
  *	PROGRAM:	JRD Access Method
- *	MODULE:		TraceManager.h
+ *	MODULE:		JrdTraceManager.h
  *	DESCRIPTION:	Trace API manager
  *
  *  The contents of this file are subject to the Initial
@@ -44,16 +44,16 @@ class jrd_tra;
 class DsqlRequest;
 class Service;
 
-class TraceManager : public ServerTraceManager
+class JrdTraceManager : public TraceManager
 {
 public:
     /* Initializes plugins. */
-	explicit TraceManager(Attachment* in_att);
-	explicit TraceManager(Service* in_svc);
-	TraceManager(const char* in_filename, Firebird::ICryptKeyCallback* callback, bool failedAttach);
+	explicit JrdTraceManager(Attachment* in_att);
+	explicit JrdTraceManager(Service* in_svc);
+	JrdTraceManager(const char* in_filename, Firebird::ICryptKeyCallback* callback, bool failedAttach);
 
 	/* Finalize plugins. Called when database is closed by the engine */
-	~TraceManager();
+	~JrdTraceManager();
 
 
 	/* Start/end transaction */
