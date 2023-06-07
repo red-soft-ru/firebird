@@ -1380,11 +1380,6 @@ inline bool bad_service(IStatus* status_vector, Rdb* rdb)
 	return bad_port_context(status_vector, iface, isc_bad_svc_handle);
 }
 
-// For Trace
-void ERR_post(const Arg::StatusVector& v)
-{
-	v.raise();
-}
 
 namespace {
 
