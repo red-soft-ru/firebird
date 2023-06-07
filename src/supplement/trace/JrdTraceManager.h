@@ -29,7 +29,8 @@
 #ifndef JRD_TRACEMANAGER_H
 #define JRD_TRACEMANAGER_H
 
-#include "../../utilities/strace/ServerTraceManager.h"
+#include "TraceManager.h"
+
 namespace Firebird {
 
 class ICryptKeyCallback;

@@ -28,7 +28,7 @@
 
 #include "firebird.h"
 
-#include "ServerTraceManager.h"
+#include "TraceManager.h"
 #include "../../common/os/path_utils.h"
 #include "../../common/ScanDir.h"
 #include "../../common/isc_proto.h"

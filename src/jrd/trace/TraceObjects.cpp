@@ -29,7 +29,7 @@
 
 #include "../../common/classes/auto.h"
 #include "../../common/utils_proto.h"
-#include "../../jrd/trace/TraceManager.h"
+#include "../../supplement/trace/JrdTraceManager.h"
 #include "../../jrd/trace/TraceLog.h"
 #include "../../jrd/trace/TraceObjects.h"
 #include "../../common/isc_proto.h"

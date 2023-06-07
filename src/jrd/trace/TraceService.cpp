@@ -37,7 +37,7 @@
 #include "../../jrd/svc.h"
 #include "../../common/os/guid.h"
 #include "../../jrd/trace/TraceLog.h"
-#include "../../jrd/trace/TraceManager.h"
+#include "../../supplement/trace/JrdTraceManager.h"
 #include "../../jrd/trace/TraceService.h"
 #include "../../jrd/scl.h"
 #include "../../jrd/Mapping.h"

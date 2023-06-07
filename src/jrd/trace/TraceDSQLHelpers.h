@@ -28,7 +28,7 @@
 #ifndef JRD_TRACE_DSQL_HELPERS_H
 #define JRD_TRACE_DSQL_HELPERS_H
 
-#include "../../jrd/trace/TraceManager.h"
+#include "../../supplement/trace/JrdTraceManager.h"
 #include "../../jrd/trace/TraceObjects.h"
 
 namespace Jrd {

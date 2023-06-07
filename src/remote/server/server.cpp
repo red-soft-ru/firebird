@@ -75,7 +75,7 @@
 #include "../common/os/os_utils.h"
 #include "../common/security.h"
 
-#include "../utilities/strace/ServerTraceManager.h"
+#include "../supplement/trace/TraceManager.h"
 #include "../common/db_alias.h"
 #ifdef WIN_NT
 #include <process.h>

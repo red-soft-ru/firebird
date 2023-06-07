@@ -26,8 +26,8 @@
  *  2008 Khorsun Vladyslav
  */
 
-#ifndef SERVER_TRACEMANAGER_H
-#define SERVER_TRACEMANAGER_H
+#ifndef TRACEMANAGER_H
+#define TRACEMANAGER_H
 
 #include "../../jrd/ntrace.h"
 #include "../../common/classes/array.h"
@@ -173,4 +173,4 @@ protected:
 	ULONG changeNumber;
 };
 
-#endif
+#endif // !TRACEMANAGER_H

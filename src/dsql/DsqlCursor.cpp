@@ -23,7 +23,7 @@
 #include "firebird.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../jrd/tra_proto.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/trace/TraceDSQLHelpers.h"
 
 #include "../dsql/dsql_proto.h"

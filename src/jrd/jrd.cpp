@@ -120,7 +120,7 @@
 #include "../common/db_alias.h"
 #include "../jrd/replication/Publisher.h"
 #include "../jrd/replication/Applier.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/trace/TraceObjects.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "../jrd/IntlManager.h"

@@ -69,7 +69,7 @@
 #include "../dsql/dsql_proto.h"
 #include "../common/StatusArg.h"
 #include "../jrd/replication/Publisher.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "../jrd/Function.h"
 #include "../jrd/Collation.h"

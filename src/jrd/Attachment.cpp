@@ -28,7 +28,7 @@
 #include "../jrd/Database.h"
 #include "../jrd/Function.h"
 #include "../jrd/nbak.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/PreparedStatement.h"
 #include "../jrd/tra.h"
 #include "../jrd/intl.h"

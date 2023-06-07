@@ -34,7 +34,7 @@
     <ClCompile Include="..\..\..\src\remote\server\os\win32\srvr_w32.cpp">
       <Filter>Remote server</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\utilities\strace\ServerTraceManager.cpp">
+    <ClCompile Include="..\..\..\src\supplement\trace\TraceManager.cpp">
       <Filter>Remote server</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\trace\TraceConfigStorage.cpp">

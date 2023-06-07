@@ -214,7 +214,7 @@
     <ClCompile Include="..\..\..\src\jrd\replication\Config.cpp" />
     <ClCompile Include="..\..\..\src\jrd\replication\Utils.cpp" />
     <ClCompile Include="..\..\..\src\utilities\ntrace\compress.cpp" />
-    <ClCompile Include="..\..\..\src\utilities\strace\ServerTraceManager.cpp" />
+    <ClCompile Include="..\..\..\src\supplement\trace\TraceManager.cpp" />
     <ClCompile Include="..\..\..\src\jrd\trace\TraceConfigStorage.cpp" />
     <ClCompile Include="..\..\..\src\jrd\trace\TraceLog.cpp" />
   </ItemGroup>

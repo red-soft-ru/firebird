@@ -67,7 +67,7 @@ SecDbCache:= $(call makeObjects,auth,SecDbCache.cpp)
 # Remote
 Remote_Trace:=  $(call makeObjects,jrd/trace,TraceConfigStorage.cpp) \
 				$(call makeObjects,jrd/trace,TraceLog.cpp) \
-				$(call makeObjects,utilities/strace,ServerTraceManager.cpp)
+				$(call makeObjects,supplement/trace,TraceManager.cpp)
 Remote_Common:= $(call dirObjects,remote) $(call dirObjects,auth/SecureRemotePassword)
 Remote_Server:= $(call dirObjects,remote/server) $(call dirObjects,auth/SecureRemotePassword/server) \
 				$(call makeObjects,jrd/replication,Config.cpp Utils.cpp) $(SecDbCache) \
@@ -93,7 +93,7 @@ AllObjects += $(Profiler_Objects)
 Engine_Objects:= $(call dirObjects,jrd) $(call dirObjects,dsql) $(call dirObjects,jrd/extds) \
 				 $(call dirObjects,jrd/optimizer) $(call dirObjects,jrd/recsrc) $(call dirObjects,jrd/replication) $(call dirObjects,jrd/trace) \
 				 $(call makeObjects,lock,lock.cpp) \
-				 $(call makeObjects,utilities/strace,ServerTraceManager.cpp)
+				 $(call dirObjects,supplement/trace)
 
 Engine_Test_Objects:= $(call dirObjects,jrd/tests)
 

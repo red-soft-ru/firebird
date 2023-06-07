@@ -56,7 +56,7 @@
 #include "../common/db_alias.h"
 #include "../jrd/scl.h"
 #include "../common/msg_encode.h"
-#include "../jrd/trace/TraceManager.h"
+#include "../supplement/trace/JrdTraceManager.h"
 #include "../jrd/trace/TraceObjects.h"
 #include "../jrd/EngineInterface.h"
 #include "../jrd/Mapping.h"
