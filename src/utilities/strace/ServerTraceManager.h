@@ -14,14 +14,16 @@
  *  See the License for the specific language governing rights
  *  and limitations under the License.
  *
- *  The Original Code was created by Artyom Abakumov
- *  <artyom.abakumov (at) red-soft.ru> for Red Soft Corporation.
+ *  The Original Code was created by Nickolay Samofatov
+ *  for the Firebird Open Source RDBMS project.
  *
- *  Copyright (c) 2023 Red Soft Corporation <info (at) red-soft.ru>
+ *  Copyright (c) 2004 Nickolay Samofatov <nickolay@broadviewsoftware.com>
  *  and all contributors signed below.
  *
  *  All Rights Reserved.
  *  Contributor(s): ______________________________________.
+ *
+ *  2008 Khorsun Vladyslav
  */
 
 #ifndef SERVER_TRACEMANAGER_H
