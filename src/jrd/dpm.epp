@@ -79,7 +79,7 @@ static USHORT compress(thread_db*, data_page*);
 static void delete_tail(thread_db*, rhdf*, const USHORT, USHORT);
 static void fragment(thread_db*, record_param*, SSHORT, Compressor&, SSHORT, const jrd_tra*);
 static void extend_relation(thread_db*, jrd_rel*, WIN*, const Jrd::RecordStorageType type);
-static UCHAR* find_space(thread_db*, record_param*, SSHORT, PageStack&, Record*, const Jrd::RecordStorageType type);
+static UCHAR* find_space(thread_db*, record_param*, SSHORT, PageStack&, Record*, const Jrd::RecordStorageType type, const bool allow_sec_on_pri = false);
 static bool get_header(WIN*, USHORT, record_param*);
 static pointer_page* get_pointer_page(thread_db*, jrd_rel*, RelationPages*, WIN*, ULONG, USHORT);
 static rhd* locate_space(thread_db*, record_param*, SSHORT, PageStack&, Record*, const Jrd::RecordStorageType type);
@@ -3120,7 +3120,8 @@ static UCHAR* find_space(thread_db*	tdbb,
 						 SSHORT	size,
 						 PageStack&	stack,
 						 Record*	record,
-						 const Jrd::RecordStorageType type)
+						 const Jrd::RecordStorageType type,
+						 const bool allow_sec_on_pri)
 {
 /**************************************
  *
@@ -3144,13 +3145,18 @@ static UCHAR* find_space(thread_db*	tdbb,
 
 	const SSHORT aligned_size = ROUNDUP(size, ODS_ALIGNMENT);
 	data_page* page = (data_page*) rpb->getWindow(tdbb).win_buffer;
+	fb_assert(!allow_sec_on_pri ||
+		page->dpg_count > 0 && !(page->dpg_header.pag_flags & dpg_secondary) &&
+		type == DPM_secondary);
 
-	if ((page->dpg_count > 0) && (type == DPM_primary) && (page->dpg_header.pag_flags & dpg_secondary))
+	if ((page->dpg_count > 0) &&
+		(type == DPM_primary) != !(page->dpg_header.pag_flags & dpg_secondary) &&
+		!allow_sec_on_pri)
 	{
-		// Attempt to put primary record on secondary data page - seems
-		// flags on PP is not correct. Fix flags and let caller to find
-		// space for record at another data page.
-
+		// Attempt to put a primary record on a secondary data page or a non-primary
+		// record on a primary data page (when it's not allowed explicitly) - seems
+		// flags on PP are not correct. Fix flags and let the caller to find a space
+		// for the record at another data page.
 		mark_full(tdbb, rpb);
 		return NULL;
 	}
@@ -3402,23 +3408,24 @@ static rhd* locate_space(thread_db* tdbb,
 			if (slot < ppage->ppg_count && ((dp_primary = ppage->ppg_page[slot])) )
 			{
 				data_page* dpage = (data_page*) CCH_HANDOFF(tdbb, window, dp_primary, LCK_write, pag_data);
-				fb_assert(dpage->dpg_count > 0 && !(dpage->dpg_header.pag_flags & dpg_secondary));
 
 				// The non-empty primary data page is expected here as long as rpb_number is
 				// correctly set before DPM_store call. But it's still safer to handle all cases.
-				if (dpage->dpg_count > 0)
+				if (dpage->dpg_count > 0 && !(dpage->dpg_header.pag_flags & dpg_secondary))
 				{
-					const bool primary = !(dpage->dpg_header.pag_flags & dpg_secondary);
-					UCHAR* space = find_space(tdbb, rpb, size, stack, record, type);
+					UCHAR* space = find_space(tdbb, rpb, size, stack, record, type, true);
 
 					if (space)
 						return (rhd*) space;
 
-					if (!window->win_page.isTemporary() && primary)
+					if (!window->win_page.isTemporary())
 						CCH_get_related(tdbb, window->win_page, lowPages);
 				}
 				else
+				{
+					fb_assert(false);
 					CCH_RELEASE(tdbb, window);
+				}
 			}
 			else
 				CCH_RELEASE(tdbb, window);
