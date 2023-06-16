@@ -219,6 +219,8 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 	const DWORD_PTR affinity = Config::getCpuAffinityMask();
 	if (affinity)
 		SetProcessAffinityMask(GetCurrentProcess(), affinity);
+	else
+		os_utils::setDefaultAffinity();
 
 	protocol_inet[0] = 0;
 
