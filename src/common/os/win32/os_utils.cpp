@@ -582,7 +582,7 @@ void setDefaultAffinity()
 			return;
 	}
 
- 	HalfStaticArray<UCHAR, 1024> buff;
+ 	HalfStaticArray<UCHAR, 1024, SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX> buff;
 	auto p = buff.getBuffer(len);
 	auto const end = p + len;
 	auto pSLPI = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(p);
