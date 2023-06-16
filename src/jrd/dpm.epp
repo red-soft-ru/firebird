@@ -1481,7 +1481,7 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&
-			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_large | dpg_orphan)) &&
+			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_orphan)) &&
 			dpage->dpg_relation == rpb->rpb_relation->rel_id &&
 			dpage->dpg_sequence == dpSequence &&
 			(dpage->dpg_count > 0);
@@ -1745,7 +1745,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&
-			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_large | dpg_orphan)) &&
+			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_orphan)) &&
 			dpage->dpg_relation == rpb->rpb_relation->rel_id &&
 			dpage->dpg_sequence == dpSequence &&
 			(dpage->dpg_count > 0);
@@ -3339,7 +3339,7 @@ static rhd* locate_space(thread_db* tdbb,
 		data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, LCK_write, pag_undefined);
 
 		const UCHAR wrongFlags = dpg_orphan |
-			((type == DPM_primary) ? dpg_secondary | dpg_large : 0);
+			((type == DPM_primary) ? dpg_secondary : 0);
 
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&
