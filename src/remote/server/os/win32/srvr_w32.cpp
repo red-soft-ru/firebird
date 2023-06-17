@@ -306,38 +306,45 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 
 		fb_shutdown(10 * 1000 /*10 seconds*/, fb_shutrsn_no_connection);
 	}
-	else if (!(server_flag & SRVR_non_service))
-	{
-		string service_name;
-		service_name.printf(REMOTE_SERVICE, instance);
-
-		CNTL_init(start_connections_thread, instance);
-
-		const SERVICE_TABLE_ENTRY service_table[] =
-		{
-			{const_cast<char*>(service_name.c_str()), CNTL_main_thread},
-			{NULL, NULL}
-		};
-
-		// BRS There is a error in MinGW (3.1.0) headers
-		// the parameter of StartServiceCtrlDispatcher is declared const in msvc headers
-#if defined(MINGW)
-		if (!StartServiceCtrlDispatcher(const_cast<SERVICE_TABLE_ENTRY*>(service_table)))
-		{
-#else
-		if (!StartServiceCtrlDispatcher(service_table))
-		{
-#endif
-			if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED) {
-				CNTL_shutdown_service("StartServiceCtrlDispatcher failed");
-			}
-			server_flag |= SRVR_non_service;
-		}
-	}
 	else
 	{
-		start_connections_thread(0);
-		nReturnValue = WINDOW_main(hThisInst, nWndMode, server_flag);
+		if (!(server_flag & SRVR_non_service))
+		{
+			string service_name;
+			service_name.printf(REMOTE_SERVICE, instance);
+
+			CNTL_init(start_connections_thread, instance);
+
+			const SERVICE_TABLE_ENTRY service_table[] =
+			{
+				{const_cast<char*>(service_name.c_str()), CNTL_main_thread},
+				{NULL, NULL}
+			};
+
+			// BRS There is a error in MinGW (3.1.0) headers
+			// the parameter of StartServiceCtrlDispatcher is declared const in msvc headers
+#if defined(MINGW)
+			if (!StartServiceCtrlDispatcher(const_cast<SERVICE_TABLE_ENTRY*>(service_table)))
+			{
+#else
+			if (!StartServiceCtrlDispatcher(service_table))
+			{
+#endif
+				const DWORD err = GetLastError();
+				if (err == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT) {
+					server_flag |= SRVR_non_service;
+				}
+				else if (err != ERROR_CALL_NOT_IMPLEMENTED) {
+					CNTL_shutdown_service("StartServiceCtrlDispatcher failed");
+				}
+			}
+		}
+
+		if (server_flag & SRVR_non_service)
+		{
+			start_connections_thread(0);
+			nReturnValue = WINDOW_main(hThisInst, nWndMode, server_flag);
+		}
 	}
 
 #ifdef DEBUG_GDS_ALLOC
