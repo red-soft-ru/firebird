@@ -321,20 +321,15 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 				{NULL, NULL}
 			};
 
-			// BRS There is a error in MinGW (3.1.0) headers
-			// the parameter of StartServiceCtrlDispatcher is declared const in msvc headers
-#if defined(MINGW)
-			if (!StartServiceCtrlDispatcher(const_cast<SERVICE_TABLE_ENTRY*>(service_table)))
-			{
-#else
 			if (!StartServiceCtrlDispatcher(service_table))
 			{
-#endif
 				const DWORD err = GetLastError();
-				if (err == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT) {
+				if (err == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT || err == ERROR_CALL_NOT_IMPLEMENTED)
+				{
 					server_flag |= SRVR_non_service;
 				}
-				else if (err != ERROR_CALL_NOT_IMPLEMENTED) {
+				else
+				{
 					CNTL_shutdown_service("StartServiceCtrlDispatcher failed");
 				}
 			}
