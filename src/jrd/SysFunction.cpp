@@ -393,6 +393,8 @@ const char
 	EFFECTIVE_USER_NAME[] = "EFFECTIVE_USER",
 	SESSION_TIMEZONE[] = "SESSION_TIMEZONE",
 	PARALLEL_WORKERS[] = "PARALLEL_WORKERS",
+	DECFLOAT_ROUND[] = "DECFLOAT_ROUND",
+	DECFLOAT_TRAPS[] = "DECFLOAT_TRAPS",
 	// SYSTEM namespace: transaction wise items
 	TRANSACTION_ID_NAME[] = "TRANSACTION_ID",
 	ISOLATION_LEVEL_NAME[] = "ISOLATION_LEVEL",
@@ -4731,6 +4733,10 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 		}
 		else if (nameStr == PARALLEL_WORKERS)
 			resultStr.printf("%d", attachment->att_parallel_workers);
+		else if (nameStr == DECFLOAT_ROUND)
+			resultStr = attachment->att_dec_status.getTxtRound();
+		else if (nameStr == DECFLOAT_TRAPS)
+			resultStr = attachment->att_dec_status.getTxtTraps();
 		else
 		{
 			// "Context variable %s is not found in namespace %s"
