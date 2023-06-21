@@ -3555,6 +3555,49 @@ static processing_state show_comments(const commentMode showextract, const char*
 		return ps_ERR;
 	END_ERROR
 
+	if (isqlGlob.major_ods >= ODS_VERSION12)
+	{
+		FOR PACK IN RDB$PACKAGES
+			WITH PACK.RDB$DESCRIPTION NOT MISSING
+			AND (PACK.RDB$SYSTEM_FLAG EQ 0 OR PACK.RDB$SYSTEM_FLAG MISSING)
+			SORTED BY PACK.RDB$PACKAGE_NAME
+
+			show_comment("PACKAGE", NULL, PACK.RDB$PACKAGE_NAME, NULL, &PACK.RDB$DESCRIPTION,
+				showextract, first ? banner : 0);
+			first = false;
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+
+		FOR M IN RDB$AUTH_MAPPING
+			WITH M.RDB$DESCRIPTION NOT MISSING
+			AND (M.RDB$SYSTEM_FLAG EQ 0 OR M.RDB$SYSTEM_FLAG MISSING)
+			SORTED BY M.RDB$MAP_NAME
+
+			show_comment("MAPPING", NULL, M.RDB$MAP_NAME, NULL, &M.RDB$DESCRIPTION,
+				showextract, first ? banner : 0);
+			first = false;
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+
+		FOR M IN SEC$GLOBAL_AUTH_MAPPING
+			WITH M.SEC$DESCRIPTION NOT MISSING
+			SORTED BY M.SEC$MAP_NAME
+
+			show_comment("GLOBAL MAPPING", NULL, M.SEC$MAP_NAME, NULL, &M.SEC$DESCRIPTION,
+				showextract, first ? banner : 0);
+			first = false;
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+	}
 	return first ? OBJECT_NOT_FOUND : SKIP;
 }
 
