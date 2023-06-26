@@ -7077,7 +7077,11 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 	else
 	{
 		values = doDsqlPass(dsqlScratch, dsqlValues, false);
-		needSavePoint = SubSelectFinder::find(dsqlScratch->getPool(), values);
+		// If this INSERT belongs to some PSQL code block and has subqueries
+		// inside its VALUES part, signal the caller to create a savepoint frame.
+		// See bug #5613 (aka CORE-5337) for details.
+		needSavePoint = (dsqlScratch->flags & DsqlCompilerScratch::FLAG_BLOCK) &&
+			SubSelectFinder::find(dsqlScratch->getPool(), values);
 	}
 
 	// Process relation
@@ -7238,13 +7242,9 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 StmtNode* StoreNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	bool needSavePoint;
-	StmtNode* node = SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch,
-		internalDsqlPass(dsqlScratch, false, needSavePoint));
+	const auto node = internalDsqlPass(dsqlScratch, false, needSavePoint);
 
-	if (!needSavePoint || nodeIs<SavepointEncloseNode>(node))
-		return node;
-
-	return FB_NEW_POOL(dsqlScratch->getPool()) SavepointEncloseNode(dsqlScratch->getPool(), node);
+	return SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, node, needSavePoint);
 }
 
 string StoreNode::internalPrint(NodePrinter& printer) const
@@ -8381,12 +8381,18 @@ DmlNode* SavepointEncloseNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 	return node;
 }
 
-StmtNode* SavepointEncloseNode::make(MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, StmtNode* node)
+StmtNode* SavepointEncloseNode::make(MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, StmtNode* node, bool force)
 {
-	// Add savepoint wrapper around the statement having error handlers
+	// Add savepoint wrapper around the statement having error handlers, or if requested explicitly
 
-	return dsqlScratch->errorHandlers ?
-		FB_NEW_POOL(pool) SavepointEncloseNode(pool, node) : node;
+	if (dsqlScratch->errorHandlers || force)
+	{
+		// Ensure that savepoints are never created around a DSQL statement
+		fb_assert(dsqlScratch->flags & DsqlCompilerScratch::FLAG_BLOCK);
+		return FB_NEW_POOL(pool) SavepointEncloseNode(pool, node);
+	}
+
+	return node;
 }
 
 SavepointEncloseNode* SavepointEncloseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
@@ -9006,11 +9012,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (!returning)
 		dsqlScratch->getStatement()->setType(DsqlCompiledStatement::TYPE_INSERT);
 
-	StmtNode* ret = SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, list);
-	if (!needSavePoint || nodeIs<SavepointEncloseNode>(ret))
-		return ret;
-
-	return FB_NEW_POOL(dsqlScratch->getPool()) SavepointEncloseNode(dsqlScratch->getPool(), ret);
+	return SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, list, needSavePoint);
 }
 
 string UpdateOrInsertNode::internalPrint(NodePrinter& printer) const
