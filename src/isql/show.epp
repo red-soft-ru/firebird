@@ -58,6 +58,7 @@
 #include "../common/classes/UserBlob.h"
 #include "../common/classes/VaryStr.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../common/classes/MetaString.h"
 #include "../common/TimeZoneUtil.h"
 #include "../isql/OptionsBase.h"
 
@@ -68,6 +69,7 @@
 #endif
 
 using Firebird::string;
+using Firebird::MetaString;
 using MsgFormat::SafeArg;
 
 
@@ -97,14 +99,14 @@ static processing_state show_dialect();
 static processing_state show_domains(const SCHAR*);
 static processing_state show_exceptions(const SCHAR*);
 static processing_state show_filters(const SCHAR*);
-static processing_state show_functions(const SCHAR*);
+static processing_state show_functions(const SCHAR*, bool);
 static processing_state show_sys_functions(const char* msg);
-static processing_state show_func_legacy(const SCHAR*);
-static processing_state show_func(const SCHAR*);
+static processing_state show_func_legacy(const MetaString&);
+static processing_state show_func(const MetaString&, const MetaString&);
 static processing_state show_generators(const SCHAR*);
 static void show_index(SCHAR*, SCHAR*, const SSHORT, const SSHORT, const SSHORT);
 static processing_state show_indices(const SCHAR* const*);
-static processing_state show_proc(const SCHAR*, bool);
+static processing_state show_proc(const SCHAR*, bool, bool, const char* msg = nullptr);
 static processing_state show_packages(const SCHAR* package_name, bool, const SCHAR* = NULL);
 static processing_state show_publications(const SCHAR* pub_name, bool, const SCHAR* = NULL);
 static void show_pub_table(const SCHAR* table_name);
@@ -114,6 +116,7 @@ static processing_state show_table(const SCHAR*, bool);
 static processing_state show_trigger(const SCHAR*, bool, bool);
 static processing_state show_users();
 static processing_state show_users12();
+static void parse_package(const char* procname, MetaString& package, MetaString& procedure);
 
 const char* const spaces = "                                ";
 static TEXT Print_buffer[512];
@@ -2312,7 +2315,7 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 				break;
 
 			case ShowOptions::procedure:
-				show_proc(NULL, true);
+				show_proc(NULL, false, true);
 				break;
 
 			case ShowOptions::package:
@@ -2335,7 +2338,8 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 			show_all_tables(1);
 			IUTILS_msg_get(MSG_FUNCTIONS, msg);
 			show_sys_functions(msg);
-			show_proc(NULL, true);
+			IUTILS_msg_get(MSG_PROCEDURES, msg);
+			show_proc(NULL, false, true, msg);
 			IUTILS_msg_get(MSG_PACKAGES, msg);
 			show_packages(NULL, true, msg);
 			IUTILS_msg_get(MSG_COLLATIONS, msg);
@@ -2438,10 +2442,10 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 		if (*cmd[2] == '"')
 		{
 			remove_delimited_double_quotes(lcmd[2]);
-			ret = show_functions(lcmd[2]);
+			ret = show_functions(lcmd[2], true);
 		}
 		else
-			ret = show_functions(cmd[2]);
+			ret = show_functions(cmd[2], false);
 
 		if (ret == OBJECT_NOT_FOUND)
 		{
@@ -2614,10 +2618,10 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 		if (*cmd[2] == '"')
 		{
 			remove_delimited_double_quotes(lcmd[2]);
-			ret = show_proc(lcmd[2], false);
+			ret = show_proc(lcmd[2], true, false);
 		}
 		else
-			ret = show_proc(cmd[2], false);
+			ret = show_proc(cmd[2], false, false);
 
 		if (ret == OBJECT_NOT_FOUND)
 		{
@@ -4312,9 +4316,8 @@ static processing_state show_sys_functions(const SCHAR* msg)
 	bool first = true;
 
 	FOR FUN IN RDB$FUNCTIONS
-		WITH FUN.RDB$SYSTEM_FLAG EQ 1 AND
-			 FUN.RDB$PACKAGE_NAME MISSING
-		SORTED BY FUN.RDB$FUNCTION_NAME
+		WITH FUN.RDB$SYSTEM_FLAG EQ 1
+		SORTED BY FUN.RDB$PACKAGE_NAME, FUN.RDB$FUNCTION_NAME
 	{
 		if (first)
 		{
@@ -4323,7 +4326,11 @@ static processing_state show_sys_functions(const SCHAR* msg)
 				isqlGlob.printf("%s%s", msg, NEWLINE);
 		}
 
-		isqlGlob.printf("%s%s", fb_utils::exact_name(FUN.RDB$FUNCTION_NAME), NEWLINE);
+		// Strip trailing blanks
+		MetaString package(FUN.RDB$PACKAGE_NAME);
+		MetaString function(FUN.RDB$FUNCTION_NAME);
+
+		isqlGlob.printf("%s%s%s%s", package.c_str(), package.hasData() ? "." : "", function.c_str(), NEWLINE);
 	}
 	END_FOR
 	ON_ERROR
@@ -4335,7 +4342,7 @@ static processing_state show_sys_functions(const SCHAR* msg)
 }
 
 
-static processing_state show_functions(const SCHAR* funcname)
+static processing_state show_functions(const SCHAR* funcname, bool quoted)
 {
 /**************************************
  *
@@ -4352,42 +4359,20 @@ static processing_state show_functions(const SCHAR* funcname)
 
 	if (!funcname || !strlen(funcname))
 	{
+		bool first = true;
+
 		// This query gets the function name; the next query
 		// gets all the dependencies if any
-
-		bool first = true;
-		string prevPackage;
 
 		FOR FUN IN RDB$FUNCTIONS
 			SORTED BY FUN.RDB$PACKAGE_NAME, FUN.RDB$FUNCTION_NAME
 		{
-			string package;
+			first = false;
 
-			if (!FUN.RDB$PACKAGE_NAME.NULL)
-			{
-				fb_utils::exact_name(FUN.RDB$PACKAGE_NAME);
-				package = FUN.RDB$PACKAGE_NAME;
-			}
+			MetaString package(FUN.RDB$PACKAGE_NAME);
+			MetaString function(FUN.RDB$FUNCTION_NAME);
 
-			if (first || package != prevPackage)
-			{
-				if (package.isEmpty())
-					isqlGlob.printf("Global functions%s%s", NEWLINE, NEWLINE);
-				else
-				{
-					if (!first)
-						isqlGlob.printf("%s", NEWLINE);
-
-					isqlGlob.printf("Package: %s%s%s", package.c_str(), NEWLINE, NEWLINE);
-				}
-
-				first = false;
-			}
-
-			prevPackage = package;
-
-			fb_utils::exact_name(FUN.RDB$FUNCTION_NAME);
-			isqlGlob.printf("%s", FUN.RDB$FUNCTION_NAME);
+			isqlGlob.printf("%s%s%s", package.c_str(), package.hasData() ? "." : "", function.c_str());
 
 			if (!(FUN.RDB$VALID_BLR.NULL || FUN.RDB$VALID_BLR))
 				isqlGlob.printf("; Invalid");
@@ -4435,14 +4420,24 @@ static processing_state show_functions(const SCHAR* funcname)
 
 	processing_state return_state = OBJECT_NOT_FOUND;
 
+	bool first = true;
+	MetaString package, function;
+	if (quoted)
+		function = funcname;
+	else
+		parse_package(funcname, package, function);
+
 	FOR FUN IN RDB$FUNCTIONS
-		WITH FUN.RDB$FUNCTION_NAME EQ funcname AND
-			 FUN.RDB$PACKAGE_NAME MISSING
+		WITH FUN.RDB$FUNCTION_NAME EQ function.c_str()
+			AND FUN.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '')
 
 		if (!FUN.RDB$MODULE_NAME.NULL)
-			return_state = show_func_legacy(funcname);
+		{
+			fb_assert(package.isEmpty());
+			return_state = show_func_legacy(function);
+		}
 		else if (isqlGlob.major_ods >= ODS_VERSION12)
-			return_state = show_func(funcname);
+			return_state = show_func(package, function);
 
 	END_FOR
 
@@ -4450,7 +4445,7 @@ static processing_state show_functions(const SCHAR* funcname)
 }
 
 
-static processing_state show_func(const SCHAR* funcname)
+static processing_state show_func(const MetaString& package, const MetaString& function)
 {
 /**************************************
  *
@@ -4467,8 +4462,8 @@ static processing_state show_func(const SCHAR* funcname)
 	bool first = true;
 
 	FOR FUN IN RDB$FUNCTIONS
-		WITH FUN.RDB$FUNCTION_NAME EQ funcname AND
-			 FUN.RDB$PACKAGE_NAME MISSING
+		WITH FUN.RDB$FUNCTION_NAME EQ function.c_str()
+			AND FUN.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '')
 
 		first = false;
 
@@ -4506,7 +4501,7 @@ static processing_state show_func(const SCHAR* funcname)
 		FOR ARG IN RDB$FUNCTION_ARGUMENTS CROSS
 			FLD IN RDB$FIELDS WITH
 			FUN.RDB$FUNCTION_NAME EQ ARG.RDB$FUNCTION_NAME AND
-			ARG.RDB$PACKAGE_NAME MISSING AND
+			ARG.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '') AND
 			ARG.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME
 			SORTED BY ARG.RDB$ARGUMENT_POSITION
 
@@ -4656,7 +4651,7 @@ static processing_state show_func(const SCHAR* funcname)
 }
 
 
-static processing_state show_func_legacy(const SCHAR* object)
+static processing_state show_func_legacy(const MetaString& function)
 {
 /**************************************
  *
@@ -4673,8 +4668,9 @@ static processing_state show_func_legacy(const SCHAR* object)
 	FOR FUN IN RDB$FUNCTIONS CROSS
 		FNA IN RDB$FUNCTION_ARGUMENTS WITH
 		FUN.RDB$FUNCTION_NAME EQ FNA.RDB$FUNCTION_NAME AND
+		FNA.RDB$PACKAGE_NAME MISSING AND
+		FUN.RDB$FUNCTION_NAME EQ function.c_str() AND
 		FUN.RDB$PACKAGE_NAME MISSING AND
-		FUN.RDB$FUNCTION_NAME EQ object AND
 		FUN.RDB$MODULE_NAME NOT MISSING
 		SORTED BY FNA.RDB$ARGUMENT_POSITION
 
@@ -5271,7 +5267,7 @@ processing_state SHOW_maps(bool extract, const SCHAR* map_name)
 }
 
 
-static processing_state show_proc(const SCHAR* procname, bool sys)
+static processing_state show_proc(const SCHAR* procname, bool quoted, bool sys, const char* msg)
 {
 /**************************************
  *
@@ -5295,7 +5291,6 @@ static processing_state show_proc(const SCHAR* procname, bool sys)
 		// gets all the dependencies if any
 
 		bool first_proc = true;
-		string prevPackage;
 
 		FOR PRC IN RDB$PROCEDURES
 			SORTED BY PRC.RDB$PACKAGE_NAME, PRC.RDB$PROCEDURE_NAME
@@ -5304,36 +5299,18 @@ static processing_state show_proc(const SCHAR* procname, bool sys)
 
 			if (system_flag == sys)
 			{
-				string package;
-
-				if (!PRC.RDB$PACKAGE_NAME.NULL)
+				if (first_proc)
 				{
-					fb_utils::exact_name(PRC.RDB$PACKAGE_NAME);
-					package = PRC.RDB$PACKAGE_NAME;
-				}
-
-				if (first_proc || package != prevPackage)
-				{
-					if (package.isEmpty())
-						isqlGlob.printf("Global procedures%s%s", NEWLINE, NEWLINE);
-					else
-					{
-						if (!first_proc)
-							isqlGlob.printf("%s", NEWLINE);
-
-						isqlGlob.printf("Package: %s%s%s", package.c_str(), NEWLINE, NEWLINE);
-					}
-
+					if (msg)
+						isqlGlob.printf("%s%s%s", NEWLINE, msg, NEWLINE);
 					first_proc = false;
 				}
 
-
-				prevPackage = package;
-
 				// Strip trailing blanks
+				MetaString package(PRC.RDB$PACKAGE_NAME);
+				MetaString procedure(PRC.RDB$PROCEDURE_NAME);
 
-				fb_utils::exact_name(PRC.RDB$PROCEDURE_NAME);
-				isqlGlob.printf("%s", PRC.RDB$PROCEDURE_NAME);
+				isqlGlob.printf("%s%s%s", package.c_str(), package.hasData() ? "." : "", procedure.c_str());
 
 				if (!(PRC.RDB$VALID_BLR.NULL || PRC.RDB$VALID_BLR))
 					isqlGlob.printf("; Invalid");
@@ -5385,10 +5362,16 @@ static processing_state show_proc(const SCHAR* procname, bool sys)
 	// A procedure was named, so print all the info on that procedure
 
 	bool first = true;
+	MetaString package, procedure;
+	if (quoted)
+		procedure = procname;
+	else
+		parse_package(procname, package, procedure);
 
 	FOR PRC IN RDB$PROCEDURES WITH
-		PRC.RDB$PROCEDURE_NAME EQ procname AND
-		PRC.RDB$PACKAGE_NAME MISSING
+		PRC.RDB$PROCEDURE_NAME EQ procedure.c_str() AND
+		PRC.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '')
+
 		first = false;
 
 		if (!PRC.RDB$ENTRYPOINT.NULL)
@@ -5421,8 +5404,8 @@ static processing_state show_proc(const SCHAR* procname, bool sys)
 
 		FOR PRM IN RDB$PROCEDURE_PARAMETERS CROSS
 			FLD IN RDB$FIELDS WITH
-			PRC.RDB$PROCEDURE_NAME EQ PRM.RDB$PROCEDURE_NAME AND
-			PRM.RDB$PACKAGE_NAME MISSING AND
+			PRM.RDB$PROCEDURE_NAME EQ PRC.RDB$PROCEDURE_NAME AND
+			PRM.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '') AND
 			PRM.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME
 			SORTED BY PRM.RDB$PARAMETER_TYPE, PRM.RDB$PARAMETER_NUMBER
 
@@ -5556,13 +5539,11 @@ static processing_state show_proc(const SCHAR* procname, bool sys)
 			}
 
 			isqlGlob.printf(NEWLINE);
-
 		END_FOR
 		ON_ERROR
 			ISQL_errmsg (fbStatus);
 			return ps_ERR;
 		END_ERROR;
-
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
@@ -5571,6 +5552,23 @@ static processing_state show_proc(const SCHAR* procname, bool sys)
 	if (first)
 		return (OBJECT_NOT_FOUND);
 	return (SKIP);
+}
+
+
+static void parse_package(const char* procname, MetaString& package, MetaString& procedure)
+{
+	for (const char* point = procname; *point; ++point)
+	{
+		if (*point == '.')
+		{
+			package.assign(procname, point - procname);
+			procedure = ++point;
+			return;
+		}
+	}
+
+	package = "";
+	procedure = procname;
 }
 
 
