@@ -133,7 +133,8 @@ struct Request
 	bool dirty = true;
 	unsigned level = 0;
 	SINT64 statementId;
-	SINT64 callerRequestId;
+	SINT64 callerStatementId = 0;
+	SINT64 callerRequestId = 0;
 	ISC_TIMESTAMP_TZ startTimestamp;
 	Nullable<ISC_TIMESTAMP_TZ> finishTimestamp;
 	Nullable<FB_UINT64> totalElapsedTicks;
@@ -182,31 +183,39 @@ public:
 	void defineRecordSource(SINT64 statementId, unsigned cursorId, unsigned recSourceId,
 		const char* accessPath, unsigned parentRecordSourceId) override;
 
-	void onRequestStart(ThrowStatusExceptionWrapper* status, SINT64 requestId, SINT64 statementId,
-		SINT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) override;
+	void onRequestStart(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 requestId,
+		SINT64 callerStatementId, SINT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) override;
 
-	void onRequestFinish(ThrowStatusExceptionWrapper* status, SINT64 requestId,
+	void onRequestFinish(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 requestId,
 		ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats) override;
 
-	void beforePsqlLineColumn(SINT64 requestId, unsigned line, unsigned column) override
+	void beforePsqlLineColumn(SINT64 statementId, SINT64 requestId, unsigned line, unsigned column) override
 	{
 	}
 
-	void afterPsqlLineColumn(SINT64 requestId, unsigned line, unsigned column, IProfilerStats* stats) override;
+	void afterPsqlLineColumn(SINT64 statementId, SINT64 requestId,
+		unsigned line, unsigned column, IProfilerStats* stats) override;
 
-	void beforeRecordSourceOpen(SINT64 requestId, unsigned cursorId, unsigned recSourceId) override
+	void beforeRecordSourceOpen(SINT64 statementId, SINT64 requestId, unsigned cursorId, unsigned recSourceId) override
 	{
 	}
 
-	void afterRecordSourceOpen(SINT64 requestId, unsigned cursorId, unsigned recSourceId,
+	void afterRecordSourceOpen(SINT64 statementId, SINT64 requestId, unsigned cursorId, unsigned recSourceId,
 		IProfilerStats* stats) override;
 
-	void beforeRecordSourceGetRecord(SINT64 requestId, unsigned cursorId, unsigned recSourceId) override
+	void beforeRecordSourceGetRecord(SINT64 statementId, SINT64 requestId,
+		unsigned cursorId, unsigned recSourceId) override
 	{
 	}
 
-	void afterRecordSourceGetRecord(SINT64 requestId, unsigned cursorId, unsigned recSourceId,
+	void afterRecordSourceGetRecord(SINT64 statementId, SINT64 requestId, unsigned cursorId, unsigned recSourceId,
 		IProfilerStats* stats) override;
+
+private:
+	Request* getRequest(SINT64 statementId, SINT64 requestId)
+	{
+		return requests.get(detailedRequests ? requestId : -statementId);
+	}
 
 public:
 	RefPtr<ProfilerPlugin> plugin;
@@ -215,10 +224,11 @@ public:
 	NonPooledMap<StatementCursorRecSourceKey, RecordSource> recordSources{defaultPool()};
 	NonPooledMap<SINT64, Request> requests{defaultPool()};
 	SINT64 id;
-	bool dirty = true;
 	ISC_TIMESTAMP_TZ startTimestamp;
 	Nullable<ISC_TIMESTAMP_TZ> finishTimestamp;
 	string description{defaultPool()};
+	bool detailedRequests = false;
+	bool dirty = true;
 };
 
 class ProfilerPlugin final : public StdPlugin<IProfilerPluginImpl<ProfilerPlugin, ThrowStatusExceptionWrapper>>
@@ -344,21 +354,36 @@ void ProfilerPlugin::init(ThrowStatusExceptionWrapper* status, IAttachment* atta
 IProfilerSession* ProfilerPlugin::startSession(ThrowStatusExceptionWrapper* status,
 	const char* description, const char* options, ISC_TIMESTAMP_TZ timestamp)
 {
+	AutoDispose<Session> session(FB_NEW Session(status, this, description, timestamp));
+
 	if (options && options[0])
 	{
-		static const ISC_STATUS statusVector[] = {
-			isc_arg_gds,
-			isc_random,
-			isc_arg_string,
-			(ISC_STATUS) "Invalid OPTIONS for Default_Profiler. Should be empty or NULL.",
-			isc_arg_end
-		};
+		string optionsStr = options;
+		optionsStr.alltrim();
 
-		status->setErrors(statusVector);
-		return nullptr;
+		if (optionsStr.hasData())
+		{
+			optionsStr.upper();
+
+			if (optionsStr == "DETAILED_REQUESTS")
+				session->detailedRequests = true;
+			else
+			{
+				static const ISC_STATUS statusVector[] = {
+					isc_arg_gds,
+					isc_random,
+					isc_arg_string,
+					(ISC_STATUS) "Invalid OPTIONS for Default_Profiler.",
+					isc_arg_end
+				};
+
+				status->setErrors(statusVector);
+				return nullptr;
+			}
+		}
 	}
 
-	return FB_NEW Session(status, this, description, timestamp);
+	return session.release();
 }
 
 void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
@@ -433,15 +458,17 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 
 	constexpr auto requestSql = R"""(
 		update or insert into plg$prof_requests
-		    (profile_id, request_id, statement_id, caller_request_id, start_timestamp, finish_timestamp, total_elapsed_time)
-		    values (?, ?, ?, ?, ?, ?, ?)
-		    matching (profile_id, request_id)
+		    (profile_id, statement_id, request_id, caller_statement_id, caller_request_id, start_timestamp,
+		     finish_timestamp, total_elapsed_time)
+		    values (?, ?, ?, ?, ?, ?, ?, ?)
+		    matching (profile_id, statement_id, request_id)
 	)""";
 
 	FB_MESSAGE(RequestMessage, ThrowStatusExceptionWrapper,
 		(FB_BIGINT, profileId)
-		(FB_BIGINT, requestId)
 		(FB_BIGINT, statementId)
+		(FB_BIGINT, requestId)
+		(FB_BIGINT, callerStatementId)
 		(FB_BIGINT, callerRequestId)
 		(FB_TIMESTAMP_TZ, startTimestamp)
 		(FB_TIMESTAMP_TZ, finishTimestamp)
@@ -452,10 +479,10 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 	constexpr auto recSrcStatSql = R"""(
 		execute block (
 		    profile_id type of column plg$prof_record_source_stats.profile_id = ?,
+		    statement_id type of column plg$prof_record_source_stats.statement_id = ?,
 		    request_id type of column plg$prof_record_source_stats.request_id = ?,
 		    cursor_id type of column plg$prof_record_source_stats.cursor_id = ?,
 		    record_source_id type of column plg$prof_record_source_stats.record_source_id = ?,
-		    statement_id type of column plg$prof_record_source_stats.statement_id = ?,
 		    open_counter type of column plg$prof_record_source_stats.open_counter = ?,
 		    open_min_elapsed_time type of column plg$prof_record_source_stats.open_min_elapsed_time = ?,
 		    open_max_elapsed_time type of column plg$prof_record_source_stats.open_max_elapsed_time = ?,
@@ -470,14 +497,15 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 		    merge into plg$prof_record_source_stats
 		        using rdb$database on
 		            profile_id = :profile_id and
+		            statement_id = :statement_id and
 		            request_id = :request_id and
 		            cursor_id = :cursor_id and
 		            record_source_id = :record_source_id
 		        when not matched then
-		            insert (profile_id, request_id, cursor_id, record_source_id, statement_id,
+		            insert (profile_id, statement_id, request_id, cursor_id, record_source_id,
 		                    open_counter, open_min_elapsed_time, open_max_elapsed_time, open_total_elapsed_time,
 		                    fetch_counter, fetch_min_elapsed_time, fetch_max_elapsed_time, fetch_total_elapsed_time)
-		                values (:profile_id, :request_id, :cursor_id, :record_source_id, :statement_id,
+		                values (:profile_id, :statement_id, :request_id, :cursor_id, :record_source_id,
 		                        :open_counter, :open_min_elapsed_time, :open_max_elapsed_time, :open_total_elapsed_time,
 		                        :fetch_counter, :fetch_min_elapsed_time, :fetch_max_elapsed_time, :fetch_total_elapsed_time)
 		        when matched then
@@ -495,10 +523,10 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 
 	FB_MESSAGE(RecSrcStatMessage, ThrowStatusExceptionWrapper,
 		(FB_BIGINT, profileId)
+		(FB_BIGINT, statementId)
 		(FB_BIGINT, requestId)
 		(FB_INTEGER, cursorId)
 		(FB_INTEGER, recordSourceId)
-		(FB_BIGINT, statementId)
 		(FB_BIGINT, openCounter)
 		(FB_BIGINT, openMinElapsedTime)
 		(FB_BIGINT, openMaxElapsedTime)
@@ -513,10 +541,10 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 	constexpr auto psqlStatSql = R"""(
 		execute block (
 		    profile_id type of column plg$prof_psql_stats.profile_id = ?,
+		    statement_id type of column plg$prof_psql_stats.statement_id = ?,
 		    request_id type of column plg$prof_psql_stats.request_id = ?,
 		    line_num type of column plg$prof_psql_stats.line_num = ?,
 		    column_num type of column plg$prof_psql_stats.column_num = ?,
-		    statement_id type of column plg$prof_psql_stats.statement_id = ?,
 		    counter type of column plg$prof_psql_stats.counter = ?,
 		    min_elapsed_time type of column plg$prof_psql_stats.min_elapsed_time = ?,
 		    max_elapsed_time type of column plg$prof_psql_stats.max_elapsed_time = ?,
@@ -527,14 +555,15 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 		    merge into plg$prof_psql_stats
 		        using rdb$database on
 		            profile_id = :profile_id and
+		            statement_id = :statement_id and
 		            request_id = :request_id and
 		            line_num = :line_num and
 		            column_num = :column_num
 		        when not matched then
-		            insert (profile_id, request_id, line_num, column_num,
-		                    statement_id, counter, min_elapsed_time, max_elapsed_time, total_elapsed_time)
-		                values (:profile_id, :request_id, :line_num, :column_num,
-		                        :statement_id, :counter, :min_elapsed_time, :max_elapsed_time, :total_elapsed_time)
+		            insert (profile_id, statement_id, request_id, line_num, column_num,
+		                    counter, min_elapsed_time, max_elapsed_time, total_elapsed_time)
+		                values (:profile_id, :statement_id, :request_id, :line_num, :column_num,
+		                        :counter, :min_elapsed_time, :max_elapsed_time, :total_elapsed_time)
 		        when matched then
 		            update set
 		                counter = counter + :counter,
@@ -546,10 +575,10 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 
 	FB_MESSAGE(PsqlStatMessage, ThrowStatusExceptionWrapper,
 		(FB_BIGINT, profileId)
+		(FB_BIGINT, statementId)
 		(FB_BIGINT, requestId)
 		(FB_INTEGER, lineNum)
 		(FB_INTEGER, columnNum)
-		(FB_BIGINT, statementId)
 		(FB_BIGINT, counter)
 		(FB_BIGINT, minElapsedTime)
 		(FB_BIGINT, maxElapsedTime)
@@ -577,25 +606,25 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 	unsigned recSrcStatBatchSize = 0;
 	unsigned psqlStatBatchSize = 0;
 
-	auto executeBatch = [&](IBatch* batch, unsigned& batchSize)
+	const auto executeBatch = [&](IBatch* batch, unsigned& batchSize)
 	{
 		if (batchSize)
 		{
 			batchSize = 0;
 
-			if (auto batchCs = batch->execute(status, transaction))
+			if (const auto batchCs = batch->execute(status, transaction))
 				batchCs->dispose();
 		}
 	};
 
-	auto executeBatches = [&]()
+	const auto executeBatches = [&]()
 	{
 		executeBatch(requestBatch, requestBatchSize);
 		executeBatch(recSrcStatBatch, recSrcStatBatchSize);
 		executeBatch(psqlStatBatch, psqlStatBatchSize);
 	};
 
-	auto addBatch = [&](IBatch* batch, unsigned& batchSize, const auto& message)
+	const auto addBatch = [&](IBatch* batch, unsigned& batchSize, const auto& message)
 	{
 		batch->add(status, 1, message.getData());
 
@@ -649,15 +678,15 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					stack.pop()->level = ++level;
 			}
 
-			auto levelArray = statementsByLevel.getOrPut(profileStatement.level);
+			const auto levelArray = statementsByLevel.getOrPut(profileStatement.level);
 			levelArray->add(&statementIt);
 		}
 
 		for (auto& levelIt : statementsByLevel)
 		{
-			for (auto statementIt : levelIt.second)
+			for (const auto statementIt : levelIt.second)
 			{
-				auto profileStatementId = statementIt->first;
+				const auto profileStatementId = statementIt->first;
 				auto& profileStatement = statementIt->second;
 
 				statementMessage->profileIdNull = FB_FALSE;
@@ -774,15 +803,15 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					stack.pop()->level = ++level;
 			}
 
-			auto levelArray = requestsByLevel.getOrPut(profileRequest.level);
+			const auto levelArray = requestsByLevel.getOrPut(profileRequest.level);
 			levelArray->add(&requestIt);
 		}
 
 		for (auto& levelIt : requestsByLevel)
 		{
-			for (auto requestIt : levelIt.second)
+			for (const auto requestIt : levelIt.second)
 			{
-				auto profileRequestId = requestIt->first;
+				const auto profileRequestId = MAX(requestIt->first, 0);
 				auto& profileRequest = requestIt->second;
 
 				if (profileRequest.dirty)
@@ -795,6 +824,9 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 
 					requestMessage->statementIdNull = FB_FALSE;
 					requestMessage->statementId = profileRequest.statementId;
+
+					requestMessage->callerStatementIdNull = profileRequest.callerStatementId == 0 ? FB_TRUE : FB_FALSE;
+					requestMessage->callerStatementId = profileRequest.callerStatementId;
 
 					requestMessage->callerRequestIdNull = profileRequest.callerRequestId == 0 ? FB_TRUE : FB_FALSE;
 					requestMessage->callerRequestId = profileRequest.callerRequestId;
@@ -811,7 +843,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					addBatch(requestBatch, requestBatchSize, requestMessage);
 
 					if (profileRequest.finishTimestamp.isAssigned())
-						finishedRequests.add(profileRequestId);
+						finishedRequests.add(requestIt->first);
 
 					profileRequest.dirty = false;
 				}
@@ -824,6 +856,9 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					recSrcStatMessage->profileIdNull = FB_FALSE;
 					recSrcStatMessage->profileId = session->getId();
 
+					recSrcStatMessage->statementIdNull = FB_FALSE;
+					recSrcStatMessage->statementId = profileRequest.statementId;
+
 					recSrcStatMessage->requestIdNull = FB_FALSE;
 					recSrcStatMessage->requestId = profileRequestId;
 
@@ -832,9 +867,6 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 
 					recSrcStatMessage->recordSourceIdNull = FB_FALSE;
 					recSrcStatMessage->recordSourceId = cursorRecSource.second;
-
-					recSrcStatMessage->statementIdNull = FB_FALSE;
-					recSrcStatMessage->statementId = profileRequest.statementId;
 
 					recSrcStatMessage->openCounterNull = FB_FALSE;
 					recSrcStatMessage->openCounter = stats.openStats.counter;
@@ -872,6 +904,9 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					psqlStatMessage->profileIdNull = FB_FALSE;
 					psqlStatMessage->profileId = session->getId();
 
+					psqlStatMessage->statementIdNull = FB_FALSE;
+					psqlStatMessage->statementId = profileRequest.statementId;
+
 					psqlStatMessage->requestIdNull = FB_FALSE;
 					psqlStatMessage->requestId = profileRequestId;
 
@@ -880,9 +915,6 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 
 					psqlStatMessage->columnNumNull = FB_FALSE;
 					psqlStatMessage->columnNum = lineColumn.second;
-
-					psqlStatMessage->statementIdNull = FB_FALSE;
-					psqlStatMessage->statementId = profileRequest.statementId;
 
 					psqlStatMessage->counterNull = FB_FALSE;
 					psqlStatMessage->counter = statsIt.second.counter;
@@ -1037,23 +1069,29 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		            references plg$prof_sessions
 		            on delete cascade
 		            using index plg$prof_requests_profile,
-		    request_id bigint not null,
 		    statement_id bigint not null,
+		    request_id bigint not null,
+		    caller_statement_id bigint,
 		    caller_request_id bigint,
 		    start_timestamp timestamp with time zone not null,
 		    finish_timestamp timestamp with time zone,
 		    total_elapsed_time bigint,
 		    constraint plg$prof_requests_pk
-		        primary key (profile_id, request_id)
-		        using index plg$prof_requests_profile_request,
+		        primary key (profile_id, statement_id, request_id)
+		        using index plg$prof_requests_profile_request_statement,
 		    constraint plg$prof_requests_statement_fk
 		        foreign key (profile_id, statement_id) references plg$prof_statements
 		        on delete cascade
 		        using index plg$prof_requests_profile_statement,
-		    constraint plg$prof_requests_caller_request_fk
-		        foreign key (profile_id, caller_request_id) references plg$prof_requests (profile_id, request_id)
+		    constraint plg$prof_requests_caller_statement_fk
+		        foreign key (profile_id, caller_statement_id) references plg$prof_statements
 		        on delete cascade
-		        using index plg$prof_requests_caller_request
+		        using index plg$prof_requests_profile_caller_statement,
+		    constraint plg$prof_requests_caller_request_fk
+		        foreign key (profile_id, caller_statement_id, caller_request_id)
+		            references plg$prof_requests (profile_id, statement_id, request_id)
+		        on delete cascade
+		        using index plg$prof_requests_profile_caller_statement_caller_request
 		))""",
 
 		"grant select, update, insert, delete on table plg$prof_requests to plg$profiler",
@@ -1065,19 +1103,19 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		            references plg$prof_sessions
 		            on delete cascade
 		            using index plg$prof_psql_stats_profile,
+		    statement_id bigint not null,
 		    request_id bigint not null,
 		    line_num integer not null,
 		    column_num integer not null,
-		    statement_id bigint not null,
 		    counter bigint not null,
 		    min_elapsed_time bigint not null,
 		    max_elapsed_time bigint not null,
 		    total_elapsed_time bigint not null,
 		    constraint plg$prof_psql_stats_pk
-		        primary key (profile_id, request_id, line_num, column_num)
-		        using index plg$prof_psql_stats_profile_request_line_column,
+		        primary key (profile_id, statement_id, request_id, line_num, column_num)
+		        using index plg$prof_psql_stats_profile_statement_request_line_column,
 		    constraint plg$prof_psql_stats_request_fk
-		        foreign key (profile_id, request_id) references plg$prof_requests
+		        foreign key (profile_id, statement_id, request_id) references plg$prof_requests
 		        on delete cascade
 		        using index plg$prof_psql_stats_profile_request,
 		    constraint plg$prof_psql_stats_statement_fk
@@ -1095,10 +1133,10 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		            references plg$prof_sessions
 		            on delete cascade
 		            using index plg$prof_record_source_stats_profile_id,
+		    statement_id bigint not null,
 		    request_id bigint not null,
 		    cursor_id integer not null,
 		    record_source_id integer not null,
-		    statement_id bigint not null,
 		    open_counter bigint not null,
 		    open_min_elapsed_time bigint not null,
 		    open_max_elapsed_time bigint not null,
@@ -1108,10 +1146,10 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		    fetch_max_elapsed_time bigint not null,
 		    fetch_total_elapsed_time bigint not null,
 		    constraint plg$prof_record_source_stats_pk
-		        primary key (profile_id, request_id, cursor_id, record_source_id)
-		        using index plg$prof_record_source_stats_profile_request_cursor_recsource,
+		        primary key (profile_id, statement_id, request_id, cursor_id, record_source_id)
+		        using index plg$prof_record_source_stats_profile_stat_req_cur_recsource,
 		    constraint plg$prof_record_source_stats_request_fk
-		        foreign key (profile_id, request_id) references plg$prof_requests
+		        foreign key (profile_id, statement_id, request_id) references plg$prof_requests
 		        on delete cascade
 		        using index plg$prof_record_source_stats_profile_request,
 		    constraint plg$prof_record_source_stats_statement_fk
@@ -1287,7 +1325,7 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		"grant select on table plg$prof_record_source_stats_view to plg$profiler"
 	};
 
-	for (auto createSql : createSqlStaments)
+	for (const auto createSql : createSqlStaments)
 	{
 		attachment->execute(status, transaction, 0, createSql, SQL_DIALECT_CURRENT,
 			nullptr, nullptr, nullptr, nullptr);
@@ -1375,7 +1413,7 @@ void Session::finish(ThrowStatusExceptionWrapper* status, ISC_TIMESTAMP_TZ times
 void Session::defineStatement(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 parentStatementId,
 	const char* type, const char* packageName, const char* routineName, const char* sqlText)
 {
-	auto statement = statements.put(statementId);
+	const auto statement = statements.put(statementId);
 	fb_assert(statement);
 
 	if (!statement)
@@ -1414,7 +1452,7 @@ void Session::defineRecordSource(SINT64 statementId, unsigned cursorId, unsigned
 
 	if (unsigned len = recSource->accessPath.length(); len > MAX_ACCESS_PATH_CHAR_LEN)
 	{
-		auto str = recSource->accessPath.c_str();
+		const auto str = recSource->accessPath.c_str();
 		unsigned charLen = 0;
 		unsigned pos = 0;
 		unsigned truncPos = 0;
@@ -1440,24 +1478,28 @@ void Session::defineRecordSource(SINT64 statementId, unsigned cursorId, unsigned
 		recSource->parentId = parentRecordSourceId;
 }
 
-void Session::onRequestStart(ThrowStatusExceptionWrapper* status, SINT64 requestId, SINT64 statementId,
-	SINT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp)
+void Session::onRequestStart(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 requestId,
+	SINT64 callerStatementId, SINT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp)
 {
-	auto request = requests.put(requestId);
-	///fb_assert(!request);
+	const auto request = requests.put(detailedRequests ? requestId : -statementId);
 
 	if (!request)
 		return;
 
 	request->statementId = statementId;
-	request->callerRequestId = callerRequestId;
 	request->startTimestamp = timestamp;
+
+	if (detailedRequests)
+	{
+		request->callerStatementId = callerStatementId;
+		request->callerRequestId = callerRequestId;
+	}
 }
 
-void Session::onRequestFinish(ThrowStatusExceptionWrapper* status, SINT64 requestId,
+void Session::onRequestFinish(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 requestId,
 	ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats)
 {
-	if (auto request = requests.get(requestId))
+	if (const auto request = requests.get(requestId))
 	{
 		request->dirty = true;
 		request->finishTimestamp = timestamp;
@@ -1465,29 +1507,32 @@ void Session::onRequestFinish(ThrowStatusExceptionWrapper* status, SINT64 reques
 	}
 }
 
-void Session::afterPsqlLineColumn(SINT64 requestId, unsigned line, unsigned column, IProfilerStats* stats)
+void Session::afterPsqlLineColumn(SINT64 statementId, SINT64 requestId,
+	unsigned line, unsigned column, IProfilerStats* stats)
 {
-	if (auto request = requests.get(requestId))
+	if (const auto request = getRequest(statementId, requestId))
 	{
 		const auto profileStats = request->psqlStats.getOrPut({line, column});
 		profileStats->hit(stats->getElapsedTicks());
 	}
 }
 
-void Session::afterRecordSourceOpen(SINT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats)
+void Session::afterRecordSourceOpen(SINT64 statementId, SINT64 requestId, unsigned cursorId, unsigned recSourceId,
+	IProfilerStats* stats)
 {
-	if (auto request = requests.get(requestId))
+	if (const auto request = getRequest(statementId, requestId))
 	{
-		auto profileStats = request->recordSourcesStats.getOrPut({cursorId, recSourceId});
+		const auto profileStats = request->recordSourcesStats.getOrPut({cursorId, recSourceId});
 		profileStats->openStats.hit(stats->getElapsedTicks());
 	}
 }
 
-void Session::afterRecordSourceGetRecord(SINT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats)
+void Session::afterRecordSourceGetRecord(SINT64 statementId, SINT64 requestId, unsigned cursorId, unsigned recSourceId,
+	IProfilerStats* stats)
 {
-	if (auto request = requests.get(requestId))
+	if (const auto request = getRequest(statementId, requestId))
 	{
-		auto profileStats = request->recordSourcesStats.getOrPut({cursorId, recSourceId});
+		const auto profileStats = request->recordSourcesStats.getOrPut({cursorId, recSourceId});
 		profileStats->fetchStats.hit(stats->getElapsedTicks());
 	}
 }

@@ -588,7 +588,15 @@ public:
 	ULONG		att_flags;					// Flags describing the state of the attachment
 	SSHORT		att_client_charset;			// user's charset specified in dpb
 	SSHORT		att_charset;				// current (client or external) attachment charset
+
+	// ASF: Attention: att_in_system_routine was initially added to support the profiler plugin
+	// writing to system tables. But a modified implementation used non-system tables and
+	// a problem was discovered that when writing to user's table from a "system context"
+	// (csb_internal) FK validations are not enforced becase MET_scan_relation is not called
+	// for the relation.
+	// Currently all "turning on" code for att_in_system_routine are disabled in SystemPackages.h.
 	bool 		att_in_system_routine = false;	// running a system routine
+
 	Lock*		att_long_locks;				// outstanding two phased locks
 #ifdef DEBUG_LCK_LIST
 	UCHAR		att_long_locks_type;		// Lock type of the first lock in list

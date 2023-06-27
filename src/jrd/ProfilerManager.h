@@ -197,13 +197,20 @@ public:
 	void beforePsqlLineColumn(Request* request, ULONG line, ULONG column)
 	{
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
-			currentSession->pluginSession->beforePsqlLineColumn(profileRequestId, line, column);
+		{
+			const auto profileStatement = getStatement(request);
+			currentSession->pluginSession->beforePsqlLineColumn(profileStatement->id, profileRequestId, line, column);
+		}
 	}
 
 	void afterPsqlLineColumn(Request* request, ULONG line, ULONG column, Stats& stats)
 	{
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
-			currentSession->pluginSession->afterPsqlLineColumn(profileRequestId, line, column, &stats);
+		{
+			const auto profileStatement = getStatement(request);
+			currentSession->pluginSession->afterPsqlLineColumn(profileStatement->id, profileRequestId,
+				line, column, &stats);
+		}
 	}
 
 	void beforeRecordSourceOpen(Request* request, const RecordSource* rsb)
@@ -215,7 +222,7 @@ public:
 			fb_assert(sequencePtr);
 
 			currentSession->pluginSession->beforeRecordSourceOpen(
-				profileRequestId, rsb->getCursorProfileId(), *sequencePtr);
+				profileStatement->id, profileRequestId, rsb->getCursorProfileId(), *sequencePtr);
 		}
 	}
 
@@ -228,7 +235,7 @@ public:
 			fb_assert(sequencePtr);
 
 			currentSession->pluginSession->afterRecordSourceOpen(
-				profileRequestId, rsb->getCursorProfileId(), *sequencePtr, &stats);
+				profileStatement->id, profileRequestId, rsb->getCursorProfileId(), *sequencePtr, &stats);
 		}
 	}
 
@@ -241,7 +248,7 @@ public:
 			fb_assert(sequencePtr);
 
 			currentSession->pluginSession->beforeRecordSourceGetRecord(
-				profileRequestId, rsb->getCursorProfileId(), *sequencePtr);
+				profileStatement->id, profileRequestId, rsb->getCursorProfileId(), *sequencePtr);
 		}
 	}
 
@@ -254,7 +261,7 @@ public:
 			fb_assert(sequencePtr);
 
 			currentSession->pluginSession->afterRecordSourceGetRecord(
-				profileRequestId, rsb->getCursorProfileId(), *sequencePtr, &stats);
+				profileStatement->id, profileRequestId, rsb->getCursorProfileId(), *sequencePtr, &stats);
 		}
 	}
 
@@ -304,12 +311,14 @@ private:
 			{
 				getStatement(request);  // define the statement and ignore the result
 
+				const StmtNumber callerStatementId = request->req_caller ?
+					request->req_caller->getStatement()->getStatementId() : 0;
 				const StmtNumber callerRequestId = request->req_caller ? request->req_caller->getRequestId() : 0;
 
 				LogLocalStatus status("Profiler onRequestStart");
 				currentSession->pluginSession->onRequestStart(&status,
-					(SINT64) request->getRequestId(), (SINT64) request->getStatement()->getStatementId(),
-					(SINT64) callerRequestId, timestamp);
+					(SINT64) request->getStatement()->getStatementId(), (SINT64) request->getRequestId(),
+					(SINT64) callerStatementId, (SINT64) callerRequestId, timestamp);
 
 				currentSession->requests.add(request->getRequestId());
 

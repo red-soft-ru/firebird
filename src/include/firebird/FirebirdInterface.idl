@@ -1746,19 +1746,22 @@ interface ProfilerSession : Disposable
 	void defineRecordSource(int64 statementId, uint cursorId, uint recSourceId,
 		const string accessPath, uint parentRecSourceId);
 
-	void onRequestStart(Status status, int64 requestId, int64 statementId, int64 callerRequestId,
-		ISC_TIMESTAMP_TZ timestamp);
+	void onRequestStart(Status status, int64 statementId, int64 requestId,
+		int64 callerStatementId, int64 callerRequestId, ISC_TIMESTAMP_TZ timestamp);
 
-	void onRequestFinish(Status status, int64 requestId, ISC_TIMESTAMP_TZ timestamp, ProfilerStats stats);
+	void onRequestFinish(Status status, int64 statementId, int64 requestId,
+		ISC_TIMESTAMP_TZ timestamp, ProfilerStats stats);
 
-	void beforePsqlLineColumn(int64 requestId, uint line, uint column);
-	void afterPsqlLineColumn(int64 requestId, uint line, uint column, ProfilerStats stats);
+	void beforePsqlLineColumn(int64 statementId, int64 requestId, uint line, uint column);
+	void afterPsqlLineColumn(int64 statementId, int64 requestId, uint line, uint column, ProfilerStats stats);
 
-	void beforeRecordSourceOpen(int64 requestId, uint cursorId, uint recSourceId);
-	void afterRecordSourceOpen(int64 requestId, uint cursorId, uint recSourceId, ProfilerStats stats);
+	void beforeRecordSourceOpen(int64 statementId, int64 requestId, uint cursorId, uint recSourceId);
+	void afterRecordSourceOpen(int64 statementId, int64 requestId, uint cursorId, uint recSourceId,
+		ProfilerStats stats);
 
-	void beforeRecordSourceGetRecord(int64 requestId, uint cursorId, uint recSourceId);
-	void afterRecordSourceGetRecord(int64 requestId, uint cursorId, uint recSourceId, ProfilerStats stats);
+	void beforeRecordSourceGetRecord(int64 statementId, int64 requestId, uint cursorId, uint recSourceId);
+	void afterRecordSourceGetRecord(int64 statementId, int64 requestId, uint cursorId, uint recSourceId,
+		ProfilerStats stats);
 }
 
 interface ProfilerStats : Versioned

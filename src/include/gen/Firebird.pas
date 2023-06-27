@@ -728,14 +728,14 @@ type
 	IProfilerSession_defineStatementPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
 	IProfilerSession_defineCursorPtr = procedure(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal); cdecl;
 	IProfilerSession_defineRecordSourcePtr = procedure(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); cdecl;
-	IProfilerSession_onRequestStartPtr = procedure(this: IProfilerSession; status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
-	IProfilerSession_onRequestFinishPtr = procedure(this: IProfilerSession; status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
-	IProfilerSession_beforePsqlLineColumnPtr = procedure(this: IProfilerSession; requestId: Int64; line: Cardinal; column: Cardinal); cdecl;
-	IProfilerSession_afterPsqlLineColumnPtr = procedure(this: IProfilerSession; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); cdecl;
-	IProfilerSession_beforeRecordSourceOpenPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
-	IProfilerSession_afterRecordSourceOpenPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
-	IProfilerSession_beforeRecordSourceGetRecordPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
-	IProfilerSession_afterRecordSourceGetRecordPtr = procedure(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+	IProfilerSession_onRequestStartPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
+	IProfilerSession_onRequestFinishPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
+	IProfilerSession_beforePsqlLineColumnPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal); cdecl;
+	IProfilerSession_afterPsqlLineColumnPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); cdecl;
+	IProfilerSession_beforeRecordSourceOpenPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
+	IProfilerSession_afterRecordSourceOpenPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+	IProfilerSession_beforeRecordSourceGetRecordPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
+	IProfilerSession_afterRecordSourceGetRecordPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
 	IProfilerStats_getElapsedTicksPtr = function(this: IProfilerStats): QWord; cdecl;
 
 	VersionedVTable = class
@@ -3839,14 +3839,14 @@ type
 		procedure defineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar);
 		procedure defineCursor(statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal);
 		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal);
-		procedure onRequestStart(status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
-		procedure onRequestFinish(status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
-		procedure beforePsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal);
-		procedure afterPsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats);
-		procedure beforeRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
-		procedure afterRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
-		procedure beforeRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
-		procedure afterRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+		procedure onRequestStart(status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
+		procedure onRequestFinish(status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
+		procedure beforePsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal);
+		procedure afterPsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats);
+		procedure beforeRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
+		procedure afterRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+		procedure beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
+		procedure afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
 	end;
 
 	IProfilerSessionImpl = class(IProfilerSession)
@@ -3860,14 +3860,14 @@ type
 		procedure defineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); virtual; abstract;
 		procedure defineCursor(statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal); virtual; abstract;
 		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); virtual; abstract;
-		procedure onRequestStart(status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); virtual; abstract;
-		procedure onRequestFinish(status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); virtual; abstract;
-		procedure beforePsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal); virtual; abstract;
-		procedure afterPsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); virtual; abstract;
-		procedure beforeRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
-		procedure afterRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
-		procedure beforeRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
-		procedure afterRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
+		procedure onRequestStart(status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); virtual; abstract;
+		procedure onRequestFinish(status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); virtual; abstract;
+		procedure beforePsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal); virtual; abstract;
+		procedure afterPsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); virtual; abstract;
+		procedure beforeRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
+		procedure afterRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
+		procedure beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
+		procedure afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
 	end;
 
 	ProfilerStatsVTable = class(VersionedVTable)
@@ -9433,46 +9433,46 @@ begin
 	ProfilerSessionVTable(vTable).defineRecordSource(Self, statementId, cursorId, recSourceId, accessPath, parentRecSourceId);
 end;
 
-procedure IProfilerSession.onRequestStart(status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
+procedure IProfilerSession.onRequestStart(status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
 begin
-	ProfilerSessionVTable(vTable).onRequestStart(Self, status, requestId, statementId, callerRequestId, timestamp);
+	ProfilerSessionVTable(vTable).onRequestStart(Self, status, statementId, requestId, callerStatementId, callerRequestId, timestamp);
 	FbException.checkException(status);
 end;
 
-procedure IProfilerSession.onRequestFinish(status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
+procedure IProfilerSession.onRequestFinish(status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats);
 begin
-	ProfilerSessionVTable(vTable).onRequestFinish(Self, status, requestId, timestamp, stats);
+	ProfilerSessionVTable(vTable).onRequestFinish(Self, status, statementId, requestId, timestamp, stats);
 	FbException.checkException(status);
 end;
 
-procedure IProfilerSession.beforePsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal);
+procedure IProfilerSession.beforePsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal);
 begin
-	ProfilerSessionVTable(vTable).beforePsqlLineColumn(Self, requestId, line, column);
+	ProfilerSessionVTable(vTable).beforePsqlLineColumn(Self, statementId, requestId, line, column);
 end;
 
-procedure IProfilerSession.afterPsqlLineColumn(requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats);
+procedure IProfilerSession.afterPsqlLineColumn(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats);
 begin
-	ProfilerSessionVTable(vTable).afterPsqlLineColumn(Self, requestId, line, column, stats);
+	ProfilerSessionVTable(vTable).afterPsqlLineColumn(Self, statementId, requestId, line, column, stats);
 end;
 
-procedure IProfilerSession.beforeRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
+procedure IProfilerSession.beforeRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
 begin
-	ProfilerSessionVTable(vTable).beforeRecordSourceOpen(Self, requestId, cursorId, recSourceId);
+	ProfilerSessionVTable(vTable).beforeRecordSourceOpen(Self, statementId, requestId, cursorId, recSourceId);
 end;
 
-procedure IProfilerSession.afterRecordSourceOpen(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+procedure IProfilerSession.afterRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
 begin
-	ProfilerSessionVTable(vTable).afterRecordSourceOpen(Self, requestId, cursorId, recSourceId, stats);
+	ProfilerSessionVTable(vTable).afterRecordSourceOpen(Self, statementId, requestId, cursorId, recSourceId, stats);
 end;
 
-procedure IProfilerSession.beforeRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
+procedure IProfilerSession.beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
 begin
-	ProfilerSessionVTable(vTable).beforeRecordSourceGetRecord(Self, requestId, cursorId, recSourceId);
+	ProfilerSessionVTable(vTable).beforeRecordSourceGetRecord(Self, statementId, requestId, cursorId, recSourceId);
 end;
 
-procedure IProfilerSession.afterRecordSourceGetRecord(requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+procedure IProfilerSession.afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
 begin
-	ProfilerSessionVTable(vTable).afterRecordSourceGetRecord(Self, requestId, cursorId, recSourceId, stats);
+	ProfilerSessionVTable(vTable).afterRecordSourceGetRecord(Self, statementId, requestId, cursorId, recSourceId, stats);
 end;
 
 function IProfilerStats.getElapsedTicks(): QWord;
@@ -16550,73 +16550,73 @@ begin
 	end
 end;
 
-procedure IProfilerSessionImpl_onRequestStartDispatcher(this: IProfilerSession; status: IStatus; requestId: Int64; statementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
+procedure IProfilerSessionImpl_onRequestStartDispatcher(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).onRequestStart(status, requestId, statementId, callerRequestId, timestamp);
+		IProfilerSessionImpl(this).onRequestStart(status, statementId, requestId, callerStatementId, callerRequestId, timestamp);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_onRequestFinishDispatcher(this: IProfilerSession; status: IStatus; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
+procedure IProfilerSessionImpl_onRequestFinishDispatcher(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; timestamp: ISC_TIMESTAMP_TZ; stats: IProfilerStats); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).onRequestFinish(status, requestId, timestamp, stats);
+		IProfilerSessionImpl(this).onRequestFinish(status, statementId, requestId, timestamp, stats);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_beforePsqlLineColumnDispatcher(this: IProfilerSession; requestId: Int64; line: Cardinal; column: Cardinal); cdecl;
+procedure IProfilerSessionImpl_beforePsqlLineColumnDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).beforePsqlLineColumn(requestId, line, column);
+		IProfilerSessionImpl(this).beforePsqlLineColumn(statementId, requestId, line, column);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_afterPsqlLineColumnDispatcher(this: IProfilerSession; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); cdecl;
+procedure IProfilerSessionImpl_afterPsqlLineColumnDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; stats: IProfilerStats); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).afterPsqlLineColumn(requestId, line, column, stats);
+		IProfilerSessionImpl(this).afterPsqlLineColumn(statementId, requestId, line, column, stats);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_beforeRecordSourceOpenDispatcher(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
+procedure IProfilerSessionImpl_beforeRecordSourceOpenDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).beforeRecordSourceOpen(requestId, cursorId, recSourceId);
+		IProfilerSessionImpl(this).beforeRecordSourceOpen(statementId, requestId, cursorId, recSourceId);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_afterRecordSourceOpenDispatcher(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+procedure IProfilerSessionImpl_afterRecordSourceOpenDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).afterRecordSourceOpen(requestId, cursorId, recSourceId, stats);
+		IProfilerSessionImpl(this).afterRecordSourceOpen(statementId, requestId, cursorId, recSourceId, stats);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_beforeRecordSourceGetRecordDispatcher(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
+procedure IProfilerSessionImpl_beforeRecordSourceGetRecordDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).beforeRecordSourceGetRecord(requestId, cursorId, recSourceId);
+		IProfilerSessionImpl(this).beforeRecordSourceGetRecord(statementId, requestId, cursorId, recSourceId);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-procedure IProfilerSessionImpl_afterRecordSourceGetRecordDispatcher(this: IProfilerSession; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+procedure IProfilerSessionImpl_afterRecordSourceGetRecordDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).afterRecordSourceGetRecord(requestId, cursorId, recSourceId, stats);
+		IProfilerSessionImpl(this).afterRecordSourceGetRecord(statementId, requestId, cursorId, recSourceId, stats);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end

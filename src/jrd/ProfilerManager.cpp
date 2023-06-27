@@ -186,7 +186,7 @@ IExternalResultSet* ProfilerPackage::discardProcedure(ThrowStatusExceptionWrappe
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (AttNumber(in->attachmentId) != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::DISCARD, in);
@@ -206,7 +206,7 @@ IExternalResultSet* ProfilerPackage::flushProcedure(ThrowStatusExceptionWrapper*
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (AttNumber(in->attachmentId) != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::FLUSH, in);
@@ -226,7 +226,7 @@ IExternalResultSet* ProfilerPackage::cancelSessionProcedure(ThrowStatusException
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (AttNumber(in->attachmentId) != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::CANCEL_SESSION, in);
@@ -247,7 +247,7 @@ IExternalResultSet* ProfilerPackage::finishSessionProcedure(ThrowStatusException
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (AttNumber(in->attachmentId) != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::FINISH_SESSION, in);
@@ -267,7 +267,7 @@ IExternalResultSet* ProfilerPackage::pauseSessionProcedure(ThrowStatusExceptionW
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (AttNumber(in->attachmentId) != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::PAUSE_SESSION, in);
@@ -287,7 +287,7 @@ IExternalResultSet* ProfilerPackage::resumeSessionProcedure(ThrowStatusException
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (AttNumber(in->attachmentId) != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::RESUME_SESSION, in);
@@ -307,7 +307,7 @@ IExternalResultSet* ProfilerPackage::setFlushIntervalProcedure(ThrowStatusExcept
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (AttNumber(in->attachmentId) != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.send(tdbb, ProfilerIpc::Tag::SET_FLUSH_INTERVAL, in);
@@ -327,7 +327,7 @@ void ProfilerPackage::startSessionFunction(ThrowStatusExceptionWrapper* /*status
 	const auto tdbb = JRD_get_thread_data();
 	const auto attachment = tdbb->getAttachment();
 
-	if (AttNumber(in->attachmentId) != attachment->att_attachment_id)
+	if (!in->attachmentIdNull && AttNumber(in->attachmentId) != attachment->att_attachment_id)
 	{
 		ProfilerIpc ipc(tdbb, *getDefaultMemoryPool(), in->attachmentId);
 		ipc.sendAndReceive(tdbb, ProfilerIpc::Tag::START_SESSION, in, out);
@@ -551,10 +551,12 @@ void ProfilerManager::onRequestFinish(Request* request, Stats& stats)
 {
 	if (const auto profileRequestId = getRequest(request, 0))
 	{
+		const auto profileStatement = getStatement(request);
 		const auto timestamp = TimeZoneUtil::getCurrentTimeStamp(request->req_attachment->att_current_timezone);
 
 		LogLocalStatus status("Profiler onRequestFinish");
-		currentSession->pluginSession->onRequestFinish(&status, profileRequestId, timestamp, &stats);
+		currentSession->pluginSession->onRequestFinish(&status, profileStatement->id, profileRequestId,
+			timestamp, &stats);
 
 		currentSession->requests.findAndRemove(profileRequestId);
 	}
@@ -1050,8 +1052,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				prc_executable,
 				// input parameters
 				{
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1064,8 +1065,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				prc_executable,
 				// input parameters
 				{
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1079,8 +1079,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				// input parameters
 				{
 					{"FLUSH", fld_bool, false, "true", {blr_literal, blr_bool, 1}},
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1093,8 +1092,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				prc_executable,
 				// input parameters
 				{
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1108,8 +1106,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				// input parameters
 				{
 					{"FLUSH", fld_bool, false, "false", {blr_literal, blr_bool, 0}},
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1122,8 +1119,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				prc_executable,
 				// input parameters
 				{
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1137,8 +1133,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				// input parameters
 				{
 					{"FLUSH_INTERVAL", fld_seconds_interval, false},
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}}
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}}
 				},
 				// output parameters
 				{
@@ -1155,8 +1150,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 				{
 					{"DESCRIPTION", fld_short_description, true, "null", {blr_null}},
 					{"FLUSH_INTERVAL", fld_seconds_interval, true, "null", {blr_null}},
-					{"ATTACHMENT_ID", fld_att_id, false, "current_connection",
-						{blr_internal_info, blr_literal, blr_long, 0, INFO_TYPE_CONNECTION_ID, 0, 0, 0}},
+					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}},
 					{"PLUGIN_NAME", fld_file_name2, true, "null", {blr_null}},
 					{"PLUGIN_OPTIONS", fld_short_description, true, "null", {blr_null}},
 				},

@@ -6955,14 +6955,14 @@ namespace Firebird
 			void (CLOOP_CARG *defineStatement)(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *defineCursor)(IProfilerSession* self, ISC_INT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *defineRecordSource)(IProfilerSession* self, ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, const char* accessPath, unsigned parentRecSourceId) CLOOP_NOEXCEPT;
-			void (CLOOP_CARG *onRequestStart)(IProfilerSession* self, IStatus* status, ISC_INT64 requestId, ISC_INT64 statementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) CLOOP_NOEXCEPT;
-			void (CLOOP_CARG *onRequestFinish)(IProfilerSession* self, IStatus* status, ISC_INT64 requestId, ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats) CLOOP_NOEXCEPT;
-			void (CLOOP_CARG *beforePsqlLineColumn)(IProfilerSession* self, ISC_INT64 requestId, unsigned line, unsigned column) CLOOP_NOEXCEPT;
-			void (CLOOP_CARG *afterPsqlLineColumn)(IProfilerSession* self, ISC_INT64 requestId, unsigned line, unsigned column, IProfilerStats* stats) CLOOP_NOEXCEPT;
-			void (CLOOP_CARG *beforeRecordSourceOpen)(IProfilerSession* self, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) CLOOP_NOEXCEPT;
-			void (CLOOP_CARG *afterRecordSourceOpen)(IProfilerSession* self, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) CLOOP_NOEXCEPT;
-			void (CLOOP_CARG *beforeRecordSourceGetRecord)(IProfilerSession* self, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) CLOOP_NOEXCEPT;
-			void (CLOOP_CARG *afterRecordSourceGetRecord)(IProfilerSession* self, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *onRequestStart)(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_INT64 callerStatementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *onRequestFinish)(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *beforePsqlLineColumn)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *afterPsqlLineColumn)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column, IProfilerStats* stats) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *beforeRecordSourceOpen)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *afterRecordSourceOpen)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *beforeRecordSourceGetRecord)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *afterRecordSourceGetRecord)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -7024,48 +7024,48 @@ namespace Firebird
 			static_cast<VTable*>(this->cloopVTable)->defineRecordSource(this, statementId, cursorId, recSourceId, accessPath, parentRecSourceId);
 		}
 
-		template <typename StatusType> void onRequestStart(StatusType* status, ISC_INT64 requestId, ISC_INT64 statementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp)
+		template <typename StatusType> void onRequestStart(StatusType* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_INT64 callerStatementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->onRequestStart(this, status, requestId, statementId, callerRequestId, timestamp);
+			static_cast<VTable*>(this->cloopVTable)->onRequestStart(this, status, statementId, requestId, callerStatementId, callerRequestId, timestamp);
 			StatusType::checkException(status);
 		}
 
-		template <typename StatusType> void onRequestFinish(StatusType* status, ISC_INT64 requestId, ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats)
+		template <typename StatusType> void onRequestFinish(StatusType* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->onRequestFinish(this, status, requestId, timestamp, stats);
+			static_cast<VTable*>(this->cloopVTable)->onRequestFinish(this, status, statementId, requestId, timestamp, stats);
 			StatusType::checkException(status);
 		}
 
-		void beforePsqlLineColumn(ISC_INT64 requestId, unsigned line, unsigned column)
+		void beforePsqlLineColumn(ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column)
 		{
-			static_cast<VTable*>(this->cloopVTable)->beforePsqlLineColumn(this, requestId, line, column);
+			static_cast<VTable*>(this->cloopVTable)->beforePsqlLineColumn(this, statementId, requestId, line, column);
 		}
 
-		void afterPsqlLineColumn(ISC_INT64 requestId, unsigned line, unsigned column, IProfilerStats* stats)
+		void afterPsqlLineColumn(ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column, IProfilerStats* stats)
 		{
-			static_cast<VTable*>(this->cloopVTable)->afterPsqlLineColumn(this, requestId, line, column, stats);
+			static_cast<VTable*>(this->cloopVTable)->afterPsqlLineColumn(this, statementId, requestId, line, column, stats);
 		}
 
-		void beforeRecordSourceOpen(ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId)
+		void beforeRecordSourceOpen(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId)
 		{
-			static_cast<VTable*>(this->cloopVTable)->beforeRecordSourceOpen(this, requestId, cursorId, recSourceId);
+			static_cast<VTable*>(this->cloopVTable)->beforeRecordSourceOpen(this, statementId, requestId, cursorId, recSourceId);
 		}
 
-		void afterRecordSourceOpen(ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats)
+		void afterRecordSourceOpen(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats)
 		{
-			static_cast<VTable*>(this->cloopVTable)->afterRecordSourceOpen(this, requestId, cursorId, recSourceId, stats);
+			static_cast<VTable*>(this->cloopVTable)->afterRecordSourceOpen(this, statementId, requestId, cursorId, recSourceId, stats);
 		}
 
-		void beforeRecordSourceGetRecord(ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId)
+		void beforeRecordSourceGetRecord(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId)
 		{
-			static_cast<VTable*>(this->cloopVTable)->beforeRecordSourceGetRecord(this, requestId, cursorId, recSourceId);
+			static_cast<VTable*>(this->cloopVTable)->beforeRecordSourceGetRecord(this, statementId, requestId, cursorId, recSourceId);
 		}
 
-		void afterRecordSourceGetRecord(ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats)
+		void afterRecordSourceGetRecord(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats)
 		{
-			static_cast<VTable*>(this->cloopVTable)->afterRecordSourceGetRecord(this, requestId, cursorId, recSourceId, stats);
+			static_cast<VTable*>(this->cloopVTable)->afterRecordSourceGetRecord(this, statementId, requestId, cursorId, recSourceId, stats);
 		}
 	};
 
@@ -20540,13 +20540,13 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG clooponRequestStartDispatcher(IProfilerSession* self, IStatus* status, ISC_INT64 requestId, ISC_INT64 statementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) CLOOP_NOEXCEPT
+		static void CLOOP_CARG clooponRequestStartDispatcher(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_INT64 callerStatementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::onRequestStart(&status2, requestId, statementId, callerRequestId, timestamp);
+				static_cast<Name*>(self)->Name::onRequestStart(&status2, statementId, requestId, callerStatementId, callerRequestId, timestamp);
 			}
 			catch (...)
 			{
@@ -20554,13 +20554,13 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG clooponRequestFinishDispatcher(IProfilerSession* self, IStatus* status, ISC_INT64 requestId, ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats) CLOOP_NOEXCEPT
+		static void CLOOP_CARG clooponRequestFinishDispatcher(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::onRequestFinish(&status2, requestId, timestamp, stats);
+				static_cast<Name*>(self)->Name::onRequestFinish(&status2, statementId, requestId, timestamp, stats);
 			}
 			catch (...)
 			{
@@ -20568,11 +20568,11 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopbeforePsqlLineColumnDispatcher(IProfilerSession* self, ISC_INT64 requestId, unsigned line, unsigned column) CLOOP_NOEXCEPT
+		static void CLOOP_CARG cloopbeforePsqlLineColumnDispatcher(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				static_cast<Name*>(self)->Name::beforePsqlLineColumn(requestId, line, column);
+				static_cast<Name*>(self)->Name::beforePsqlLineColumn(statementId, requestId, line, column);
 			}
 			catch (...)
 			{
@@ -20580,11 +20580,11 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopafterPsqlLineColumnDispatcher(IProfilerSession* self, ISC_INT64 requestId, unsigned line, unsigned column, IProfilerStats* stats) CLOOP_NOEXCEPT
+		static void CLOOP_CARG cloopafterPsqlLineColumnDispatcher(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column, IProfilerStats* stats) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				static_cast<Name*>(self)->Name::afterPsqlLineColumn(requestId, line, column, stats);
+				static_cast<Name*>(self)->Name::afterPsqlLineColumn(statementId, requestId, line, column, stats);
 			}
 			catch (...)
 			{
@@ -20592,11 +20592,11 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopbeforeRecordSourceOpenDispatcher(IProfilerSession* self, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) CLOOP_NOEXCEPT
+		static void CLOOP_CARG cloopbeforeRecordSourceOpenDispatcher(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				static_cast<Name*>(self)->Name::beforeRecordSourceOpen(requestId, cursorId, recSourceId);
+				static_cast<Name*>(self)->Name::beforeRecordSourceOpen(statementId, requestId, cursorId, recSourceId);
 			}
 			catch (...)
 			{
@@ -20604,11 +20604,11 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopafterRecordSourceOpenDispatcher(IProfilerSession* self, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) CLOOP_NOEXCEPT
+		static void CLOOP_CARG cloopafterRecordSourceOpenDispatcher(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				static_cast<Name*>(self)->Name::afterRecordSourceOpen(requestId, cursorId, recSourceId, stats);
+				static_cast<Name*>(self)->Name::afterRecordSourceOpen(statementId, requestId, cursorId, recSourceId, stats);
 			}
 			catch (...)
 			{
@@ -20616,11 +20616,11 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopbeforeRecordSourceGetRecordDispatcher(IProfilerSession* self, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) CLOOP_NOEXCEPT
+		static void CLOOP_CARG cloopbeforeRecordSourceGetRecordDispatcher(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				static_cast<Name*>(self)->Name::beforeRecordSourceGetRecord(requestId, cursorId, recSourceId);
+				static_cast<Name*>(self)->Name::beforeRecordSourceGetRecord(statementId, requestId, cursorId, recSourceId);
 			}
 			catch (...)
 			{
@@ -20628,11 +20628,11 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopafterRecordSourceGetRecordDispatcher(IProfilerSession* self, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) CLOOP_NOEXCEPT
+		static void CLOOP_CARG cloopafterRecordSourceGetRecordDispatcher(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				static_cast<Name*>(self)->Name::afterRecordSourceGetRecord(requestId, cursorId, recSourceId, stats);
+				static_cast<Name*>(self)->Name::afterRecordSourceGetRecord(statementId, requestId, cursorId, recSourceId, stats);
 			}
 			catch (...)
 			{
@@ -20673,14 +20673,14 @@ namespace Firebird
 		virtual void defineStatement(StatusType* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText) = 0;
 		virtual void defineCursor(ISC_INT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column) = 0;
 		virtual void defineRecordSource(ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, const char* accessPath, unsigned parentRecSourceId) = 0;
-		virtual void onRequestStart(StatusType* status, ISC_INT64 requestId, ISC_INT64 statementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) = 0;
-		virtual void onRequestFinish(StatusType* status, ISC_INT64 requestId, ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats) = 0;
-		virtual void beforePsqlLineColumn(ISC_INT64 requestId, unsigned line, unsigned column) = 0;
-		virtual void afterPsqlLineColumn(ISC_INT64 requestId, unsigned line, unsigned column, IProfilerStats* stats) = 0;
-		virtual void beforeRecordSourceOpen(ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) = 0;
-		virtual void afterRecordSourceOpen(ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) = 0;
-		virtual void beforeRecordSourceGetRecord(ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) = 0;
-		virtual void afterRecordSourceGetRecord(ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) = 0;
+		virtual void onRequestStart(StatusType* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_INT64 callerStatementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) = 0;
+		virtual void onRequestFinish(StatusType* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats) = 0;
+		virtual void beforePsqlLineColumn(ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column) = 0;
+		virtual void afterPsqlLineColumn(ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column, IProfilerStats* stats) = 0;
+		virtual void beforeRecordSourceOpen(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) = 0;
+		virtual void afterRecordSourceOpen(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) = 0;
+		virtual void beforeRecordSourceGetRecord(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) = 0;
+		virtual void afterRecordSourceGetRecord(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
