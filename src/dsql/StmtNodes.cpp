@@ -6537,7 +6537,11 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool upd
 	else
 	{
 		values = doDsqlPass(dsqlScratch, dsqlValues, false);
-		needSavePoint = SubSelectFinder::find(dsqlScratch->getPool(), values);
+		// If this INSERT belongs to some PSQL code block and has subqueries
+		// inside its VALUES part, signal the caller to create a savepoint frame.
+		// See bug #5613 (aka CORE-5337) for details.
+		needSavePoint = (dsqlScratch->flags & DsqlCompilerScratch::FLAG_BLOCK) &&
+			SubSelectFinder::find(dsqlScratch->getPool(), values);
 	}
 
 	// Process relation
