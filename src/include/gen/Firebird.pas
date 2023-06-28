@@ -5352,7 +5352,7 @@ const
 	isc_overriding_without_identity      = 335545134;
 	isc_overriding_system_invalid        = 335545135;
 	isc_overriding_user_invalid          = 335545136;
-	isc_overriding_system_missing        = 335545137;
+	isc_overriding_missing               = 335545137;
 	isc_decprecision_err                 = 335545138;
 	isc_decfloat_divide_by_zero          = 335545139;
 	isc_decfloat_inexact_result          = 335545140;

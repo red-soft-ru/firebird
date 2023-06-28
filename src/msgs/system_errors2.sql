@@ -823,7 +823,7 @@ set bulk_insert INSERT INTO SYSTEM_ERRORS (SQL_CODE, SQL_CLASS, SQL_SUBCLASS, FA
 (-902, '42', '000', 0, 814, 'overriding_without_identity', NULL, NULL)
 (-902, '42', '000', 0, 815, 'overriding_system_invalid', NULL, NULL)
 (-902, '42', '000', 0, 816, 'overriding_user_invalid', NULL, NULL)
-(-902, '42', '000', 0, 817, 'overriding_system_missing', NULL, NULL)
+(-902, '42', '000', 0, 817, 'overriding_missing', NULL, NULL)
 (-842, 'HY', '104', 0, 818, 'decprecision_err', NULL, NULL)
 (-901, '22', '012', 0, 819, 'decfloat_divide_by_zero', NULL, NULL)
 (-901, '22', '000', 0, 820, 'decfloat_inexact_result', NULL, NULL)

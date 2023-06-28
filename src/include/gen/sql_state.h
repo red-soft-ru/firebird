@@ -837,7 +837,7 @@ static const struct {
 	{335545134, "42000"}, // 814 overriding_without_identity
 	{335545135, "42000"}, // 815 overriding_system_invalid
 	{335545136, "42000"}, // 816 overriding_user_invalid
-	{335545137, "42000"}, // 817 overriding_system_missing
+	{335545137, "42000"}, // 817 overriding_missing
 	{335545138, "HY104"}, // 818 decprecision_err
 	{335545139, "22012"}, // 819 decfloat_divide_by_zero
 	{335545140, "22000"}, // 820 decfloat_inexact_result

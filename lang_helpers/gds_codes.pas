@@ -1679,8 +1679,8 @@ const
 	gds_overriding_system_invalid        = 335545135;
 	isc_overriding_user_invalid          = 335545136;
 	gds_overriding_user_invalid          = 335545136;
-	isc_overriding_system_missing        = 335545137;
-	gds_overriding_system_missing        = 335545137;
+	isc_overriding_missing               = 335545137;
+	gds_overriding_missing               = 335545137;
 	isc_decprecision_err                 = 335545138;
 	gds_decprecision_err                 = 335545138;
 	isc_decfloat_divide_by_zero          = 335545139;

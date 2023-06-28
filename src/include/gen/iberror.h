@@ -872,7 +872,7 @@ const ISC_STATUS isc_att_shut_engine                  = 335545133L;
 const ISC_STATUS isc_overriding_without_identity      = 335545134L;
 const ISC_STATUS isc_overriding_system_invalid        = 335545135L;
 const ISC_STATUS isc_overriding_user_invalid          = 335545136L;
-const ISC_STATUS isc_overriding_system_missing        = 335545137L;
+const ISC_STATUS isc_overriding_missing               = 335545137L;
 const ISC_STATUS isc_decprecision_err                 = 335545138L;
 const ISC_STATUS isc_decfloat_divide_by_zero          = 335545139L;
 const ISC_STATUS isc_decfloat_inexact_result          = 335545140L;
@@ -2351,7 +2351,7 @@ const ISC_STATUS isc_err_max                          = 1453;
 #define isc_overriding_without_identity      335545134L
 #define isc_overriding_system_invalid        335545135L
 #define isc_overriding_user_invalid          335545136L
-#define isc_overriding_system_missing        335545137L
+#define isc_overriding_missing               335545137L
 #define isc_decprecision_err                 335545138L
 #define isc_decfloat_divide_by_zero          335545139L
 #define isc_decfloat_inexact_result          335545140L

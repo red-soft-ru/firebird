@@ -838,7 +838,7 @@ static const struct {
 	{"overriding_without_identity", 335545134},
 	{"overriding_system_invalid", 335545135},
 	{"overriding_user_invalid", 335545136},
-	{"overriding_system_missing", 335545137},
+	{"overriding_missing", 335545137},
 	{"decprecision_err", 335545138},
 	{"decfloat_divide_by_zero", 335545139},
 	{"decfloat_inexact_result", 335545140},

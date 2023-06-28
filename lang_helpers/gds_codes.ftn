@@ -1684,8 +1684,8 @@ C --
       PARAMETER (GDS__overriding_system_invalid        = 335545135)
       INTEGER*4 GDS__overriding_user_invalid         
       PARAMETER (GDS__overriding_user_invalid          = 335545136)
-      INTEGER*4 GDS__overriding_system_missing       
-      PARAMETER (GDS__overriding_system_missing        = 335545137)
+      INTEGER*4 GDS__overriding_missing              
+      PARAMETER (GDS__overriding_missing               = 335545137)
       INTEGER*4 GDS__decprecision_err                
       PARAMETER (GDS__decprecision_err                 = 335545138)
       INTEGER*4 GDS__decfloat_divide_by_zero         
