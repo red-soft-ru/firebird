@@ -2660,7 +2660,8 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 
 					// Check if flags are in a dangerous state in terms of the database consistency.
 					// Such cases are not supposed to happen, so they should be reported as errors.
-					const bool swept_flag_err = (pp_bits & ppg_dp_swept) && !(new_pp_bits & ppg_dp_swept);
+					const bool swept_flag_err = (pp_bits & ppg_dp_swept) && !(new_pp_bits & ppg_dp_swept) &&
+						!(!(pp_bits & ppg_dp_empty) && (pp_bits & ppg_dp_secondary) && (new_pp_bits & ppg_dp_empty));
 
 					const int code = swept_flag_err ?
 						VAL_P_PAGE_WRONG_BITS_ERR : VAL_P_PAGE_WRONG_BITS;

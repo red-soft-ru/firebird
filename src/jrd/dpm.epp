@@ -1836,9 +1836,9 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 			const ULONG page_number = ppage->ppg_page[slot];
 			const UCHAR* bits = (UCHAR*) (ppage->ppg_page + dbb->dbb_dp_per_pp);
 			const bool pp_swept = PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept);
-			/*fb_assert(PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty) ||
+			fb_assert(PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty) ||
 				!PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary) ||
-				pp_swept);*/
+				pp_swept);
 
 			if (page_number && (sweeper ? !pp_swept :
 				!PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty | ppg_dp_secondary)) )
@@ -2235,7 +2235,7 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 	// Swept flag on PP was cleared earlier by locate_space()
 
 	Ods::pag* page = rpb->getWindow(tdbb).win_buffer;
-	/*fb_assert(!(page->pag_flags & dpg_secondary) || page->pag_flags & dpg_swept);*/
+	fb_assert(!(page->pag_flags & dpg_secondary) || page->pag_flags & dpg_swept);
 
 	if (page->pag_flags & dpg_swept && type == DPM_primary)
 		page->pag_flags &= ~dpg_swept;
@@ -3559,7 +3559,7 @@ static rhd* locate_space(thread_db* tdbb,
 					if (type == DPM_primary)
 						PPG_DP_BIT_CLEAR(bits, slot, ppg_dp_secondary | ppg_dp_swept);
 					else
-						PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary/* | ppg_dp_swept*/);
+						PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary | ppg_dp_swept);
 
 					dp_is_secondary = !(type == DPM_primary);
 				}
@@ -3749,18 +3749,23 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 		return;
 	}
 
-	// Don't set the precedence when only dpg_full or dpg_large is set or cleared.
-	// It doesn't affect the database consistency and removes extra write of the
-	// pointer page if ppg_dp_swept was cleared recently in locate_space.
-	if ((flags & (dpg_swept | dpg_secondary)) !=
-			(bit_swept_set | bit_scnd_set) ||
-		(dpEmpty != bit_empty_set))
+	// The swept flag is the only flag which requires the precedence relationship
+	// between PP and DP when it's set or cleared.
+	if (bit_swept_set != (flags & dpg_swept))
 	{
-		fb_assert(!(bit_swept_set && !(flags & dpg_swept)));
-		CCH_precedence(tdbb, &pp_window, rpb->getWindow(tdbb).win_page);
+		if (!bit_swept_set)
+		{
+			CCH_precedence(tdbb, &pp_window, rpb->getWindow(tdbb).win_page);
+			CCH_MARK(tdbb, &pp_window);
+		}
+		else
+		{
+			fb_assert(false);
+			CCH_MARK_MUST_WRITE(tdbb, &pp_window);
+		}
 	}
-
-	CCH_MARK(tdbb, &pp_window);
+	else
+		CCH_MARK(tdbb, &pp_window);
 
 	UCHAR bit = PPG_DP_BIT_MASK(slot, ppg_dp_full);
 	if (flags & dpg_full)
@@ -3965,7 +3970,7 @@ static void store_big_record(thread_db* tdbb,
 
 	// Swept flag on PP was cleared earlier by locate_space()
 
-	/*fb_assert(!(page->dpg_header.pag_flags & dpg_secondary) || page->dpg_header.pag_flags & dpg_swept);*/
+	fb_assert(!(page->dpg_header.pag_flags & dpg_secondary) || page->dpg_header.pag_flags & dpg_swept);
 
 	if (page->dpg_header.pag_flags & dpg_swept && type == DPM_primary)
 		page->dpg_header.pag_flags &= ~dpg_swept;
