@@ -10929,14 +10929,11 @@ static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
 
 		if (identityType == IDENT_TYPE_BY_DEFAULT && *insertOverride == OverrideClause::SYSTEM_VALUE)
 			ERR_post(Arg::Gds(isc_overriding_system_invalid) << relation->rel_name);
-
-		if (identityType == IDENT_TYPE_ALWAYS && *insertOverride == OverrideClause::USER_VALUE)
-			ERR_post(Arg::Gds(isc_overriding_user_invalid) << relation->rel_name);
 	}
 	else
 	{
 		if (identityType == IDENT_TYPE_ALWAYS)
-			ERR_post(Arg::Gds(isc_overriding_system_missing) << relation->rel_name);
+			ERR_post(Arg::Gds(isc_overriding_missing) << relation->rel_name);
 	}
 }
 
