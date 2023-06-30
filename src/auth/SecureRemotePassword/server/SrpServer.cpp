@@ -274,7 +274,7 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 
 			account = sb->getLogin();
 
-			const size_t len = strlen(account.c_str());
+			const size_t len = account.length();
 			if (len > SZ_LOGIN)
 				status_exception::raise(Arg::Gds(isc_long_login) << Arg::Num(len) << Arg::Num(SZ_LOGIN));
 
