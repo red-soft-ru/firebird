@@ -5454,10 +5454,9 @@ class InitPool
 {
 public:
 	explicit InitPool(MemoryPool&)
-	{
-		m_pool = InitCDS::createPool();
-		m_pool->setStatsGroup(m_stats);
-	}
+		: m_pool(InitCDS::createPool()),
+		  m_stats(m_pool->getStatsGroup())
+	{ }
 
 	~InitPool()
 	{
@@ -5488,7 +5487,7 @@ public:
 
 private:
 	MemoryPool* m_pool;
-	MemoryStats m_stats;
+	MemoryStats& m_stats;
 };
 
 static InitInstance<InitPool> initPool;
