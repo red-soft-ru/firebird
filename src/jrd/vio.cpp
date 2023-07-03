@@ -574,8 +574,6 @@ namespace
 	{
 		if (rpb->rpb_flags & rpb_not_packed)
 		{
-			rpb->rpb_flags &= ~rpb_not_packed;
-
 			const auto length = MIN(rpb->rpb_length, outLength);
 
 			memcpy(output, rpb->rpb_address, length);
