@@ -40,6 +40,7 @@
 #include "../dsql/ExprNodes.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/exe.h"
+#include "../jrd/recsrc/RecordSource.h"
 
 namespace Jrd {
 
@@ -494,9 +495,16 @@ public:
 		return firstRows;
 	}
 
+	bool isSemiJoined() const
+	{
+		return (rse->flags & RseNode::FLAG_SEMI_JOINED) != 0;
+	}
+
+	RecordSource* applyBoolean(RecordSource* rsb, ConjunctIterator& iter);
 	RecordSource* applyLocalBoolean(RecordSource* rsb,
 									const StreamList& streams,
 									ConjunctIterator& iter);
+
 	bool checkEquiJoin(BoolExprNode* boolean);
 	bool getEquiJoinKeys(BoolExprNode* boolean,
 						 NestConst<ValueExprNode>* node1,
@@ -521,7 +529,7 @@ private:
 					RiverList& rivers,
 					SortNode** sortClause,
 					const PlanNode* planClause);
-	bool generateEquiJoin(RiverList& org_rivers);
+	bool generateEquiJoin(RiverList& rivers, JoinType joinType = INNER_JOIN);
 	void generateInnerJoin(StreamList& streams,
 						   RiverList& rivers,
 						   SortNode** sortClause,
@@ -778,7 +786,8 @@ class InnerJoin : private Firebird::PermanentStorage
 	{
 	public:
 		StreamInfo(MemoryPool& p, StreamType num)
-			: number(num), indexedRelationships(p)
+			: number(num), baseMatches(p), baseDependentFromStreams(p),
+			  indexedRelationships(p)
 		{}
 
 		bool isIndependent() const
@@ -824,6 +833,9 @@ class InnerJoin : private Firebird::PermanentStorage
 		bool baseNavigated = false;
 		bool used = false;
 		unsigned previousExpectedStreams = 0;
+
+		MatchedBooleanList baseMatches;
+		SortedStreamList baseDependentFromStreams;
 
 		IndexedRelationships indexedRelationships;
 	};

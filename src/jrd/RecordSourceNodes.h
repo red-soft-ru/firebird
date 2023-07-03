@@ -731,7 +731,8 @@ public:
 		FLAG_DSQL_COMPARATIVE	= 0x10,	// transformed from DSQL ComparativeBoolNode
 		FLAG_LATERAL			= 0x20,	// lateral derived table
 		FLAG_SKIP_LOCKED		= 0x40,	// skip locked
-		FLAG_SUB_QUERY			= 0x80	// sub-query
+		FLAG_SUB_QUERY			= 0x80,	// sub-query
+		FLAG_SEMI_JOINED		= 0x100	// participates in semi-join
 	};
 
 	bool isInvariant() const
@@ -757,6 +758,11 @@ public:
 	bool isSubQuery() const
 	{
 		return (flags & FLAG_SUB_QUERY) != 0;
+	}
+
+	bool isSemiJoined() const
+	{
+		return (flags & FLAG_SEMI_JOINED) != 0;
 	}
 
 	bool hasWriteLock() const
@@ -863,6 +869,7 @@ public:
 private:
 	void planCheck(const CompilerScratch* csb) const;
 	static void planSet(CompilerScratch* csb, PlanNode* plan);
+	RseNode* processPossibleJoins(thread_db* tdbb, CompilerScratch* csb);
 
 public:
 	NestConst<ValueExprNode> dsqlFirst;
