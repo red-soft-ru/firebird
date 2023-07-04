@@ -4860,13 +4860,6 @@ ISC_STATUS rem_port::prepare_statement(P_SQLST * prepareL, PACKET* sendL)
 	if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
 		return this->send_response(sendL, 0, 0, &status_vector, false);
 
-	if (statement->rsr_cursor_name.hasData())
-	{
-		statement->rsr_iface->setCursorName(&status_vector, statement->rsr_cursor_name.c_str());
-		if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
-			return this->send_response(sendL, 0, 0, &status_vector, false);
-	}
-
 	LocalStatus ls2;
 	CheckStatusWrapper s2(&ls2);
 	statement->rsr_iface->getInfo(&s2, infoLength, info, prepareL->p_sqlst_buffer_length, buffer);
