@@ -1421,6 +1421,8 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 		const ULONG back_page  = rpb->rpb_b_page;
 		const USHORT back_line = rpb->rpb_b_line;
 		const USHORT save_flags = rpb->rpb_flags;
+		const ULONG save_f_page = rpb->rpb_f_page;
+		const USHORT save_f_line = rpb->rpb_f_line;
 
 		while (rpb->rpb_flags & rpb_incomplete)
 		{
@@ -1432,6 +1434,8 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 		rpb->rpb_b_page = back_page;
 		rpb->rpb_b_line = back_line;
 		rpb->rpb_flags = save_flags;
+		rpb->rpb_f_page = save_f_page;
+		rpb->rpb_f_line = save_f_line;
 	}
 
 	CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
