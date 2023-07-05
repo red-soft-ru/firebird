@@ -2312,6 +2312,8 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
+	rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_large | rpb_chained | rpb_gc_active | rpb_long_tranum);
+
 #ifdef VIO_DEBUG
 	jrd_rel* relation = rpb->rpb_relation;
 	VIO_trace(DEBUG_WRITES,
@@ -2581,6 +2583,7 @@ static void delete_tail(thread_db* tdbb, rhdf* header, const USHORT page_space, 
 	{
 		USHORT flags = header->rhdf_flags;
 		ULONG page_number = header->rhdf_f_page;
+		fb_assert(flags & rhd_incomplete);
 
 		while (flags & rhd_incomplete)
 		{
@@ -2597,7 +2600,10 @@ static void delete_tail(thread_db* tdbb, rhdf* header, const USHORT page_space, 
 				PAG_release_page(tdbb, window.win_page, ZERO_PAGE_NUMBER);
 			}
 			else
+			{
+				fb_assert(false);
 				break;
+			}
 		}
 		return;
 	}
