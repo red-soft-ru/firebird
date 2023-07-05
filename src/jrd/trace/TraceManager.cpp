@@ -458,6 +458,7 @@ void TraceManager::event_dsql_restart(Attachment* att, jrd_tra* transaction,
 			i++; /* Move to next plugin */ \
 		} \
 		else { \
+			plug_info->plugin->release(); \
 			trace_sessions.remove(i); /* Remove broken plugin from the list */ \
 		} \
 	}
