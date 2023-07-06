@@ -1628,6 +1628,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 		PathName org_filename, expanded_name;
 		bool is_alias = false;
 		MutexEnsureUnlock guardDbInit(dbInitMutex, FB_FUNCTION);
+		LateRefGuard lateBlocking(FB_FUNCTION);
 		Mapping mapping(Mapping::MAP_THROW_NOT_FOUND, cryptCallback);
 
 		try
@@ -1743,6 +1744,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			// Don't pass user_status into ctor to keep warnings
 			EngineContextHolder tdbb(nullptr, jAtt, FB_FUNCTION, AttachmentHolder::ATT_DONT_LOCK);
 			tdbb->tdbb_status_vector = user_status;
+			lateBlocking.lock(jAtt->getStable()->getBlockingMutex(), jAtt->getStable());
 
 			attachment->att_crypt_callback = getDefCryptCallback(cryptCallback);
 			attachment->att_client_charset = attachment->att_charset = options.dpb_interp;
@@ -2798,6 +2800,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 		bool is_alias = false;
 		Firebird::RefPtr<const Config> config;
 		Mapping mapping(Mapping::MAP_THROW_NOT_FOUND, cryptCallback);
+		LateRefGuard lateBlocking(FB_FUNCTION);
 
 		try
 		{
@@ -2914,6 +2917,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			// Don't pass user_status into ctor to keep warnings
 			EngineContextHolder tdbb(nullptr, jAtt, FB_FUNCTION, AttachmentHolder::ATT_DONT_LOCK);
 			tdbb->tdbb_status_vector = user_status;
+			lateBlocking.lock(jAtt->getStable()->getBlockingMutex(), jAtt->getStable());
 
 			attachment->att_crypt_callback = getDefCryptCallback(cryptCallback);
 
