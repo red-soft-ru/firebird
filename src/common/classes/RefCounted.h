@@ -47,6 +47,11 @@ namespace Firebird
 			return refCnt;
 		}
 
+		void assertNonZero()
+		{
+			fb_assert(m_refCnt.value() > 0);
+		}
+
 	protected:
 		RefCounted() : m_refCnt(0) {}
 
