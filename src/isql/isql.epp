@@ -244,6 +244,7 @@ namespace IcuUtil
 	}
 }
 
+void ISQL_warning(Firebird::CheckStatusWrapper* st);
 
 static inline bool commit_trans(Firebird::ITransaction** x)
 {
@@ -994,20 +995,7 @@ bool ISQL_errmsg(Firebird::IStatus* st)
 			}
 		}
 
-		/*
-		if (state & Firebird::IStatus::STATE_WARNINGS)
-		{
-			const ISC_STATUS* w = st->getWarnings();
-			while (fb_interpret(err, es, &w)) {
-				STDERROUT(errbuf);
-				if (err == errbuf)
-				{
-					*err++ = '-';
-					--es;
-				}
-			}
-		}
-		*/
+		ISQL_warning(fbStatus);
 
 		if (Input_file)
 		{
