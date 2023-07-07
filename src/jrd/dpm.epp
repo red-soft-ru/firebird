@@ -2590,7 +2590,9 @@ static void delete_tail(thread_db* tdbb, rhdf* header, const USHORT page_space, 
 			window.win_page = page_number;
 			data_page* dpage = (data_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_data);
 
-			if (dpage->dpg_header.pag_flags & dpg_orphan)
+			if (dpage->dpg_header.pag_flags & dpg_orphan &&
+				dpage->dpg_header.pag_flags & dpg_full &&
+				dpage->dpg_count == 1)
 			{
 				header = (rhdf*) ((UCHAR *) dpage + dpage->dpg_rpt[0].dpg_offset);
 				flags = header->rhdf_flags;
