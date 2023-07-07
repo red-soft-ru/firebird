@@ -233,14 +233,18 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 	bool exclusive = notify_shutdown(tdbb, flag, delay, guard);
 	bool successful = exclusive;
 
-	// Try to get exclusive database lock periodically up to specified delay. If we
-	// haven't gotten it report shutdown error for weaker forms. For forced shutdown
-	// keep notifying until successful.
-
 	SSHORT timeout = delay ? delay - 1 : 0;
 
-	if (!exclusive)
+	if (exclusive)
 	{
+		// Ensure we have the proper DBB_shutdown_* flags in place
+		shutdown(tdbb, flag, false);
+	}
+	else
+	{
+		// Try to get exclusive database lock periodically up to specified delay. If we
+		// haven't gotten it report shutdown error for weaker forms. For forced shutdown
+		// keep notifying until successful.
 		do
 		{
 			if (!(dbb->dbb_ast_flags & (DBB_shut_attach | DBB_shut_tran | DBB_shut_force)))
@@ -279,8 +283,7 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 		}
 	}
 
-	dbb->dbb_ast_flags &= ~(DBB_shut_force | DBB_shut_attach | DBB_shut_tran |
-							DBB_shutdown | DBB_shutdown_single | DBB_shutdown_full);
+	dbb->dbb_ast_flags &= ~(DBB_shut_force | DBB_shut_attach | DBB_shut_tran);
 
 	WIN window(HEADER_PAGE_NUMBER);
 	Ods::header_page* const header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
@@ -293,15 +296,12 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 		break;
 	case isc_dpb_shut_multi:
 		header->hdr_flags |= Ods::hdr_shutdown_multi;
-		dbb->dbb_ast_flags |= DBB_shutdown;
 		break;
 	case isc_dpb_shut_single:
 		header->hdr_flags |= Ods::hdr_shutdown_single;
-		dbb->dbb_ast_flags |= DBB_shutdown | DBB_shutdown_single;
 		break;
 	case isc_dpb_shut_full:
 		header->hdr_flags |= Ods::hdr_shutdown_full;
-		dbb->dbb_ast_flags |= DBB_shutdown | DBB_shutdown_full;
 		break;
 	default:
 		fb_assert(false);
