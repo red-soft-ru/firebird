@@ -1093,8 +1093,6 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 		else
 		{
 			// There is cleanup to be done.  Bring the old version forward first
-
-			rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_chained | rpb_gc_active | rpb_long_tranum);
 			DPM_update(tdbb, rpb, 0, transaction);
 			delete_tail(tdbb, &temp2, rpb->rpb_page);
 		}
@@ -6530,7 +6528,6 @@ static void replace_record(thread_db*		tdbb,
 #endif
 
 	record_param temp = *rpb;
-	rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_chained | rpb_gc_active | rpb_long_tranum);
 	DPM_update(tdbb, rpb, stack, transaction);
 	delete_tail(tdbb, &temp, rpb->rpb_page);
 
