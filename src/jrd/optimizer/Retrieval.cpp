@@ -453,7 +453,7 @@ void Retrieval::analyzeNavigation(const InversionCandidateList& inversions)
 			HalfStaticArray<ValueExprNode*, OPT_STATIC_ITEMS> nodes;
 			nodes.add(orgNode);
 
-			for (auto iter = optimizer->getConjuncts(); iter.hasData(); ++iter)
+			for (auto iter = optimizer->getConjuncts(outerFlag, innerFlag); iter.hasData(); ++iter)
 			{
 				const auto cmpNode = nodeAs<ComparativeBoolNode>(*iter);
 
