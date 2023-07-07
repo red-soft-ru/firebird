@@ -244,8 +244,6 @@ namespace IcuUtil
 	}
 }
 
-void ISQL_warning(Firebird::CheckStatusWrapper* st);
-
 static inline bool commit_trans(Firebird::ITransaction** x)
 {
 	(*x)->commit(fbStatus);
