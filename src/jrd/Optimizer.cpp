@@ -643,6 +643,13 @@ void OptimizerRetrieval::analyzeNavigation(const InversionCandidateList& inversi
  **************************************/
 	fb_assert(sort);
 
+	OptimizerBlk::opt_conjunct* const opt_begin =
+		optimizer->opt_conjuncts.begin() + (outerFlag ? optimizer->opt_base_parent_conjuncts : 0);
+
+	const OptimizerBlk::opt_conjunct* const opt_end =
+		innerFlag ? optimizer->opt_conjuncts.begin() + optimizer->opt_base_missing_conjuncts :
+					optimizer->opt_conjuncts.end();
+
 	for (FB_SIZE_T i = 0; i < indexScratches.getCount(); ++i)
 	{
 		IndexScratch* const indexScratch = &indexScratches[i];
@@ -710,8 +717,7 @@ void OptimizerRetrieval::analyzeNavigation(const InversionCandidateList& inversi
 			HalfStaticArray<ValueExprNode*, OPT_STATIC_ITEMS> nodes;
 			nodes.add(orgNode);
 
-			for (const OptimizerBlk::opt_conjunct* tail = optimizer->opt_conjuncts.begin();
-				tail < optimizer->opt_conjuncts.end(); tail++)
+			for (const OptimizerBlk::opt_conjunct* tail = opt_begin; tail < opt_end; tail++)
 			{
 				BoolExprNode* const boolean = tail->opt_conjunct_node;
 				fb_assert(boolean);
