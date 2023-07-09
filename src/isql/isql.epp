@@ -1164,7 +1164,7 @@ bool ISQL_errmsg(Firebird::IStatus* st)
 			}
 		}
 
-		ISQL_warning(fbStatus);
+		ISQL_warning(st);
 
 		if (Input_file)
 		{
@@ -1228,7 +1228,7 @@ bool ISQL_errmsg(Firebird::IStatus* st)
 }
 
 
-void ISQL_warning(Firebird::CheckStatusWrapper* st)
+void ISQL_warning(Firebird::IStatus* st)
 {
 /**************************************
  *
