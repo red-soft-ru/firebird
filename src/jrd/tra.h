@@ -187,7 +187,7 @@ public:
 		tra_outer(outer),
 		tra_snapshot_handle(0),
 		tra_snapshot_number(0),
-		tra_sorts(*p),
+		tra_sorts(*p, attachment->att_database),
 		tra_gen_ids(NULL),
 		tra_replicator(NULL),
 		tra_interface(NULL),

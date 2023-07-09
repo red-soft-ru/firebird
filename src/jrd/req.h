@@ -316,7 +316,7 @@ public:
 		  req_timeout(0),
 		  req_domain_validation(NULL),
 		  req_auto_trans(*req_pool),
-		  req_sorts(*req_pool),
+		  req_sorts(*req_pool, attachment->att_database),
 		  req_rpb(*req_pool),
 		  impureArea(*req_pool)
 	{
