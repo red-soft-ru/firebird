@@ -542,7 +542,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
  *	return false.
  *
  **************************************/
-	const int CCH_EXCLUSIVE_RETRY_INTERVAL = 1;	// retry interval in seconds
+	const int CCH_EXCLUSIVE_RETRY_INTERVAL = 10;	// retry interval in millseconds
 
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
@@ -562,7 +562,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
 
 	attachment->att_flags |= (level == LCK_none) ? ATT_attach_pending : ATT_exclusive_pending;
 
-	const SLONG timeout = (wait_flag == LCK_WAIT) ? 1L << 30 : -wait_flag;
+	const SLONG timeout = (wait_flag == LCK_WAIT) ? 1L << 30 : (-wait_flag * 1000 / CCH_EXCLUSIVE_RETRY_INTERVAL);
 
 	// If requesting exclusive database access, then re-position attachment as the
 	// youngest so that pending attachments may pass.
@@ -640,7 +640,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
 			if (remaining >= CCH_EXCLUSIVE_RETRY_INTERVAL)
 			{
 				SyncUnlockGuard unlock(exLock ? (*exGuard) : dsGuard);
-				Thread::sleep(CCH_EXCLUSIVE_RETRY_INTERVAL * 1000);
+				Thread::sleep(CCH_EXCLUSIVE_RETRY_INTERVAL);
 			}
 
 		} // try
