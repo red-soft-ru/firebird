@@ -214,16 +214,16 @@ public:
 
 	IndexCreateTask(thread_db* tdbb, MemoryPool* pool, IndexCreation* creation) : Task(),
 		m_pool(pool),
+		m_dbb(tdbb->getDatabase()),
 		m_tdbb_flags(tdbb->tdbb_flags),
 		m_flags(0),
 		m_creation(creation),
-		m_sorts(*m_pool),
+		m_sorts(*m_pool, m_dbb),
 		m_items(*m_pool),
 		m_stop(false),
 		m_countPP(0),
 		m_nextPP(0)
 	{
-		m_dbb = tdbb->getDatabase();
 		Attachment* att = tdbb->getAttachment();
 
 		if (att->isGbak())
