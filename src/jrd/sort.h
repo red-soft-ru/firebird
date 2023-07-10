@@ -431,7 +431,7 @@ public:
 
 private:
 	MemoryPool& pool;
-	Database* dbb;
+	Database* const dbb;
 	Firebird::SortedArray<Sort*> sorts;
 	Firebird::HalfStaticArray<UCHAR*, 4> buffers;
 };

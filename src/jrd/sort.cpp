@@ -2195,7 +2195,7 @@ void SortOwner::unlinkAll()
 
 	if (buffers.hasData())
 	{
-		// Here we cache blocks to be reused later
+		// Move cached buffers to the database level cache to be reused later by other attachments
 
 		const size_t MAX_CACHED_SORT_BUFFERS = 8; // 1MB
 
