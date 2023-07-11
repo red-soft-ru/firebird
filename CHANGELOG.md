@@ -1,3 +1,235 @@
+# v4.0.3
+
+## Improvements
+
+* [#7542](https://github.com/FirebirdSQL/firebird/issues/7542): Compiler warnings raise when build cloop-generated _Firebird.pas_ in RAD Studio 11.3  
+  Contributor(s): Vlad Khorsun
+
+* [#7539](https://github.com/FirebirdSQL/firebird/issues/7539): `RDB$GET/SET_CONTEXT()`: enclosing in apostrophes or double quotes of a missed namespace/variable will made output more readable  
+  Contributor(s): Vlad Khorsun
+
+* [#7494](https://github.com/FirebirdSQL/firebird/issues/7494): Avoid non necessary index reads  
+  Contributor(s): Vlad Khorsun
+
+* [#7468](https://github.com/FirebirdSQL/firebird/issues/7468): Add switch to control in guardian timeout before killing firebird server process  
+  Contributor(s): Alex Peshkoff
+
+* [#7437](https://github.com/FirebirdSQL/firebird/issues/7437): Updated _zlib_ to version 1.2.13 (released 2022-10-13)  
+  Contributor(s): Vlad Khorsun
+
+* [#7425](https://github.com/FirebirdSQL/firebird/issues/7425): Add REPLICA MODE to the output of the _isql_ `SHOW DATABASE` command  
+  Contributor(s): Dmitry Yemanov
+
+* [#7418](https://github.com/FirebirdSQL/firebird/issues/7418): Improve reliability of plugin manager  
+  Contributor(s): Alex Peshkoff
+
+* [#7294](https://github.com/FirebirdSQL/firebird/issues/7294): Allow FB-known macros in replication.conf  
+  Contributor(s): Dmitry Yemanov
+
+* [#7259](https://github.com/FirebirdSQL/firebird/issues/7259): Remove TcpLoopbackFastPath and use of SIO_LOOPBACK_FAST_PATH  
+  Contributor(s): Vlad Khorsun
+
+* [#7186](https://github.com/FirebirdSQL/firebird/issues/7186): _Nbackup_ `RDB$BACKUP_HISTORY` cleanup  
+  Contributor(s): Vlad Khorsun
+
+## Bugfixes
+
+* [#7670](https://github.com/FirebirdSQL/firebird/issues/7670): Cursor name can duplicate parameter and variable names in procedures and functions  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7665](https://github.com/FirebirdSQL/firebird/issues/7665): Wrong result ordering in `LEFT JOIN` query  
+  Contributor(s): Dmitry Yemanov
+
+* [#7664](https://github.com/FirebirdSQL/firebird/issues/7664): `DROP TABLE` executed for a table with big records may lead to "wrong page type" or "end of file" error  
+  Contributor(s): Ilya Eremin
+
+* [#7651](https://github.com/FirebirdSQL/firebird/issues/7651): Unable to find savepoint in insert with nested query and returning clause in FB4  
+  Contributor(s): Dmitry Yemanov
+
+* [#7638](https://github.com/FirebirdSQL/firebird/issues/7638): `OVERRIDING USER VALUE` should be allowed for `GENERATED ALWAYS AS IDENTITY`  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7627](https://github.com/FirebirdSQL/firebird/issues/7627): The size of the database with big records becomes bigger after backup/restore  
+  Contributor(s): Ilya Eremin
+
+* [#7626](https://github.com/FirebirdSQL/firebird/issues/7626): Segfault when new attachment is done to shutting down database  
+  Contributor(s): Alex Peshkoff
+
+* [#7611](https://github.com/FirebirdSQL/firebird/issues/7611): Can't backup/restore database from v3 to v4 with `SEC$USER_NAME` field longer than 10 characters  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7610](https://github.com/FirebirdSQL/firebird/issues/7610): Uninitialized/random value assigned to `RDB$ROLES.RDB$SYSTEM PRIVILEGES` when restoring from FB3 backup  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7605](https://github.com/FirebirdSQL/firebird/issues/7605): Disallow replication of `RDB$BACKUP_HISTORY`  
+  Contributor(s): Dmitry Yemanov
+
+* [#7604](https://github.com/FirebirdSQL/firebird/issues/7604): PSQL functions do not convert the output BLOB to the connection character set  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7603](https://github.com/FirebirdSQL/firebird/issues/7603): `BIN_SHR` on `INT128` does not apply sign extension  
+  Contributor(s): Alex Peshkoff
+
+* [#7599](https://github.com/FirebirdSQL/firebird/issues/7599): Conversion of text with '\0' to `DECFLOAT` without errors  
+  Contributor(s): Alex Peshkoff
+
+* [#7591](https://github.com/FirebirdSQL/firebird/issues/7591): `RELEASE SAVEPOINT ONLY` works incorrectly  
+  Contributor(s): Dmitry Yemanov
+
+* [#7582](https://github.com/FirebirdSQL/firebird/issues/7582): Missing _isc_info_end_ in _Firebird.pas_  
+  Contributor(s): Alex Peshkoff
+
+* [#7579](https://github.com/FirebirdSQL/firebird/issues/7579): Cannot _nbackup_ a Firebird 3.0 database in Firebird 4.0 service with _engine12_ setup in _Providers_  
+  Contributor(s): Alex Peshkoff
+
+* [#7556](https://github.com/FirebirdSQL/firebird/issues/7556): FB Classic can hang attempting to attach DB while it is starting to encrypt/decrypt  
+  Contributor(s): Alex Peshkoff
+
+* [#7555](https://github.com/FirebirdSQL/firebird/issues/7555): Invalid configuration for random fresh created database may be used after drop of another one with alias in _databases.conf_  
+  Contributor(s): Alex Peshkoff
+
+* [#7548](https://github.com/FirebirdSQL/firebird/issues/7548): `SET BIND OF TIMESTAMP WITH TIME ZONE TO CHAR` is not working with UTF8 connection charset  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7537](https://github.com/FirebirdSQL/firebird/issues/7537): Wrong name in error message when unknown namespace is passed into `RDB$SET_CONTEXT`  
+  Contributor(s): Vlad Khorsun
+
+* [#7535](https://github.com/FirebirdSQL/firebird/issues/7535): High CPU usage connect to Firebird 3 database using Firebird 4 Classic and SuperClassic service  
+  Contributor(s): Vlad Khorsun
+
+* [#7517](https://github.com/FirebirdSQL/firebird/issues/7517): Successful compiling of procedure with wrong PLAN(s) used by some of its statement(s)  
+  Contributor(s): Dmitry Yemanov
+
+* [#7514](https://github.com/FirebirdSQL/firebird/issues/7514): Segfault when detaching after deleting shadow on Classic  
+  Contributor(s): Alex Peshkoff
+
+* [#7510](https://github.com/FirebirdSQL/firebird/issues/7510): Firebird regularly crashes soon after unload of _udr_engine_ plugin  
+  Contributor(s): Alex Peshkoff
+
+* [#7501](https://github.com/FirebirdSQL/firebird/issues/7501): Precision of a standalone unit may differ from a packaged one in SQL dialect 1  
+  Contributor(s): Vlad Khorsun
+
+* [#7499](https://github.com/FirebirdSQL/firebird/issues/7499): Problem with restore (error: index cannot be used in the specified plan)  
+  Contributor(s): Vlad Khorsun
+
+* [#7488](https://github.com/FirebirdSQL/firebird/issues/7488): Invalid real to string cast  
+  Contributor(s): Artyom Abakumov, Alex Peshkoff
+
+* [#7484](https://github.com/FirebirdSQL/firebird/issues/7484): External engine `SYSTEM` not found  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7482](https://github.com/FirebirdSQL/firebird/issues/7482): Result of `blob_append(null, null) (literal '<null>')` is not shown  
+  Contributor(s): Vlad Khorsun, Adriano dos Santos Fernandes
+
+* [#7473](https://github.com/FirebirdSQL/firebird/issues/7473): Client application crash when processing callback requests from server during _attachDatabase_  
+  Contributor(s): Alex Peshkoff
+
+* [#7472](https://github.com/FirebirdSQL/firebird/issues/7472): Window functions may lead to crash interacting with others exceptions  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7467](https://github.com/FirebirdSQL/firebird/issues/7467): Simple SQL crashes Firebird: `select cast(rdb$db_key as integer) from rdb$database`  
+  Contributor(s): Alex Peshkoff
+
+* [#7465](https://github.com/FirebirdSQL/firebird/issues/7465): Restore success illegally reported when _gbak_ was unable to activate all indices  
+  Contributor(s): Alex Peshkoff
+
+* [#7456](https://github.com/FirebirdSQL/firebird/issues/7456): Impossible drop function in package with name of PSQL-function  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7446](https://github.com/FirebirdSQL/firebird/issues/7446): Attempt to use data in destroyed transaction pool  
+  Contributor(s): Alex Peshkoff
+
+* [#7444](https://github.com/FirebirdSQL/firebird/issues/7444): _isql_ crashes while executing test from QA suite  
+  Contributor(s): Alex Peshkoff
+
+* [#7415](https://github.com/FirebirdSQL/firebird/issues/7415): _DbCrypt/KeyHolder_ plugins key changing issues on running server  
+  Contributor(s): Alexey Mochalov
+
+* [#7402](https://github.com/FirebirdSQL/firebird/issues/7402): Server crashes on startup error  
+  Contributor(s): Alex Peshkoff
+
+* [#7398](https://github.com/FirebirdSQL/firebird/issues/7398): Worst plan sort created to execute an indexed tables  
+  Contributor(s): Dmitry Yemanov
+
+* [#7393](https://github.com/FirebirdSQL/firebird/issues/7393): Access violation after double fault in _attachDatabase()_  
+  Contributor(s): Alex Peshkoff
+
+* [#7387](https://github.com/FirebirdSQL/firebird/issues/7387): Unreliable replication behaviour in Linux Classic  
+  Contributor(s): Dmitry Yemanov
+
+* [#7380](https://github.com/FirebirdSQL/firebird/issues/7380): Aliased blob variable with less restrictions makes text blob accept malformed string through `BLOB_APPEND`  
+  Contributor(s): Vlad Khorsun
+
+* [#7379](https://github.com/FirebirdSQL/firebird/issues/7379): `BLOB_APPEND` with existing blob accepts malformed string  
+  Contributor(s): Vlad Khorsun, Adriano dos Santos Fernandes
+
+* [#7371](https://github.com/FirebirdSQL/firebird/issues/7371): Various errors (fatal lock manager error, pthread_mutex_destroy failed) caused by races when opening/closing database  
+  Contributor(s): Alex Peshkoff
+
+* [#7370](https://github.com/FirebirdSQL/firebird/issues/7370): Segfault under OOM conditions  
+  Contributor(s): Alex Peshkoff
+
+* [#7369](https://github.com/FirebirdSQL/firebird/issues/7369): Build fails against _re2_ 20220601  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7365](https://github.com/FirebirdSQL/firebird/issues/7365): Client side aliases do not work in _databases.conf_  
+  Contributor(s): Alex Peshkoff
+
+* [#7361](https://github.com/FirebirdSQL/firebird/issues/7361): Broken compacting of trace config storage  
+  Contributor(s): Alex Peshkoff
+
+* [#7359](https://github.com/FirebirdSQL/firebird/issues/7359): Querying to list the running trace sessions can fail if two service API calls was done before it for a short time (Linux specifics)  
+  Contributor(s): Alex Peshkoff
+
+* [#7357](https://github.com/FirebirdSQL/firebird/issues/7357): Lock manager error when connect a Firebird 3.0 database more than once using SuperClassic Firebird 4.0 service  
+  Contributor(s): Alex Peshkoff
+
+* [#7349](https://github.com/FirebirdSQL/firebird/issues/7349): Contradictory licensing/distribution statements in several charset-support files  
+  Contributor(s): Mark Rotteveel
+
+* [#7314](https://github.com/FirebirdSQL/firebird/issues/7314): Multitreaded activating indices restarts server process  
+  Contributor(s): Vlad Khorsun
+
+* [#7298](https://github.com/FirebirdSQL/firebird/issues/7298): Unreliable info result parsing  
+  Contributor(s): Alex Peshkoff
+
+* [#7296](https://github.com/FirebirdSQL/firebird/issues/7296): During shutdown _op_disconnect_ may be sent to invalid handle  
+  Contributor(s): Alex Peshkoff
+
+* [#7295](https://github.com/FirebirdSQL/firebird/issues/7295): Unexpected message 'Error reading data from the connection' when _fbtracemgr_ is closed using Ctrl-C  
+  Contributor(s): Alex Peshkoff
+
+* [#7283](https://github.com/FirebirdSQL/firebird/issues/7283): Suspicious error message during install  
+  Contributor(s): Alex Peshkoff
+
+* [#7276](https://github.com/FirebirdSQL/firebird/issues/7276): Firebird 4 literal with `CONTAINING` crashes server  
+  Contributor(s): Vlad Khorsun
+
+* [#7271](https://github.com/FirebirdSQL/firebird/issues/7271): Sporadic server crash  
+  Contributor(s): Vlad Khorsun
+
+* [#7262](https://github.com/FirebirdSQL/firebird/issues/7262): Repeated _op_batch_create_ leaks the batch  
+  Contributor(s): Alex Peshkoff
+
+* [#7256](https://github.com/FirebirdSQL/firebird/issues/7256): Inconsistent conversion of non-TEXT blobs in `BLOB_APPEND`  
+  Contributor(s): Vlad Khorsun
+
+* [#7255](https://github.com/FirebirdSQL/firebird/issues/7255): `READ COMMITTED READ CONSISTENCY` mode is broken in Classic / SuperClassic on Linux  
+  Contributor(s): Alex Peshkoff
+
+* [#7241](https://github.com/FirebirdSQL/firebird/issues/7241): MacOS installer - firebird user is not created correctly if group already exists  
+  Contributor(s): Jonathan Frutos
+
+* [#7239](https://github.com/FirebirdSQL/firebird/issues/7239): Connect using XNET protocol shows different exception (comparing to INET) if database is in the shutdown state  
+  Contributor(s): Vlad Khorsun
+
+* [#6941](https://github.com/FirebirdSQL/firebird/issues/6941): Dummy (always true) conditions may change the join order  
+  Contributor(s): Dmitry Yemanov
+
+* [#4729](https://github.com/FirebirdSQL/firebird/issues/4729): `GRANT` and `REVOKE UPDATE` (field)  
+  Contributor(s): Alex Peshkoff
+
+
 # v4.0.2
 
 ## New features
