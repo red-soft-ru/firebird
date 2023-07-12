@@ -7667,17 +7667,6 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 
 	attachment->destroyIntlObjects(tdbb);
 
-	{
-		// Destroy transactions and release their locks
-		// before detaching them from the attachment.
-		jrd_tra* next = NULL;
-		for (jrd_tra* tran = attachment->att_transactions; tran; tran = next)
-		{
-			next = tran->tra_next;
-			jrd_tra::destroy(attachment, tran);
-		}
-	}
-
 	attachment->detachLocks();
 
 	LCK_fini(tdbb, LCK_OWNER_attachment);
@@ -7768,6 +7757,15 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 	SCL_release_all(attachment->att_security_classes);
 
 	delete attachment->att_user;
+
+	{
+		jrd_tra* next = NULL;
+		for (jrd_tra* tran = attachment->att_transactions; tran; tran = next)
+		{
+			next = tran->tra_next;
+			jrd_tra::destroy(attachment, tran);
+		}
+	}
 
 	tdbb->setAttachment(NULL);
 	Jrd::Attachment::destroy(attachment);

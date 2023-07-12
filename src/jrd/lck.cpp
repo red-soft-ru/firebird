@@ -1483,19 +1483,18 @@ Lock::Lock(thread_db* tdbb, USHORT length, lck_t type, void* object, lock_ast_t 
 
 Lock::~Lock()
 {
-	// lck_id might be set if exception or bugcheck occurs
-	if (lck_id)
+	fb_assert(lck_id == 0);
+	fb_assert(!lck_attachment.hasData());
+
+	if (lck_attachment || lck_next || lck_prior)
 	{
 #ifdef DEBUG_LCK_LIST
-		if (lck_attachment || lck_next || lck_prior)
-		{
-			gds__log("DEBUG_LCK_LIST: Lock::~Lock(): this 0x%p, attachment 0x%p, lck_type %d, lck_next 0x%p, lck_prior 0x%p",
-				this, lck_attachment ? lck_attachment->getHandle() : NULL,
-				(int) lck_type, lck_next, lck_prior);
-		}
+		gds__log("DEBUG_LCK_LIST: Lock::~Lock(): this 0x%p, attachment 0x%p, lck_type %d, lck_next 0x%p, lck_prior 0x%p",
+			this, lck_attachment ? lck_attachment->getHandle() : NULL,
+			(int) lck_type, lck_next, lck_prior);
 #endif
 
-		LCK_release(JRD_get_thread_data(), this);
+		setLockAttachment(NULL);
 	}
 }
 

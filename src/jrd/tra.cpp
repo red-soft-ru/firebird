@@ -3790,7 +3790,6 @@ jrd_tra::~jrd_tra()
 		MemoryPool::deletePool(tra_autonomous_pool);
 
 	delete tra_sec_db_context;
-	delete tra_lock;
 }
 
 
