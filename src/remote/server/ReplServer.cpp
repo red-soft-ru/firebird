@@ -1009,7 +1009,7 @@ namespace
 }
 
 
-bool REPL_server(CheckStatusWrapper* status, const ReplicaList& replicas, bool wait)
+bool REPL_server(CheckStatusWrapper* status, const Replication::Config::ReplicaList& replicas, bool wait)
 {
 	try
 	{
