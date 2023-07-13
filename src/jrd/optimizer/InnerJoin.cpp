@@ -532,8 +532,6 @@ River* InnerJoin::formRiver()
 			const auto priorRsb = (rsbs.getCount() == 1) ? rsbs[0] :
 				FB_NEW_POOL(getPool()) NestedLoopJoin(csb, rsbs.getCount(), rsbs.begin());
 
-			const River priorRiver(csb, priorRsb, nullptr, streams);
-
 			// Prepare record sources and corresponding equivalence keys for hash-joining
 			RecordSource* hashJoinRsbs[] = {priorRsb, rsb};
 
@@ -550,9 +548,9 @@ River* InnerJoin::formRiver()
 				if (!optimizer->getEquiJoinKeys(match, &node1, &node2))
 					fb_assert(false);
 
-				if (!priorRiver.isReferenced(node1))
+				if (!node2->containsStream(stream.number))
 				{
-					fb_assert(priorRiver.isReferenced(node2));
+					fb_assert(node1->containsStream(stream.number));
 
 					// Swap the sides
 					std::swap(node1, node2);
