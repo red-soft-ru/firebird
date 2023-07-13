@@ -23,6 +23,6 @@
 #ifndef UTIL_REPL_SERVER_H
 #define UTIL_REPL_SERVER_H
 
-bool REPL_server(Firebird::CheckStatusWrapper*, bool);
+bool REPL_server(Firebird::CheckStatusWrapper*, const ReplicaList&, bool);
 
 #endif // UTIL_REPL_SERVER_H

@@ -81,11 +81,8 @@ namespace
 
 	int shutdownHandler(const int, const int, void*)
 	{
-		if (activeThreads.value())
+		if (!shutdownFlag && activeThreads.value())
 		{
-			gds__log("Shutting down the replication server with %d replicated database(s)",
-					 (int) activeThreads.value());
-
 			shutdownFlag = true;
 			shutdownSemaphore.release(activeThreads.value() + 1);
 
@@ -579,15 +576,6 @@ namespace
 		return value;
 	}
 
-	void readConfig(TargetList& targets)
-	{
-		Array<Replication::Config*> replicas;
-		Replication::Config::enumerate(replicas);
-
-		for (auto replica : replicas)
-			targets.add(FB_NEW Target(replica));
-	}
-
 	bool validateHeader(const SegmentHeader* header)
 	{
 		if (strcmp(header->hdr_signature, CHANGELOG_SIGNATURE))
@@ -988,14 +976,15 @@ namespace
 	{
 		AutoPtr<Target> target(static_cast<Target*>(arg));
 		const auto config = target->getConfig();
+		const auto dbName = config->dbName.c_str();
 
-		target->verbose("Started replication thread");
+		AutoMemoryPool workingPool(MemoryPool::createPool());
+		ContextPoolHolder threadContext(workingPool);
+
+		target->verbose("Started replication for database %s", dbName);
 
 		while (!shutdownFlag)
 		{
-			AutoMemoryPool workingPool(MemoryPool::createPool());
-			ContextPoolHolder threadContext(workingPool);
-
 			const ProcessStatus ret = process_archive(*workingPool, target);
 
 			if (ret == PROCESS_CONTINUE)
@@ -1003,10 +992,7 @@ namespace
 
 			target->shutdown();
 
-			if (ret == PROCESS_SHUTDOWN)
-				break;
-
-			if (!shutdownFlag)
+			if (ret != PROCESS_SHUTDOWN)
 			{
 				const ULONG timeout =
 					(ret == PROCESS_SUSPEND) ? config->applyIdleTimeout : config->applyErrorTimeout;
@@ -1015,7 +1001,7 @@ namespace
 			}
 		}
 
-		target->verbose("Finished replication thread");
+		target->verbose("Finished replication for database %s", dbName);
 		--activeThreads;
 
 		return 0;
@@ -1023,17 +1009,15 @@ namespace
 }
 
 
-bool REPL_server(CheckStatusWrapper* status, bool wait)
+bool REPL_server(CheckStatusWrapper* status, const ReplicaList& replicas, bool wait)
 {
 	try
 	{
-		fb_shutdown_callback(0, shutdownHandler, fb_shut_finish, 0);
+		fb_shutdown_callback(0, shutdownHandler, fb_shut_preproviders, 0);
 
-		TargetList targets;
-		readConfig(targets);
-
-		for (auto target : targets)
+		for (const auto replica : replicas)
 		{
+			const auto target = FB_NEW Target(replica);
 			Thread::start(process_thread, target, THREAD_medium, NULL);
 			++activeThreads;
 		}

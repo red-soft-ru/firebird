@@ -96,6 +96,7 @@
 #include "../common/classes/semaphore.h"
 #include "../common/classes/FpeControl.h"
 #include "../jrd/license.h"
+#include "../jrd/replication/Config.h"
 #include "../utilities/install/install_nt.h"
 #include "../remote/remote.h"
 #include "../remote/server/os/win32/cntl_proto.h"
@@ -530,12 +531,18 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 		}
 	}
 
-	FbLocalStatus localStatus;
-	if (!REPL_server(&localStatus, false))
+	Replication::Config::ReplicaList replicas;
+	Replication::Config::enumerate(replicas);
+
+	if (replicas.hasData())
 	{
-		const char* errorMsg = "Replication server initialization error";
-		iscLogStatus(errorMsg, localStatus->getErrors());
-		Syslog::Record(Syslog::Error, errorMsg);
+		FbLocalStatus localStatus;
+		if (!REPL_server(&localStatus, replicas, false))
+		{
+			const char* errorMsg = "Replication server initialization error";
+			iscLogStatus(errorMsg, localStatus->getErrors());
+			Syslog::Record(Syslog::Error, errorMsg);
+		}
 	}
 
 	return 0;
