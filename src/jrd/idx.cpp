@@ -1510,12 +1510,16 @@ void IDX_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		IndexErrorContext context(rpb->rpb_relation, &idx);
 		idx_e error_code;
 
-		IndexKey key(tdbb, rpb->rpb_relation, &idx);
+		AutoIndexExpression expression;
+		IndexKey key(tdbb, rpb->rpb_relation, &idx, expression);
+
 		if ( (error_code = key.compose(rpb->rpb_record)) )
 		{
 			CCH_RELEASE(tdbb, &window);
 			context.raise(tdbb, error_code, rpb->rpb_record);
 		}
+
+		expression.reset();
 
 		insertion.iib_key = key;
 
