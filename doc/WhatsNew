@@ -1,4 +1,185 @@
   **************************
+  * v3.0.11
+  **************************
+
+    * Improvement #7539
+        RDB$GET/SET_CONTEXT(): enclosing in apostrophes or double quotes  of a missed namespace/variable will made output more readable
+      Contributor(s): Vlad Khorsun
+
+    * Improvement #7494
+        Firebird performance issue - non necessary index reads
+      Contributor(s): Vlad Khorsun
+
+    * Improvement #7468
+        Add switch to control in guardian timeout before killing firebird server process
+      Contributor(s): Alexander Peshkov
+
+    * Improvement #7437
+        zlib version 1.2.13 released 2022-10-13
+      Contributor(s): Vlad Khorsun
+
+    * Improvement #7418
+        Reliability of plugin manager
+      Contributor(s): Alexander Peshkov
+
+    * Improvement #7259
+        Remove TcpLoopbackFastPath and use of SIO_LOOPBACK_FAST_PATH
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #7665
+        Wrong result ordering in LEFT JOIN query
+      Contributor(s): Dmitry Yemanov
+
+    * Bugfix #7664
+        DROP TABLE executed for a table with big records may lead to "wrong page type" or "end of file" error
+      Contributor(s): Vlad Khorsun, Ilya Eremin
+
+    * Bugfix #7626
+        Segfault when new attachment is done to shutting down database
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7556
+        FB Classic can hang when attempts to attach DB while it is starting to encrypt/decrypt
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7555
+        Invalid configuration for random fresh created database may be used after drop of another one with alias in databases.conf
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7537
+        Wrong name in error message when unknown namespace is passed into RDB$SET_CONTEXT()
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #7517
+        Successful compiling of procedure with wrong PLAN(s) used by some of its statement(s)
+      Contributor(s): Dmitry Yemanov
+
+    * Bugfix #7514
+        Segfault when detaching after deleting shadow on Classic
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7510
+        Firebird regularly crashes soon after unload of udr_engine  plugin
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7501
+        Precision of standalone unit may differ from packaged one in SQL dialect 1
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #7499
+        Problem with restore
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #7473
+        Client application crash when processing callback requests from server during attachDatabase
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7467
+        Simple sql crashes firebird: select cast(rdb$db_key as integer) from rdb$database
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7465
+        Restore success illegally reported when gbak was unable to activate all indices
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7446
+        Attempt to use data in destroyed transaction pool
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7444
+        isql crashes when executing test from QA suite
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7434
+        Crash or error in SUBSTRING()'s regexp parser with UTF-8 encoding
+      Contributor(s): Alexey Mochalov
+
+    * Bugfix #7428
+        Problem with editing procedures being in use
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #7415
+        DbCrypt/KeyHolder plugins key changing issues on running server
+      Contributor(s): Alexey Mochalov
+
+    * Bugfix #7413
+        Regression: bad plan in FB 3.0.9+ (correct in FB 3.0.8)
+      Contributor(s): Dmitry Yemanov
+
+    * Bugfix #7406
+        Regression - trusted role does not work with version 3.0.10
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7402
+        Server crashes on startup error
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7393
+        Access violation after double fault in attachDatabase()
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7370
+        Segfault under OOM conditions
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7365
+        Client side aliases do not work in databases.conf
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7349
+        Contradictory licensing/distribution statements in several charset-support files
+      Contributor(s): Mark Rotteveel
+
+    * Bugfix #7314
+        Multitreaded activating indices restarts server process
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #7299
+        gfix hangs on disconnect when transactions trace active
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7298
+        Unreliable info result parsing
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7296
+        During shutdown op_disconnect may be sent to invalid handle
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7295
+        Unexpected message 'Error reading data from the connection' when fbtracemgr is closed using ctrl-C
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7314
+        Sporadic crash on 3.0.10.33106
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #7237
+        Starting operator become unstable on indexed varchar fields
+      Contributor(s): Adriano dos Santos Fernandes
+
+    * Bugfix #6947
+        Query to mon$ tables does not return data when the encryption/decryption thread is running
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #6941
+        Dummy (always true) conditions may change the join order
+      Contributor(s): Dmitry Yemanov
+
+    * Bugfix #5853
+        Wrong formatting of "Elapsed time" in isql
+      Contributor(s): Jiri Cincura
+
+    * Bugfix #4729
+        Grant and Revoke update (field)
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #3810
+        Wrong or missing IS NULL optimization (regression)
+      Contributor(s): Vlad Khorsun
+
+
+  **************************
   * v3.0.10
   **************************
 
