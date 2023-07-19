@@ -1434,7 +1434,7 @@ SINT64 DPM_gen_id(thread_db* tdbb, SLONG generator, bool initialize, SINT64 val)
 }
 
 
-bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
+bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type, const bool preserve_swept_flag)
 {
 /**************************************
  *
@@ -1489,7 +1489,7 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 			(dpage->dpg_count > 0);
 
 		const bool pageOk = valid_primary &&
-			(lock_type == LCK_read || !(dpage->dpg_header.pag_flags & dpg_swept));
+			(lock_type == LCK_read || !(dpage->dpg_header.pag_flags & dpg_swept) || preserve_swept_flag);
 
 		if (pageOk && get_header(window, line, rpb) &&
 			!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
@@ -1524,7 +1524,7 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 		UCHAR* bits = (UCHAR*) (page->ppg_page + dbb->dbb_dp_per_pp);
 		pp_swept = PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept);
 
-		if (lock_type != LCK_write || !page_number || !pp_swept ||
+		if (lock_type == LCK_read || !page_number || !pp_swept || preserve_swept_flag ||
 			PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty | ppg_dp_secondary))
 			break;
 

@@ -179,8 +179,11 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 
 		for (auto rpb = rpbsSetup.begin(); tail < streams_end; ++rpb, ++tail)
 		{
-			// fetch input stream for update if all booleans matched against indices
-			if ((tail->csb_flags & csb_update) && !(tail->csb_flags & csb_unmatched))
+			// Fetch input stream for update if all booleans matched against indices.
+			// Do not set RPB_s_update flag when Super is used because it doesn't
+			// improve performance for it. See comments in VIO_get and VIO_next_record.
+			if ((tail->csb_flags & csb_update) && !(tail->csb_flags & csb_unmatched) &&
+				Config::getServerMode() != MODE_SUPER)
 				 rpb->rpb_stream_flags |= RPB_s_update;
 
 			// if no fields are referenced and this stream is not intended for update,

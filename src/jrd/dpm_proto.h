@@ -67,7 +67,7 @@ bool	DPM_fetch(Jrd::thread_db*, Jrd::record_param*, USHORT);
 bool	DPM_fetch_back(Jrd::thread_db*, Jrd::record_param*, USHORT, SSHORT);
 void	DPM_fetch_fragment(Jrd::thread_db*, Jrd::record_param*, USHORT);
 SINT64	DPM_gen_id(Jrd::thread_db*, SLONG, bool, SINT64);
-bool	DPM_get(Jrd::thread_db*, Jrd::record_param*, SSHORT);
+bool	DPM_get(Jrd::thread_db*, Jrd::record_param*, SSHORT, const bool preserve_swept_flag = false);
 ULONG	DPM_get_blob(Jrd::thread_db*, Jrd::blb*, RecordNumber, bool, ULONG);
 bool	DPM_next(Jrd::thread_db*, Jrd::record_param*, USHORT, Jrd::FindNextRecordScope);
 void	DPM_pages(Jrd::thread_db*, SSHORT, int, ULONG, ULONG);
