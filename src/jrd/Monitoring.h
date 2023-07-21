@@ -256,9 +256,12 @@ class MonitoringData FB_FINAL : public Firebird::PermanentStorage, public Firebi
 		AttNumber attId;
 		TEXT userName[USERNAME_LENGTH + 1];
 		ULONG length;
-	};
 
-	static ULONG alignOffset(ULONG absoluteOffset);
+		inline ULONG getBlockLength() const
+		{
+			return FB_ALIGN(sizeof(Element) + length, FB_ALIGNMENT);
+		}
+	};
 
 public:
 	class Guard
