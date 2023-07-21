@@ -559,19 +559,10 @@ namespace
 			(SINT64) finish.value().timestamp_time / 10;
 
 		const SINT64 delta = finishMsec - startMsec;
+		const double seconds = (double) delta / 1000;
 
 		string value;
-
-		if (delta < 1000) // less than 1 second
-			value.printf("%u ms", (unsigned) delta);
-		else if (delta < 60 * 1000) // less than 1 minute
-			value.printf("%u second(s)", (unsigned) (delta / 1000));
-		else if (delta < 60 * 60 * 1000) // less than 1 hour
-			value.printf("%u minute(s)", (unsigned) (delta / 1000 / 60));
-		else if (delta < 24 * 60 * 60 * 1000) // less than 1 day
-			value.printf("%u hour(s)", (unsigned) (delta / 1000 / 60 / 60));
-		else
-			value.printf("%u day(s)", (unsigned) (delta / 1000 / 60 / 60 / 24));
+		value.printf("%.3lfs", seconds);
 
 		return value;
 	}
@@ -746,12 +737,11 @@ namespace
 
 			if (queue.isEmpty())
 			{
-				target->verbose("No new segments found, suspending for %u seconds",
-								config->applyIdleTimeout);
+				target->verbose("No new segments found, suspending");
 				return ret;
 			}
 
-			target->verbose("Added %u segment(s) to the processing queue", (ULONG) queue.getCount());
+			target->verbose("Added %u segment(s) to the queue", (ULONG) queue.getCount());
 
 			// Second pass: replicate the chain of contiguous segments
 
@@ -762,12 +752,11 @@ namespace
 			FB_UINT64 next_sequence = 0;
 			const bool restart = target->isShutdown();
 
-			for (Segment** iter = queue.begin(); iter != queue.end(); ++iter)
+			for (auto segment : queue)
 			{
 				if (shutdownFlag)
 					return PROCESS_SHUTDOWN;
 
-				Segment* const segment = *iter;
 				const FB_UINT64 sequence = segment->header.hdr_sequence;
 				const Guid& guid = segment->header.hdr_guid;
 
@@ -800,8 +789,7 @@ namespace
 				// then there's no point in replaying the whole sequence
 				if (max_sequence == last_sequence && !last_offset)
 				{
-					target->verbose("No new segments found, suspending for %u seconds",
-									config->applyIdleTimeout);
+					target->verbose("No new segments found, suspending");
 					return ret;
 				}
 
@@ -902,12 +890,12 @@ namespace
 				if (oldest)
 				{
 					const TraNumber oldest_trans = oldest->tra_id;
-					extra.printf("preserving the file due to %u active transaction(s) (oldest: %" UQUADFORMAT " in segment %" UQUADFORMAT ")",
-								 (unsigned) transactions.getCount(), oldest_trans, oldest_sequence);
+					extra.printf("preserving (OAT: %" UQUADFORMAT " in segment %" UQUADFORMAT ")",
+								 oldest_trans, oldest_sequence);
 				}
 				else
 				{
-					extra += "deleting the file";
+					extra = "deleting";
 				}
 
 				target->verbose("Segment %" UQUADFORMAT " (%u bytes) is replicated in %s, %s",
@@ -961,7 +949,7 @@ namespace
 
 			target->logError(message);
 
-			target->verbose("Suspending for %u seconds", config->applyErrorTimeout);
+			target->verbose("Disconnecting and suspending");
 
 			ret = PROCESS_ERROR;
 		}
