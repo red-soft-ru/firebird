@@ -3239,8 +3239,8 @@ static UCHAR* find_space(thread_db*	tdbb,
 	rpb->rpb_line = slot;
 	rpb->rpb_number.setValue(((SINT64) page->dpg_sequence) * dbb->dbb_max_records + slot);
 
-	if (record)		// rpb->getWindow(tdbb).win_page ?
-		record->pushPrecedence(PageNumber(DB_PAGE_SPACE, rpb->rpb_page));
+	if (record)
+		record->pushPrecedence(rpb->getWindow(tdbb).win_page);
 
 	if (page->dpg_count == 1)
 	{
@@ -3643,9 +3643,6 @@ static rhd* locate_space(thread_db* tdbb,
 
 	if (i == 20)
 		BUGCHECK(255);			// msg 255 cannot find free space
-
-	if (record)		// window->win_page ?
-		record->pushPrecedence(PageNumber(DB_PAGE_SPACE, window->win_page.getPageNum()));
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_WRITES_INFO,
