@@ -154,6 +154,9 @@ namespace
 
 	void BufferedStreamWindow::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
 	{
+		plan += printIndent(++level) + "Window Buffer";
+		printOptInfo(plan);
+
 		if (recurse)
 			m_next->print(tdbb, plan, detailed, level, recurse);
 	}
@@ -405,6 +408,9 @@ void WindowedStream::getChildren(Array<const RecordSource*>& children) const
 
 void WindowedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
 {
+	plan += printIndent(++level) + "Window";
+	printOptInfo(plan);
+
 	if (recurse)
 		m_joinedStream->print(tdbb, plan, detailed, level, recurse);
 }
@@ -897,7 +903,7 @@ void WindowedStream::WindowStream::print(thread_db* tdbb, string& plan, bool det
 {
 	if (detailed)
 	{
-		plan += printIndent(++level) + "Window";
+		plan += printIndent(++level) + "Window Partition";
 		printOptInfo(plan);
 	}
 
