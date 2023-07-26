@@ -1297,7 +1297,7 @@ DeclareCursorNode* DeclareCursorNode::pass1(thread_db* tdbb, CompilerScratch* cs
 
 DeclareCursorNode* DeclareCursorNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
-	AutoSetCurrentCursorProfileId autoSetCurrentCursorProfileId(csb);
+	AutoSetCurrentCursorId autoSetCurrentCursorId(csb);
 
 	rse->pass2Rse(tdbb, csb);
 
@@ -5063,7 +5063,7 @@ StmtNode* ForNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 StmtNode* ForNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
-	AutoSetCurrentCursorProfileId autoSetCurrentCursorProfileId(csb);
+	AutoSetCurrentCursorId autoSetCurrentCursorId(csb);
 
 	rse->pass2Rse(tdbb, csb);
 

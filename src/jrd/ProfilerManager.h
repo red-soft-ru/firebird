@@ -218,11 +218,11 @@ public:
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
 		{
 			const auto profileStatement = getStatement(request);
-			const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceProfileId());
+			const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId());
 			fb_assert(sequencePtr);
 
 			currentSession->pluginSession->beforeRecordSourceOpen(
-				profileStatement->id, profileRequestId, rsb->getCursorProfileId(), *sequencePtr);
+				profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr);
 		}
 	}
 
@@ -231,11 +231,11 @@ public:
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
 		{
 			const auto profileStatement = getStatement(request);
-			const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceProfileId());
+			const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId());
 			fb_assert(sequencePtr);
 
 			currentSession->pluginSession->afterRecordSourceOpen(
-				profileStatement->id, profileRequestId, rsb->getCursorProfileId(), *sequencePtr, &stats);
+				profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr, &stats);
 		}
 	}
 
@@ -244,11 +244,11 @@ public:
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
 		{
 			const auto profileStatement = getStatement(request);
-			const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceProfileId());
+			const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId());
 			fb_assert(sequencePtr);
 
 			currentSession->pluginSession->beforeRecordSourceGetRecord(
-				profileStatement->id, profileRequestId, rsb->getCursorProfileId(), *sequencePtr);
+				profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr);
 		}
 	}
 
@@ -257,11 +257,11 @@ public:
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
 		{
 			const auto profileStatement = getStatement(request);
-			const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceProfileId());
+			const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId());
 			fb_assert(sequencePtr);
 
 			currentSession->pluginSession->afterRecordSourceGetRecord(
-				profileStatement->id, profileRequestId, rsb->getCursorProfileId(), *sequencePtr, &stats);
+				profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr, &stats);
 		}
 	}
 

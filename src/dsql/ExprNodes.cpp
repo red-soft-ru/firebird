@@ -11351,7 +11351,7 @@ ValueExprNode* SubQueryNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 		csb->csb_invariants.push(&impureOffset);
 	}
 
-	AutoSetCurrentCursorProfileId autoSetCurrentCursorProfileId(csb);
+	AutoSetCurrentCursorId autoSetCurrentCursorId(csb);
 
 	rse->pass2Rse(tdbb, csb);
 

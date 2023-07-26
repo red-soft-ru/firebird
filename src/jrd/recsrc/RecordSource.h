@@ -91,14 +91,14 @@ namespace Jrd
 			return m_cardinality;
 		}
 
-		ULONG getCursorProfileId() const
+		ULONG getCursorId() const
 		{
-			return m_cursorProfileId;
+			return m_cursorId;
 		}
 
-		ULONG getRecSourceProfileId() const
+		ULONG getRecSourceId() const
 		{
-			return m_recSourceProfileId;
+			return m_recSourceId;
 		}
 
 		void open(thread_db* tdbb) const;
@@ -139,8 +139,8 @@ namespace Jrd
 		double m_cardinality = 0.0;
 		ULONG m_impure = 0;
 		bool m_recursive = false;
-		const ULONG m_cursorProfileId;
-		const ULONG m_recSourceProfileId;
+		const ULONG m_cursorId;
+		const ULONG m_recSourceId;
 	};
 
 

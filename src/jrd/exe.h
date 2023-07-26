@@ -598,9 +598,9 @@ public:
 	ExprNode*	csb_currentAssignTarget;
 	dsc*		csb_preferredDesc;		// expected by receiving side data format
 
-	ULONG		csb_currentCursorProfileId = 0;
-	ULONG		csb_nextCursorProfileId = 1;
-	ULONG		csb_nextRecSourceProfileId = 1;
+	ULONG		csb_currentCursorId = 0;
+	ULONG		csb_nextCursorId = 1;
+	ULONG		csb_nextRecSourceId = 1;
 
 	struct csb_repeat
 	{
@@ -671,12 +671,12 @@ inline void CompilerScratch::csb_repeat::deactivate()
 }
 
 
-class AutoSetCurrentCursorProfileId : private Firebird::AutoSetRestore<ULONG>
+class AutoSetCurrentCursorId : private Firebird::AutoSetRestore<ULONG>
 {
 public:
-	explicit AutoSetCurrentCursorProfileId(CompilerScratch* csb)
-		: AutoSetRestore(&csb->csb_currentCursorProfileId,
-			(csb->csb_currentCursorProfileId == 0 ? csb->csb_nextCursorProfileId++ : csb->csb_currentCursorProfileId))
+	explicit AutoSetCurrentCursorId(CompilerScratch* csb)
+		: AutoSetRestore(&csb->csb_currentCursorId,
+			(csb->csb_currentCursorId == 0 ? csb->csb_nextCursorId++ : csb->csb_currentCursorId))
 	{
 	}
 };

@@ -49,9 +49,9 @@ namespace Jrd
 		virtual ~Select()
 		{}
 
-		ULONG getCursorProfileId() const
+		ULONG getCursorId() const
 		{
-			return m_cursorProfileId;
+			return m_cursorId;
 		}
 
 		const RecordSource* getAccessPath() const
@@ -88,7 +88,7 @@ namespace Jrd
 		const RseNode* const m_rse;
 
 	private:
-		const ULONG m_cursorProfileId;
+		const ULONG m_cursorId;
 		MetaName m_cursorName;	// optional name for explicit PSQL cursors
 		ULONG m_line = 0;
 		ULONG m_column = 0;

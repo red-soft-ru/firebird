@@ -473,7 +473,7 @@ void ProfilerManager::prepareCursor(thread_db* tdbb, Request* request, const Sel
 	if (!profileStatement)
 		return;
 
-	auto cursorId = select->getCursorProfileId();
+	auto cursorId = select->getCursorId();
 
 	if (profileStatement->definedCursors.exist(cursorId))
 		return;
@@ -491,10 +491,10 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 	if (!profileStatement)
 		return;
 
-	if (profileStatement->recSourceSequence.exist(rsb->getRecSourceProfileId()))
+	if (profileStatement->recSourceSequence.exist(rsb->getRecSourceId()))
 		return;
 
-	fb_assert(profileStatement->definedCursors.exist(rsb->getCursorProfileId()));
+	fb_assert(profileStatement->definedCursors.exist(rsb->getCursorId()));
 
 	Array<NonPooledPair<const RecordSource*, const RecordSource*>> tree;
 	tree.add({rsb, nullptr});
@@ -513,12 +513,12 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 	}
 
 	NonPooledMap<ULONG, ULONG> idSequenceMap;
-	auto sequencePtr = profileStatement->cursorNextSequence.getOrPut(rsb->getCursorProfileId());
+	auto sequencePtr = profileStatement->cursorNextSequence.getOrPut(rsb->getCursorId());
 
 	for (const auto& pair : tree)
 	{
-		const auto cursorId = pair.first->getCursorProfileId();
-		const auto recSourceId = pair.first->getRecSourceProfileId();
+		const auto cursorId = pair.first->getCursorId();
+		const auto recSourceId = pair.first->getRecSourceId();
 		idSequenceMap.put(recSourceId, ++*sequencePtr);
 
 		string accessPath;
@@ -538,7 +538,7 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 		ULONG parentSequence = 0;
 
 		if (pair.second)
-			parentSequence = *idSequenceMap.get(pair.second->getRecSourceProfileId());
+			parentSequence = *idSequenceMap.get(pair.second->getRecSourceId());
 
 		currentSession->pluginSession->defineRecordSource(profileStatement->id, cursorId,
 			*sequencePtr, accessPath.c_str(), parentSequence);

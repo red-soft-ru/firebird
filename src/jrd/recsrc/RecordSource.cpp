@@ -49,8 +49,8 @@ using namespace Jrd;
 // -------------------
 
 RecordSource::RecordSource(CompilerScratch* csb)
-	: m_cursorProfileId(csb->csb_currentCursorProfileId),
-	  m_recSourceProfileId(csb->csb_nextRecSourceProfileId++)
+	: m_cursorId(csb->csb_currentCursorId),
+	  m_recSourceId(csb->csb_nextRecSourceId++)
 {
 }
 

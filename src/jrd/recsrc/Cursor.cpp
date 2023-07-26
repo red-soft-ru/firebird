@@ -55,7 +55,7 @@ namespace
 Select::Select(const RecordSource* source, const RseNode* rse, ULONG line, ULONG column, const MetaName& cursorName)
 	: m_top(source),
 	  m_rse(rse),
-	  m_cursorProfileId(source->getCursorProfileId()),
+	  m_cursorId(source->getCursorId()),
 	  m_cursorName(cursorName),
 	  m_line(line),
 	  m_column(column)

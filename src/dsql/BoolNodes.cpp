@@ -1589,7 +1589,7 @@ void RseBoolNode::pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::funct
 		csb->csb_invariants.push(&impureOffset);
 	}
 
-	AutoSetCurrentCursorProfileId autoSetCurrentCursorProfileId(csb);
+	AutoSetCurrentCursorId autoSetCurrentCursorId(csb);
 
 	rse->pass2Rse(tdbb, csb);
 
