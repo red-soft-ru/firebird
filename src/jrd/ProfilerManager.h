@@ -416,11 +416,11 @@ private:
 	//----------
 
 	FB_MESSAGE(StartSessionInput, Firebird::ThrowStatusExceptionWrapper,
-		(FB_INTL_VARCHAR(255, CS_METADATA), description)
+		(FB_INTL_VARCHAR(255 * METADATA_BYTES_PER_CHAR, CS_METADATA), description)
 		(FB_INTEGER, flushInterval)
 		(FB_BIGINT, attachmentId)
-		(FB_INTL_VARCHAR(255, CS_METADATA), pluginName)
-		(FB_INTL_VARCHAR(255, CS_METADATA), pluginOptions)
+		(FB_INTL_VARCHAR(255 * METADATA_BYTES_PER_CHAR, CS_METADATA), pluginName)
+		(FB_INTL_VARCHAR(255 * METADATA_BYTES_PER_CHAR, CS_METADATA), pluginOptions)
 	);
 
 	FB_MESSAGE(StartSessionOutput, Firebird::ThrowStatusExceptionWrapper,
