@@ -219,6 +219,7 @@ namespace Replication
 #ifdef WIN_NT
 		string params;
 		params.printf("/c %s", command.c_str());
+
 		SHELLEXECUTEINFO seInfo = {0};
 		seInfo.cbSize = sizeof(SHELLEXECUTEINFO);
 		seInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
@@ -229,10 +230,17 @@ namespace Replication
 		seInfo.lpDirectory = NULL;
 		seInfo.nShow = SW_HIDE;
 		seInfo.hInstApp = NULL;
-		ShellExecuteEx(&seInfo);
-		WaitForSingleObject(seInfo.hProcess, INFINITE);
+
+		if (!ShellExecuteEx(&seInfo))
+			return -1;
+
 		DWORD exitCode = 0;
-		GetExitCodeProcess(seInfo.hProcess, &exitCode);
+		if (seInfo.hProcess)
+		{
+			WaitForSingleObject(seInfo.hProcess, INFINITE);
+			GetExitCodeProcess(seInfo.hProcess, &exitCode);
+			CloseHandle(seInfo.hProcess);
+		}
 		return (int) exitCode;
 #else
 		return system(command.c_str());
