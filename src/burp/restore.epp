@@ -1019,7 +1019,8 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 	}
 	else
 	{
-		dpb.insertInt(isc_dpb_parallel_workers, tdgbl->gbl_sw_par_workers);
+		if (tdgbl->gbl_sw_par_workers > 0)
+			dpb.insertInt(isc_dpb_parallel_workers, tdgbl->gbl_sw_par_workers);
 		dpb.insertByte(isc_dpb_shutdown, isc_dpb_shut_multi);
 	}
 	dpb.insertInt(isc_dpb_shutdown_delay, 0);

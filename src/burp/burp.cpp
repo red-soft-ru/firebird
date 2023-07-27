@@ -597,7 +597,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	tdgbl->gbl_sw_old_descriptions = false;
 	tdgbl->gbl_sw_mode = false;
 	tdgbl->gbl_sw_skip_count = 0;
-	tdgbl->gbl_sw_par_workers = 1;
+	tdgbl->gbl_sw_par_workers = uSvc->getParallelWorkers();
 	tdgbl->action = NULL;
 
 	burp_fil* file = NULL;
