@@ -10335,8 +10335,10 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
  **************************************/
 
 	if (tdgbl->gbl_sw_par_workers)
+	{
 		BURP_verbose(410, SafeArg() << tdgbl->gbl_sw_par_workers);
 		// msg 410 use up to @1 parallel workers
+	}
 
 	// Read burp record first
 
