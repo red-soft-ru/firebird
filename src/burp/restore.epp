@@ -1019,7 +1019,8 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 	}
 	else
 	{
-		dpb.insertInt(isc_dpb_parallel_workers, tdgbl->gbl_sw_par_workers);
+		if (tdgbl->gbl_sw_par_workers > 0)
+			dpb.insertInt(isc_dpb_parallel_workers, tdgbl->gbl_sw_par_workers);
 		dpb.insertByte(isc_dpb_shutdown, isc_dpb_shut_multi);
 	}
 	dpb.insertInt(isc_dpb_shutdown_delay, 0);
@@ -10332,6 +10333,12 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
  *	Perform the body of restore.
  *
  **************************************/
+
+	if (tdgbl->gbl_sw_par_workers)
+	{
+		BURP_verbose(410, SafeArg() << tdgbl->gbl_sw_par_workers);
+		// msg 410 use up to @1 parallel workers
+	}
 
 	// Read burp record first
 
