@@ -475,13 +475,17 @@ void ProfilerManager::prepareCursor(thread_db* tdbb, Request* request, const Sel
 
 	auto cursorId = select->getCursorId();
 
-	if (profileStatement->definedCursors.exist(cursorId))
-		return;
+	if (!profileStatement->definedCursors.exist(cursorId))
+	{
+		currentSession->pluginSession->defineCursor(profileStatement->id, cursorId,
+			select->getName().nullStr(), select->getLine(), select->getColumn());
 
-	currentSession->pluginSession->defineCursor(profileStatement->id, cursorId,
-		select->getName().nullStr(), select->getLine(), select->getColumn());
+		profileStatement->definedCursors.add(cursorId);
+	}
 
-	profileStatement->definedCursors.add(cursorId);
+	const auto recordSource = select->getAccessPath();
+
+	prepareRecSource(tdbb, request, recordSource);
 }
 
 void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const RecordSource* rsb)
@@ -496,35 +500,32 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 
 	fb_assert(profileStatement->definedCursors.exist(rsb->getCursorId()));
 
-	Array<NonPooledPair<const RecordSource*, const RecordSource*>> tree;
-	tree.add({rsb, nullptr});
-
-	for (unsigned pos = 0; pos < tree.getCount(); ++pos)
+	struct PlanItem : PermanentStorage
 	{
-		const auto thisRsb = tree[pos].first;
+		explicit PlanItem(MemoryPool& p)
+			: PermanentStorage(p)
+		{
+		}
 
-		Array<const RecordSource*> children;
-		thisRsb->getChildren(children);
+		const RecordSource* recordSource = nullptr;
+		const RecordSource* parentRecordSource = nullptr;
+		string accessPath{getPool()};
+		unsigned level = 0;
+	};
 
-		unsigned childPos = pos;
+	ObjectsArray<PlanItem> planItems;
+	planItems.add().recordSource = rsb;
 
-		for (const auto child : children)
-			tree.insert(++childPos, {child, thisRsb});
-	}
-
-	NonPooledMap<ULONG, ULONG> idSequenceMap;
-	auto sequencePtr = profileStatement->cursorNextSequence.getOrPut(rsb->getCursorId());
-
-	for (const auto& pair : tree)
+	for (unsigned pos = 0; pos < planItems.getCount(); ++pos)
 	{
-		const auto cursorId = pair.first->getCursorId();
-		const auto recSourceId = pair.first->getRecSourceId();
-		idSequenceMap.put(recSourceId, ++*sequencePtr);
+		auto& planItem = planItems[pos];
+		const auto thisRsb = planItem.recordSource;
 
-		string accessPath;
-		pair.first->print(tdbb, accessPath, true, 0, false);
+		string& accessPath = planItem.accessPath;
+		thisRsb->print(tdbb, accessPath, true, 0, false);
 
 		constexpr auto INDENT_MARKER = "\n    ";
+		constexpr unsigned INDENT_COUNT = 4;
 
 		if (accessPath.find(INDENT_MARKER) == 0)
 		{
@@ -535,13 +536,44 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 			} while ((pos = accessPath.find(INDENT_MARKER, pos + 1)) != string::npos);
 		}
 
+		if (accessPath.hasData() && accessPath[0] == '\n')
+			accessPath.erase(0, 1);
+
+		Array<const RecordSource*> children;
+		thisRsb->getChildren(children);
+
+		unsigned level = planItem.level;
+
+		if (const auto lastLinePos = accessPath.find_last_of('\n'); lastLinePos != string::npos)
+			level += (accessPath.find_first_not_of(' ', lastLinePos + 1) - lastLinePos + 1) / INDENT_COUNT;
+
+		unsigned childPos = pos;
+
+		for (const auto child : children)
+		{
+			auto& inserted = planItems.insert(++childPos);
+			inserted.recordSource = child;
+			inserted.parentRecordSource = thisRsb;
+			inserted.level = level + 1;
+		}
+	}
+
+	NonPooledMap<ULONG, ULONG> idSequenceMap;
+	auto sequencePtr = profileStatement->cursorNextSequence.getOrPut(rsb->getCursorId());
+
+	for (const auto& planItem : planItems)
+	{
+		const auto cursorId = planItem.recordSource->getCursorId();
+		const auto recSourceId = planItem.recordSource->getRecSourceId();
+		idSequenceMap.put(recSourceId, ++*sequencePtr);
+
 		ULONG parentSequence = 0;
 
-		if (pair.second)
-			parentSequence = *idSequenceMap.get(pair.second->getRecSourceId());
+		if (planItem.parentRecordSource)
+			parentSequence = *idSequenceMap.get(planItem.parentRecordSource->getRecSourceId());
 
 		currentSession->pluginSession->defineRecordSource(profileStatement->id, cursorId,
-			*sequencePtr, accessPath.c_str(), parentSequence);
+			*sequencePtr, planItem.level, planItem.accessPath.c_str(), parentSequence);
 
 		profileStatement->recSourceSequence.put(recSourceId, *sequencePtr);
 	}

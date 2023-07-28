@@ -1744,7 +1744,7 @@ interface ProfilerSession : Disposable
 	void defineCursor(int64 statementId, uint cursorId, const string name, uint line, uint column);
 
 	void defineRecordSource(int64 statementId, uint cursorId, uint recSourceId,
-		const string accessPath, uint parentRecSourceId);
+		uint level, const string accessPath, uint parentRecSourceId);
 
 	void onRequestStart(Status status, int64 statementId, int64 requestId,
 		int64 callerStatementId, int64 callerRequestId, ISC_TIMESTAMP_TZ timestamp);

@@ -265,6 +265,7 @@ Below is the list of tables that stores profile data.
  - `CURSOR_ID` type `INTEGER` - Cursor ID
  - `RECORD_SOURCE_ID` type `INTEGER` - Record source ID
  - `PARENT_RECORD_SOURCE_ID` type `INTEGER` - Parent record source ID
+ - `LEVEL` type `INTEGER` - Indentation level for the record source
  - `ACCESS_PATH` type `VARCHAR(255) CHARACTER SET UTF8` - Access path for the record source
  - Primary key: `PROFILE_ID, STATEMENT_ID, CURSOR_ID, RECORD_SOURCE_ID`
 
@@ -419,6 +420,7 @@ select rstat.profile_id,
        cur.column_num cursor_column_num,
        rstat.record_source_id,
        recsrc.parent_record_source_id,
+       recsrc.level,
        recsrc.access_path,
        cast(sum(rstat.open_counter) as bigint) open_counter,
        min(rstat.open_min_elapsed_time) open_min_elapsed_time,
@@ -461,6 +463,7 @@ select rstat.profile_id,
            cur.column_num,
            rstat.record_source_id,
            recsrc.parent_record_source_id,
+           recsrc.level,
            recsrc.access_path
   order by coalesce(sum(rstat.open_total_elapsed_time), 0) + coalesce(sum(rstat.fetch_total_elapsed_time), 0) desc
 ```

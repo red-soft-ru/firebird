@@ -106,6 +106,7 @@ struct Cursor
 struct RecordSource
 {
 	Nullable<ULONG> parentId;
+	unsigned level;
 	string accessPath{defaultPool()};
 };
 
@@ -181,7 +182,7 @@ public:
 	void defineCursor(SINT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column) override;
 
 	void defineRecordSource(SINT64 statementId, unsigned cursorId, unsigned recSourceId,
-		const char* accessPath, unsigned parentRecordSourceId) override;
+		unsigned level, const char* accessPath, unsigned parentRecordSourceId) override;
 
 	void onRequestStart(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 requestId,
 		SINT64 callerStatementId, SINT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) override;
@@ -441,8 +442,8 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 	constexpr auto recSrcSql = R"""(
 		update or insert into plg$prof_record_sources
 		    (profile_id, statement_id, cursor_id, record_source_id,
-		     parent_record_source_id, access_path)
-		    values (?, ?, ?, ?, ?, ?)
+		     parent_record_source_id, level, access_path)
+		    values (?, ?, ?, ?, ?, ?, ?)
 		    matching (profile_id, statement_id, cursor_id, record_source_id)
 	)""";
 
@@ -452,6 +453,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 		(FB_INTEGER, cursorId)
 		(FB_INTEGER, recordSourceId)
 		(FB_INTEGER, parentRecordSourceId)
+		(FB_INTEGER, level)
 		(FB_INTL_VARCHAR(MAX_ACCESS_PATH_CHAR_LEN * 4, CS_UTF8), accessPath)
 	) recSrcMessage(status, MasterInterfacePtr());
 	recSrcMessage.clear();
@@ -773,6 +775,9 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 			recSrcMessage->parentRecordSourceIdNull = !recSrc.parentId.specified;
 			recSrcMessage->parentRecordSourceId = recSrc.parentId.value;
 
+			recSrcMessage->levelNull = FB_FALSE;
+			recSrcMessage->level = recSrc.level;
+
 			recSrcMessage->accessPathNull = FB_FALSE;
 			recSrcMessage->accessPath.set(recSrc.accessPath.c_str());
 
@@ -1041,6 +1046,7 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		    cursor_id integer not null,
 		    record_source_id integer not null,
 		    parent_record_source_id integer,
+		    level integer not null,
 		    access_path varchar(255) character set utf8 not null,
 		    constraint plg$prof_record_sources_pk
 		        primary key (profile_id, statement_id, cursor_id, record_source_id)
@@ -1276,6 +1282,7 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		       cur.column_num cursor_column_num,
 		       rstat.record_source_id,
 		       recsrc.parent_record_source_id,
+		       recsrc.level,
 		       recsrc.access_path,
 		       cast(sum(rstat.open_counter) as bigint) open_counter,
 		       min(rstat.open_min_elapsed_time) open_min_elapsed_time,
@@ -1318,6 +1325,7 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		           cur.column_num,
 		           rstat.record_source_id,
 		           recsrc.parent_record_source_id,
+		           recsrc.level,
 		           recsrc.access_path
 		  order by coalesce(sum(rstat.open_total_elapsed_time), 0) + coalesce(sum(rstat.fetch_total_elapsed_time), 0) desc
 		)""",
@@ -1440,7 +1448,7 @@ void Session::defineCursor(SINT64 statementId, unsigned cursorId, const char* na
 }
 
 void Session::defineRecordSource(SINT64 statementId, unsigned cursorId, unsigned recSourceId,
-	const char* accessPath, unsigned parentRecordSourceId)
+	unsigned level, const char* accessPath, unsigned parentRecordSourceId)
 {
 	const auto recSource = recordSources.put({{statementId, cursorId}, recSourceId});
 	fb_assert(recSource);
@@ -1448,6 +1456,7 @@ void Session::defineRecordSource(SINT64 statementId, unsigned cursorId, unsigned
 	if (!recSource)
 		return;
 
+	recSource->level = level;
 	recSource->accessPath = accessPath;
 
 	if (unsigned len = recSource->accessPath.length(); len > MAX_ACCESS_PATH_CHAR_LEN)

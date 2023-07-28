@@ -94,8 +94,6 @@ public:
 			{
 				lastTicks = profilerManager->queryTicks();
 
-				profilerManager->prepareRecSource(tdbb, request, recordSource);
-
 				if (profilerManager->currentSession->flags & Firebird::IProfilerSession::FLAG_BEFORE_EVENTS)
 				{
 					if (event == Event::OPEN)
@@ -191,7 +189,6 @@ public:
 		const Firebird::PathName& pluginName, const Firebird::string& description, const Firebird::string& options);
 
 	void prepareCursor(thread_db* tdbb, Request* request, const Select* select);
-	void prepareRecSource(thread_db* tdbb, Request* request, const RecordSource* rsb);
 	void onRequestFinish(Request* request, Stats& stats);
 
 	void beforePsqlLineColumn(Request* request, ULONG line, ULONG column)
@@ -218,11 +215,12 @@ public:
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
 		{
 			const auto profileStatement = getStatement(request);
-			const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId());
-			fb_assert(sequencePtr);
 
-			currentSession->pluginSession->beforeRecordSourceOpen(
-				profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr);
+			if (const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId()))
+			{
+				currentSession->pluginSession->beforeRecordSourceOpen(
+					profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr);
+			}
 		}
 	}
 
@@ -231,11 +229,12 @@ public:
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
 		{
 			const auto profileStatement = getStatement(request);
-			const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId());
-			fb_assert(sequencePtr);
 
-			currentSession->pluginSession->afterRecordSourceOpen(
-				profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr, &stats);
+			if (const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId()))
+			{
+				currentSession->pluginSession->afterRecordSourceOpen(
+					profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr, &stats);
+			}
 		}
 	}
 
@@ -244,11 +243,12 @@ public:
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
 		{
 			const auto profileStatement = getStatement(request);
-			const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId());
-			fb_assert(sequencePtr);
 
-			currentSession->pluginSession->beforeRecordSourceGetRecord(
-				profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr);
+			if (const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId()))
+			{
+				currentSession->pluginSession->beforeRecordSourceGetRecord(
+					profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr);
+			}
 		}
 	}
 
@@ -257,11 +257,12 @@ public:
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
 		{
 			const auto profileStatement = getStatement(request);
-			const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId());
-			fb_assert(sequencePtr);
 
-			currentSession->pluginSession->afterRecordSourceGetRecord(
-				profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr, &stats);
+			if (const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId()))
+			{
+				currentSession->pluginSession->afterRecordSourceGetRecord(
+					profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr, &stats);
+			}
 		}
 	}
 
@@ -282,6 +283,8 @@ public:
 	}
 
 private:
+	void prepareRecSource(thread_db* tdbb, Request* request, const RecordSource* rsb);
+
 	void cancelSession();
 	void finishSession(thread_db* tdbb, bool flushData);
 	void pauseSession(bool flushData);

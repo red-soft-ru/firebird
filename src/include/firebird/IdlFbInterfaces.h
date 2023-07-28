@@ -6954,7 +6954,7 @@ namespace Firebird
 			void (CLOOP_CARG *finish)(IProfilerSession* self, IStatus* status, ISC_TIMESTAMP_TZ timestamp) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *defineStatement)(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *defineCursor)(IProfilerSession* self, ISC_INT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column) CLOOP_NOEXCEPT;
-			void (CLOOP_CARG *defineRecordSource)(IProfilerSession* self, ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, const char* accessPath, unsigned parentRecSourceId) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *defineRecordSource)(IProfilerSession* self, ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, unsigned level, const char* accessPath, unsigned parentRecSourceId) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *onRequestStart)(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_INT64 callerStatementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *onRequestFinish)(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *beforePsqlLineColumn)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column) CLOOP_NOEXCEPT;
@@ -7019,9 +7019,9 @@ namespace Firebird
 			static_cast<VTable*>(this->cloopVTable)->defineCursor(this, statementId, cursorId, name, line, column);
 		}
 
-		void defineRecordSource(ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, const char* accessPath, unsigned parentRecSourceId)
+		void defineRecordSource(ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, unsigned level, const char* accessPath, unsigned parentRecSourceId)
 		{
-			static_cast<VTable*>(this->cloopVTable)->defineRecordSource(this, statementId, cursorId, recSourceId, accessPath, parentRecSourceId);
+			static_cast<VTable*>(this->cloopVTable)->defineRecordSource(this, statementId, cursorId, recSourceId, level, accessPath, parentRecSourceId);
 		}
 
 		template <typename StatusType> void onRequestStart(StatusType* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_INT64 callerStatementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp)
@@ -20528,11 +20528,11 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopdefineRecordSourceDispatcher(IProfilerSession* self, ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, const char* accessPath, unsigned parentRecSourceId) CLOOP_NOEXCEPT
+		static void CLOOP_CARG cloopdefineRecordSourceDispatcher(IProfilerSession* self, ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, unsigned level, const char* accessPath, unsigned parentRecSourceId) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				static_cast<Name*>(self)->Name::defineRecordSource(statementId, cursorId, recSourceId, accessPath, parentRecSourceId);
+				static_cast<Name*>(self)->Name::defineRecordSource(statementId, cursorId, recSourceId, level, accessPath, parentRecSourceId);
 			}
 			catch (...)
 			{
@@ -20672,7 +20672,7 @@ namespace Firebird
 		virtual void finish(StatusType* status, ISC_TIMESTAMP_TZ timestamp) = 0;
 		virtual void defineStatement(StatusType* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText) = 0;
 		virtual void defineCursor(ISC_INT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column) = 0;
-		virtual void defineRecordSource(ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, const char* accessPath, unsigned parentRecSourceId) = 0;
+		virtual void defineRecordSource(ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, unsigned level, const char* accessPath, unsigned parentRecSourceId) = 0;
 		virtual void onRequestStart(StatusType* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_INT64 callerStatementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) = 0;
 		virtual void onRequestFinish(StatusType* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats) = 0;
 		virtual void beforePsqlLineColumn(ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column) = 0;
