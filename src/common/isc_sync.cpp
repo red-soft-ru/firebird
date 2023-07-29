@@ -816,14 +816,17 @@ int SharedMemoryBase::eventWait(event_t* event, const SLONG value, const SLONG m
 #if defined HAVE_CLOCK_GETTIME
 		clock_gettime(CLOCK_REALTIME, &timer);
 #else
-		gettimeofday(&timer, NULL);
+		struct timeval tp;
+		GETTIMEOFDAY(&tp);
+		timer.tv_sec = tp.tv_sec;
+		timer.tv_nsec = tp.tv_usec * 1000;
 #endif
 		timer.tv_sec += micro_seconds / 1000000;
 		timer.tv_nsec += 1000 * (micro_seconds % 1000000);
-		if (timer.tv_nsec >= 1000000)
+		if (timer.tv_nsec >= 1000000000l)
 		{
 			timer.tv_sec++;
-			timer.tv_nsec -= 1000000;
+			timer.tv_nsec -= 1000000000l;
 		}
 	}
 
