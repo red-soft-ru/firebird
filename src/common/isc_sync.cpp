@@ -819,7 +819,12 @@ int SharedMemoryBase::eventWait(event_t* event, const SLONG value, const SLONG m
 		gettimeofday(&timer, NULL);
 #endif
 		timer.tv_sec += micro_seconds / 1000000;
-		timer.tv_nsec = 1000 * (micro_seconds % 1000000);
+		timer.tv_nsec += 1000 * (micro_seconds % 1000000);
+		if (timer.tv_nsec >= 1000000)
+		{
+			timer.tv_sec++;
+			timer.tv_nsec -= 1000000;
+		}
 	}
 
 	int ret = FB_SUCCESS;
