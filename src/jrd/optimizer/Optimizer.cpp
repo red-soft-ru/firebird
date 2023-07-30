@@ -2283,9 +2283,7 @@ bool Optimizer::generateEquiJoin(RiverList& orgRivers)
 				if (!river1->isReferenced(node2))
 					continue;
 
-				ValueExprNode* const temp = node1;
-				node1 = node2;
-				node2 = temp;
+				std::swap(node1, node2);
 			}
 
 			for (unsigned j = i + 1; j < orgRivers.getCount(); j++)
@@ -2308,6 +2306,8 @@ bool Optimizer::generateEquiJoin(RiverList& orgRivers)
 
 					if (eq_class == last_class)
 						last_class += orgCount;
+
+					iter |= Optimizer::CONJUNCT_MATCHED;
 				}
 			}
 		}
