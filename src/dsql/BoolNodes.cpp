@@ -1611,7 +1611,7 @@ void RseBoolNode::pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::funct
 		rsb->setAnyBoolean(rse->rse_boolean, ansiAny, ansiNot);
 	}
 
-	subQuery = FB_NEW_POOL(*tdbb->getDefaultPool()) SubQuery(rsb, rse);
+	subQuery = FB_NEW_POOL(*tdbb->getDefaultPool()) SubQuery(csb, rsb, rse);
 	csb->csb_fors.add(subQuery);
 }
 

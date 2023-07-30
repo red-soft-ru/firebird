@@ -35,7 +35,7 @@ namespace Jrd
 
 	// Select class (common base for sub-queries and cursors)
 
-	class Select
+	class Select : public AccessPath
 	{
 	public:
 		enum : ULONG {
@@ -43,20 +43,12 @@ namespace Jrd
 			INVARIANT = 2
 		};
 
-		Select(const RecordSource* source, const RseNode* rse, ULONG line = 0, ULONG column = 0,
+		Select(CompilerScratch* csb, const RecordSource* source, const RseNode* rse, ULONG line = 0, ULONG column = 0,
 			const MetaName& cursorName = {});
 
-		virtual ~Select()
-		{}
-
-		ULONG getCursorId() const
+		const RecordSource* getRootRecordSource() const
 		{
-			return m_cursorId;
-		}
-
-		const RecordSource* getAccessPath() const
-		{
-			return m_top;
+			return m_root;
 		}
 
 		const MetaName& getName() const
@@ -75,20 +67,28 @@ namespace Jrd
 		}
 
 		void initializeInvariants(Request* request) const;
-		void printPlan(thread_db* tdbb, Firebird::string& plan, bool detailed) const;
+
+		void printPlan(thread_db* tdbb, Firebird::string& plan, bool detailed) const
+		{
+			print(tdbb, plan, detailed, 0, true);
+		}
+
+		void print(thread_db* tdbb, Firebird::string& plan,
+			bool detailed, unsigned level, bool recurse) const override;
+
+		void getChildren(Firebird::Array<const RecordSource*>& children) const override
+		{
+			children.add(m_root);
+		}
 
 		virtual void open(thread_db* tdbb) const = 0;
 		virtual void close(thread_db* tdbb) const = 0;
 
 	protected:
-		void prepareProfiler(thread_db* tdbb, Request* request) const;
-
-	protected:
-		const RecordSource* const m_top;
+		const RecordSource* const m_root;
 		const RseNode* const m_rse;
 
 	private:
-		const ULONG m_cursorId;
 		MetaName m_cursorName;	// optional name for explicit PSQL cursors
 		ULONG m_line = 0;
 		ULONG m_column = 0;
@@ -99,7 +99,7 @@ namespace Jrd
 	class SubQuery final : public Select
 	{
 	public:
-		SubQuery(const RecordSource* rsb, const RseNode* rse);
+		SubQuery(CompilerScratch* csb, const RecordSource* rsb, const RseNode* rse);
 
 		void open(thread_db* tdbb) const override;
 		void close(thread_db* tdbb) const override;

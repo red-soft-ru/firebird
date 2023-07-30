@@ -11385,7 +11385,7 @@ ValueExprNode* SubQueryNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	// Finish up processing of record selection expressions.
 
 	RecordSource* const rsb = CMP_post_rse(tdbb, csb, rse);
-	subQuery = FB_NEW_POOL(*tdbb->getDefaultPool()) SubQuery(rsb, rse);
+	subQuery = FB_NEW_POOL(*tdbb->getDefaultPool()) SubQuery(csb, rsb, rse);
 	csb->csb_fors.add(subQuery);
 
 	return this;

@@ -483,22 +483,20 @@ void ProfilerManager::prepareCursor(thread_db* tdbb, Request* request, const Sel
 		profileStatement->definedCursors.add(cursorId);
 	}
 
-	const auto recordSource = select->getAccessPath();
-
-	prepareRecSource(tdbb, request, recordSource);
+	prepareRecSource(tdbb, request, select);
 }
 
-void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const RecordSource* rsb)
+void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const AccessPath* recordSource)
 {
 	auto profileStatement = getStatement(request);
 
 	if (!profileStatement)
 		return;
 
-	if (profileStatement->recSourceSequence.exist(rsb->getRecSourceId()))
+	if (profileStatement->recSourceSequence.exist(recordSource->getRecSourceId()))
 		return;
 
-	fb_assert(profileStatement->definedCursors.exist(rsb->getCursorId()));
+	fb_assert(profileStatement->definedCursors.exist(recordSource->getCursorId()));
 
 	struct PlanItem : PermanentStorage
 	{
@@ -507,14 +505,14 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 		{
 		}
 
-		const RecordSource* recordSource = nullptr;
-		const RecordSource* parentRecordSource = nullptr;
+		const AccessPath* recordSource = nullptr;
+		const AccessPath* parentRecordSource = nullptr;
 		string accessPath{getPool()};
 		unsigned level = 0;
 	};
 
 	ObjectsArray<PlanItem> planItems;
-	planItems.add().recordSource = rsb;
+	planItems.add().recordSource = recordSource;
 
 	for (unsigned pos = 0; pos < planItems.getCount(); ++pos)
 	{
@@ -559,7 +557,7 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 	}
 
 	NonPooledMap<ULONG, ULONG> idSequenceMap;
-	auto sequencePtr = profileStatement->cursorNextSequence.getOrPut(rsb->getCursorId());
+	auto sequencePtr = profileStatement->cursorNextSequence.getOrPut(recordSource->getCursorId());
 
 	for (const auto& planItem : planItems)
 	{

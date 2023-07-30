@@ -79,17 +79,19 @@ public:
 		};
 
 	public:
-		RecordSourceStopWatcher(thread_db* tdbb, const RecordSource* aRecordSource, Event aEvent)
-			: recordSource(aRecordSource),
+		RecordSourceStopWatcher(thread_db* tdbb, const RecordSource* recordSource, Event aEvent)
+			: RecordSourceStopWatcher(tdbb, tdbb->getAttachment()->getActiveProfilerManagerForNonInternalStatement(tdbb),
+				recordSource, aEvent)
+		{
+		}
+
+		RecordSourceStopWatcher(thread_db* tdbb, ProfilerManager* aProfilerManager,
+					const AccessPath* recordSource, Event aEvent)
+			: request(tdbb->getRequest()),
+			  profilerManager(aProfilerManager),
+			  recordSource(recordSource),
 			  event(aEvent)
 		{
-			const auto attachment = tdbb->getAttachment();
-			request = tdbb->getRequest();
-
-			profilerManager = attachment->isProfilerActive() && !request->hasInternalStatement() ?
-				attachment->getProfilerManager(tdbb) :
-				nullptr;
-
 			if (profilerManager)
 			{
 				lastTicks = profilerManager->queryTicks();
@@ -123,9 +125,9 @@ public:
 		}
 
 	private:
-		const RecordSource* recordSource;
 		Request* request;
 		ProfilerManager* profilerManager;
+		const AccessPath* recordSource;
 		SINT64 lastTicks;
 		SINT64 lastAccumulatedOverhead;
 		Event event;
@@ -210,58 +212,58 @@ public:
 		}
 	}
 
-	void beforeRecordSourceOpen(Request* request, const RecordSource* rsb)
+	void beforeRecordSourceOpen(Request* request, const AccessPath* recordSource)
 	{
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
 		{
 			const auto profileStatement = getStatement(request);
 
-			if (const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId()))
+			if (const auto sequencePtr = profileStatement->recSourceSequence.get(recordSource->getRecSourceId()))
 			{
 				currentSession->pluginSession->beforeRecordSourceOpen(
-					profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr);
+					profileStatement->id, profileRequestId, recordSource->getCursorId(), *sequencePtr);
 			}
 		}
 	}
 
-	void afterRecordSourceOpen(Request* request, const RecordSource* rsb, Stats& stats)
+	void afterRecordSourceOpen(Request* request, const AccessPath* recordSource, Stats& stats)
 	{
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
 		{
 			const auto profileStatement = getStatement(request);
 
-			if (const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId()))
+			if (const auto sequencePtr = profileStatement->recSourceSequence.get(recordSource->getRecSourceId()))
 			{
 				currentSession->pluginSession->afterRecordSourceOpen(
-					profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr, &stats);
+					profileStatement->id, profileRequestId, recordSource->getCursorId(), *sequencePtr, &stats);
 			}
 		}
 	}
 
-	void beforeRecordSourceGetRecord(Request* request, const RecordSource* rsb)
+	void beforeRecordSourceGetRecord(Request* request, const AccessPath* recordSource)
 	{
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
 		{
 			const auto profileStatement = getStatement(request);
 
-			if (const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId()))
+			if (const auto sequencePtr = profileStatement->recSourceSequence.get(recordSource->getRecSourceId()))
 			{
 				currentSession->pluginSession->beforeRecordSourceGetRecord(
-					profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr);
+					profileStatement->id, profileRequestId, recordSource->getCursorId(), *sequencePtr);
 			}
 		}
 	}
 
-	void afterRecordSourceGetRecord(Request* request, const RecordSource* rsb, Stats& stats)
+	void afterRecordSourceGetRecord(Request* request, const AccessPath* recordSource, Stats& stats)
 	{
 		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
 		{
 			const auto profileStatement = getStatement(request);
 
-			if (const auto sequencePtr = profileStatement->recSourceSequence.get(rsb->getRecSourceId()))
+			if (const auto sequencePtr = profileStatement->recSourceSequence.get(recordSource->getRecSourceId()))
 			{
 				currentSession->pluginSession->afterRecordSourceGetRecord(
-					profileStatement->id, profileRequestId, rsb->getCursorId(), *sequencePtr, &stats);
+					profileStatement->id, profileRequestId, recordSource->getCursorId(), *sequencePtr, &stats);
 			}
 		}
 	}
@@ -283,7 +285,7 @@ public:
 	}
 
 private:
-	void prepareRecSource(thread_db* tdbb, Request* request, const RecordSource* rsb);
+	void prepareRecSource(thread_db* tdbb, Request* request, const AccessPath* recordSource);
 
 	void cancelSession();
 	void finishSession(thread_db* tdbb, bool flushData);

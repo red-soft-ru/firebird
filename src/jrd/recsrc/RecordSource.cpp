@@ -45,12 +45,21 @@ using namespace Jrd;
 //#define PRINT_OPT_INFO	// print optimizer info (cardinality, cost) in plans
 
 
+// AccessPath class
+// -------------------
+
+AccessPath::AccessPath(CompilerScratch* csb)
+	: m_cursorId(csb->csb_currentCursorId),
+	  m_recSourceId(csb->csb_nextRecSourceId++)
+{
+}
+
+
 // Record source class
 // -------------------
 
 RecordSource::RecordSource(CompilerScratch* csb)
-	: m_cursorId(csb->csb_currentCursorId),
-	  m_recSourceId(csb->csb_nextRecSourceId++)
+	: AccessPath(csb)
 {
 }
 
@@ -207,10 +216,6 @@ void RecordSource::printOptInfo(string& plan) const
 	info.printf(" [rows: %" UQUADFORMAT "]", (FB_UINT64) (m_cardinality + 0.5));
 	plan += info;
 #endif
-}
-
-RecordSource::~RecordSource()
-{
 }
 
 

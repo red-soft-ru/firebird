@@ -1317,7 +1317,7 @@ DeclareCursorNode* DeclareCursorNode::pass2(thread_db* tdbb, CompilerScratch* cs
 	csb->csb_fors.add(cursor);
 
 	StreamList cursorStreams;
-	cursor->getAccessPath()->findUsedStreams(cursorStreams);
+	cursor->getRootRecordSource()->findUsedStreams(cursorStreams);
 
 	// Activate cursor streams to allow index usage for <cursor>.<field> references, see CORE-4675.
 	// It's also useful for correlated sub-queries in the select list, see CORE-4379.

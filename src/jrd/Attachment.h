@@ -837,6 +837,7 @@ public:
 	void invalidateReplSet(thread_db* tdbb, bool broadcast);
 
 	ProfilerManager* getProfilerManager(thread_db* tdbb);
+	ProfilerManager* getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb);
 	bool isProfilerActive();
 	void releaseProfilerManager();
 
