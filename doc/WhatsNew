@@ -34,6 +34,14 @@
         DROP TABLE executed for a table with big records may lead to "wrong page type" or "end of file" error
       Contributor(s): Vlad Khorsun, Ilya Eremin
 
+    * Bugfix #7662
+        Peformance issues in prepare_update()
+      Contributor(s): Ilya Eremin
+
+    * Bugfix #7661
+        FB3 CS rejects new connections
+      Contributor(s): Vlad Khorsun
+
     * Bugfix #7626
         Segfault when new attachment is done to shutting down database
       Contributor(s): Alexander Peshkov
@@ -157,6 +165,10 @@
     * Bugfix #7237
         Starting operator become unstable on indexed varchar fields
       Contributor(s): Adriano dos Santos Fernandes
+
+    * Bugfix #7233
+        Slow database restore when Classic server mode is used
+      Contributor(s): Ilya Eremin
 
     * Bugfix #6947
         Query to mon$ tables does not return data when the encryption/decryption thread is running
