@@ -34,6 +34,9 @@
 
 ## Bugfixes
 
+* [#7683](https://github.com/FirebirdSQL/firebird/issues/7683): `rdb$time_zone_util.transitions` returns an infinite result set  
+  Contributor(s): Adriano dos Santos Fernandes
+
 * [#7670](https://github.com/FirebirdSQL/firebird/issues/7670): Cursor name can duplicate parameter and variable names in procedures and functions  
   Contributor(s): Adriano dos Santos Fernandes
 
@@ -42,6 +45,12 @@
 
 * [#7664](https://github.com/FirebirdSQL/firebird/issues/7664): `DROP TABLE` executed for a table with big records may lead to "wrong page type" or "end of file" error  
   Contributor(s): Ilya Eremin
+
+* [#7662](https://github.com/FirebirdSQL/firebird/pull/7662): Peformance issues in prepare_update()  
+  Contributor(s): Ilya Eremin
+
+* [#7661](https://github.com/FirebirdSQL/firebird/issues/7661): FB CS rejects new connections  
+  Contributor(s): Vlad Khorsun
 
 * [#7651](https://github.com/FirebirdSQL/firebird/issues/7651): Unable to find savepoint in insert with nested query and returning clause in FB4  
   Contributor(s): Dmitry Yemanov
@@ -216,6 +225,9 @@
 
 * [#7255](https://github.com/FirebirdSQL/firebird/issues/7255): `READ COMMITTED READ CONSISTENCY` mode is broken in Classic / SuperClassic on Linux  
   Contributor(s): Alex Peshkoff
+
+* [#7233](https://github.com/FirebirdSQL/firebird/pull/7233): Slow database restore when Classic server mode is used  
+  Contributor(s): Ilya Eremin
 
 * [#7241](https://github.com/FirebirdSQL/firebird/issues/7241): MacOS installer - firebird user is not created correctly if group already exists  
   Contributor(s): Jonathan Frutos
