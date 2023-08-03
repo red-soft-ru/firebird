@@ -129,8 +129,8 @@ void TraceCfgReader::readConfig()
 			PathName expandedName;
 
 			if (m_databaseName == noQuotePattern ||
-				expandDatabaseName(noQuotePattern, expandedName, nullptr) &&
-				m_databaseName == expandedName)
+				(expandDatabaseName(noQuotePattern, expandedName, nullptr),
+				m_databaseName == expandedName) )
 			{
 				match = exactMatch = true;
 			}
