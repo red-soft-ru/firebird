@@ -8,7 +8,7 @@ BuildVersion="$Id: writeBuildNum.sh,v 1.28732 2010/05/29 13:12:08 fsg Exp $"
 BuildType=V
 MajorVer=3
 MinorVer=0
-RevNo=11
+RevNo=12
 BuildNum=33704
 
 NowAt=`pwd`
