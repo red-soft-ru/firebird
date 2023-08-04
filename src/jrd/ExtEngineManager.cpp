@@ -279,8 +279,10 @@ namespace
 	class MessageMoverNode : public CompoundStmtNode
 	{
 	public:
-		MessageMoverNode(MemoryPool& pool, MessageNode* fromMessage, MessageNode* toMessage)
-			: CompoundStmtNode(pool)
+		MessageMoverNode(MemoryPool& pool, MessageNode* fromMessage, MessageNode* toMessage,
+					MessageNode* aCheckMessageEof = nullptr)
+			: CompoundStmtNode(pool),
+			  checkMessageEof(aCheckMessageEof)
 		{
 			// Iterate over the format items, except the EOF item.
 			for (USHORT i = 0; i < (fromMessage->format->fmt_count / 2) * 2; i += 2)
@@ -314,6 +316,25 @@ namespace
 				assign->asgnTo = param;
 			}
 		}
+
+		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override
+		{
+			if (checkMessageEof &&
+				request->req_operation == Request::req_evaluate &&
+				(request->req_flags & req_proc_select))
+			{
+				const auto msg = request->getImpure<UCHAR>(checkMessageEof->impureOffset);
+				const auto eof = (SSHORT*) (msg + (IPTR) checkMessageEof->format->fmt_desc.back().dsc_address);
+
+				if (!*eof)
+					request->req_operation = Request::req_return;
+			}
+
+			return CompoundStmtNode::execute(tdbb, request, exeState);
+		}
+
+	private:
+		MessageNode* checkMessageEof;
 	};
 
 	// External function node.
@@ -362,7 +383,8 @@ namespace
 		{
 			SuspendNode* suspend = FB_NEW_POOL(pool) SuspendNode(pool);
 			suspend->message = intOutMessageNode;
-			suspend->statement = FB_NEW_POOL(pool) MessageMoverNode(pool, extOutMessageNode, intOutMessageNode);
+			suspend->statement = FB_NEW_POOL(pool) MessageMoverNode(pool,
+				extOutMessageNode, intOutMessageNode, intOutMessageNode);
 
 			statements.add(suspend);
 			statements.add(FB_NEW_POOL(pool) StallNode(pool));
@@ -381,34 +403,37 @@ namespace
 			switch (request->req_operation)
 			{
 				case Request::req_evaluate:
+					impure->sta_state = 0;
+					*eof = 0;
+
 					fb_assert(!resultSet);
 					resultSet = procedure->open(tdbb, extInMsg, extOutMsg);
 
 					if (!resultSet)
-					{
-						*eof = 0;
 						break;
-					}
-					else
-						*eof = -1;
 					// fall into
 
 				case Request::req_proceed:
 				case Request::req_sync:
+					*eof = 0;
 					if (resultSet)
 					{
 						if (resultSet->fetch(tdbb) && (request->req_flags & req_proc_fetch))
 							*eof = -1;
 						else
 						{
-							*eof = 0;
 							delete resultSet;
 							resultSet = NULL;
 						}
 					}
 
 					impure->sta_state = 0;	// suspend node
-					request->req_operation = Request::req_sync;
+
+					if (!*eof)
+						request->req_operation = Request::req_return;
+					else
+						request->req_operation = Request::req_sync;
+
 					break;
 
 				case Request::req_unwind:
