@@ -1719,3 +1719,29 @@ static void trigger_failure(thread_db* tdbb, Request* trigger)
 		ERR_punt();
 	}
 }
+
+
+void AutoCacheRequest::cacheRequest()
+{
+	thread_db* tdbb = JRD_get_thread_data();
+	Attachment* att = tdbb->getAttachment();
+
+	Statement** stmt = which == IRQ_REQUESTS ? &att->att_internal[id] :
+		which == DYN_REQUESTS ? &att->att_dyn_req[id] : nullptr;
+	if (!stmt)
+	{
+		fb_assert(false);
+		return;
+	}
+
+	if (*stmt)
+	{
+		// self resursive call already filled cache
+		request->getStatement()->release(tdbb);
+		request = att->findSystemRequest(tdbb, id, which);
+		fb_assert(request);
+	}
+	else
+		*stmt = request->getStatement();
+}
+
