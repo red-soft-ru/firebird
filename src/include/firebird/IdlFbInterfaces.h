@@ -5602,7 +5602,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_ITRACE_PROCEDURE_VERSION 2u
+#define FIREBIRD_ITRACE_PROCEDURE_VERSION 3u
 
 	class ITraceProcedure : public IVersioned
 	{
@@ -5612,6 +5612,9 @@ namespace Firebird
 			const char* (CLOOP_CARG *getProcName)(ITraceProcedure* self) CLOOP_NOEXCEPT;
 			ITraceParams* (CLOOP_CARG *getInputs)(ITraceProcedure* self) CLOOP_NOEXCEPT;
 			PerformanceInfo* (CLOOP_CARG *getPerf)(ITraceProcedure* self) CLOOP_NOEXCEPT;
+			ISC_INT64 (CLOOP_CARG *getStmtID)(ITraceProcedure* self) CLOOP_NOEXCEPT;
+			const char* (CLOOP_CARG *getPlan)(ITraceProcedure* self) CLOOP_NOEXCEPT;
+			const char* (CLOOP_CARG *getExplainedPlan)(ITraceProcedure* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -5644,9 +5647,39 @@ namespace Firebird
 			PerformanceInfo* ret = static_cast<VTable*>(this->cloopVTable)->getPerf(this);
 			return ret;
 		}
+
+		ISC_INT64 getStmtID()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			ISC_INT64 ret = static_cast<VTable*>(this->cloopVTable)->getStmtID(this);
+			return ret;
+		}
+
+		const char* getPlan()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getPlan(this);
+			return ret;
+		}
+
+		const char* getExplainedPlan()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getExplainedPlan(this);
+			return ret;
+		}
 	};
 
-#define FIREBIRD_ITRACE_FUNCTION_VERSION 2u
+#define FIREBIRD_ITRACE_FUNCTION_VERSION 3u
 
 	class ITraceFunction : public IVersioned
 	{
@@ -5657,6 +5690,9 @@ namespace Firebird
 			ITraceParams* (CLOOP_CARG *getInputs)(ITraceFunction* self) CLOOP_NOEXCEPT;
 			ITraceParams* (CLOOP_CARG *getResult)(ITraceFunction* self) CLOOP_NOEXCEPT;
 			PerformanceInfo* (CLOOP_CARG *getPerf)(ITraceFunction* self) CLOOP_NOEXCEPT;
+			ISC_INT64 (CLOOP_CARG *getStmtID)(ITraceFunction* self) CLOOP_NOEXCEPT;
+			const char* (CLOOP_CARG *getPlan)(ITraceFunction* self) CLOOP_NOEXCEPT;
+			const char* (CLOOP_CARG *getExplainedPlan)(ITraceFunction* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -5695,9 +5731,39 @@ namespace Firebird
 			PerformanceInfo* ret = static_cast<VTable*>(this->cloopVTable)->getPerf(this);
 			return ret;
 		}
+
+		ISC_INT64 getStmtID()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			ISC_INT64 ret = static_cast<VTable*>(this->cloopVTable)->getStmtID(this);
+			return ret;
+		}
+
+		const char* getPlan()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getPlan(this);
+			return ret;
+		}
+
+		const char* getExplainedPlan()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getExplainedPlan(this);
+			return ret;
+		}
 	};
 
-#define FIREBIRD_ITRACE_TRIGGER_VERSION 2u
+#define FIREBIRD_ITRACE_TRIGGER_VERSION 3u
 
 	class ITraceTrigger : public IVersioned
 	{
@@ -5709,6 +5775,9 @@ namespace Firebird
 			int (CLOOP_CARG *getAction)(ITraceTrigger* self) CLOOP_NOEXCEPT;
 			int (CLOOP_CARG *getWhich)(ITraceTrigger* self) CLOOP_NOEXCEPT;
 			PerformanceInfo* (CLOOP_CARG *getPerf)(ITraceTrigger* self) CLOOP_NOEXCEPT;
+			ISC_INT64 (CLOOP_CARG *getStmtID)(ITraceTrigger* self) CLOOP_NOEXCEPT;
+			const char* (CLOOP_CARG *getPlan)(ITraceTrigger* self) CLOOP_NOEXCEPT;
+			const char* (CLOOP_CARG *getExplainedPlan)(ITraceTrigger* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -5755,6 +5824,36 @@ namespace Firebird
 		PerformanceInfo* getPerf()
 		{
 			PerformanceInfo* ret = static_cast<VTable*>(this->cloopVTable)->getPerf(this);
+			return ret;
+		}
+
+		ISC_INT64 getStmtID()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			ISC_INT64 ret = static_cast<VTable*>(this->cloopVTable)->getStmtID(this);
+			return ret;
+		}
+
+		const char* getPlan()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getPlan(this);
+			return ret;
+		}
+
+		const char* getExplainedPlan()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getExplainedPlan(this);
 			return ret;
 		}
 	};
@@ -6029,7 +6128,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_ITRACE_PLUGIN_VERSION 4u
+#define FIREBIRD_ITRACE_PLUGIN_VERSION 5u
 
 	class ITracePlugin : public IReferenceCounted
 	{
@@ -6058,6 +6157,9 @@ namespace Firebird
 			FB_BOOLEAN (CLOOP_CARG *trace_event_sweep)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceSweepInfo* sweep, unsigned sweep_state) CLOOP_NOEXCEPT;
 			FB_BOOLEAN (CLOOP_CARG *trace_func_execute)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceFunction* function, FB_BOOLEAN started, unsigned func_result) CLOOP_NOEXCEPT;
 			FB_BOOLEAN (CLOOP_CARG *trace_dsql_restart)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceSQLStatement* statement, unsigned number) CLOOP_NOEXCEPT;
+			FB_BOOLEAN (CLOOP_CARG *trace_proc_compile)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceProcedure* procedure, ISC_INT64 time_millis, unsigned proc_result) CLOOP_NOEXCEPT;
+			FB_BOOLEAN (CLOOP_CARG *trace_func_compile)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceFunction* function, ISC_INT64 time_millis, unsigned func_result) CLOOP_NOEXCEPT;
+			FB_BOOLEAN (CLOOP_CARG *trace_trigger_compile)(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceTrigger* trigger, ISC_INT64 time_millis, unsigned trig_result) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -6216,6 +6318,36 @@ namespace Firebird
 			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_dsql_restart(this, connection, transaction, statement, number);
 			return ret;
 		}
+
+		FB_BOOLEAN trace_proc_compile(ITraceDatabaseConnection* connection, ITraceProcedure* procedure, ISC_INT64 time_millis, unsigned proc_result)
+		{
+			if (cloopVTable->version < 5)
+			{
+				return 0;
+			}
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_proc_compile(this, connection, procedure, time_millis, proc_result);
+			return ret;
+		}
+
+		FB_BOOLEAN trace_func_compile(ITraceDatabaseConnection* connection, ITraceFunction* function, ISC_INT64 time_millis, unsigned func_result)
+		{
+			if (cloopVTable->version < 5)
+			{
+				return 0;
+			}
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_func_compile(this, connection, function, time_millis, func_result);
+			return ret;
+		}
+
+		FB_BOOLEAN trace_trigger_compile(ITraceDatabaseConnection* connection, ITraceTrigger* trigger, ISC_INT64 time_millis, unsigned trig_result)
+		{
+			if (cloopVTable->version < 5)
+			{
+				return 0;
+			}
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_trigger_compile(this, connection, trigger, time_millis, trig_result);
+			return ret;
+		}
 	};
 
 #define FIREBIRD_ITRACE_FACTORY_VERSION 4u
@@ -6262,7 +6394,10 @@ namespace Firebird
 		static CLOOP_CONSTEXPR unsigned TRACE_EVENT_ERROR = 17;
 		static CLOOP_CONSTEXPR unsigned TRACE_EVENT_SWEEP = 18;
 		static CLOOP_CONSTEXPR unsigned TRACE_EVENT_FUNC_EXECUTE = 19;
-		static CLOOP_CONSTEXPR unsigned TRACE_EVENT_MAX = 20;
+		static CLOOP_CONSTEXPR unsigned TRACE_EVENT_PROC_COMPILE = 20;
+		static CLOOP_CONSTEXPR unsigned TRACE_EVENT_FUNC_COMPILE = 21;
+		static CLOOP_CONSTEXPR unsigned TRACE_EVENT_TRIGGER_COMPILE = 22;
+		static CLOOP_CONSTEXPR unsigned TRACE_EVENT_MAX = 23;
 
 		ISC_UINT64 trace_needs()
 		{
@@ -17636,6 +17771,9 @@ namespace Firebird
 					this->getProcName = &Name::cloopgetProcNameDispatcher;
 					this->getInputs = &Name::cloopgetInputsDispatcher;
 					this->getPerf = &Name::cloopgetPerfDispatcher;
+					this->getStmtID = &Name::cloopgetStmtIDDispatcher;
+					this->getPlan = &Name::cloopgetPlanDispatcher;
+					this->getExplainedPlan = &Name::cloopgetExplainedPlanDispatcher;
 				}
 			} vTable;
 
@@ -17680,6 +17818,45 @@ namespace Firebird
 				return static_cast<PerformanceInfo*>(0);
 			}
 		}
+
+		static ISC_INT64 CLOOP_CARG cloopgetStmtIDDispatcher(ITraceProcedure* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getStmtID();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<ISC_INT64>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetPlanDispatcher(ITraceProcedure* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPlan();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetExplainedPlanDispatcher(ITraceProcedure* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getExplainedPlan();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceProcedure> > >
@@ -17698,6 +17875,9 @@ namespace Firebird
 		virtual const char* getProcName() = 0;
 		virtual ITraceParams* getInputs() = 0;
 		virtual PerformanceInfo* getPerf() = 0;
+		virtual ISC_INT64 getStmtID() = 0;
+		virtual const char* getPlan() = 0;
+		virtual const char* getExplainedPlan() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -17717,6 +17897,9 @@ namespace Firebird
 					this->getInputs = &Name::cloopgetInputsDispatcher;
 					this->getResult = &Name::cloopgetResultDispatcher;
 					this->getPerf = &Name::cloopgetPerfDispatcher;
+					this->getStmtID = &Name::cloopgetStmtIDDispatcher;
+					this->getPlan = &Name::cloopgetPlanDispatcher;
+					this->getExplainedPlan = &Name::cloopgetExplainedPlanDispatcher;
 				}
 			} vTable;
 
@@ -17774,6 +17957,45 @@ namespace Firebird
 				return static_cast<PerformanceInfo*>(0);
 			}
 		}
+
+		static ISC_INT64 CLOOP_CARG cloopgetStmtIDDispatcher(ITraceFunction* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getStmtID();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<ISC_INT64>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetPlanDispatcher(ITraceFunction* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPlan();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetExplainedPlanDispatcher(ITraceFunction* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getExplainedPlan();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceFunction> > >
@@ -17793,6 +18015,9 @@ namespace Firebird
 		virtual ITraceParams* getInputs() = 0;
 		virtual ITraceParams* getResult() = 0;
 		virtual PerformanceInfo* getPerf() = 0;
+		virtual ISC_INT64 getStmtID() = 0;
+		virtual const char* getPlan() = 0;
+		virtual const char* getExplainedPlan() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -17813,6 +18038,9 @@ namespace Firebird
 					this->getAction = &Name::cloopgetActionDispatcher;
 					this->getWhich = &Name::cloopgetWhichDispatcher;
 					this->getPerf = &Name::cloopgetPerfDispatcher;
+					this->getStmtID = &Name::cloopgetStmtIDDispatcher;
+					this->getPlan = &Name::cloopgetPlanDispatcher;
+					this->getExplainedPlan = &Name::cloopgetExplainedPlanDispatcher;
 				}
 			} vTable;
 
@@ -17883,6 +18111,45 @@ namespace Firebird
 				return static_cast<PerformanceInfo*>(0);
 			}
 		}
+
+		static ISC_INT64 CLOOP_CARG cloopgetStmtIDDispatcher(ITraceTrigger* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getStmtID();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<ISC_INT64>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetPlanDispatcher(ITraceTrigger* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPlan();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetExplainedPlanDispatcher(ITraceTrigger* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getExplainedPlan();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceTrigger> > >
@@ -17903,6 +18170,9 @@ namespace Firebird
 		virtual int getAction() = 0;
 		virtual int getWhich() = 0;
 		virtual PerformanceInfo* getPerf() = 0;
+		virtual ISC_INT64 getStmtID() = 0;
+		virtual const char* getPlan() = 0;
+		virtual const char* getExplainedPlan() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -18587,6 +18857,9 @@ namespace Firebird
 					this->trace_event_sweep = &Name::clooptrace_event_sweepDispatcher;
 					this->trace_func_execute = &Name::clooptrace_func_executeDispatcher;
 					this->trace_dsql_restart = &Name::clooptrace_dsql_restartDispatcher;
+					this->trace_proc_compile = &Name::clooptrace_proc_compileDispatcher;
+					this->trace_func_compile = &Name::clooptrace_func_compileDispatcher;
+					this->trace_trigger_compile = &Name::clooptrace_trigger_compileDispatcher;
 				}
 			} vTable;
 
@@ -18879,6 +19152,45 @@ namespace Firebird
 			}
 		}
 
+		static FB_BOOLEAN CLOOP_CARG clooptrace_proc_compileDispatcher(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceProcedure* procedure, ISC_INT64 time_millis, unsigned proc_result) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::trace_proc_compile(connection, procedure, time_millis, proc_result);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG clooptrace_func_compileDispatcher(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceFunction* function, ISC_INT64 time_millis, unsigned func_result) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::trace_func_compile(connection, function, time_millis, func_result);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG clooptrace_trigger_compileDispatcher(ITracePlugin* self, ITraceDatabaseConnection* connection, ITraceTrigger* trigger, ISC_INT64 time_millis, unsigned trig_result) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::trace_trigger_compile(connection, trigger, time_millis, trig_result);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) CLOOP_NOEXCEPT
 		{
 			try
@@ -18940,6 +19252,9 @@ namespace Firebird
 		virtual FB_BOOLEAN trace_event_sweep(ITraceDatabaseConnection* connection, ITraceSweepInfo* sweep, unsigned sweep_state) = 0;
 		virtual FB_BOOLEAN trace_func_execute(ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceFunction* function, FB_BOOLEAN started, unsigned func_result) = 0;
 		virtual FB_BOOLEAN trace_dsql_restart(ITraceDatabaseConnection* connection, ITraceTransaction* transaction, ITraceSQLStatement* statement, unsigned number) = 0;
+		virtual FB_BOOLEAN trace_proc_compile(ITraceDatabaseConnection* connection, ITraceProcedure* procedure, ISC_INT64 time_millis, unsigned proc_result) = 0;
+		virtual FB_BOOLEAN trace_func_compile(ITraceDatabaseConnection* connection, ITraceFunction* function, ISC_INT64 time_millis, unsigned func_result) = 0;
+		virtual FB_BOOLEAN trace_trigger_compile(ITraceDatabaseConnection* connection, ITraceTrigger* trigger, ISC_INT64 time_millis, unsigned trig_result) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

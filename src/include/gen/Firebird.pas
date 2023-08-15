@@ -618,15 +618,24 @@ type
 	ITraceProcedure_getProcNamePtr = function(this: ITraceProcedure): PAnsiChar; cdecl;
 	ITraceProcedure_getInputsPtr = function(this: ITraceProcedure): ITraceParams; cdecl;
 	ITraceProcedure_getPerfPtr = function(this: ITraceProcedure): PerformanceInfoPtr; cdecl;
+	ITraceProcedure_getStmtIDPtr = function(this: ITraceProcedure): Int64; cdecl;
+	ITraceProcedure_getPlanPtr = function(this: ITraceProcedure): PAnsiChar; cdecl;
+	ITraceProcedure_getExplainedPlanPtr = function(this: ITraceProcedure): PAnsiChar; cdecl;
 	ITraceFunction_getFuncNamePtr = function(this: ITraceFunction): PAnsiChar; cdecl;
 	ITraceFunction_getInputsPtr = function(this: ITraceFunction): ITraceParams; cdecl;
 	ITraceFunction_getResultPtr = function(this: ITraceFunction): ITraceParams; cdecl;
 	ITraceFunction_getPerfPtr = function(this: ITraceFunction): PerformanceInfoPtr; cdecl;
+	ITraceFunction_getStmtIDPtr = function(this: ITraceFunction): Int64; cdecl;
+	ITraceFunction_getPlanPtr = function(this: ITraceFunction): PAnsiChar; cdecl;
+	ITraceFunction_getExplainedPlanPtr = function(this: ITraceFunction): PAnsiChar; cdecl;
 	ITraceTrigger_getTriggerNamePtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
 	ITraceTrigger_getRelationNamePtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
 	ITraceTrigger_getActionPtr = function(this: ITraceTrigger): Integer; cdecl;
 	ITraceTrigger_getWhichPtr = function(this: ITraceTrigger): Integer; cdecl;
 	ITraceTrigger_getPerfPtr = function(this: ITraceTrigger): PerformanceInfoPtr; cdecl;
+	ITraceTrigger_getStmtIDPtr = function(this: ITraceTrigger): Int64; cdecl;
+	ITraceTrigger_getPlanPtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
+	ITraceTrigger_getExplainedPlanPtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
 	ITraceServiceConnection_getServiceIDPtr = function(this: ITraceServiceConnection): Pointer; cdecl;
 	ITraceServiceConnection_getServiceMgrPtr = function(this: ITraceServiceConnection): PAnsiChar; cdecl;
 	ITraceServiceConnection_getServiceNamePtr = function(this: ITraceServiceConnection): PAnsiChar; cdecl;
@@ -670,6 +679,9 @@ type
 	ITracePlugin_trace_event_sweepPtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean; cdecl;
 	ITracePlugin_trace_func_executePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean; cdecl;
 	ITracePlugin_trace_dsql_restartPtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean; cdecl;
+	ITracePlugin_trace_proc_compilePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean; cdecl;
+	ITracePlugin_trace_func_compilePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean; cdecl;
+	ITracePlugin_trace_trigger_compilePtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean; cdecl;
 	ITraceFactory_trace_needsPtr = function(this: ITraceFactory): QWord; cdecl;
 	ITraceFactory_trace_createPtr = function(this: ITraceFactory; status: IStatus; init_info: ITraceInitInfo): ITracePlugin; cdecl;
 	IUdrFunctionFactory_setupPtr = procedure(this: IUdrFunctionFactory; status: IStatus; context: IExternalContext; metadata: IRoutineMetadata; inBuilder: IMetadataBuilder; outBuilder: IMetadataBuilder); cdecl;
@@ -3144,14 +3156,20 @@ type
 		getProcName: ITraceProcedure_getProcNamePtr;
 		getInputs: ITraceProcedure_getInputsPtr;
 		getPerf: ITraceProcedure_getPerfPtr;
+		getStmtID: ITraceProcedure_getStmtIDPtr;
+		getPlan: ITraceProcedure_getPlanPtr;
+		getExplainedPlan: ITraceProcedure_getExplainedPlanPtr;
 	end;
 
 	ITraceProcedure = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 
 		function getProcName(): PAnsiChar;
 		function getInputs(): ITraceParams;
 		function getPerf(): PerformanceInfoPtr;
+		function getStmtID(): Int64;
+		function getPlan(): PAnsiChar;
+		function getExplainedPlan(): PAnsiChar;
 	end;
 
 	ITraceProcedureImpl = class(ITraceProcedure)
@@ -3160,6 +3178,9 @@ type
 		function getProcName(): PAnsiChar; virtual; abstract;
 		function getInputs(): ITraceParams; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getStmtID(): Int64; virtual; abstract;
+		function getPlan(): PAnsiChar; virtual; abstract;
+		function getExplainedPlan(): PAnsiChar; virtual; abstract;
 	end;
 
 	TraceFunctionVTable = class(VersionedVTable)
@@ -3167,15 +3188,21 @@ type
 		getInputs: ITraceFunction_getInputsPtr;
 		getResult: ITraceFunction_getResultPtr;
 		getPerf: ITraceFunction_getPerfPtr;
+		getStmtID: ITraceFunction_getStmtIDPtr;
+		getPlan: ITraceFunction_getPlanPtr;
+		getExplainedPlan: ITraceFunction_getExplainedPlanPtr;
 	end;
 
 	ITraceFunction = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 
 		function getFuncName(): PAnsiChar;
 		function getInputs(): ITraceParams;
 		function getResult(): ITraceParams;
 		function getPerf(): PerformanceInfoPtr;
+		function getStmtID(): Int64;
+		function getPlan(): PAnsiChar;
+		function getExplainedPlan(): PAnsiChar;
 	end;
 
 	ITraceFunctionImpl = class(ITraceFunction)
@@ -3185,6 +3212,9 @@ type
 		function getInputs(): ITraceParams; virtual; abstract;
 		function getResult(): ITraceParams; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getStmtID(): Int64; virtual; abstract;
+		function getPlan(): PAnsiChar; virtual; abstract;
+		function getExplainedPlan(): PAnsiChar; virtual; abstract;
 	end;
 
 	TraceTriggerVTable = class(VersionedVTable)
@@ -3193,10 +3223,13 @@ type
 		getAction: ITraceTrigger_getActionPtr;
 		getWhich: ITraceTrigger_getWhichPtr;
 		getPerf: ITraceTrigger_getPerfPtr;
+		getStmtID: ITraceTrigger_getStmtIDPtr;
+		getPlan: ITraceTrigger_getPlanPtr;
+		getExplainedPlan: ITraceTrigger_getExplainedPlanPtr;
 	end;
 
 	ITraceTrigger = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 		const TYPE_ALL = Cardinal(0);
 		const TYPE_BEFORE = Cardinal(1);
 		const TYPE_AFTER = Cardinal(2);
@@ -3206,6 +3239,9 @@ type
 		function getAction(): Integer;
 		function getWhich(): Integer;
 		function getPerf(): PerformanceInfoPtr;
+		function getStmtID(): Int64;
+		function getPlan(): PAnsiChar;
+		function getExplainedPlan(): PAnsiChar;
 	end;
 
 	ITraceTriggerImpl = class(ITraceTrigger)
@@ -3216,6 +3252,9 @@ type
 		function getAction(): Integer; virtual; abstract;
 		function getWhich(): Integer; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getStmtID(): Int64; virtual; abstract;
+		function getPlan(): PAnsiChar; virtual; abstract;
+		function getExplainedPlan(): PAnsiChar; virtual; abstract;
 	end;
 
 	TraceServiceConnectionVTable = class(TraceConnectionVTable)
@@ -3380,10 +3419,13 @@ type
 		trace_event_sweep: ITracePlugin_trace_event_sweepPtr;
 		trace_func_execute: ITracePlugin_trace_func_executePtr;
 		trace_dsql_restart: ITracePlugin_trace_dsql_restartPtr;
+		trace_proc_compile: ITracePlugin_trace_proc_compilePtr;
+		trace_func_compile: ITracePlugin_trace_func_compilePtr;
+		trace_trigger_compile: ITracePlugin_trace_trigger_compilePtr;
 	end;
 
 	ITracePlugin = class(IReferenceCounted)
-		const VERSION = 4;
+		const VERSION = 5;
 		const RESULT_SUCCESS = Cardinal(0);
 		const RESULT_FAILED = Cardinal(1);
 		const RESULT_UNAUTHORIZED = Cardinal(2);
@@ -3414,6 +3456,9 @@ type
 		function trace_event_sweep(connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean;
 		function trace_func_execute(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean;
 		function trace_dsql_restart(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean;
+		function trace_proc_compile(connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean;
+		function trace_func_compile(connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean;
+		function trace_trigger_compile(connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean;
 	end;
 
 	ITracePluginImpl = class(ITracePlugin)
@@ -3443,6 +3488,9 @@ type
 		function trace_event_sweep(connection: ITraceDatabaseConnection; sweep: ITraceSweepInfo; sweep_state: Cardinal): Boolean; virtual; abstract;
 		function trace_func_execute(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; function_: ITraceFunction; started: Boolean; func_result: Cardinal): Boolean; virtual; abstract;
 		function trace_dsql_restart(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean; virtual; abstract;
+		function trace_proc_compile(connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean; virtual; abstract;
+		function trace_func_compile(connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean; virtual; abstract;
+		function trace_trigger_compile(connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean; virtual; abstract;
 	end;
 
 	TraceFactoryVTable = class(PluginBaseVTable)
@@ -3472,7 +3520,10 @@ type
 		const TRACE_EVENT_ERROR = Cardinal(17);
 		const TRACE_EVENT_SWEEP = Cardinal(18);
 		const TRACE_EVENT_FUNC_EXECUTE = Cardinal(19);
-		const TRACE_EVENT_MAX = Cardinal(20);
+		const TRACE_EVENT_PROC_COMPILE = Cardinal(20);
+		const TRACE_EVENT_FUNC_COMPILE = Cardinal(21);
+		const TRACE_EVENT_TRIGGER_COMPILE = Cardinal(22);
+		const TRACE_EVENT_MAX = Cardinal(23);
 
 		function trace_needs(): QWord;
 		function trace_create(status: IStatus; init_info: ITraceInitInfo): ITracePlugin;
@@ -8834,6 +8885,36 @@ begin
 	Result := TraceProcedureVTable(vTable).getPerf(Self);
 end;
 
+function ITraceProcedure.getStmtID(): Int64;
+begin
+	if (vTable.version < 3) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceProcedureVTable(vTable).getStmtID(Self);
+	end;
+end;
+
+function ITraceProcedure.getPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceProcedureVTable(vTable).getPlan(Self);
+	end;
+end;
+
+function ITraceProcedure.getExplainedPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceProcedureVTable(vTable).getExplainedPlan(Self);
+	end;
+end;
+
 function ITraceFunction.getFuncName(): PAnsiChar;
 begin
 	Result := TraceFunctionVTable(vTable).getFuncName(Self);
@@ -8852,6 +8933,36 @@ end;
 function ITraceFunction.getPerf(): PerformanceInfoPtr;
 begin
 	Result := TraceFunctionVTable(vTable).getPerf(Self);
+end;
+
+function ITraceFunction.getStmtID(): Int64;
+begin
+	if (vTable.version < 3) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceFunctionVTable(vTable).getStmtID(Self);
+	end;
+end;
+
+function ITraceFunction.getPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceFunctionVTable(vTable).getPlan(Self);
+	end;
+end;
+
+function ITraceFunction.getExplainedPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceFunctionVTable(vTable).getExplainedPlan(Self);
+	end;
 end;
 
 function ITraceTrigger.getTriggerName(): PAnsiChar;
@@ -8877,6 +8988,36 @@ end;
 function ITraceTrigger.getPerf(): PerformanceInfoPtr;
 begin
 	Result := TraceTriggerVTable(vTable).getPerf(Self);
+end;
+
+function ITraceTrigger.getStmtID(): Int64;
+begin
+	if (vTable.version < 3) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceTriggerVTable(vTable).getStmtID(Self);
+	end;
+end;
+
+function ITraceTrigger.getPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceTriggerVTable(vTable).getPlan(Self);
+	end;
+end;
+
+function ITraceTrigger.getExplainedPlan(): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceTriggerVTable(vTable).getExplainedPlan(Self);
+	end;
 end;
 
 function ITraceServiceConnection.getServiceID(): Pointer;
@@ -9103,6 +9244,36 @@ begin
 	end
 	else begin
 		Result := TracePluginVTable(vTable).trace_dsql_restart(Self, connection, transaction, statement, number);
+	end;
+end;
+
+function ITracePlugin.trace_proc_compile(connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean;
+begin
+	if (vTable.version < 5) then begin
+		Result := false;
+	end
+	else begin
+		Result := TracePluginVTable(vTable).trace_proc_compile(Self, connection, procedure_, time_millis, proc_result);
+	end;
+end;
+
+function ITracePlugin.trace_func_compile(connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean;
+begin
+	if (vTable.version < 5) then begin
+		Result := false;
+	end
+	else begin
+		Result := TracePluginVTable(vTable).trace_func_compile(Self, connection, function_, time_millis, func_result);
+	end;
+end;
+
+function ITracePlugin.trace_trigger_compile(connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean;
+begin
+	if (vTable.version < 5) then begin
+		Result := false;
+	end
+	else begin
+		Result := TracePluginVTable(vTable).trace_trigger_compile(Self, connection, trigger, time_millis, trig_result);
 	end;
 end;
 
@@ -15023,6 +15194,33 @@ begin
 	end
 end;
 
+function ITraceProcedureImpl_getStmtIDDispatcher(this: ITraceProcedure): Int64; cdecl;
+begin
+	try
+		Result := ITraceProcedureImpl(this).getStmtID();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceProcedureImpl_getPlanDispatcher(this: ITraceProcedure): PAnsiChar; cdecl;
+begin
+	try
+		Result := ITraceProcedureImpl(this).getPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceProcedureImpl_getExplainedPlanDispatcher(this: ITraceProcedure): PAnsiChar; cdecl;
+begin
+	try
+		Result := ITraceProcedureImpl(this).getExplainedPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
 var
 	ITraceProcedureImpl_vTable: TraceProcedureVTable;
 
@@ -15066,6 +15264,33 @@ begin
 	Result := nil;
 	try
 		Result := ITraceFunctionImpl(this).getPerf();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceFunctionImpl_getStmtIDDispatcher(this: ITraceFunction): Int64; cdecl;
+begin
+	try
+		Result := ITraceFunctionImpl(this).getStmtID();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceFunctionImpl_getPlanDispatcher(this: ITraceFunction): PAnsiChar; cdecl;
+begin
+	try
+		Result := ITraceFunctionImpl(this).getPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceFunctionImpl_getExplainedPlanDispatcher(this: ITraceFunction): PAnsiChar; cdecl;
+begin
+	try
+		Result := ITraceFunctionImpl(this).getExplainedPlan();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -15124,6 +15349,33 @@ begin
 	Result := nil;
 	try
 		Result := ITraceTriggerImpl(this).getPerf();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceTriggerImpl_getStmtIDDispatcher(this: ITraceTrigger): Int64; cdecl;
+begin
+	try
+		Result := ITraceTriggerImpl(this).getStmtID();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceTriggerImpl_getPlanDispatcher(this: ITraceTrigger): PAnsiChar; cdecl;
+begin
+	try
+		Result := ITraceTriggerImpl(this).getPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceTriggerImpl_getExplainedPlanDispatcher(this: ITraceTrigger): PAnsiChar; cdecl;
+begin
+	try
+		Result := ITraceTriggerImpl(this).getExplainedPlan();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -15730,6 +15982,33 @@ begin
 	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_dsql_restart(connection, transaction, statement, number);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITracePluginImpl_trace_proc_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean; cdecl;
+begin
+	try
+		Result := ITracePluginImpl(this).trace_proc_compile(connection, procedure_, time_millis, proc_result);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITracePluginImpl_trace_func_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean; cdecl;
+begin
+	try
+		Result := ITracePluginImpl(this).trace_func_compile(connection, function_, time_millis, func_result);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITracePluginImpl_trace_trigger_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean; cdecl;
+begin
+	try
+		Result := ITracePluginImpl(this).trace_trigger_compile(connection, trigger, time_millis, trig_result);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -17449,25 +17728,34 @@ initialization
 	ITraceContextVariableImpl_vTable.getVarValue := @ITraceContextVariableImpl_getVarValueDispatcher;
 
 	ITraceProcedureImpl_vTable := TraceProcedureVTable.create;
-	ITraceProcedureImpl_vTable.version := 2;
+	ITraceProcedureImpl_vTable.version := 3;
 	ITraceProcedureImpl_vTable.getProcName := @ITraceProcedureImpl_getProcNameDispatcher;
 	ITraceProcedureImpl_vTable.getInputs := @ITraceProcedureImpl_getInputsDispatcher;
 	ITraceProcedureImpl_vTable.getPerf := @ITraceProcedureImpl_getPerfDispatcher;
+	ITraceProcedureImpl_vTable.getStmtID := @ITraceProcedureImpl_getStmtIDDispatcher;
+	ITraceProcedureImpl_vTable.getPlan := @ITraceProcedureImpl_getPlanDispatcher;
+	ITraceProcedureImpl_vTable.getExplainedPlan := @ITraceProcedureImpl_getExplainedPlanDispatcher;
 
 	ITraceFunctionImpl_vTable := TraceFunctionVTable.create;
-	ITraceFunctionImpl_vTable.version := 2;
+	ITraceFunctionImpl_vTable.version := 3;
 	ITraceFunctionImpl_vTable.getFuncName := @ITraceFunctionImpl_getFuncNameDispatcher;
 	ITraceFunctionImpl_vTable.getInputs := @ITraceFunctionImpl_getInputsDispatcher;
 	ITraceFunctionImpl_vTable.getResult := @ITraceFunctionImpl_getResultDispatcher;
 	ITraceFunctionImpl_vTable.getPerf := @ITraceFunctionImpl_getPerfDispatcher;
+	ITraceFunctionImpl_vTable.getStmtID := @ITraceFunctionImpl_getStmtIDDispatcher;
+	ITraceFunctionImpl_vTable.getPlan := @ITraceFunctionImpl_getPlanDispatcher;
+	ITraceFunctionImpl_vTable.getExplainedPlan := @ITraceFunctionImpl_getExplainedPlanDispatcher;
 
 	ITraceTriggerImpl_vTable := TraceTriggerVTable.create;
-	ITraceTriggerImpl_vTable.version := 2;
+	ITraceTriggerImpl_vTable.version := 3;
 	ITraceTriggerImpl_vTable.getTriggerName := @ITraceTriggerImpl_getTriggerNameDispatcher;
 	ITraceTriggerImpl_vTable.getRelationName := @ITraceTriggerImpl_getRelationNameDispatcher;
 	ITraceTriggerImpl_vTable.getAction := @ITraceTriggerImpl_getActionDispatcher;
 	ITraceTriggerImpl_vTable.getWhich := @ITraceTriggerImpl_getWhichDispatcher;
 	ITraceTriggerImpl_vTable.getPerf := @ITraceTriggerImpl_getPerfDispatcher;
+	ITraceTriggerImpl_vTable.getStmtID := @ITraceTriggerImpl_getStmtIDDispatcher;
+	ITraceTriggerImpl_vTable.getPlan := @ITraceTriggerImpl_getPlanDispatcher;
+	ITraceTriggerImpl_vTable.getExplainedPlan := @ITraceTriggerImpl_getExplainedPlanDispatcher;
 
 	ITraceServiceConnectionImpl_vTable := TraceServiceConnectionVTable.create;
 	ITraceServiceConnectionImpl_vTable.version := 3;
@@ -17517,7 +17805,7 @@ initialization
 	ITraceInitInfoImpl_vTable.getLogWriter := @ITraceInitInfoImpl_getLogWriterDispatcher;
 
 	ITracePluginImpl_vTable := TracePluginVTable.create;
-	ITracePluginImpl_vTable.version := 4;
+	ITracePluginImpl_vTable.version := 5;
 	ITracePluginImpl_vTable.addRef := @ITracePluginImpl_addRefDispatcher;
 	ITracePluginImpl_vTable.release := @ITracePluginImpl_releaseDispatcher;
 	ITracePluginImpl_vTable.trace_get_error := @ITracePluginImpl_trace_get_errorDispatcher;
@@ -17542,6 +17830,9 @@ initialization
 	ITracePluginImpl_vTable.trace_event_sweep := @ITracePluginImpl_trace_event_sweepDispatcher;
 	ITracePluginImpl_vTable.trace_func_execute := @ITracePluginImpl_trace_func_executeDispatcher;
 	ITracePluginImpl_vTable.trace_dsql_restart := @ITracePluginImpl_trace_dsql_restartDispatcher;
+	ITracePluginImpl_vTable.trace_proc_compile := @ITracePluginImpl_trace_proc_compileDispatcher;
+	ITracePluginImpl_vTable.trace_func_compile := @ITracePluginImpl_trace_func_compileDispatcher;
+	ITracePluginImpl_vTable.trace_trigger_compile := @ITracePluginImpl_trace_trigger_compileDispatcher;
 
 	ITraceFactoryImpl_vTable := TraceFactoryVTable.create;
 	ITraceFactoryImpl_vTable.version := 4;

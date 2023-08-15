@@ -886,8 +886,10 @@ void Trigger::compile(thread_db* tdbb)
 	{
 		// Allocate statement memory pool
 		MemoryPool* new_pool = att->createPool();
+
 		// Trigger request is not compiled yet. Lets do it now
 		USHORT par_flags = (USHORT) (flags & TRG_ignore_perm) ? csb_ignore_perm : 0;
+
 		if (type & 1)
 			par_flags |= csb_pre_trigger;
 		else
@@ -904,6 +906,8 @@ void Trigger::compile(thread_db* tdbb)
 
 			if (engine.isEmpty())
 			{
+				TraceTrigCompile trace(tdbb, this);
+
 				if (debugInfo.hasData())
 				{
 					DBG_parse_debug_info((ULONG) debugInfo.getCount(), debugInfo.begin(),
@@ -912,6 +916,8 @@ void Trigger::compile(thread_db* tdbb)
 
 				PAR_blr(tdbb, relation, blr.begin(), (ULONG) blr.getCount(), NULL, &csb, &statement,
 					(relation ? true : false), par_flags);
+
+				trace.finish(statement, ITracePlugin::RESULT_SUCCESS);
 			}
 			else
 			{

@@ -93,6 +93,7 @@
 #include "../common/classes/Hash.h"
 #include "../common/classes/MsgPrint.h"
 #include "../jrd/Function.h"
+#include "../jrd/trace/TraceJrdHelpers.h"
 
 
 #ifdef HAVE_CTYPE_H
@@ -2034,17 +2035,19 @@ void MET_load_trigger(thread_db* tdbb,
 
 		if (TRG.RDB$RELATION_NAME.NULL)
 		{
+			fb_assert(!relation);
+
 			if ((TRG.RDB$TRIGGER_TYPE & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DB ||
 				(TRG.RDB$TRIGGER_TYPE & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DDL)
 			{
-				// this is a database trigger
+				// this is a database or DDL trigger
 				get_trigger(tdbb,
 							relation,
 							&TRG.RDB$TRIGGER_BLR,
 							&debug_blob_id,
 							triggers,
 							TRG.RDB$TRIGGER_NAME,
-							TRG.RDB$TRIGGER_TYPE & ~TRIGGER_TYPE_MASK,
+							TRG.RDB$TRIGGER_TYPE,
 							(bool) TRG.RDB$SYSTEM_FLAG,
 							trig_flags,
 							engine,
@@ -3681,16 +3684,21 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 					}
 					else
 					{
+						const string name = procedure->getName().toString();
+
 						try
 						{
+							TraceProcCompile trace(tdbb, name);
+
 							procedure->parseBlr(tdbb, csb, &P.RDB$PROCEDURE_BLR,
 								P.RDB$DEBUG_INFO.NULL ? NULL : &P.RDB$DEBUG_INFO);
+
+							trace.finish(procedure->getStatement(), ITracePlugin::RESULT_SUCCESS);
 						}
 						catch (const Exception& ex)
 						{
 							StaticStatusVector temp_status;
 							ex.stuffException(temp_status);
-							const string name = procedure->getName().toString();
 							(Arg::Gds(isc_bad_proc_BLR) << Arg::Str(name)
 								<< Arg::StatusVector(temp_status.begin())).raise();
 						}

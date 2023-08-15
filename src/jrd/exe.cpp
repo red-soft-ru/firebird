@@ -563,9 +563,10 @@ void EXE_execute_ddl_triggers(thread_db* tdbb, jrd_tra* transaction, bool preTri
 
 		for (const auto& trigger : *attachment->att_ddl_triggers)
 		{
-			const bool preTrigger = ((trigger.type & 0x1) == 0);
+			const auto type = trigger.type & ~TRIGGER_TYPE_MASK;
+			const bool preTrigger = ((type & 1) == 0);
 
-			if ((trigger.type & (1LL << action)) && (preTriggers == preTrigger))
+			if ((type & (1LL << action)) && (preTriggers == preTrigger))
 			{
 				triggers.add() = trigger;
 			}
@@ -1116,10 +1117,11 @@ static void execute_looper(thread_db* tdbb,
 
 
 void EXE_execute_triggers(thread_db* tdbb,
-								TrigVector** triggers,
-								record_param* old_rpb,
-								record_param* new_rpb,
-								TriggerAction trigger_action, StmtNode::WhichTrigger which_trig)
+						  TrigVector** triggers,
+						  record_param* old_rpb,
+						  record_param* new_rpb,
+						  TriggerAction trigger_action,
+						  StmtNode::WhichTrigger which_trig)
 {
 /**************************************
  *
