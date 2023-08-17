@@ -614,7 +614,7 @@ RecordSource* Optimizer::compile(RseNode* subRse, BoolExprNodeStack* parentStack
 			{
 				if (*selfIter == *subIter)
 				{
-					selfIter |= (subIter & (CONJUNCT_USED | CONJUNCT_MATCHED));
+					selfIter |= subIter.getFlags();
 					break;
 				}
 			}
@@ -1574,41 +1574,6 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 
 
 //
-// Find conjuncts local to the given river and compose an appropriate filter
-//
-
-RecordSource* Optimizer::applyLocalBoolean(RecordSource* rsb,
-										   const StreamList& streams,
-										   ConjunctIterator& iter)
-{
-	StreamStateHolder globalHolder(csb);
-	globalHolder.deactivate();
-
-	StreamStateHolder localHolder(csb, streams);
-	localHolder.activate(csb);
-
-	BoolExprNode* boolean = nullptr;
-	double selectivity = MAXIMUM_SELECTIVITY;
-
-	for (iter.rewind(); iter.hasData(); ++iter)
-	{
-		if (!(iter & CONJUNCT_USED) &&
-			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
-			iter->computable(csb, INVALID_STREAM, false))
-		{
-			compose(getPool(), &boolean, iter);
-			iter |= CONJUNCT_USED;
-
-			if (!(iter & CONJUNCT_MATCHED))
-				selectivity *= getSelectivity(*iter);
-		}
-	}
-
-	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity) : rsb;
-}
-
-
-//
 // Check to make sure that the user-specified indices were actually utilized by the optimizer
 //
 
@@ -2307,7 +2272,7 @@ bool Optimizer::generateEquiJoin(RiverList& orgRivers)
 					if (eq_class == last_class)
 						last_class += orgCount;
 
-					iter |= Optimizer::CONJUNCT_MATCHED;
+					iter |= Optimizer::CONJUNCT_JOINED;
 				}
 			}
 		}
@@ -2660,7 +2625,7 @@ RecordSource* Optimizer::generateResidualBoolean(RecordSource* rsb)
 			compose(getPool(), &boolean, iter);
 			iter |= CONJUNCT_USED;
 
-			if (!(iter & CONJUNCT_MATCHED))
+			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
 				selectivity *= getSelectivity(*iter);
 		}
 	}
@@ -2827,9 +2792,10 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 				{
 					if (!outerFlag)
 						tail->csb_flags |= csb_unmatched;
-
-					filterSelectivity *= getSelectivity(*iter);
 				}
+
+				if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
+					filterSelectivity *= getSelectivity(*iter);
 			}
 		}
 	}
@@ -2861,6 +2827,41 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 	}
 
 	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, filterSelectivity) : rsb;
+}
+
+
+//
+// Find conjuncts local to the given river and compose an appropriate filter
+//
+
+RecordSource* Optimizer::applyLocalBoolean(RecordSource* rsb,
+										   const StreamList& streams,
+										   ConjunctIterator& iter)
+{
+	StreamStateHolder globalHolder(csb);
+	globalHolder.deactivate();
+
+	StreamStateHolder localHolder(csb, streams);
+	localHolder.activate(csb);
+
+	BoolExprNode* boolean = nullptr;
+	double selectivity = MAXIMUM_SELECTIVITY;
+
+	for (iter.rewind(); iter.hasData(); ++iter)
+	{
+		if (!(iter & CONJUNCT_USED) &&
+			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
+			iter->computable(csb, INVALID_STREAM, false))
+		{
+			compose(getPool(), &boolean, iter);
+			iter |= CONJUNCT_USED;
+
+			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
+				selectivity *= getSelectivity(*iter);
+		}
+	}
+
+	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity) : rsb;
 }
 
 
