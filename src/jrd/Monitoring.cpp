@@ -101,7 +101,7 @@ namespace
 		TempSpace& tempSpace;
 	};
 
-	const ULONG HEADER_SIZE = FB_ALIGN(sizeof(MonitoringHeader), FB_ALIGNMENT);
+	const ULONG HEADER_SIZE = (ULONG) FB_ALIGN(sizeof(MonitoringHeader), FB_ALIGNMENT);
 
 } // namespace
 

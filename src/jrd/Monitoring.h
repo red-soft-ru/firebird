@@ -260,7 +260,7 @@ class MonitoringData final : public Firebird::PermanentStorage, public Firebird:
 
 		inline ULONG getBlockLength() const
 		{
-			return FB_ALIGN(sizeof(Element) + length, FB_ALIGNMENT);
+			return (ULONG) FB_ALIGN(sizeof(Element) + length, FB_ALIGNMENT);
 		}
 	};
 
