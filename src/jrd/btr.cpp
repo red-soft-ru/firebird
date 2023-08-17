@@ -561,9 +561,11 @@ idx_e IndexKey::compose(Record* record)
 				else
 				{
 					desc_ptr = nullptr;
-					m_key.key_nulls = 1;
 				}
 			}
+
+			if (!desc_ptr)
+				m_key.key_nulls = 1;
 
 			m_key.key_flags |= key_empty;
 
