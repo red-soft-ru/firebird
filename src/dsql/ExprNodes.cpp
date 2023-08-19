@@ -10956,6 +10956,12 @@ DmlNode* SubQueryNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch*
 
 		if (csb->csb_currentDMLNode)
 			node->ownSavepoint = false;
+
+		if (!csb->csb_currentForNode && !csb->csb_currentDMLNode &&
+			(csb->csb_g_flags & csb_computed_field))
+		{
+			node->ownSavepoint = false;
+		}
 	}
 
 	return node;

@@ -4091,8 +4091,8 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 					DmlNode* nod = dependencies ?
 						MET_get_dependencies(tdbb, relation, p, length, csb, NULL, NULL, NULL,
-							field->fld_name, obj_computed, 0, depTrans) :
-						PAR_blr(tdbb, relation, p, length, csb, NULL, NULL, false, 0);
+							field->fld_name, obj_computed, csb_computed_field, depTrans) :
+						PAR_blr(tdbb, relation, p, length, csb, NULL, NULL, false, csb_computed_field);
 
 					field->fld_computation = static_cast<ValueExprNode*>(nod);
 				}
