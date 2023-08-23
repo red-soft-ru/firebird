@@ -15196,6 +15196,7 @@ end;
 
 function ITraceProcedureImpl_getStmtIDDispatcher(this: ITraceProcedure): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceProcedureImpl(this).getStmtID();
 	except
@@ -15205,6 +15206,7 @@ end;
 
 function ITraceProcedureImpl_getPlanDispatcher(this: ITraceProcedure): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceProcedureImpl(this).getPlan();
 	except
@@ -15214,6 +15216,7 @@ end;
 
 function ITraceProcedureImpl_getExplainedPlanDispatcher(this: ITraceProcedure): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceProcedureImpl(this).getExplainedPlan();
 	except
@@ -15271,6 +15274,7 @@ end;
 
 function ITraceFunctionImpl_getStmtIDDispatcher(this: ITraceFunction): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceFunctionImpl(this).getStmtID();
 	except
@@ -15280,6 +15284,7 @@ end;
 
 function ITraceFunctionImpl_getPlanDispatcher(this: ITraceFunction): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceFunctionImpl(this).getPlan();
 	except
@@ -15289,6 +15294,7 @@ end;
 
 function ITraceFunctionImpl_getExplainedPlanDispatcher(this: ITraceFunction): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceFunctionImpl(this).getExplainedPlan();
 	except
@@ -15356,6 +15362,7 @@ end;
 
 function ITraceTriggerImpl_getStmtIDDispatcher(this: ITraceTrigger): Int64; cdecl;
 begin
+	Result := 0;
 	try
 		Result := ITraceTriggerImpl(this).getStmtID();
 	except
@@ -15365,6 +15372,7 @@ end;
 
 function ITraceTriggerImpl_getPlanDispatcher(this: ITraceTrigger): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceTriggerImpl(this).getPlan();
 	except
@@ -15374,6 +15382,7 @@ end;
 
 function ITraceTriggerImpl_getExplainedPlanDispatcher(this: ITraceTrigger): PAnsiChar; cdecl;
 begin
+	Result := nil;
 	try
 		Result := ITraceTriggerImpl(this).getExplainedPlan();
 	except
@@ -15989,6 +15998,7 @@ end;
 
 function ITracePluginImpl_trace_proc_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_proc_compile(connection, procedure_, time_millis, proc_result);
 	except
@@ -15998,6 +16008,7 @@ end;
 
 function ITracePluginImpl_trace_func_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_func_compile(connection, function_, time_millis, func_result);
 	except
@@ -16007,6 +16018,7 @@ end;
 
 function ITracePluginImpl_trace_trigger_compileDispatcher(this: ITracePlugin; connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean; cdecl;
 begin
+	Result := false;
 	try
 		Result := ITracePluginImpl(this).trace_trigger_compile(connection, trigger, time_millis, trig_result);
 	except

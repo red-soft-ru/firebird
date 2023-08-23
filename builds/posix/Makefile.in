@@ -820,6 +820,7 @@ clean_vers:
 clean_misc:
 	$(RM) security.tmp test.header.txt
 	$(RM) $(TMP_FUNCS_PAS) $(RPL_AWK) $(RPL_GREP)
+	$(TOUCH) -c -t 200001010000 $(API_H_FILE) $(API_PAS_FILE)
 
 
 ifeq ($(EDITLINE_FLG),Y)
