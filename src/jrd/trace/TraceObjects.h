@@ -448,7 +448,6 @@ public:
 	TraceProcedureImpl(const Firebird::string& name, const Statement* statement) :
 		StatementHolder(statement),
 		m_name(name),
-		m_request(nullptr),
 		m_perf(nullptr),
 		m_inputs(nullptr, nullptr)
 	{}
@@ -456,7 +455,6 @@ public:
 	TraceProcedureImpl(Request* request, Firebird::PerformanceInfo* perf) :
 		StatementHolder(request),
 		m_name(getName()),
-		m_request(request),
 		m_perf(perf),
 		m_inputs(request->req_proc_caller, request->req_proc_inputs)
 	{}
@@ -494,7 +492,6 @@ public:
 
 private:
 	const Firebird::string m_name;
-	Request* const m_request;
 	Firebird::PerformanceInfo* const m_perf;
 	TraceDscFromValues m_inputs;
 };
@@ -508,7 +505,6 @@ public:
 	TraceFunctionImpl(const Firebird::string& name, const Statement* statement) :
 		StatementHolder(statement),
 		m_name(name),
-		m_request(nullptr),
 		m_perf(nullptr),
 		m_inputs(nullptr),
 		m_value(nullptr)
@@ -518,7 +514,6 @@ public:
 					  Firebird::ITraceParams* inputs, const dsc* value) :
 		StatementHolder(request),
 		m_name(getName()),
-		m_request(request),
 		m_perf(perf),
 		m_inputs(inputs),
 		m_value(value)
@@ -562,7 +557,6 @@ public:
 
 private:
 	Firebird::string m_name;
-	Request* const m_request;
 	Firebird::PerformanceInfo* const m_perf;
 	Firebird::ITraceParams* const m_inputs;
 	TraceDscFromDsc m_value;
@@ -581,7 +575,6 @@ public:
 		m_relationName(relationName),
 		m_which(which),
 		m_action(action),
-		m_request(nullptr),
 		m_perf(nullptr)
 	{}
 
@@ -592,7 +585,6 @@ public:
 			request->req_rpb[0].rpb_relation->rel_name : ""),
 		m_which(which),
 		m_action(request->req_trigger_action),
-		m_request(request),
 		m_perf(perf)
 	{}
 
@@ -642,7 +634,6 @@ private:
 	const Firebird::string m_relationName;
 	const int m_which;
 	const int m_action;
-	const Request* const m_request;
 	Firebird::PerformanceInfo* const m_perf;
 };
 
