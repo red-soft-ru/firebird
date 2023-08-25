@@ -112,15 +112,30 @@ void CoercionRule::setRule(const TypeClause* from, const TypeClause *to)
 		raiseError();
 
 	// Generic check
+	class BufSize
+	{
+	public:
+		static constexpr unsigned makeSize(unsigned len)
+		{
+			return (len + FB_ALIGNMENT) * 2;
+		}
+	};
+
 	const unsigned DATASIZE = 256;
-	UCHAR buf[DATASIZE * 2 + FB_ALIGNMENT];
-	memset(buf, 0, sizeof buf);
+	HalfStaticArray<UCHAR, BufSize::makeSize(DATASIZE)> buffer;
+
+	unsigned datasize = MAX(toMask & FLD_has_len ? toDsc.dsc_length : 0,
+		fromMask & FLD_has_len ? fromDsc.dsc_length : 0);
+	datasize = MAX(DATASIZE, datasize);
+	UCHAR* buf = buffer.getBuffer(BufSize::makeSize(datasize));
+	memset(buf, 0, buffer.getCount());
+
 	toDsc.dsc_address = FB_ALIGN(buf, FB_ALIGNMENT);
 	if (! (toMask & FLD_has_len))
 	{
-		toDsc.dsc_length = DATASIZE - 2;
+		toDsc.dsc_length = datasize - 2;
 	}
-	fromDsc.dsc_address = toDsc.dsc_address + DATASIZE;
+	fromDsc.dsc_address = FB_ALIGN(toDsc.dsc_address + datasize, FB_ALIGNMENT);
 
 	try
 	{
