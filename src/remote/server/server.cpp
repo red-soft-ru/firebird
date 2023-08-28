@@ -730,8 +730,13 @@ public:
 
 		if (st.hasData())
 		{
-			if (st.getErrors()[1] == isc_missing_data_structures)
+			switch (st.getErrors()[1])
+			{
+			case isc_missing_data_structures:
+			case isc_login:
 				status_exception::raise(&st);
+				break;
+			}
 
 			iscLogStatus("Authentication error", &st);
 			Arg::Gds loginError(isc_login_error);
@@ -2100,19 +2105,25 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 		HANDSHAKE_DEBUG(fprintf(stderr, "!accepted, sending reject\n"));
 		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
 		{
-			if (status.getErrors()[1] != isc_missing_data_structures)
+			switch (status.getErrors()[1])
 			{
-				iscLogStatus("Authentication error", &status);
-				Arg::Gds loginError(isc_login_error);
-#ifdef DEV_BUILD
-				loginError << Arg::StatusVector(&status);
-#endif
-				LocalStatus tmp;
-				loginError.copyTo(&tmp);
-				port->send_response(send, 0, 0, &tmp, false);
-			}
-			else
+			case isc_missing_data_structures:
+			case isc_login:
 				port->send_response(send, 0, 0, &status, false);
+				break;
+
+			default:
+				{
+					iscLogStatus("Authentication error", &status);
+					Arg::Gds loginError(isc_login_error);
+#ifdef DEV_BUILD
+					loginError << Arg::StatusVector(&status);
+#endif
+					LocalStatus tmp;
+					loginError.copyTo(&tmp);
+					port->send_response(send, 0, 0, &tmp, false);
+				}
+			}
 		}
 		else
 			port->send(send);
