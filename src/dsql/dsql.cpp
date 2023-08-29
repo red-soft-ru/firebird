@@ -320,7 +320,12 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 	}
 
 	if (msgBuffer)
+	{
+		auto old = tdbb->getRequest();
+		Cleanup restoreRequest([tdbb, old] {tdbb->setRequest(old);});
+		tdbb->setRequest(req_request);
 		mapInOut(tdbb, true, message, NULL, msgBuffer);
+	}
 
 	trace.fetch(false, ITracePlugin::RESULT_SUCCESS);
 	return true;
