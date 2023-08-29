@@ -337,13 +337,16 @@ bool CoercionRule::coerce(thread_db* tdbb, dsc* d) const
 		subTypeCompatibility[d->dsc_dtype] != COMPATIBLE_INT ||
 		subTypeCompatibility[toDsc.dsc_dtype] != COMPATIBLE_INT)
 	{
-		if (!type_lengths[toDsc.dsc_dtype])
+		if (!(toMask & FLD_has_len))
 		{
-			fb_assert(toDsc.isText());
-			d->dsc_length = d->getStringLength();
+			if (!type_lengths[toDsc.dsc_dtype])
+			{
+				fb_assert(toDsc.isText());
+				d->dsc_length = d->getStringLength();
+			}
+			else
+				d->dsc_length = type_lengths[toDsc.dsc_dtype];
 		}
-		else
-			d->dsc_length = type_lengths[toDsc.dsc_dtype];
 
 		d->dsc_dtype = toDsc.dsc_dtype;
 	}
@@ -356,7 +359,7 @@ bool CoercionRule::coerce(thread_db* tdbb, dsc* d) const
 		d->dsc_length = DataTypeUtil(tdbb).convertLength(d->dsc_length, srcCharSet, toDsc.getCharSet());
 
 	// varchar length
-	if (d->dsc_dtype == dtype_varying)
+	if (d->dsc_dtype == dtype_varying && !(toMask & FLD_has_len))
 		d->dsc_length += sizeof(USHORT);
 
 	// subtype - special processing for BLOBs
