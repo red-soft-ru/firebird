@@ -2413,26 +2413,32 @@ bool BTR_types_comparable(const dsc& target, const dsc& source)
 	if (source.isNull() || DSC_EQUIV(&source, &target, true))
 		return true;
 
-	if (DTYPE_IS_TEXT(target.dsc_dtype))
+	if (target.isText())
 	{
 		// should we also check for the INTL stuff here?
-		return (DTYPE_IS_TEXT(source.dsc_dtype) || source.dsc_dtype == dtype_dbkey);
+		return source.isText() || source.isDbKey();
 	}
 
-	if (target.dsc_dtype == dtype_int64)
-		return (source.dsc_dtype <= dtype_long || source.dsc_dtype == dtype_int64);
+	if (target.isNumeric())
+		return source.isText() || source.isNumeric();
 
-	if (DTYPE_IS_NUMERIC(target.dsc_dtype))
-		return (source.dsc_dtype <= dtype_double || source.dsc_dtype == dtype_int64);
+	if (target.isDate())
+	{
+		// source.isDate() is already covered above in DSC_EQUIV
+		return source.isText() || source.isTimeStamp();
+	}
 
-	if (target.dsc_dtype == dtype_sql_date)
-		return (source.dsc_dtype <= dtype_sql_date || source.dsc_dtype == dtype_timestamp);
+	if (target.isTime())
+	{
+		// source.isTime() below covers both TZ and non-TZ time
+		return source.isText() || source.isTime() || source.isTimeStamp();
+	}
 
-	if (DTYPE_IS_DATE(target.dsc_dtype))
-		return (source.dsc_dtype <= dtype_timestamp);
+	if (target.isTimeStamp())
+		return source.isText() || source.isDateTime();
 
-	if (target.dsc_dtype == dtype_boolean)
-		return DTYPE_IS_TEXT(source.dsc_dtype) || source.dsc_dtype == dtype_boolean;
+	if (target.isBoolean())
+		return source.isText() || source.isBoolean();
 
 	return false;
 }
