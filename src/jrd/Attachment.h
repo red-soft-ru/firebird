@@ -73,6 +73,7 @@ namespace Jrd
 	class jrd_file;
 	class Format;
 	class BufferControl;
+	class PageToBufferMap;
 	class SparseBitmap;
 	class jrd_rel;
 	class ExternalFile;
@@ -638,6 +639,8 @@ public:
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
 	int att_parallel_workers;
+
+	PageToBufferMap* att_bdb_cache;			// managed in CCH, created in att_pool, freed with it
 
 	Firebird::RefPtr<Firebird::IReplicatedSession> att_replicator;
 	Firebird::AutoPtr<Replication::TableMatcher> att_repl_matcher;
