@@ -378,6 +378,12 @@ public:
 				break;
 			}
 		}
+		else if (const auto listNode = nodeAs<InListBoolNode>(node))
+		{
+			const auto selectivity = REDUCE_SELECTIVITY_FACTOR_EQUALITY *
+				listNode->list->items.getCount();
+			return MIN(selectivity, MAXIMUM_SELECTIVITY);
+		}
 		else if (nodeIs<MissingBoolNode>(node))
 		{
 			return REDUCE_SELECTIVITY_FACTOR_EQUALITY;
@@ -517,7 +523,8 @@ enum segmentScanType {
 	segmentScanEqual,
 	segmentScanEquivalent,
 	segmentScanMissing,
-	segmentScanStarting
+	segmentScanStarting,
+	segmentScanList
 };
 
 typedef Firebird::HalfStaticArray<BoolExprNode*, OPT_STATIC_ITEMS> MatchedBooleanList;
@@ -531,6 +538,7 @@ struct IndexScratchSegment
 	explicit IndexScratchSegment(MemoryPool& p, const IndexScratchSegment& other)
 		: lowerValue(other.lowerValue),
 		  upperValue(other.upperValue),
+		  valueList(other.valueList),
 		  excludeLower(other.excludeLower),
 		  excludeUpper(other.excludeUpper),
 		  scope(other.scope),
@@ -540,6 +548,7 @@ struct IndexScratchSegment
 
 	ValueExprNode* lowerValue = nullptr;		// lower bound on index value
 	ValueExprNode* upperValue = nullptr;		// upper bound on index value
+	LookupValueList* valueList = nullptr;		// values to match
 	bool excludeLower = false;					// exclude lower bound value from scan
 	bool excludeUpper = false;					// exclude upper bound value from scan
 	unsigned scope = 0;							// highest scope level
@@ -563,6 +572,7 @@ struct IndexScratch
 	unsigned nonFullMatchedSegments = 0;
 	bool usePartialKey = false;				// Use INTL_KEY_PARTIAL
 	bool useMultiStartingKeys = false;		// Use INTL_KEY_MULTI_STARTING
+	bool useRootListScan = false;
 
 	Firebird::ObjectsArray<IndexScratchSegment> segments;
 	MatchedBooleanList matches;					// matched booleans (partial indices only)
