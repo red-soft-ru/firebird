@@ -1528,6 +1528,10 @@ void CCH_init2(thread_db* tdbb)
 	Database* dbb = tdbb->getDatabase();
 	BufferControl* bcb = dbb->dbb_bcb;
 
+	// Avoid running CCH_init2() in 2 parallel threads
+	Firebird::MutexEnsureUnlock guard(bcb->bcb_threadStartup, FB_FUNCTION);
+	guard.enter();
+
 	if (!(bcb->bcb_flags & BCB_exclusive) || (bcb->bcb_flags & (BCB_cache_writer | BCB_writer_start)))
 		return;
 
@@ -1548,6 +1552,7 @@ void CCH_init2(thread_db* tdbb)
 	{
 		// writer startup in progress
 		bcb->bcb_flags |= BCB_writer_start;
+		guard.leave();
 
 		try
 		{
