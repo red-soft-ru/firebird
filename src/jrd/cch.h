@@ -146,6 +146,9 @@ public:
 	Firebird::SyncObject	bcb_syncLRU;
 	//Firebird::SyncObject	bcb_syncPageWrite;
 
+	// If we make bcb_flags atomic this mutex will become unneeded: XCHG of bcb_flags is enough
+	Firebird::Mutex			bcb_threadStartup;
+
 	typedef ThreadFinishSync<BufferControl*> BcbThreadSync;
 
 	static void cache_writer(BufferControl* bcb);
