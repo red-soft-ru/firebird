@@ -3025,6 +3025,8 @@ void VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	org_rpb->rpb_flags &= ~(rpb_delta | rpb_uk_modified);
 	org_rpb->rpb_flags |= new_rpb->rpb_flags & (rpb_delta | rpb_uk_modified);
 
+	stack.merge(new_rpb->rpb_record->getPrecedence());
+
 	replace_record(tdbb, org_rpb, &stack, transaction);
 
 	if (!(transaction->tra_flags & TRA_system) &&
