@@ -1109,7 +1109,7 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 
 bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 							  jrd_tra* transaction, MemoryPool* pool,
-							  bool writelock, bool noundo)
+							  RecordLock recordLock, bool noundo)
 {
 /**************************************
  *
@@ -1258,9 +1258,10 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 		// If the transaction is a read committed and chooses the no version
 		// option, wait for reads also!
 
-		if ((transaction->tra_flags & TRA_read_committed) &&
+		if (recordLock != RecordLock::SKIP &&
+			(transaction->tra_flags & TRA_read_committed) &&
 			!(transaction->tra_flags & TRA_read_consistency) &&
-			(!(transaction->tra_flags & TRA_rec_version) || writelock))
+			(!(transaction->tra_flags & TRA_rec_version) || recordLock == RecordLock::LOCK))
 		{
 			if (state == tra_limbo)
 			{
@@ -1975,7 +1976,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	if (rpb->rpb_runtime_flags & (RPB_refetch | RPB_undo_read))
 	{
-		VIO_refetch_record(tdbb, rpb, transaction, false, true);
+		VIO_refetch_record(tdbb, rpb, transaction, RecordLock::NONE, true);
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
 		fb_assert(!(rpb->rpb_runtime_flags & RPB_undo_read));
 	}
@@ -2905,7 +2906,7 @@ bool VIO_get(thread_db* tdbb, record_param* rpb, jrd_tra* transaction, MemoryPoo
 	const USHORT lock_type = (rpb->rpb_stream_flags & RPB_s_update) ? LCK_write : LCK_read;
 
 	if (!DPM_get(tdbb, rpb, lock_type) ||
-		!VIO_chase_record_version(tdbb, rpb, transaction, pool, false, false))
+		!VIO_chase_record_version(tdbb, rpb, transaction, pool, RecordLock::NONE, false))
 	{
 		return false;
 	}
@@ -3280,7 +3281,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			old_record->copyFrom(org_rpb->rpb_record);
 		}
 
-		VIO_refetch_record(tdbb, org_rpb, transaction, false, true);
+		VIO_refetch_record(tdbb, org_rpb, transaction, RecordLock::NONE, true);
 		org_rpb->rpb_runtime_flags &= ~RPB_refetch;
 		fb_assert(!(org_rpb->rpb_runtime_flags & RPB_undo_read));
 
@@ -3763,7 +3764,7 @@ bool VIO_next_record(thread_db* tdbb,
 		{
 			return false;
 		}
-	} while (!VIO_chase_record_version(tdbb, rpb, transaction, pool, false, false));
+	} while (!VIO_chase_record_version(tdbb, rpb, transaction, pool, RecordLock::NONE, false));
 
 	if (rpb->rpb_runtime_flags & RPB_undo_data)
 		fb_assert(rpb->getWindow(tdbb).win_bdb == NULL);
@@ -3841,7 +3842,7 @@ Record* VIO_record(thread_db* tdbb, record_param* rpb, const Format* format, Mem
 
 
 bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction,
-						bool writelock, bool noundo)
+						RecordLock recordLock, bool noundo)
 {
 /**************************************
  *
@@ -3864,9 +3865,9 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 	const TraNumber tid_fetch = rpb->rpb_transaction_nr;
 
 	if (!DPM_get(tdbb, rpb, LCK_read) ||
-		!VIO_chase_record_version(tdbb, rpb, transaction, tdbb->getDefaultPool(), writelock, noundo))
+		!VIO_chase_record_version(tdbb, rpb, transaction, tdbb->getDefaultPool(), recordLock, noundo))
 	{
-		if (writelock)
+		if (recordLock == RecordLock::LOCK)
 			return false;
 
 		ERR_post(Arg::Gds(isc_no_cur_rec));
@@ -3890,7 +3891,7 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 	// make sure the record has not been updated.  Also, punt after
 	// VIO_data() call which will release the page.
 
-	if (!writelock &&
+	if (recordLock != RecordLock::LOCK &&
 		(transaction->tra_flags & TRA_read_committed) &&
 		(tid_fetch != rpb->rpb_transaction_nr) &&
 		// added to check that it was not current transaction,
@@ -4486,7 +4487,7 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 
 	if (org_rpb->rpb_runtime_flags & (RPB_refetch | RPB_undo_read))
 	{
-		if (!VIO_refetch_record(tdbb, org_rpb, transaction, true, true))
+		if (!VIO_refetch_record(tdbb, org_rpb, transaction, (skipLocked ? RecordLock::SKIP : RecordLock::LOCK), true))
 			return WriteLockResult::CONFLICTED;
 
 		org_rpb->rpb_runtime_flags &= ~RPB_refetch;

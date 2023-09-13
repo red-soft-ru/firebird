@@ -2658,7 +2658,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 
 	if (rpb->rpb_runtime_flags & RPB_refetch)
 	{
-		VIO_refetch_record(tdbb, rpb, transaction, false, false);
+		VIO_refetch_record(tdbb, rpb, transaction, RecordLock::NONE, false);
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
 	}
 
@@ -7112,7 +7112,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 	if (orgRpb->rpb_runtime_flags & RPB_refetch)
 	{
-		VIO_refetch_record(tdbb, orgRpb, transaction, false, false);
+		VIO_refetch_record(tdbb, orgRpb, transaction, RecordLock::NONE, false);
 		orgRpb->rpb_runtime_flags &= ~RPB_refetch;
 	}
 
@@ -10547,9 +10547,9 @@ static void cleanupRpb(thread_db* tdbb, record_param* rpb)
 }
 
 // Try to set write lock on record until success or record exists
-static void forceWriteLock(thread_db * tdbb, record_param * rpb, jrd_tra * transaction)
+static void forceWriteLock(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 {
-	while (VIO_refetch_record(tdbb, rpb, transaction, true, true))
+	while (VIO_refetch_record(tdbb, rpb, transaction, RecordLock::LOCK, true))
 	{
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
 
