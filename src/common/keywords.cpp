@@ -339,6 +339,7 @@ static const TOK tokens[] =
 	{TOK_ON, "ON", false},
 	{TOK_ONLY, "ONLY", false},
 	{TOK_OPEN, "OPEN", false},
+	{TOK_OPTIMIZE, "OPTIMIZE", true},
 	{TOK_OPTION, "OPTION", true},
 	{TOK_OR, "OR", false},
 	{TOK_ORDER, "ORDER", false},

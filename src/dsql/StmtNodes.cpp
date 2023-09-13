@@ -63,6 +63,7 @@
 #include "../dsql/gen_proto.h"
 #include "../dsql/make_proto.h"
 #include "../dsql/pass1_proto.h"
+#include "../dsql/DsqlStatementCache.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -1238,7 +1239,7 @@ DeclareCursorNode* DeclareCursorNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	dt->querySpec = dsqlSelect->dsqlExpr;
 	dt->alias = dsqlName.c_str();
 
-	rse = PASS1_derived_table(dsqlScratch, dt, NULL, dsqlSelect->dsqlWithLock, dsqlSelect->dsqlSkipLocked);
+	rse = PASS1_derived_table(dsqlScratch, dt, NULL, dsqlSelect);
 
 	// Assign number and store in the dsqlScratch stack.
 	cursorNumber = dsqlScratch->cursorNumber++;
@@ -4931,7 +4932,7 @@ ForNode* ForNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		dt->querySpec = dsqlSelect->dsqlExpr;
 		dt->alias = dsqlCursor->dsqlName.c_str();
 
-		node->rse = PASS1_derived_table(dsqlScratch, dt, NULL, dsqlSelect->dsqlWithLock, dsqlSelect->dsqlSkipLocked);
+		node->rse = PASS1_derived_table(dsqlScratch, dt, NULL, dsqlSelect);
 
 		dsqlCursor->rse = node->rse;
 		dsqlCursor->cursorNumber = dsqlScratch->cursorNumber++;
@@ -7528,7 +7529,7 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 		if (dsqlRse && dsqlScratch->isPsql() && dsqlReturning)
 			selExpr->dsqlFlags |= RecordSourceNode::DFLAG_SINGLETON;
 
-		RseNode* rse = PASS1_rse(dsqlScratch, selExpr, false, false);
+		RseNode* rse = PASS1_rse(dsqlScratch, selExpr);
 		node->dsqlRse = rse;
 		values = rse->dsqlSelectList;
 		needSavePoint = false;
@@ -8206,9 +8207,10 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	SelectNode* node = FB_NEW_POOL(dsqlScratch->getPool()) SelectNode(dsqlScratch->getPool());
 	node->dsqlForUpdate = dsqlForUpdate;
+	node->dsqlOptimizeForFirstRows = dsqlOptimizeForFirstRows;
 
 	const DsqlContextStack::iterator base(*dsqlScratch->context);
-	node->dsqlRse = PASS1_rse(dsqlScratch, dsqlExpr, dsqlWithLock, dsqlSkipLocked);
+	node->dsqlRse = PASS1_rse(dsqlScratch, dsqlExpr, this);
 	dsqlScratch->context->clear(base);
 
 	if (dsqlForUpdate)
@@ -9163,6 +9165,25 @@ void SetSessionNode::execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** /*
 	case TYPE_STMT_TIMEOUT:
 		att->setStatementTimeout(m_value);
 		break;
+	}
+}
+
+
+//--------------------
+
+
+void SetOptimizeNode::execute(thread_db* tdbb, DsqlRequest* /*request*/, jrd_tra** /*traHandle*/) const
+{
+	const auto attachment = tdbb->getAttachment();
+
+	if (attachment->att_opt_first_rows != optimizeMode)
+	{
+		attachment->att_opt_first_rows = optimizeMode;
+
+		// Clear the local compiled statements cache to allow queries
+		// to be re-optimized accordingly to the new rules
+
+		attachment->att_dsql_instance->dbb_statement_cache->purge(tdbb, false);
 	}
 }
 

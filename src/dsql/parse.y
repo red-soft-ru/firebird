@@ -689,6 +689,7 @@ using namespace Firebird;
 // tokens added for Firebird 5.0
 
 %token <metaNamePtr> LOCKED
+%token <metaNamePtr> OPTIMIZE
 %token <metaNamePtr> QUARTER
 %token <metaNamePtr> TARGET
 %token <metaNamePtr> TIMEZONE_NAME
@@ -918,6 +919,7 @@ mng_statement
 	| session_reset								{ $$ = $1; }
 	| set_time_zone								{ $$ = $1; }
 	| set_bind									{ $$ = $1; }
+	| set_optimize								{ $$ = $1; }
 	;
 
 
@@ -5481,6 +5483,14 @@ decfloat_trap($setDecFloatTrapsNode)
 		{ $setDecFloatTrapsNode->trap($1); }
 	;
 
+%type <mngNode> set_optimize
+set_optimize
+	: SET OPTIMIZE optimize_mode
+		{ $$ = newNode<SetOptimizeNode>($3); }
+	| SET OPTIMIZE TO DEFAULT
+		{ $$ = newNode<SetOptimizeNode>(); }
+	;
+
 %type <setSessionNode> session_statement
 session_statement
 	: SET SESSION IDLE TIMEOUT long_integer timepart_sesion_idle_tout
@@ -5764,13 +5774,14 @@ ddl_desc
 
 %type <selectNode> select
 select
-	: select_expr for_update_clause lock_clause
+	: select_expr for_update_clause lock_clause optimize_clause
 		{
 			SelectNode* node = newNode<SelectNode>();
 			node->dsqlExpr = $1;
 			node->dsqlForUpdate = $2;
 			node->dsqlWithLock = $3.first;
 			node->dsqlSkipLocked = $3.second;
+			node->dsqlOptimizeForFirstRows = $4;
 			$$ = node;
 		}
 	;
@@ -5797,6 +5808,22 @@ lock_clause
 skip_locked_clause_opt
 	: /* nothing */			{ $$ = false; }
 	| SKIP LOCKED			{ $$ = true; }
+	;
+
+%type <nullableBoolVal>	optimize_clause
+optimize_clause
+	: OPTIMIZE optimize_mode
+		{ $$ = Nullable<bool>::val($2); }
+	| // nothing
+		{ $$ = Nullable<bool>::empty(); }
+	;
+
+%type <boolVal> optimize_mode
+optimize_mode
+	: FOR FIRST ROWS
+		{ $$ = true; }
+	| FOR ALL ROWS
+		{ $$ = false; }
 	;
 
 
@@ -9186,6 +9213,7 @@ non_reserved_word
 	| BLOB_APPEND
 	// added in FB 5.0
 	| LOCKED
+	| OPTIMIZE
 	| QUARTER
 	| TARGET
 	| TIMEZONE_NAME
