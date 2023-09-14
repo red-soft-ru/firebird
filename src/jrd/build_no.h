@@ -3,16 +3,16 @@
                *** DO NOT EDIT ***
   TO CHANGE ANY INFORMATION IN HERE PLEASE
   EDIT src/misc/writeBuildNum.sh
-  FORMAL BUILD NUMBER:1211
+  FORMAL BUILD NUMBER:1215
 */
 
-#define PRODUCT_VER_STRING "5.0.0.1211"
-#define FILE_VER_STRING "WI-V5.0.0.1211"
-#define LICENSE_VER_STRING "WI-V5.0.0.1211"
-#define FILE_VER_NUMBER 5, 0, 0, 1211
+#define PRODUCT_VER_STRING "5.0.0.1215"
+#define FILE_VER_STRING "WI-V5.0.0.1215"
+#define LICENSE_VER_STRING "WI-V5.0.0.1215"
+#define FILE_VER_NUMBER 5, 0, 0, 1215
 #define FB_MAJOR_VER "5"
 #define FB_MINOR_VER "0"
 #define FB_REV_NO "0"
-#define FB_BUILD_NO "1211"
+#define FB_BUILD_NO "1215"
 #define FB_BUILD_TYPE "V"
 #define FB_BUILD_SUFFIX "Firebird 5.0 Release Candidate 1"
