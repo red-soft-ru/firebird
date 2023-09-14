@@ -5,7 +5,7 @@
 
 BuildVersion="$Id: writeBuildNum.sh,v 1.28732 2010/05/29 13:12:08 fsg Exp $"
 
-BuildType=T
+BuildType=V
 MajorVer=5
 MinorVer=0
 RevNo=0
@@ -20,8 +20,8 @@ Root=`dirname $Root`
 
 if [ "$SPECIAL_BUILD_SUFFIX" = "" ]; then
 # Normal builds
-SuffixKind="Beta 2"
-SuffixVer=""
+SuffixKind="Release Candidate"
+SuffixVer="1"
 BuildSuffix="Firebird $MajorVer.$MinorVer"
 [ "$SuffixKind" = "" ] || BuildSuffix="$BuildSuffix $SuffixKind"
 [ "$SuffixVer" = "" ] || BuildSuffix="$BuildSuffix $SuffixVer"

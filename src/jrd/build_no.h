@@ -7,12 +7,12 @@
 */
 
 #define PRODUCT_VER_STRING "5.0.0.1211"
-#define FILE_VER_STRING "WI-T5.0.0.1211"
-#define LICENSE_VER_STRING "WI-T5.0.0.1211"
+#define FILE_VER_STRING "WI-V5.0.0.1211"
+#define LICENSE_VER_STRING "WI-V5.0.0.1211"
 #define FILE_VER_NUMBER 5, 0, 0, 1211
 #define FB_MAJOR_VER "5"
 #define FB_MINOR_VER "0"
 #define FB_REV_NO "0"
 #define FB_BUILD_NO "1211"
-#define FB_BUILD_TYPE "T"
-#define FB_BUILD_SUFFIX "Firebird 5.0 Beta 2"
+#define FB_BUILD_TYPE "V"
+#define FB_BUILD_SUFFIX "Firebird 5.0 Release Candidate 1"
