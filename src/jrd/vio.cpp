@@ -344,7 +344,14 @@ inline void clearRecordStack(RecordStack& stack)
  *
  **************************************/
 	while (stack.hasData())
-		delete stack.pop();
+	{
+		Record* r = stack.pop();
+
+		if (!r->isTempActive())
+			delete r;
+		else
+			fb_assert(false);
+	}
 }
 
 inline bool needDfw(thread_db* tdbb, const jrd_tra* transaction)
@@ -489,8 +496,8 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 	Record* data = NULL;
 	Record* old_data = NULL;
 
-	AutoGCRecord gc_rec1;
-	AutoGCRecord gc_rec2;
+	AutoTempRecord gc_rec1;
+	AutoTempRecord gc_rec2;
 
 	bool samePage;
 	bool deleted;
@@ -2140,10 +2147,11 @@ Record* VIO_gc_record(thread_db* tdbb, jrd_rel* relation)
 		Record* const record = *iter;
 		fb_assert(record);
 
-		if (!record->testFlags(REC_gc_active))
+		if (!record->isTempActive())
 		{
 			// initialize record for reuse
-			record->reset(format, REC_gc_active);
+			record->reset(format);
+			record->setTempActive();
 			return record;
 		}
 	}
@@ -2151,7 +2159,7 @@ Record* VIO_gc_record(thread_db* tdbb, jrd_rel* relation)
 	// Allocate a garbage collect record block if all are active
 
 	Record* const record = FB_NEW_POOL(*relation->rel_pool)
-		Record(*relation->rel_pool, format, REC_gc_active);
+		Record(*relation->rel_pool, format, true);
 	relation->rel_gc_records.add(record);
 	return record;
 }
@@ -2613,7 +2621,7 @@ void VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	if (org_rpb->rpb_runtime_flags & (RPB_refetch | RPB_undo_read))
 	{
 		const bool undo_read = (org_rpb->rpb_runtime_flags & RPB_undo_read);
-		AutoGCRecord old_record;
+		AutoTempRecord old_record;
 		if (undo_read)
 		{
 			old_record = VIO_gc_record(tdbb, relation);
@@ -3960,7 +3968,7 @@ void VIO_verb_cleanup(thread_db* tdbb, jrd_tra* transaction)
 								const UndoItem& undo = action->vct_undo->current();
 								const bool same_tx = undo.isSameTx();
 								const bool new_ver = undo.isNewVersion();
-								AutoUndoRecord record(undo.setupRecord(transaction));
+								AutoTempRecord record(undo.setupRecord(transaction));
 
 								// Have we done BOTH an update and delete to this record
 								// in the same transaction?
@@ -4046,7 +4054,7 @@ void VIO_verb_cleanup(thread_db* tdbb, jrd_tra* transaction)
 								const UndoItem& undo = action->vct_undo->current();
 								const bool same_tx = undo.isSameTx();
 								const bool new_ver = undo.isNewVersion();
-								AutoUndoRecord record(undo.setupRecord(transaction));
+								AutoTempRecord record(undo.setupRecord(transaction));
 
 								verb_post(tdbb, transaction, &rpb, record, same_tx, new_ver);
 							}
@@ -5205,7 +5213,7 @@ static UndoDataRet get_undo_data(thread_db* tdbb, jrd_tra* transaction,
 			rpb->rpb_runtime_flags |= RPB_undo_data;
 			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 
-			AutoUndoRecord undoRecord(undo.setupRecord(transaction));
+			AutoTempRecord undoRecord(undo.setupRecord(transaction));
 
 			Record* const record = VIO_record(tdbb, rpb, undoRecord->getFormat(), pool);
 			record->copyFrom(undoRecord);
@@ -6065,7 +6073,7 @@ static void purge(thread_db* tdbb, record_param* rpb)
 	// the record.
 
 	record_param temp = *rpb;
-	AutoGCRecord gc_rec(VIO_gc_record(tdbb, relation));
+	AutoTempRecord gc_rec(VIO_gc_record(tdbb, relation));
 	Record* record = rpb->rpb_record = gc_rec;
 
 	VIO_data(tdbb, rpb, relation->rel_pool);
@@ -6400,7 +6408,7 @@ static void update_in_place(thread_db* tdbb,
 	// becomes meaningless.  What we need to do is replace the old "delta" record
 	// with an old "complete" record, update in placement, then delete the old delta record
 
-	AutoGCRecord gc_rec;
+	AutoTempRecord gc_rec;
 
 	record_param temp2;
 	const Record* prior = org_rpb->rpb_prior;
@@ -6570,7 +6578,7 @@ static void verb_post(thread_db* tdbb,
 	}
 	else if (same_tx)
 	{
-		AutoUndoRecord undo;
+		AutoTempRecord undo;
 
 		if (action->vct_undo && action->vct_undo->locate(rpb->rpb_number.getValue()))
 		{
@@ -6605,7 +6613,7 @@ static void verb_post(thread_db* tdbb,
 		// so make sure we garbage collect before we lose track of the
 		// in-place-updated record.
 
-		AutoUndoRecord undo;
+		AutoTempRecord undo;
 
 		if (action->vct_undo && action->vct_undo->locate(rpb->rpb_number.getValue()))
 			undo = action->vct_undo->current().setupRecord(transaction);

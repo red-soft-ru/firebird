@@ -347,17 +347,18 @@ public:
 			Record* const record = *iter;
 			fb_assert(record);
 
-			if (!record->testFlags(REC_undo_active))
+			if (!record->isTempActive())
 			{
 				// initialize record for reuse
-				record->reset(format, REC_undo_active);
+				record->reset(format);
+				record->setTempActive();
 				return record;
 			}
 		}
 
 		fb_assert(tra_undo_records.getCount() < MAX_UNDO_RECORDS);
 
-		Record* const record = FB_NEW_POOL(*tra_pool) Record(*tra_pool, format, REC_undo_active);
+		Record* const record = FB_NEW_POOL(*tra_pool) Record(*tra_pool, format, true);
 		tra_undo_records.add(record);
 
 		return record;
