@@ -345,7 +345,7 @@ void IDX_create_index(thread_db* tdbb,
 
 	// Checkout a garbage collect record block for fetching data.
 
-	AutoGCRecord gc_record(VIO_gc_record(tdbb, relation));
+	AutoTempRecord gc_record(VIO_gc_record(tdbb, relation));
 
 	// Unless this is the only attachment or a database restore, worry about
 	// preserving the page working sets of other attachments.
