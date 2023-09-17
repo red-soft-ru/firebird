@@ -6,13 +6,13 @@
   FORMAL BUILD NUMBER:1219
 */
 
-#define PRODUCT_VER_STRING "5.0.0.1219"
-#define FILE_VER_STRING "WI-V5.0.0.1219"
-#define LICENSE_VER_STRING "WI-V5.0.0.1219"
-#define FILE_VER_NUMBER 5, 0, 0, 1219
-#define FB_MAJOR_VER "5"
+#define PRODUCT_VER_STRING "6.0.0.1219"
+#define FILE_VER_STRING "WI-T6.0.0.1219"
+#define LICENSE_VER_STRING "WI-T6.0.0.1219"
+#define FILE_VER_NUMBER 6, 0, 0, 1219
+#define FB_MAJOR_VER "6"
 #define FB_MINOR_VER "0"
 #define FB_REV_NO "0"
 #define FB_BUILD_NO "1219"
-#define FB_BUILD_TYPE "V"
-#define FB_BUILD_SUFFIX "Firebird 5.0 Release Candidate 1"
+#define FB_BUILD_TYPE "T"
+#define FB_BUILD_SUFFIX "Firebird 6.0 Initial"
