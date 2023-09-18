@@ -162,42 +162,10 @@ public:
 		return FB_NEW_POOL(getPool()) IntlString(getPool(), s, charSet);
 	}
 
-	// newNode overloads
-
-	template <typename T>
-	T* newNode()
+	template <typename T, typename... Args>
+	T* newNode(Args&&... args)
 	{
-		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool()));
-	}
-
-	template <typename T, typename T1>
-	T* newNode(T1 a1)
-	{
-		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool(), a1));
-	}
-
-	template <typename T, typename T1, typename T2>
-	T* newNode(T1 a1, T2 a2)
-	{
-		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool(), a1, a2));
-	}
-
-	template <typename T, typename T1, typename T2, typename T3>
-	T* newNode(T1 a1, T2 a2, T3 a3)
-	{
-		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool(), a1, a2, a3));
-	}
-
-	template <typename T, typename T1, typename T2, typename T3, typename T4>
-	T* newNode(T1 a1, T2 a2, T3 a3, T4 a4)
-	{
-		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool(), a1, a2, a3, a4));
-	}
-
-	template <typename T, typename T1, typename T2, typename T3, typename T4, typename T5>
-	T* newNode(T1 a1, T2 a2, T3 a3, T4 a4, T5 a5)
-	{
-		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool(), a1, a2, a3, a4, a5));
+		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool(), std::forward<Args>(args)...));
 	}
 
 private:
