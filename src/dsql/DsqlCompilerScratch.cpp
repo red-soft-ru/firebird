@@ -353,7 +353,7 @@ void DsqlCompilerScratch::putLocalVariables(CompoundStmtNode* parameters, USHORT
 		// Check not implemented sub-functions.
 		for (const auto& funcPair : subFunctions)
 		{
-			if (!funcPair.second->dsqlBlock)
+			if (funcPair.second->isForwardDecl())
 			{
 				status_exception::raise(
 					Arg::Gds(isc_subfunc_not_impl) <<
@@ -364,7 +364,7 @@ void DsqlCompilerScratch::putLocalVariables(CompoundStmtNode* parameters, USHORT
 		// Check not implemented sub-procedures.
 		for (const auto& procPair : subProcedures)
 		{
-			if (!procPair.second->dsqlBlock)
+			if (procPair.second->isForwardDecl())
 			{
 				status_exception::raise(
 					Arg::Gds(isc_subproc_not_impl) <<

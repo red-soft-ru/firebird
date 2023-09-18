@@ -378,17 +378,7 @@ public:
 	explicit DeclareSubFuncNode(MemoryPool& pool, const MetaName& aName)
 		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_SUBFUNC>(pool),
 		  name(pool, aName),
-		  dsqlParameters(pool),
-		  dsqlReturns(pool),
-		  dsqlSignature(pool, aName),
-		  dsqlBlock(NULL),
-		  blockScratch(NULL),
-		  dsqlFunction(NULL),
-		  blrStart(NULL),
-		  subCsb(NULL),
-		  routine(NULL),
-		  blrLength(0),
-		  dsqlDeterministic(false)
+		  dsqlSignature(pool, aName)
 	{
 	}
 
@@ -416,6 +406,9 @@ public:
 
 	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
 
+public:
+	bool isForwardDecl() const;
+
 private:
 	static void parseParameters(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 		Firebird::Array<NestConst<Parameter> >& paramArray, USHORT* defaultCount = NULL);
@@ -425,17 +418,15 @@ private:
 
 public:
 	MetaName name;
-	Firebird::Array<NestConst<ParameterClause> > dsqlParameters;
-	Firebird::Array<NestConst<ParameterClause> > dsqlReturns;
 	Signature dsqlSignature;
 	NestConst<ExecBlockNode> dsqlBlock;
-	DsqlCompilerScratch* blockScratch;
-	dsql_udf* dsqlFunction;
-	const UCHAR* blrStart;
-	CompilerScratch* subCsb;
-	Function* routine;
-	ULONG blrLength;
-	bool dsqlDeterministic;
+	DsqlCompilerScratch* blockScratch = nullptr;
+	dsql_udf* dsqlFunction = nullptr;
+	const UCHAR* blrStart = nullptr;
+	CompilerScratch* subCsb = nullptr;
+	Function* routine = nullptr;
+	ULONG blrLength = 0;
+	bool dsqlDeterministic = false;
 };
 
 
@@ -445,16 +436,7 @@ public:
 	explicit DeclareSubProcNode(MemoryPool& pool, const MetaName& aName)
 		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_SUBPROC>(pool),
 		  name(pool, aName),
-		  dsqlParameters(pool),
-		  dsqlReturns(pool),
-		  dsqlSignature(pool, aName),
-		  dsqlBlock(NULL),
-		  blockScratch(NULL),
-		  dsqlProcedure(NULL),
-		  blrStart(NULL),
-		  subCsb(NULL),
-		  routine(NULL),
-		  blrLength(0)
+		  dsqlSignature(pool, aName)
 	{
 	}
 
@@ -482,6 +464,9 @@ public:
 
 	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
 
+public:
+	bool isForwardDecl() const;
+
 private:
 	static void parseParameters(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 		Firebird::Array<NestConst<Parameter> >& paramArray, USHORT* defaultCount = NULL);
@@ -491,16 +476,14 @@ private:
 
 public:
 	MetaName name;
-	Firebird::Array<NestConst<ParameterClause> > dsqlParameters;
-	Firebird::Array<NestConst<ParameterClause> > dsqlReturns;
 	Signature dsqlSignature;
 	NestConst<ExecBlockNode> dsqlBlock;
-	DsqlCompilerScratch* blockScratch;
-	dsql_prc* dsqlProcedure;
-	const UCHAR* blrStart;
-	CompilerScratch* subCsb;
-	jrd_prc* routine;
-	ULONG blrLength;
+	DsqlCompilerScratch* blockScratch = nullptr;
+	dsql_prc* dsqlProcedure = nullptr;
+	const UCHAR* blrStart = nullptr;
+	CompilerScratch* subCsb = nullptr;
+	jrd_prc* routine = nullptr;
+	ULONG blrLength = 0;
 };
 
 
@@ -794,9 +777,7 @@ public:
 	explicit ExecBlockNode(MemoryPool& pool)
 		: TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_EXEC_BLOCK>(pool),
 		  parameters(pool),
-		  returns(pool),
-		  localDeclList(NULL),
-		  body(NULL)
+		  returns(pool)
 	{
 	}
 
@@ -808,8 +789,8 @@ private:
 	static void revertParametersOrder(Firebird::Array<dsql_par*>& parameters);
 
 public:
-	Firebird::Array<NestConst<ParameterClause> > parameters;
-	Firebird::Array<NestConst<ParameterClause> > returns;
+	Firebird::Array<NestConst<ParameterClause>> parameters;
+	Firebird::Array<NestConst<ParameterClause>> returns;
 	NestConst<CompoundStmtNode> localDeclList;
 	NestConst<StmtNode> body;
 };

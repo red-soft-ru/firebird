@@ -1565,6 +1565,11 @@ DmlNode* DeclareSubFuncNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 	return node;
 }
 
+bool DeclareSubFuncNode::isForwardDecl() const
+{
+	return !dsqlBlock || !dsqlBlock->body;
+}
+
 void DeclareSubFuncNode::parseParameters(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 	Firebird::Array<NestConst<Parameter> >& paramArray, USHORT* defaultCount)
 {
@@ -1617,16 +1622,16 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE)
 		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << "nested sub function");
 
-	DeclareSubFuncNode* prevDecl = dsqlScratch->getSubFunction(name);
-	bool implemetingForward = prevDecl && !prevDecl->dsqlBlock && dsqlBlock;
+	const auto prevDecl = dsqlScratch->getSubFunction(name);
+	const bool implemetingForward = prevDecl && prevDecl->isForwardDecl() && !isForwardDecl();
 
 	dsqlFunction = implemetingForward ? prevDecl->dsqlFunction : FB_NEW_POOL(pool) dsql_udf(pool);
 
 	dsqlFunction->udf_flags = UDF_subfunc;
 	dsqlFunction->udf_name.identifier = name;
 
-	fb_assert(dsqlReturns.getCount() == 1);
-	const TypeClause* returnType = dsqlReturns[0]->type;
+	fb_assert(dsqlBlock->returns.getCount() == 1);
+	const auto returnType = dsqlBlock->returns[0]->type;
 
 	dsqlFunction->udf_dtype = returnType->dtype;
 	dsqlFunction->udf_scale = returnType->scale;
@@ -1643,13 +1648,12 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	sigRet.fromType(returnType);
 	dsqlSignature.parameters.add(sigRet);
 
-	Array<NestConst<ParameterClause> >& paramArray = dsqlParameters;
 	bool defaultFound = false;
 
-	for (NestConst<ParameterClause>* i = paramArray.begin(); i != paramArray.end(); ++i)
+	for (NestConst<ParameterClause>* i = dsqlBlock->parameters.begin(); i != dsqlBlock->parameters.end(); ++i)
 	{
-		ParameterClause* param = *i;
-		const unsigned paramIndex = i - paramArray.begin();
+		auto param = *i;
+		const unsigned paramIndex = i - dsqlBlock->parameters.begin();
 
 		SignatureParameter sigParam(pool);
 		sigParam.type = 0;
@@ -1676,7 +1680,7 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 			defaultFound = true;
 
 			if (!implemetingForward && dsqlFunction->udf_def_count == 0)
-				dsqlFunction->udf_def_count = paramArray.end() - i;
+				dsqlFunction->udf_def_count = dsqlBlock->parameters.end() - i;
 		}
 		else
 		{
@@ -1688,8 +1692,8 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 						Arg::Gds(isc_invalid_clause) << Arg::Str("defaults must be last"));
 			}
 
-			if (prevDecl && paramIndex < prevDecl->dsqlParameters.getCount())
-				param->defaultClause = prevDecl->dsqlParameters[paramIndex]->defaultClause;
+			if (prevDecl && paramIndex < prevDecl->dsqlBlock->parameters.getCount())
+				param->defaultClause = prevDecl->dsqlBlock->parameters[paramIndex]->defaultClause;
 		}
 	}
 
@@ -1702,13 +1706,13 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 			name.c_str());
 	}
 
-	if (!dsqlBlock)	// forward decl
+	if (isForwardDecl())
 		return this;
 
 	if (prevDecl)
 		dsqlScratch->putSubFunction(this, true);
 
-	auto statement = FB_NEW_POOL(pool) DsqlDmlStatement(pool, dsqlScratch->getAttachment(), dsqlBlock);
+	const auto statement = FB_NEW_POOL(pool) DsqlDmlStatement(pool, dsqlScratch->getAttachment(), dsqlBlock);
 
 	if (dsqlScratch->clientDialect > SQL_DIALECT_V5)
 		statement->setBlrVersion(5);
@@ -1737,7 +1741,7 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 
 void DeclareSubFuncNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	if (!dsqlBlock)	// forward decl
+	if (isForwardDecl())
 		return;
 
 	GEN_statement(blockScratch, dsqlBlock);
@@ -1892,6 +1896,11 @@ DmlNode* DeclareSubProcNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 	return node;
 }
 
+bool DeclareSubProcNode::isForwardDecl() const
+{
+	return !dsqlBlock || !dsqlBlock->body;
+}
+
 void DeclareSubProcNode::parseParameters(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 	Array<NestConst<Parameter> >& paramArray, USHORT* defaultCount)
 {
@@ -1941,27 +1950,26 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE)
 		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << "nested sub procedure");
 
-	DeclareSubProcNode* prevDecl = dsqlScratch->getSubProcedure(name);
-	bool implemetingForward = prevDecl && !prevDecl->dsqlBlock && dsqlBlock;
+	const auto prevDecl = dsqlScratch->getSubProcedure(name);
+	const bool implemetingForward = prevDecl && prevDecl->isForwardDecl() && !isForwardDecl();
 
 	dsqlProcedure = implemetingForward ? prevDecl->dsqlProcedure : FB_NEW_POOL(pool) dsql_prc(pool);
 
 	dsqlProcedure->prc_flags = PRC_subproc;
 	dsqlProcedure->prc_name.identifier = name;
-	dsqlProcedure->prc_in_count = USHORT(dsqlParameters.getCount());
-	dsqlProcedure->prc_out_count = USHORT(dsqlReturns.getCount());
+	dsqlProcedure->prc_in_count = USHORT(dsqlBlock->parameters.getCount());
+	dsqlProcedure->prc_out_count = USHORT(dsqlBlock->returns.getCount());
 
-	if (dsqlParameters.hasData())
+	if (dsqlBlock->parameters.hasData())
 	{
-		Array<NestConst<ParameterClause> >& paramArray = dsqlParameters;
 		bool defaultFound = false;
 
-		dsqlProcedure->prc_inputs = paramArray.front()->type;
+		dsqlProcedure->prc_inputs = dsqlBlock->parameters.front()->type;
 
-		for (NestConst<ParameterClause>* i = paramArray.begin(); i != paramArray.end(); ++i)
+		for (NestConst<ParameterClause>* i = dsqlBlock->parameters.begin(); i != dsqlBlock->parameters.end(); ++i)
 		{
-			ParameterClause* param = *i;
-			const unsigned paramIndex = i - paramArray.begin();
+			auto param = *i;
+			const unsigned paramIndex = i - dsqlBlock->parameters.begin();
 
 			SignatureParameter sigParam(pool);
 			sigParam.type = 0;	// input
@@ -1982,7 +1990,7 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 				defaultFound = true;
 
 				if (!implemetingForward && dsqlProcedure->prc_def_count == 0)
-					dsqlProcedure->prc_def_count = paramArray.end() - i;
+					dsqlProcedure->prc_def_count = dsqlBlock->parameters.end() - i;
 			}
 			else
 			{
@@ -1994,21 +2002,19 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 							Arg::Gds(isc_invalid_clause) << Arg::Str("defaults must be last"));
 				}
 
-				if (prevDecl && paramIndex < prevDecl->dsqlParameters.getCount())
-					param->defaultClause = prevDecl->dsqlParameters[paramIndex]->defaultClause;
+				if (prevDecl && paramIndex < prevDecl->dsqlBlock->parameters.getCount())
+					param->defaultClause = prevDecl->dsqlBlock->parameters[paramIndex]->defaultClause;
 			}
 		}
 	}
 
-	if (dsqlReturns.hasData())
+	if (dsqlBlock->returns.hasData())
 	{
-		Array<NestConst<ParameterClause> >& paramArray = dsqlReturns;
+		dsqlProcedure->prc_outputs = dsqlBlock->returns.front()->type;
 
-		dsqlProcedure->prc_outputs = paramArray.front()->type;
-
-		for (NestConst<ParameterClause>* i = paramArray.begin(); i != paramArray.end(); ++i)
+		for (NestConst<ParameterClause>* i = dsqlBlock->returns.begin(); i != dsqlBlock->returns.end(); ++i)
 		{
-			ParameterClause* param = *i;
+			const auto param = *i;
 
 			SignatureParameter sigParam(pool);
 			sigParam.type = 1;	// output
@@ -2028,13 +2034,13 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 			name.c_str());
 	}
 
-	if (!dsqlBlock)	// forward decl
+	if (isForwardDecl())
 		return this;
 
 	if (prevDecl)
 		dsqlScratch->putSubProcedure(this, true);
 
-	auto statement = FB_NEW_POOL(pool) DsqlDmlStatement(pool, dsqlScratch->getAttachment(), dsqlBlock);
+	const auto statement = FB_NEW_POOL(pool) DsqlDmlStatement(pool, dsqlScratch->getAttachment(), dsqlBlock);
 
 	if (dsqlScratch->clientDialect > SQL_DIALECT_V5)
 		statement->setBlrVersion(5);
@@ -2063,7 +2069,7 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 
 void DeclareSubProcNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	if (!dsqlBlock)	// forward decl
+	if (isForwardDecl())
 		return;
 
 	GEN_statement(blockScratch, dsqlBlock);

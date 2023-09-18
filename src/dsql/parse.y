@@ -3101,9 +3101,6 @@ local_nonforward_declaration
 	| local_declaration_subproc_start AS local_declarations_opt full_proc_block
 		{
 			DeclareSubProcNode* node = $1;
-			node->dsqlBlock = newNode<ExecBlockNode>();
-			node->dsqlBlock->parameters = node->dsqlParameters;
-			node->dsqlBlock->returns = node->dsqlReturns;
 			node->dsqlBlock->localDeclList = $3;
 			node->dsqlBlock->body = $4;
 
@@ -3115,9 +3112,6 @@ local_nonforward_declaration
 	| local_declaration_subfunc_start AS local_declarations_opt full_proc_block
 		{
 			DeclareSubFuncNode* node = $1;
-			node->dsqlBlock = newNode<ExecBlockNode>();
-			node->dsqlBlock->parameters = node->dsqlParameters;
-			node->dsqlBlock->returns = node->dsqlReturns;
 			node->dsqlBlock->localDeclList = $3;
 			node->dsqlBlock->body = $4;
 
@@ -3131,21 +3125,27 @@ local_nonforward_declaration
 %type <declareSubProcNode> local_declaration_subproc_start
 local_declaration_subproc_start
 	: DECLARE PROCEDURE symbol_procedure_name
-			{ $$ = newNode<DeclareSubProcNode>(NOTRIAL(*$3)); }
-		input_parameters(NOTRIAL(&$4->dsqlParameters))
-		output_parameters(NOTRIAL(&$4->dsqlReturns))
+			{
+				$$ = newNode<DeclareSubProcNode>(NOTRIAL(*$3));
+				$$->dsqlBlock = newNode<ExecBlockNode>();
+			}
+		input_parameters(NOTRIAL(&$4->dsqlBlock->parameters))
+		output_parameters(NOTRIAL(&$4->dsqlBlock->returns))
 			{ $$ = $4; }
 	;
 
 %type <declareSubFuncNode> local_declaration_subfunc_start
 local_declaration_subfunc_start
 	: DECLARE FUNCTION symbol_UDF_name
-			{ $$ = newNode<DeclareSubFuncNode>(NOTRIAL(*$3)); }
-		input_parameters(NOTRIAL(&$4->dsqlParameters))
+			{
+				$$ = newNode<DeclareSubFuncNode>(NOTRIAL(*$3));
+				$$->dsqlBlock = newNode<ExecBlockNode>();
+			}
+		input_parameters(NOTRIAL(&$4->dsqlBlock->parameters))
 		RETURNS domain_or_non_array_type collate_clause deterministic_opt
 			{
 				$$ = $4;
-				$$->dsqlReturns.add(newNode<ParameterClause>($<legacyField>7, optName($8)));
+				$$->dsqlBlock->returns.add(newNode<ParameterClause>($<legacyField>7, optName($8)));
 				$$->dsqlDeterministic = $9;
 			}
 	;
