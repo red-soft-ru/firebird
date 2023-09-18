@@ -1664,26 +1664,7 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->flags |= (DsqlCompilerScratch::FLAG_BLOCK | DsqlCompilerScratch::FLAG_FUNCTION);
 
-	// check for duplicated parameters and declaration names
-
-	StrArray names;
-
-	for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
-	{
-		const ParameterClause* const parameter = parameters[i];
-
-		if (names.exist(parameter->name.c_str()))
-		{
-			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
-		}
-
-		if (parameter->name.hasData())	// legacy UDFs has unnamed parameters
-			names.add(parameter->name.c_str());
-	}
-
-	PASS1_check_unique_fields_names(names, localDeclList);
+	LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, &parameters, nullptr);
 
 	source.ltrim("\n\r\t ");
 
@@ -2329,7 +2310,8 @@ void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* 
 		// of previous calls to PASS1_node and PASS1_statement.
 		dsqlScratch->setPsql(true);
 
-		dsqlScratch->putLocalVariables(localDeclList, 1);
+		if (localDeclList)
+			localDeclList->genBlr(dsqlScratch);
 
 		dsqlScratch->loopLevel = 0;
 		dsqlScratch->cursorNumber = 0;
@@ -2635,39 +2617,7 @@ DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->flags |= (DsqlCompilerScratch::FLAG_BLOCK | DsqlCompilerScratch::FLAG_PROCEDURE);
 
-	// check for duplicated parameters and declaration names
-
-	StrArray names;
-
-	for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
-	{
-		const ParameterClause* const parameter = parameters[i];
-
-		if (names.exist(parameter->name.c_str()))
-		{
-			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
-		}
-
-		names.add(parameter->name.c_str());
-	}
-
-	for (FB_SIZE_T i = 0; i < returns.getCount(); ++i)
-	{
-		const ParameterClause* const parameter = returns[i];
-
-		if (names.exist(parameter->name.c_str()))
-		{
-			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
-		}
-
-		names.add(parameter->name.c_str());
-	}
-
-	PASS1_check_unique_fields_names(names, localDeclList);
+	LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, &parameters, &returns);
 
 	source.ltrim("\n\r\t ");
 
@@ -3200,7 +3150,8 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 	// of previous calls to PASS1_node and PASS1_statement.
 	dsqlScratch->setPsql(true);
 
-	dsqlScratch->putLocalVariables(localDeclList, returns.getCount());
+	if (localDeclList)
+		localDeclList->genBlr(dsqlScratch);
 
 	dsqlScratch->loopLevel = 0;
 	dsqlScratch->cursorNumber = 0;
@@ -3717,7 +3668,9 @@ void CreateAlterTriggerNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* d
 		dsqlScratch->appendUChar(blr_begin);
 
 		dsqlScratch->setPsql(true);
-		dsqlScratch->putLocalVariables(localDeclList, 0);
+
+		if (localDeclList)
+			localDeclList->genBlr(dsqlScratch);
 
 		dsqlScratch->loopLevel = 0;
 		dsqlScratch->cursorNumber = 0;

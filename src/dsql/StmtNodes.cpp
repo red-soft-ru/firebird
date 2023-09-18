@@ -4354,34 +4354,7 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->localDeclList = localDeclList;
 	node->body = body;
 
-	const FB_SIZE_T count = node->parameters.getCount() + node->returns.getCount() +
-		(node->localDeclList ? node->localDeclList->statements.getCount() : 0);
-
-	if (count != 0)
-	{
-		StrArray names(*getDefaultMemoryPool(), count);
-
-		// Hand-made PASS1_check_unique_fields_names for arrays of ParameterClause
-
-		Array<NestConst<ParameterClause> > params(parameters);
-		params.add(returns.begin(), returns.getCount());
-
-		for (FB_SIZE_T i = 0; i < params.getCount(); ++i)
-		{
-			ParameterClause* parameter = params[i];
-
-			FB_SIZE_T pos;
-			if (!names.find(parameter->name.c_str(), pos))
-				names.insert(pos, parameter->name.c_str());
-			else
-			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
-						  Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
-			}
-		}
-
-		PASS1_check_unique_fields_names(names, node->localDeclList);
-	}
+	LocalDeclarationsNode::checkUniqueFieldsNames(node->localDeclList, &parameters, &returns);
 
 	return node;
 }
@@ -4507,15 +4480,15 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		}
 	}
 
-	const Array<dsql_var*>& variables = subRoutine ? dsqlScratch->outputVariables : dsqlScratch->variables;
+	const auto& variables = subRoutine ? dsqlScratch->outputVariables : dsqlScratch->variables;
 
 	for (const auto variable : variables)
 		dsqlScratch->putLocalVariable(variable, nullptr, {});
 
 	dsqlScratch->setPsql(true);
 
-	dsqlScratch->putLocalVariables(localDeclList,
-		USHORT((subRoutine ? 0 : parameters.getCount()) + returns.getCount()));
+	if (localDeclList)
+		localDeclList->genBlr(dsqlScratch);
 
 	dsqlScratch->loopLevel = 0;
 
@@ -5436,6 +5409,166 @@ void LineColumnNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->putDebugSrcInfo(line, column);
 	statement->genBlr(dsqlScratch);
+}
+
+
+//--------------------
+
+
+// Check duplicate fields (params, variables, cursors etc).
+void LocalDeclarationsNode::checkUniqueFieldsNames(const LocalDeclarationsNode* node,
+	const Array<NestConst<ParameterClause>>* inputParameters,
+	const Array<NestConst<ParameterClause>>* outputParameters)
+{
+	const FB_SIZE_T count = (inputParameters ? inputParameters->getCount() : 0) +
+		(outputParameters ? outputParameters->getCount() : 0) +
+		(node ? node->statements.getCount() : 0);
+
+	StrArray names(*getDefaultMemoryPool(), count);
+
+	for (const auto parameters : {inputParameters, outputParameters})
+	{
+		if (parameters)
+		{
+			for (const auto parameter : *parameters)
+			{
+				if (parameter->name.hasData())	// legacy UDFs has unnamed parameters
+				{
+					FB_SIZE_T pos;
+					if (!names.find(parameter->name.c_str(), pos))
+						names.insert(pos, parameter->name.c_str());
+					else
+					{
+						ERRD_post(
+							Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
+							Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
+					}
+				}
+			}
+		}
+	}
+
+	if (node)
+	{
+		for (const auto statement : node->statements)
+		{
+			const char* name = nullptr;
+
+			if (auto varNode = nodeAs<DeclareVariableNode>(statement))
+				name = varNode->dsqlDef->name.c_str();
+			else if (auto cursorNode = nodeAs<DeclareCursorNode>(statement))
+				name = cursorNode->dsqlName.c_str();
+			else if (nodeAs<DeclareSubProcNode>(statement) || nodeAs<DeclareSubFuncNode>(statement))
+				continue;
+
+			fb_assert(name);
+
+			FB_SIZE_T pos;
+			if (!names.find(name, pos))
+				names.insert(pos, name);
+			else
+			{
+				ERRD_post(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
+					Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(name));
+			}
+		}
+	}
+}
+
+void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	// Sub routine needs a different approach from EXECUTE BLOCK.
+	// EXECUTE BLOCK needs "ports", which creates DSQL messages using the client charset.
+	// Sub routine doesn't need ports and should generate BLR as declared in its metadata.
+	const bool isSubRoutine = dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE;
+	const auto& variables = isSubRoutine ? dsqlScratch->outputVariables : dsqlScratch->variables;
+	USHORT locals = variables.getCount();
+
+	Array<dsql_var*> declaredVariables;
+
+	const auto end = statements.end();
+
+	for (auto ptr = statements.begin(); ptr != end; ++ptr)
+	{
+		auto parameter = *ptr;
+
+		dsqlScratch->putDebugSrcInfo(parameter->line, parameter->column);
+
+		if (const auto varNode = nodeAs<DeclareVariableNode>(parameter))
+		{
+			dsql_fld* field = varNode->dsqlDef->type;
+			const NestConst<StmtNode>* rest = ptr;
+
+			while (++rest != end)
+			{
+				if (const auto varNode2 = nodeAs<DeclareVariableNode>(*rest))
+				{
+					const dsql_fld* rest_field = varNode2->dsqlDef->type;
+
+					if (field->fld_name == rest_field->fld_name)
+					{
+						ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
+								  Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(field->fld_name));
+					}
+				}
+			}
+
+			const auto variable = dsqlScratch->makeVariable(field, field->fld_name.c_str(),
+				dsql_var::TYPE_LOCAL, 0, 0, locals);
+			declaredVariables.add(variable);
+
+			dsqlScratch->putLocalVariableDecl(variable, varNode, varNode->dsqlDef->type->collate);
+
+			// Some field attributes are calculated inside putLocalVariable(), so we reinitialize
+			// the descriptor.
+			DsqlDescMaker::fromField(&variable->desc, field);
+
+			++locals;
+		}
+		else if (nodeIs<DeclareCursorNode>(parameter) ||
+			nodeIs<DeclareSubProcNode>(parameter) ||
+			nodeIs<DeclareSubFuncNode>(parameter))
+		{
+			parameter->dsqlPass(dsqlScratch);
+			parameter->genBlr(dsqlScratch);
+		}
+		else
+			fb_assert(false);
+	}
+
+	auto declVarIt = declaredVariables.begin();
+
+	for (const auto parameter : statements)
+	{
+		if (const auto varNode = nodeAs<DeclareVariableNode>(parameter))
+			dsqlScratch->putLocalVariableInit(*declVarIt++, varNode);
+	}
+
+	if (!isSubRoutine)
+	{
+		// Check not implemented sub-functions.
+		for (const auto& [name, subFunc] : dsqlScratch->getSubFunctions())
+		{
+			if (subFunc->isForwardDecl())
+			{
+				status_exception::raise(
+					Arg::Gds(isc_subfunc_not_impl) <<
+					name.c_str());
+			}
+		}
+
+		// Check not implemented sub-procedures.
+		for (const auto& [name, subProc] : dsqlScratch->getSubProcedures())
+		{
+			if (subProc->isForwardDecl())
+			{
+				status_exception::raise(
+					Arg::Gds(isc_subproc_not_impl) <<
+					name.c_str());
+			}
+		}
+	}
 }
 
 

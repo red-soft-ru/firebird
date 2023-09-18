@@ -35,7 +35,7 @@ namespace Jrd
 {
 
 class BinaryBoolNode;
-class CompoundStmtNode;
+class LocalDeclarationsNode;
 class DeclareCursorNode;
 class DeclareLocalTableNode;
 class DeclareVariableNode;
@@ -153,7 +153,6 @@ public:
 	void putBlrMarkers(ULONG marks);
 	void putDtype(const TypeClause* field, bool useSubType);
 	void putType(const TypeClause* type, bool useSubType);
-	void putLocalVariables(CompoundStmtNode* parameters, USHORT locals);
 	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, const MetaName& collationName);
 	void putLocalVariableInit(dsql_var* variable, const DeclareVariableNode* hostParam);
 
@@ -238,8 +237,18 @@ public:
 	bool isPsql() const { return psql; }
 	void setPsql(bool value) { psql = value; }
 
+	const auto& getSubFunctions() const
+	{
+		return subFunctions;
+	}
+
 	DeclareSubFuncNode* getSubFunction(const MetaName& name);
 	void putSubFunction(DeclareSubFuncNode* subFunc, bool replace = false);
+
+	const auto& getSubProcedures() const
+	{
+		return subProcedures;
+	}
 
 	DeclareSubProcNode* getSubProcedure(const MetaName& name);
 	void putSubProcedure(DeclareSubProcNode* subProc, bool replace = false);

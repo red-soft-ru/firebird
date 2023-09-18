@@ -791,7 +791,7 @@ private:
 public:
 	Firebird::Array<NestConst<ParameterClause>> parameters;
 	Firebird::Array<NestConst<ParameterClause>> returns;
-	NestConst<CompoundStmtNode> localDeclList;
+	NestConst<LocalDeclarationsNode> localDeclList;
 	NestConst<StmtNode> body;
 };
 
@@ -986,6 +986,28 @@ public:
 
 private:
 	NestConst<StmtNode> statement;
+};
+
+
+class LocalDeclarationsNode final : public TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_LOCAL_DECLARATIONS>
+{
+public:
+	explicit LocalDeclarationsNode(MemoryPool& pool)
+		: TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_LOCAL_DECLARATIONS>(pool),
+		  statements(pool)
+	{
+	}
+
+public:
+	static void checkUniqueFieldsNames(const LocalDeclarationsNode* node,
+		const Firebird::Array<NestConst<ParameterClause>>* inputParameters,
+		const Firebird::Array<NestConst<ParameterClause>>* outputParameters);
+
+public:
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+
+public:
+	Firebird::Array<NestConst<StmtNode>> statements;
 };
 
 

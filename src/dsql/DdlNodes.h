@@ -39,7 +39,7 @@
 
 namespace Jrd {
 
-class CompoundStmtNode;
+class LocalDeclarationsNode;
 class RelationSourceNode;
 class ValueListNode;
 class SecDbContext;
@@ -469,7 +469,7 @@ public:
 	bool deterministic;
 	Firebird::Array<NestConst<ParameterClause> > parameters;
 	NestConst<ParameterClause> returnType;
-	NestConst<CompoundStmtNode> localDeclList;
+	NestConst<LocalDeclarationsNode> localDeclList;
 	Firebird::string source;
 	NestConst<StmtNode> body;
 	bool compiled;
@@ -605,7 +605,7 @@ public:
 	Firebird::Array<NestConst<ParameterClause> > parameters;
 	Firebird::Array<NestConst<ParameterClause> > returns;
 	Firebird::string source;
-	NestConst<CompoundStmtNode> localDeclList;
+	NestConst<LocalDeclarationsNode> localDeclList;
 	NestConst<StmtNode> body;
 	bool compiled;
 	bool invalid;
@@ -782,7 +782,7 @@ private:
 public:
 	bool create;
 	bool alter;
-	NestConst<CompoundStmtNode> localDeclList;
+	NestConst<LocalDeclarationsNode> localDeclList;
 	NestConst<StmtNode> body;
 	bool compiled;
 	bool invalid;

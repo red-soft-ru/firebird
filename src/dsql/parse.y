@@ -831,6 +831,7 @@ using namespace Firebird;
 	Jrd::DeclareCursorNode* declCursorNode;
 	Jrd::ErrorHandlerNode* errorHandlerNode;
 	Jrd::ExecStatementNode* execStatementNode;
+	Jrd::LocalDeclarationsNode* localDeclarationsNode;
 	Jrd::MergeNode* mergeNode;
 	Jrd::MergeNode::NotMatched* mergeNotMatchedClause;
 	Jrd::MergeNode::Matched* mergeMatchedClause;
@@ -3025,12 +3026,12 @@ package_body_item
 	;
 
 
-%type <compoundStmtNode> local_declarations_opt
+%type <localDeclarationsNode> local_declarations_opt
 local_declarations_opt
 	: local_forward_declarations_opt local_nonforward_declarations_opt
 		{
-			CompoundStmtNode* forward = $1;
-			CompoundStmtNode* nonForward = $2;
+			LocalDeclarationsNode* forward = $1;
+			LocalDeclarationsNode* nonForward = $2;
 
 			if (!forward)
 				$$ = nonForward;
@@ -3044,17 +3045,17 @@ local_declarations_opt
 		}
 	;
 
-%type <compoundStmtNode> local_forward_declarations_opt
+%type <localDeclarationsNode> local_forward_declarations_opt
 local_forward_declarations_opt
-	: /* nothing */					{ $$ = NULL; }
+	: /* nothing */					{ $$ = nullptr; }
 	| local_forward_declarations
 	;
 
-%type <compoundStmtNode> local_forward_declarations
+%type <localDeclarationsNode> local_forward_declarations
 local_forward_declarations
 	: local_forward_declaration
 		{
-			$$ = newNode<CompoundStmtNode>();
+			$$ = newNode<LocalDeclarationsNode>();
 			$$->statements.add($1);
 		}
 	| local_forward_declarations local_forward_declaration
@@ -3070,17 +3071,17 @@ local_forward_declaration
 	| local_declaration_subfunc_start ';'	{ $$ = $1; }
 	;
 
-%type <compoundStmtNode> local_nonforward_declarations_opt
+%type <localDeclarationsNode> local_nonforward_declarations_opt
 local_nonforward_declarations_opt
-	: /* nothing */						{ $$ = NULL; }
+	: /* nothing */						{ $$ = nullptr; }
 	| local_nonforward_declarations
 	;
 
-%type <compoundStmtNode> local_nonforward_declarations
+%type <localDeclarationsNode> local_nonforward_declarations
 local_nonforward_declarations
 	: local_nonforward_declaration
 		{
-			$$ = newNode<CompoundStmtNode>();
+			$$ = newNode<LocalDeclarationsNode>();
 			$$->statements.add($1);
 		}
 	| local_nonforward_declarations local_nonforward_declaration
