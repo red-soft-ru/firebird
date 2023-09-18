@@ -62,22 +62,12 @@ namespace {
 
 DsqlBatch::DsqlBatch(DsqlDmlRequest* req, const dsql_msg* /*message*/, IMessageMetadata* inMeta, ClumpletReader& pb)
 	: m_dsqlRequest(req),
-	  m_batch(NULL),
 	  m_meta(inMeta),
 	  m_messages(m_dsqlRequest->getPool()),
 	  m_blobs(m_dsqlRequest->getPool()),
 	  m_blobMap(m_dsqlRequest->getPool()),
 	  m_blobMeta(m_dsqlRequest->getPool()),
-	  m_defaultBpb(m_dsqlRequest->getPool()),
-	  m_messageSize(0),
-	  m_alignedMessage(0),
-	  m_alignment(0),
-	  m_flags(0),
-	  m_detailed(DETAILED_LIMIT),
-	  m_bufferSize(BUFFER_LIMIT),
-	  m_lastBlob(MAX_ULONG),
-	  m_setBlobSize(false),
-	  m_blobPolicy(IBatch::BLOB_NONE)
+	  m_defaultBpb(m_dsqlRequest->getPool())
 {
 	memset(&m_genId, 0, sizeof(m_genId));
 

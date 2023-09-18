@@ -128,12 +128,8 @@ class AggregateSort : protected Firebird::PermanentStorage, public Printable
 public:
 	explicit AggregateSort(Firebird::MemoryPool& p)
 		: PermanentStorage(p),
-		  length(0),
-		  intl(false),
-		  impure(0),
 		  keyItems(p)
 	{
-		desc.clear();
 	}
 
 public:
@@ -144,9 +140,9 @@ public:
 
 public:
 	dsc desc;
-	ULONG length;
-	bool intl;
-	ULONG impure;
+	ULONG length = 0;
+	bool intl = false;
+	ULONG impure = 0;
 	Firebird::HalfStaticArray<sort_key_def, 2> keyItems;
 };
 

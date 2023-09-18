@@ -7486,13 +7486,6 @@ ValueExprNode* InternalInfoNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 static RegisterNode<LiteralNode> regLiteralNode({blr_literal});
 
-LiteralNode::LiteralNode(MemoryPool& pool)
-	: TypedNode<ValueExprNode, ExprNode::TYPE_LITERAL>(pool),
-	  dsqlStr(NULL), litNumStringLength(0)
-{
-	litDesc.clear();
-}
-
 // Parse a literal value.
 DmlNode* LiteralNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
 {

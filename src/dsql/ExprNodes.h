@@ -693,7 +693,6 @@ public:
 	explicit DomainValidationNode(MemoryPool& pool)
 		: TypedNode<ValueExprNode, ExprNode::TYPE_DOMAIN_VALIDATION>(pool)
 	{
-		domDesc.clear();
 	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -918,7 +917,10 @@ public:
 class LiteralNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_LITERAL>
 {
 public:
-	explicit LiteralNode(MemoryPool& pool);
+	explicit LiteralNode(MemoryPool& pool)
+		: TypedNode<ValueExprNode, ExprNode::TYPE_LITERAL>(pool)
+	{
+	}
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 	static void genConstant(DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool negateValue, USHORT numStringLength = 0);
@@ -956,9 +958,9 @@ public:
 	void fixMinSInt128(MemoryPool& pool);
 
 public:
-	const IntlString* dsqlStr;
+	const IntlString* dsqlStr = nullptr;
 	dsc litDesc;
-	USHORT litNumStringLength;
+	USHORT litNumStringLength = 0;
 };
 
 

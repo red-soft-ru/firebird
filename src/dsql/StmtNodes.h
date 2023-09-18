@@ -510,7 +510,6 @@ public:
 	explicit DeclareVariableNode(MemoryPool& pool)
 		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_VARIABLE>(pool)
 	{
-		varDesc.clear();
 	}
 
 public:

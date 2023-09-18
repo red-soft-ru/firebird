@@ -2387,10 +2387,9 @@ dsc* evlBlobAppend(thread_db* tdbb, const SysFunction* function, const NestValue
 
 	blb* blob = NULL;
 	bid blob_id;
-	dsc blobDsc;
-
 	blob_id.clear();
-	blobDsc.clear();
+
+	dsc blobDsc;
 
 	const dsc* argDsc = EVL_expr(tdbb, request, args[0]);
 	const bool arg0_null = (request->req_flags & req_null) || (argDsc == NULL);

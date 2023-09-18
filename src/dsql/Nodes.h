@@ -770,10 +770,8 @@ class ValueExprNode : public ExprNode
 {
 public:
 	ValueExprNode(Type aType, MemoryPool& pool)
-		: ExprNode(aType, pool),
-		  nodScale(0)
+		: ExprNode(aType, pool)
 	{
-		dsqlDesc.clear();
 	}
 
 public:
@@ -848,7 +846,7 @@ public:
 	virtual dsc* execute(thread_db* tdbb, Request* request) const = 0;
 
 public:
-	SCHAR nodScale;
+	SCHAR nodScale = 0;
 
 protected:
 	dsc dsqlDesc;
