@@ -292,10 +292,10 @@ public:
 class DeclareCursorNode final : public TypedNode<StmtNode, StmtNode::TYPE_DECLARE_CURSOR>
 {
 public:
-	static const USHORT CUR_TYPE_NONE = 0;
-	static const USHORT CUR_TYPE_EXPLICIT = 1;
-	static const USHORT CUR_TYPE_FOR = 2;
-	static const USHORT CUR_TYPE_ALL = (CUR_TYPE_EXPLICIT | CUR_TYPE_FOR);
+	static constexpr USHORT CUR_TYPE_NONE = 0;
+	static constexpr USHORT CUR_TYPE_EXPLICIT = 1;
+	static constexpr USHORT CUR_TYPE_FOR = 2;
+	static constexpr USHORT CUR_TYPE_ALL = CUR_TYPE_EXPLICIT | CUR_TYPE_FOR;
 
 	explicit DeclareCursorNode(MemoryPool& pool, const MetaName& aDsqlName = NULL,
 				USHORT aDsqlCursorType = CUR_TYPE_NONE)
@@ -1557,10 +1557,10 @@ public:
 		ISO_LEVEL_READ_COMMITTED_READ_CONSISTENCY
 	};
 
-	static const unsigned LOCK_MODE_SHARED 		= 0x1;
-	static const unsigned LOCK_MODE_PROTECTED	= 0x2;
-	static const unsigned LOCK_MODE_READ		= 0x4;
-	static const unsigned LOCK_MODE_WRITE		= 0x8;
+	static constexpr unsigned LOCK_MODE_SHARED 		= 0x1;
+	static constexpr unsigned LOCK_MODE_PROTECTED	= 0x2;
+	static constexpr unsigned LOCK_MODE_READ		= 0x4;
+	static constexpr unsigned LOCK_MODE_WRITE		= 0x8;
 
 public:
 	explicit SetTransactionNode(MemoryPool& pool)

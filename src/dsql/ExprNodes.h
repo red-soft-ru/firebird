@@ -1579,7 +1579,7 @@ class ParameterNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_PARAM
 private:
 	// CVC: This is a guess for the length of the parameter for LIKE and others, when the
 	// original dtype isn't string and force_varchar is true.
-	static const int LIKE_PARAM_LEN = 30;
+	static constexpr int LIKE_PARAM_LEN = 30;
 
 public:
 	explicit ParameterNode(MemoryPool& pool);
