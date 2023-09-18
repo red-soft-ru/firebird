@@ -134,19 +134,19 @@ public:
 		freeData();
 	}
 
-	void clear() throw()
+	void clear() noexcept
 	{
 		count = 0;
 	}
 
 protected:
-	const T& getElement(size_type index) const throw()
+	const T& getElement(size_type index) const noexcept
 	{
   		fb_assert(index < count);
   		return data[index];
 	}
 
-	T& getElement(size_type index) throw()
+	T& getElement(size_type index) noexcept
 	{
   		fb_assert(index < count);
   		return data[index];
@@ -174,12 +174,12 @@ public:
 		return *this;
 	}
 
-	const T& operator[](size_type index) const throw()
+	const T& operator[](size_type index) const noexcept
 	{
   		return getElement(index);
 	}
 
-	T& operator[](size_type index) throw()
+	T& operator[](size_type index) noexcept
 	{
   		return getElement(index);
 	}
@@ -266,14 +266,14 @@ public:
 		count += itemsCount;
 	}
 
-	T* remove(const size_type index) throw()
+	T* remove(const size_type index) noexcept
 	{
   		fb_assert(index < count);
   		memmove(data + index, data + index + 1, sizeof(T) * (--count - index));
 		return &data[index];
 	}
 
-	T* removeRange(const size_type from, const size_type to) throw()
+	T* removeRange(const size_type from, const size_type to) noexcept
 	{
   		fb_assert(from <= to);
   		fb_assert(to <= count);
@@ -282,7 +282,7 @@ public:
 		return &data[from];
 	}
 
-	T* removeCount(const size_type index, const size_type n) throw()
+	T* removeCount(const size_type index, const size_type n) noexcept
 	{
   		fb_assert(index + n <= count);
   		memmove(data + index, data + index + n, sizeof(T) * (count - index - n));
@@ -290,7 +290,7 @@ public:
 		return &data[index];
 	}
 
-	T* remove(T* itr) throw()
+	T* remove(T* itr) noexcept
 	{
 		const size_type index = itr - begin();
   		fb_assert(index < count);
@@ -298,12 +298,12 @@ public:
 		return &data[index];
 	}
 
-	T* remove(T* itrFrom, T* itrTo) throw()
+	T* remove(T* itrFrom, T* itrTo) noexcept
 	{
 		return removeRange(itrFrom - begin(), itrTo - begin());
 	}
 
-	void shrink(size_type newCount) throw()
+	void shrink(size_type newCount) noexcept
 	{
 		fb_assert(newCount <= count);
 		count = newCount;
@@ -363,7 +363,7 @@ public:
 		memcpy(data, items, sizeof(T) * count);
 	}
 
-	size_type getCount() const throw() { return count; }
+	size_type getCount() const noexcept { return count; }
 
 	bool isEmpty() const { return count == 0; }
 

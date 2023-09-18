@@ -377,7 +377,7 @@ namespace Firebird
 				delete getPointer(i);
 		}
 
-		size_type getCount() const throw()
+		size_type getCount() const noexcept
 		{
 			return inherited::getCount();
 		}
@@ -768,7 +768,7 @@ namespace Firebird
 		PointersArray() : values(), pointers() { }
 		~PointersArray() { }
 
-		size_type getCount() const throw()
+		size_type getCount() const noexcept
 		{
 			fb_assert(values.getCount() == pointers.getCount());
 			return values.getCount();

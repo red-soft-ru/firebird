@@ -167,7 +167,7 @@ Attachment* DsqlBatch::getAttachment() const
 	return m_dsqlRequest->req_dbb->dbb_attachment;
 }
 
-void DsqlBatch::setInterfacePtr(JBatch* interfacePtr) throw()
+void DsqlBatch::setInterfacePtr(JBatch* interfacePtr) noexcept
 {
 	fb_assert(!m_batch);
 	m_batch = interfacePtr;

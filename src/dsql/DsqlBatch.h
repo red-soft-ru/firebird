@@ -65,7 +65,7 @@ public:
 		unsigned parLength, const UCHAR* par);
 
 	Attachment* getAttachment() const;
-	void setInterfacePtr(JBatch* interfacePtr) throw();
+	void setInterfacePtr(JBatch* interfacePtr) noexcept;
 
 	void add(thread_db* tdbb, ULONG count, const void* inBuffer);
 	void addBlob(thread_db* tdbb, ULONG length, const void* inBuffer, ISC_QUAD* blobId, unsigned parLength, const unsigned char* par);
