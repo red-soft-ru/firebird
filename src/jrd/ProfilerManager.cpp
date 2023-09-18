@@ -661,8 +661,7 @@ void ProfilerManager::flush(bool updateTimer)
 
 		for (bool hasNext = pluginAccessor.getFirst(); hasNext;)
 		{
-			auto& pluginName = pluginAccessor.current()->first;
-			auto& plugin = pluginAccessor.current()->second;
+			auto& [pluginName, plugin] = *pluginAccessor.current();
 
 			LogLocalStatus status("Profiler flush");
 			plugin->flush(&status);

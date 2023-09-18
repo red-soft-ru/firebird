@@ -7222,11 +7222,8 @@ OuterMapNode* OuterMapNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	if (!csb->mainCsb)
 		status_exception::raise(Arg::Gds(isc_random) << "Invalid blr_outer_map. Must be inside subroutine.");
 
-	for (const auto& pair : csb->outerMessagesMap)
+	for (const auto& [innerNumber, outerNumber] : csb->outerMessagesMap)
 	{
-		const auto innerNumber = pair.first;
-		const auto outerNumber = pair.second;
-
 		const auto outerMessage = CMP_csb_element(csb->mainCsb, outerNumber)->csb_message;
 		if (!outerMessage)
 		{
@@ -7249,11 +7246,8 @@ OuterMapNode* OuterMapNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 			csb->csb_msg_number = innerNumber;
 	}
 
-	for (const auto& pair : csb->outerVarsMap)
+	for (const auto& [innerNumber, outerNumber] : csb->outerVarsMap)
 	{
-		const auto innerNumber = pair.first;
-		const auto outerNumber = pair.second;
-
 		auto& outerVariables = *csb->mainCsb->csb_variables;
 		if (outerNumber >= outerVariables.count() || !outerVariables[outerNumber])
 		{

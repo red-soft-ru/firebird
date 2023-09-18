@@ -351,24 +351,24 @@ void DsqlCompilerScratch::putLocalVariables(CompoundStmtNode* parameters, USHORT
 	if (!(flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE))
 	{
 		// Check not implemented sub-functions.
-		for (const auto& funcPair : subFunctions)
+		for (const auto& [name, subFunc] : subFunctions)
 		{
-			if (funcPair.second->isForwardDecl())
+			if (subFunc->isForwardDecl())
 			{
 				status_exception::raise(
 					Arg::Gds(isc_subfunc_not_impl) <<
-					funcPair.first.c_str());
+					name.c_str());
 			}
 		}
 
 		// Check not implemented sub-procedures.
-		for (const auto& procPair : subProcedures)
+		for (const auto& [name, subProc] : subProcedures)
 		{
-			if (procPair.second->isForwardDecl())
+			if (subProc->isForwardDecl())
 			{
 				status_exception::raise(
 					Arg::Gds(isc_subproc_not_impl) <<
-					procPair.first.c_str());
+					name.c_str());
 			}
 		}
 	}
@@ -449,18 +449,18 @@ void DsqlCompilerScratch::putOuterMaps()
 
 	appendUChar(blr_outer_map);
 
-	for (auto& pair : outerVarsMap)
+	for (auto& [inner, outer] : outerVarsMap)
 	{
 		appendUChar(blr_outer_map_variable);
-		appendUShort(pair.first);
-		appendUShort(pair.second);
+		appendUShort(inner);
+		appendUShort(outer);
 	}
 
-	for (auto& pair : outerMessagesMap)
+	for (auto& [inner, outer] : outerMessagesMap)
 	{
 		appendUChar(blr_outer_map_message);
-		appendUShort(pair.first);
-		appendUShort(pair.second);
+		appendUShort(inner);
+		appendUShort(outer);
 	}
 
 	appendUChar(blr_end);

@@ -853,11 +853,8 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					profileRequest.dirty = false;
 				}
 
-				for (const auto& statsIt : profileRequest.recordSourcesStats)
+				for (const auto& [cursorRecSource, stats] : profileRequest.recordSourcesStats)
 				{
-					const auto& cursorRecSource = statsIt.first;
-					const auto& stats = statsIt.second;
-
 					recSrcStatMessage->profileIdNull = FB_FALSE;
 					recSrcStatMessage->profileId = session->getId();
 
