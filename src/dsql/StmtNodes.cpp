@@ -4254,9 +4254,11 @@ const StmtNode* InitVariableNode::execute(thread_db* tdbb, Request* request, Exe
 {
 	if (request->req_operation == Request::req_evaluate)
 	{
+		const auto varImpure = request->getImpure<impure_value>(varDecl->impureOffset);
+
 		if (varInfo)
 		{
-			dsc* toDesc = &request->getImpure<impure_value>(varDecl->impureOffset)->vlu_desc;
+			dsc* toDesc = &varImpure->vlu_desc;
 			toDesc->dsc_flags |= DSC_null;
 
 			MapFieldInfo::ValueType fieldInfo;
@@ -4274,6 +4276,8 @@ const StmtNode* InitVariableNode::execute(thread_db* tdbb, Request* request, Exe
 				}
 			}
 		}
+
+		varImpure->vlu_flags |= VLU_initialized;
 
 		request->req_operation = Request::req_return;
 	}
@@ -4497,10 +4501,10 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		}
 	}
 
-	Array<dsql_var*>& variables = subRoutine ? dsqlScratch->outputVariables : dsqlScratch->variables;
+	const Array<dsql_var*>& variables = subRoutine ? dsqlScratch->outputVariables : dsqlScratch->variables;
 
-	for (Array<dsql_var*>::const_iterator i = variables.begin(); i != variables.end(); ++i)
-		dsqlScratch->putLocalVariable(*i, 0, NULL);
+	for (const auto variable : variables)
+		dsqlScratch->putLocalVariable(variable, nullptr, {});
 
 	dsqlScratch->setPsql(true);
 

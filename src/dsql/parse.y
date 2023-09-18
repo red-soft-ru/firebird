@@ -3158,11 +3158,31 @@ local_declaration_item
 
 %type <stmtNode> var_declaration_item
 var_declaration_item
-	: column_domain_or_non_array_type collate_clause default_par_opt
+	: column_domain_or_non_array_type collate_clause var_declaration_initializer
 		{
 			DeclareVariableNode* node = newNode<DeclareVariableNode>();
 			node->dsqlDef = newNode<ParameterClause>($1, optName($2), $3);
 			$$ = node;
+		}
+	;
+
+%type <valueSourceClause> var_declaration_initializer
+var_declaration_initializer
+	: // nothing
+		{ $$ = nullptr; }
+	| DEFAULT value
+		{
+			const auto clause = newNode<ValueSourceClause>();
+			clause->value = $2;
+			clause->source = makeParseStr(YYPOSNARG(1), YYPOSNARG(2));
+			$$ = clause;
+		}
+	| '=' value
+		{
+			const auto clause = newNode<ValueSourceClause>();
+			clause->value = $2;
+			clause->source = makeParseStr(YYPOSNARG(1), YYPOSNARG(2));
+			$$ = clause;
 		}
 	;
 

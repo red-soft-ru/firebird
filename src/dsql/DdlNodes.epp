@@ -2323,7 +2323,7 @@ void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* 
 		}
 
 		dsql_var* const variable = dsqlScratch->outputVariables[0];
-		dsqlScratch->putLocalVariable(variable, 0, NULL);
+		dsqlScratch->putLocalVariable(variable, nullptr, {});
 
 		// ASF: This is here to not change the old logic (proc_flag)
 		// of previous calls to PASS1_node and PASS1_statement.
@@ -3193,7 +3193,7 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 		 i != dsqlScratch->outputVariables.end();
 		 ++i)
 	{
-		dsqlScratch->putLocalVariable(*i, 0, NULL);
+		dsqlScratch->putLocalVariable(*i, nullptr, {});
 	}
 
 	// ASF: This is here to not change the old logic (proc_flag)
