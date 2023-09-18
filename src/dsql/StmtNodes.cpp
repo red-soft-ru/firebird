@@ -4943,7 +4943,7 @@ ForNode* ForNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->cursors.push(dsqlCursor);
 	}
 	else
-		node->rse = dsqlSelect->dsqlPass(dsqlScratch)->rse;
+		node->rse = dsqlSelect->dsqlProcess(dsqlScratch);
 
 	node->dsqlInto = dsqlPassArray(dsqlScratch, dsqlInto);
 
@@ -5576,7 +5576,7 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	dsqlSelect->selectExpr = selectExpr;
 
 	const auto mergeNode = FB_NEW_POOL(pool) MergeNode(pool);
-	mergeNode->rse = dsqlSelect->dsqlPass(dsqlScratch)->rse;
+	mergeNode->rse = dsqlSelect->dsqlProcess(dsqlScratch);
 
 	// Get the already processed relations.
 	const auto processedRse = nodeAs<RseNode>(mergeNode->rse->dsqlStreams->items[0]);
@@ -8189,7 +8189,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 //--------------------
 
 
-SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+RseNode* SelectNode::dsqlProcess(DsqlCompilerScratch* dsqlScratch)
 {
 	const auto statement = dsqlScratch->getDsqlStatement();
 
@@ -8198,7 +8198,7 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->optimizeForFirstRows = optimizeForFirstRows;
 
 	const DsqlContextStack::iterator base(*dsqlScratch->context);
-	node->rse = PASS1_rse(dsqlScratch, selectExpr, this);
+	const auto processedRse = PASS1_rse(dsqlScratch, selectExpr, this);
 	dsqlScratch->context->clear(base);
 
 	if (forUpdate)
@@ -8212,8 +8212,74 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		// stored procedure occurs in the select list. In these cases all of stored procedure is
 		// executed under savepoint for open cursor.
 
-		if (node->rse->dsqlOrder || node->rse->dsqlDistinct)
+		if (processedRse->dsqlOrder || processedRse->dsqlDistinct)
 			statement->setFlags(statement->getFlags() & ~DsqlStatement::FLAG_NO_BATCH);
+	}
+
+	return processedRse;
+}
+
+SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	const auto statement = dsqlScratch->getDsqlStatement();
+
+	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) SelectNode(dsqlScratch->getPool());
+	node->optimizeForFirstRows = optimizeForFirstRows;
+	node->forUpdate = forUpdate;
+	node->withLock = withLock;
+	node->skipLocked = skipLocked;
+	node->rse = dsqlProcess(dsqlScratch);
+
+	// Set up parameter for things in the select list.
+	for (auto item : node->rse->dsqlSelectList->items)
+	{
+		const auto parameter = MAKE_parameter(statement->getReceiveMsg(), true, true, 0, item);
+		parameter->par_node = item;
+		DsqlDescMaker::fromNode(dsqlScratch, &parameter->par_desc, item);
+	}
+
+	// Set up parameter to handle EOF.
+
+	const auto parameterEof = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, nullptr);
+	statement->setEof(parameterEof);
+	parameterEof->par_desc.dsc_dtype = dtype_short;
+	parameterEof->par_desc.dsc_scale = 0;
+	parameterEof->par_desc.dsc_length = sizeof(SSHORT);
+
+	// Save DBKEYs for possible update later.
+
+	if (forUpdate && !node->rse->dsqlDistinct)
+	{
+		for (const auto item : node->rse->dsqlStreams->items)
+		{
+			//// TODO: LocalTableSourceNode
+			if (auto relNode = nodeAs<RelationSourceNode>(item))
+			{
+				dsql_ctx* context = relNode->dsqlContext;
+
+				if (const auto* const relation = context->ctx_relation)
+				{
+					// Set up dbkey.
+					auto parameter = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, nullptr);
+
+					parameter->par_dbkey_relname = relation->rel_name;
+					parameter->par_context = context;
+
+					parameter->par_desc.dsc_dtype = dtype_text;
+					parameter->par_desc.dsc_ttype() = ttype_binary;
+					parameter->par_desc.dsc_length = relation->rel_dbkey_length;
+
+					// Set up record version.
+					parameter = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, nullptr);
+					parameter->par_rec_version_relname = relation->rel_name;
+					parameter->par_context = context;
+
+					parameter->par_desc.dsc_dtype = dtype_text;
+					parameter->par_desc.dsc_ttype() = ttype_binary;
+					parameter->par_desc.dsc_length = sizeof(SINT64);
+				}
+			}
+		}
 	}
 
 	return node;
@@ -8236,63 +8302,7 @@ string SelectNode::internalPrint(NodePrinter& printer) const
 // Generate BLR for a SELECT statement.
 void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	fb_assert(rse);
-
 	const auto statement = dsqlScratch->getDsqlStatement();
-
-	// Set up parameter for things in the select list.
-	for (auto item : rse->dsqlSelectList->items)
-	{
-		const auto parameter = MAKE_parameter(statement->getReceiveMsg(), true, true, 0, item);
-		parameter->par_node = item;
-		DsqlDescMaker::fromNode(dsqlScratch, &parameter->par_desc, item);
-	}
-
-	// Set up parameter to handle EOF.
-
-	const auto parameterEof = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, nullptr);
-	statement->setEof(parameterEof);
-	parameterEof->par_desc.dsc_dtype = dtype_short;
-	parameterEof->par_desc.dsc_scale = 0;
-	parameterEof->par_desc.dsc_length = sizeof(SSHORT);
-
-	// Save DBKEYs for possible update later.
-
-	NonPooledMap<dsql_par*, dsql_ctx*> paramContexts(*getDefaultMemoryPool());
-
-	if (forUpdate && !rse->dsqlDistinct)
-	{
-		for (const auto item : rse->dsqlStreams->items)
-		{
-			//// TODO: LocalTableSourceNode
-			if (auto relNode = nodeAs<RelationSourceNode>(item))
-			{
-				dsql_ctx* context = relNode->dsqlContext;
-
-				if (const auto* const relation = context->ctx_relation)
-				{
-					// Set up dbkey.
-					auto parameter = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, nullptr);
-
-					parameter->par_dbkey_relname = relation->rel_name;
-					paramContexts.put(parameter, context);
-
-					parameter->par_desc.dsc_dtype = dtype_text;
-					parameter->par_desc.dsc_ttype() = ttype_binary;
-					parameter->par_desc.dsc_length = relation->rel_dbkey_length;
-
-					// Set up record version.
-					parameter = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, nullptr);
-					parameter->par_rec_version_relname = relation->rel_name;
-					paramContexts.put(parameter, context);
-
-					parameter->par_desc.dsc_dtype = dtype_text;
-					parameter->par_desc.dsc_ttype() = ttype_binary;
-					parameter->par_desc.dsc_length = sizeof(SINT64);
-				}
-			}
-		}
-	}
 
 	// Generate definitions for the messages.
 
@@ -8348,21 +8358,19 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			GEN_parameter(dsqlScratch, parameter);
 		}
 
-		dsql_ctx* context;
-
-		if (parameter->par_dbkey_relname.hasData() && paramContexts.get(parameter, context))
+		if (parameter->par_dbkey_relname.hasData() && parameter->par_context)
 		{
 			dsqlScratch->appendUChar(blr_assignment);
 			dsqlScratch->appendUChar(blr_dbkey);
-			GEN_stuff_context(dsqlScratch, context);
+			GEN_stuff_context(dsqlScratch, parameter->par_context);
 			GEN_parameter(dsqlScratch, parameter);
 		}
 
-		if (parameter->par_rec_version_relname.hasData() && paramContexts.get(parameter, context))
+		if (parameter->par_rec_version_relname.hasData() && parameter->par_context)
 		{
 			dsqlScratch->appendUChar(blr_assignment);
 			dsqlScratch->appendUChar(blr_record_version);
-			GEN_stuff_context(dsqlScratch, context);
+			GEN_stuff_context(dsqlScratch, parameter->par_context);
 			GEN_parameter(dsqlScratch, parameter);
 		}
 	}

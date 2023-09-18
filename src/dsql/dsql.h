@@ -554,6 +554,7 @@ public:
 	dsql_msg* par_message = nullptr;	// Parent message
 	dsql_par* par_null = nullptr;		// Null parameter, if used
 	ValueExprNode* par_node = nullptr;	// Associated value node, if any
+	dsql_ctx* par_context = nullptr;	// Context for SELECT FOR UPDATE
 	MetaName par_dbkey_relname;			// Context of internally requested dbkey
 	MetaName par_rec_version_relname;	// Context of internally requested rec. version
 	MetaName par_name;					// Parameter name, if any

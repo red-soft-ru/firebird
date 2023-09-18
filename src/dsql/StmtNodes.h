@@ -1326,6 +1326,8 @@ public:
 	}
 
 public:
+	RseNode* dsqlProcess(DsqlCompilerScratch* dsqlScratch);
+
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	SelectNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
