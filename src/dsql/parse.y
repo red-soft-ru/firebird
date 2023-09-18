@@ -5801,11 +5801,11 @@ select
 	: select_expr for_update_clause lock_clause optimize_clause
 		{
 			SelectNode* node = newNode<SelectNode>();
-			node->dsqlExpr = $1;
-			node->dsqlForUpdate = $2;
-			node->dsqlWithLock = $3.first;
-			node->dsqlSkipLocked = $3.second;
-			node->dsqlOptimizeForFirstRows = $4;
+			node->selectExpr = $1;
+			node->forUpdate = $2;
+			node->withLock = $3.first;
+			node->skipLocked = $3.second;
+			node->optimizeForFirstRows = $4;
 			$$ = node;
 		}
 	;

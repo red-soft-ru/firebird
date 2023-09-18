@@ -1236,7 +1236,7 @@ DeclareCursorNode* DeclareCursorNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	SelectExprNode* dt = FB_NEW_POOL(dsqlScratch->getPool()) SelectExprNode(dsqlScratch->getPool());
 	dt->dsqlFlags = RecordSourceNode::DFLAG_DERIVED | RecordSourceNode::DFLAG_CURSOR;
-	dt->querySpec = dsqlSelect->dsqlExpr;
+	dt->querySpec = dsqlSelect->selectExpr;
 	dt->alias = dsqlName.c_str();
 
 	rse = PASS1_derived_table(dsqlScratch, dt, NULL, dsqlSelect);
@@ -4933,7 +4933,7 @@ ForNode* ForNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		SelectExprNode* dt = FB_NEW_POOL(dsqlScratch->getPool()) SelectExprNode(dsqlScratch->getPool());
 		dt->dsqlFlags = RecordSourceNode::DFLAG_DERIVED | RecordSourceNode::DFLAG_CURSOR;
-		dt->querySpec = dsqlSelect->dsqlExpr;
+		dt->querySpec = dsqlSelect->selectExpr;
 		dt->alias = dsqlCursor->dsqlName.c_str();
 
 		node->rse = PASS1_derived_table(dsqlScratch, dt, NULL, dsqlSelect);
@@ -4943,7 +4943,7 @@ ForNode* ForNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->cursors.push(dsqlCursor);
 	}
 	else
-		node->rse = dsqlSelect->dsqlPass(dsqlScratch)->dsqlRse;
+		node->rse = dsqlSelect->dsqlPass(dsqlScratch)->rse;
 
 	node->dsqlInto = dsqlPassArray(dsqlScratch, dsqlInto);
 
@@ -5573,10 +5573,10 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		selectExpr->dsqlFlags |= RecordSourceNode::DFLAG_SINGLETON;
 
 	const auto dsqlSelect = FB_NEW_POOL(pool) SelectNode(pool);
-	dsqlSelect->dsqlExpr = selectExpr;
+	dsqlSelect->selectExpr = selectExpr;
 
 	const auto mergeNode = FB_NEW_POOL(pool) MergeNode(pool);
-	mergeNode->rse = dsqlSelect->dsqlPass(dsqlScratch)->dsqlRse;
+	mergeNode->rse = dsqlSelect->dsqlPass(dsqlScratch)->rse;
 
 	// Get the already processed relations.
 	const auto processedRse = nodeAs<RseNode>(mergeNode->rse->dsqlStreams->items[0]);
@@ -8189,35 +8189,17 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 //--------------------
 
 
-static RegisterNode<SelectNode> regSelectNode({blr_select});
-
-DmlNode* SelectNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
-{
-	SelectNode* node = FB_NEW_POOL(pool) SelectNode(pool);
-
-	while (csb->csb_blr_reader.peekByte() != blr_end)
-	{
-		if (csb->csb_blr_reader.peekByte() != blr_receive)
-			PAR_syntax_error(csb, "blr_receive");
-		node->statements.add(PAR_parse_stmt(tdbb, csb));
-	}
-
-	csb->csb_blr_reader.getByte();	// skip blr_end
-
-	return node;
-}
-
 SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	SelectNode* node = FB_NEW_POOL(dsqlScratch->getPool()) SelectNode(dsqlScratch->getPool());
-	node->dsqlForUpdate = dsqlForUpdate;
-	node->dsqlOptimizeForFirstRows = dsqlOptimizeForFirstRows;
+	node->forUpdate = forUpdate;
+	node->optimizeForFirstRows = optimizeForFirstRows;
 
 	const DsqlContextStack::iterator base(*dsqlScratch->context);
-	node->dsqlRse = PASS1_rse(dsqlScratch, dsqlExpr, this);
+	node->rse = PASS1_rse(dsqlScratch, selectExpr, this);
 	dsqlScratch->context->clear(base);
 
-	if (dsqlForUpdate)
+	if (forUpdate)
 	{
 		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_SELECT_UPD);
 		dsqlScratch->getDsqlStatement()->addFlags(DsqlStatement::FLAG_NO_BATCH);
@@ -8228,9 +8210,7 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		// stored procedure occurs in the select list. In these cases all of stored procedure is
 		// executed under savepoint for open cursor.
 
-		RseNode* rseNode = nodeAs<RseNode>(node->dsqlRse);
-
-		if (rseNode->dsqlOrder || rseNode->dsqlDistinct)
+		if (node->rse->dsqlOrder || node->rse->dsqlDistinct)
 		{
 			dsqlScratch->getDsqlStatement()->setFlags(
 				dsqlScratch->getDsqlStatement()->getFlags() & ~DsqlStatement::FLAG_NO_BATCH);
@@ -8244,11 +8224,12 @@ string SelectNode::internalPrint(NodePrinter& printer) const
 {
 	StmtNode::internalPrint(printer);
 
-	NODE_PRINT(printer, dsqlExpr);
-	NODE_PRINT(printer, dsqlForUpdate);
-	NODE_PRINT(printer, dsqlWithLock);
-	NODE_PRINT(printer, dsqlRse);
-	NODE_PRINT(printer, statements);
+	NODE_PRINT(printer, selectExpr);
+	NODE_PRINT(printer, optimizeForFirstRows);
+	NODE_PRINT(printer, forUpdate);
+	NODE_PRINT(printer, withLock);
+	NODE_PRINT(printer, skipLocked);
+	NODE_PRINT(printer, rse);
 
 	return "SelectNode";
 }
@@ -8256,10 +8237,9 @@ string SelectNode::internalPrint(NodePrinter& printer) const
 // Generate BLR for a SELECT statement.
 void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	RseNode* const rse = nodeAs<RseNode>(dsqlRse);
 	fb_assert(rse);
 
-	DsqlStatement* const statement = dsqlScratch->getDsqlStatement();
+	const auto statement = dsqlScratch->getDsqlStatement();
 
 	// Set up parameter for things in the select list.
 	ValueListNode* list = rse->dsqlSelectList;
@@ -8284,7 +8264,7 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	GenericMap<NonPooled<dsql_par*, dsql_ctx*> > paramContexts(*getDefaultMemoryPool());
 	dsql_ctx* context;
 
-	if (dsqlForUpdate && !rse->dsqlDistinct)
+	if (forUpdate && !rse->dsqlDistinct)
 	{
 		RecSourceListNode* streamList = rse->dsqlStreams;
 
@@ -8345,7 +8325,7 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	dsqlScratch->appendUChar(blr_for);
 	dsqlScratch->appendUChar(blr_stall);
-	GEN_rse(dsqlScratch, dsqlRse);
+	GEN_rse(dsqlScratch, rse);
 
 	dsqlScratch->appendUChar(blr_send);
 	dsqlScratch->appendUChar(message->msg_number);
@@ -8401,26 +8381,57 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	GEN_parameter(dsqlScratch, statement->getEof());
 }
 
-SelectNode* SelectNode::pass1(thread_db* tdbb, CompilerScratch* csb)
+
+//--------------------
+
+
+static RegisterNode<SelectMessageNode> regSelectMessageNode({blr_select});
+
+DmlNode* SelectMessageNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
 {
-	for (NestConst<StmtNode>* i = statements.begin(); i != statements.end(); ++i)
-		doPass1(tdbb, csb, i->getAddress());
+	const auto node = FB_NEW_POOL(pool) SelectMessageNode(pool);
+
+	while (csb->csb_blr_reader.peekByte() != blr_end)
+	{
+		if (csb->csb_blr_reader.peekByte() != blr_receive)
+			PAR_syntax_error(csb, "blr_receive");
+		node->statements.add(PAR_parse_stmt(tdbb, csb));
+	}
+
+	csb->csb_blr_reader.getByte();	// skip blr_end
+
+	return node;
+}
+
+string SelectMessageNode::internalPrint(NodePrinter& printer) const
+{
+	StmtNode::internalPrint(printer);
+
+	NODE_PRINT(printer, statements);
+
+	return "SelectMessageNode";
+}
+
+SelectMessageNode* SelectMessageNode::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	for (auto statement : statements)
+		doPass1(tdbb, csb, statement.getAddress());
 	return this;
 }
 
-SelectNode* SelectNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+SelectMessageNode* SelectMessageNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
-	for (NestConst<StmtNode>* i = statements.begin(); i != statements.end(); ++i)
-		doPass2(tdbb, csb, i->getAddress(), this);
+	for (auto statement : statements)
+		doPass2(tdbb, csb, statement.getAddress(), this);
 	return this;
 }
 
-// Execute a SELECT statement. This is more than a little obscure.
+// Execute a blr_select statement. This is more than a little obscure.
 // We first set up the SELECT statement as the "message" and stall on receive (waiting for user send).
 // EXE_send will then loop thru the sub-statements of select looking for the appropriate RECEIVE
 // statement. When (or if) it finds it, it will set it up the next statement to be executed.
 // The RECEIVE, then, will be entered with the operation "req_proceed".
-const StmtNode* SelectNode::execute(thread_db* /*tdbb*/, Request* request, ExeState* /*exeState*/) const
+const StmtNode* SelectMessageNode::execute(thread_db* /*tdbb*/, Request* request, ExeState* /*exeState*/) const
 {
 	switch (request->req_operation)
 	{

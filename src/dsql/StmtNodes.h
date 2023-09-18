@@ -1318,11 +1318,34 @@ public:
 };
 
 
-class SelectNode final : public TypedNode<StmtNode, StmtNode::TYPE_SELECT>
+class SelectNode final : public TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_SELECT>
 {
 public:
 	explicit SelectNode(MemoryPool& pool)
-		: TypedNode<StmtNode, StmtNode::TYPE_SELECT>(pool),
+		: TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_SELECT>(pool)
+	{
+	}
+
+public:
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	SelectNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+
+public:
+	NestConst<SelectExprNode> selectExpr;
+	NestConst<RseNode> rse;
+	TriState optimizeForFirstRows;
+	bool forUpdate = false;
+	bool withLock = false;
+	bool skipLocked = false;
+};
+
+
+class SelectMessageNode final : public TypedNode<StmtNode, StmtNode::TYPE_SELECT_MESSAGE>
+{
+public:
+	explicit SelectMessageNode(MemoryPool& pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_SELECT_MESSAGE>(pool),
 		  statements(pool)
 	{
 	}
@@ -1330,21 +1353,25 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual SelectNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual SelectNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual SelectNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+
+	SelectMessageNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		fb_assert(false);
+		return nullptr;
+	}
+
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override
+	{
+		fb_assert(false);
+	}
+
+	SelectMessageNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	SelectMessageNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
-	NestConst<SelectExprNode> dsqlExpr;
-	NestConst<RseNode> dsqlRse;
 	Firebird::Array<NestConst<StmtNode>> statements;
-	bool dsqlForUpdate = false;
-	bool dsqlWithLock = false;
-	bool dsqlSkipLocked = false;
-	TriState dsqlOptimizeForFirstRows;
 };
 
 

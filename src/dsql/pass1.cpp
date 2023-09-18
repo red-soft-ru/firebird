@@ -585,15 +585,15 @@ RseNode* PASS1_rse(DsqlCompilerScratch* dsqlScratch,
 	DEV_BLKCHK(dsqlScratch, dsql_type_req);
 	DEV_BLKCHK(input, dsql_type_nod);
 
-	const bool updateLock = select ? select->dsqlWithLock : false;
-	const bool skipLocked = select ? select->dsqlSkipLocked : false;
+	const bool updateLock = select ? select->withLock : false;
+	const bool skipLocked = select ? select->skipLocked : false;
 
 	dsqlScratch->scopeLevel++;
 	RseNode* node = pass1_rse(dsqlScratch, input, NULL, NULL, updateLock, skipLocked, 0);
 	dsqlScratch->scopeLevel--;
 
 	if (select)
-		node->firstRows = select->dsqlOptimizeForFirstRows;
+		node->firstRows = select->optimizeForFirstRows;
 
 	return node;
 }
