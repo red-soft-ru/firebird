@@ -83,47 +83,63 @@ public:
 	typedef const_pointer const_iterator;
 
 	explicit Array(MemoryPool& p)
-		: Storage(p), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Storage(p),
+		  count(0),
+		  capacity(this->getStorageSize()),
+		  data(this->getStorage())
 	{
 		// Ensure we can carry byte copy operations.
 		fb_assert(capacity < FB_MAX_SIZEOF / sizeof(T));
 	}
 
 	Array(MemoryPool& p, const size_type InitialCapacity)
-		: Storage(p), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Array(p)
 	{
 		ensureCapacity(InitialCapacity);
 	}
 
 	Array(MemoryPool& p, const Array<T, Storage>& source)
-		: Storage(p), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Array(p)
 	{
 		copyFrom(source);
 	}
 
-	Array() : count(0),
-		capacity(this->getStorageSize()), data(this->getStorage()) { }
+	Array()
+		: count(0),
+		  capacity(this->getStorageSize()),
+		  data(this->getStorage())
+	{
+	}
 
 	explicit Array(const size_type InitialCapacity)
-		: Storage(), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Storage(),
+		  count(0),
+		  capacity(this->getStorageSize()),
+		  data(this->getStorage())
 	{
 		ensureCapacity(InitialCapacity);
 	}
 
 	Array(const T* items, const size_type itemsCount)
-		: Storage(), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Storage(),
+		  count(0),
+		  capacity(this->getStorageSize()),
+		  data(this->getStorage())
 	{
 		add(items, itemsCount);
 	}
 
 	Array(const Array<T, Storage>& source)
-		: Storage(), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Storage(),
+		  count(0),
+		  capacity(this->getStorageSize()),
+		  data(this->getStorage())
 	{
 		copyFrom(source);
 	}
 
 	Array(MemoryPool& p, std::initializer_list<T> items)
-		: Storage(p), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Array(p)
 	{
 		for (auto& item : items)
 			add(item);
