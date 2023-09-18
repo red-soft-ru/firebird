@@ -116,7 +116,7 @@ static int partners_ast_relation(void*);
 static int rescan_ast_relation(void*);
 static ULONG get_rel_flags_from_FLAGS(USHORT);
 static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, TrigVector**, const TEXT*, FB_UINT64, bool,
-	USHORT, const MetaName&, const string&, const bid*, Nullable<bool> ssDefiner);
+	USHORT, const MetaName&, const string&, const bid*, TriState ssDefiner);
 static bool get_type(thread_db*, USHORT*, const UCHAR*, const TEXT*);
 static void lookup_view_contexts(thread_db*, jrd_rel*);
 static void make_relation_scope_name(const TEXT*, const USHORT, string& str);
@@ -125,7 +125,7 @@ static BoolExprNode* parse_field_validation_blr(thread_db* tdbb, bid* blob_id, c
 static bool resolve_charset_and_collation(thread_db*, USHORT*, const UCHAR*, const UCHAR*);
 static void save_trigger_data(thread_db*, TrigVector**, jrd_rel*, Statement*, blb*, blb*,
 	const TEXT*, FB_UINT64, bool, USHORT, const MetaName&, const string&,
-	const bid*, Nullable<bool> ssDefiner);
+	const bid*, TriState ssDefiner);
 static void scan_partners(thread_db*, jrd_rel*);
 static bool verify_TRG_ignore_perm(thread_db*, const MetaName&);
 
@@ -2025,7 +2025,7 @@ void MET_load_trigger(thread_db* tdbb,
 		if (!TRG.RDB$ENTRYPOINT.NULL)	// ODS_12_0
 			entryPoint = TRG.RDB$ENTRYPOINT;
 
-		Nullable<bool> ssDefiner;
+		TriState ssDefiner;
 
 		// If SQL SECURITY for relation was not specified it will re-use DB default so we should not care about it
 		if (!TRG.RDB$SQL_SECURITY.NULL)
@@ -3351,7 +3351,7 @@ void MET_parse_sys_trigger(thread_db* tdbb, jrd_rel* relation)
 				statement->flags |= Statement::FLAG_IGNORE_PERM;
 
 			save_trigger_data(tdbb, ptr, relation, statement, NULL, NULL, NULL, type, true, 0, "",
-				"", NULL, Nullable<bool>());
+				"", NULL, TriState());
 		}
 	}
 	END_FOR
@@ -3506,7 +3506,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 			}
 
 			procedure->setId(P.RDB$PROCEDURE_ID);
-			Nullable<bool> ssDefiner;
+			TriState ssDefiner;
 
 			if (!P.RDB$SECURITY_CLASS.NULL)
 				procedure->setSecurityName(P.RDB$SECURITY_CLASS);
@@ -3527,7 +3527,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 				END_FOR
 			}
 
-			if (!ssDefiner.specified)
+			if (ssDefiner.isUnknown())
 			{
 				if (!P.RDB$SQL_SECURITY.NULL)
 					ssDefiner = (bool) P.RDB$SQL_SECURITY;
@@ -3537,7 +3537,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 
 			procedure->owner = P.RDB$OWNER_NAME;
 
-			if (ssDefiner.orElse(false))
+			if (ssDefiner.asBool())
 				procedure->invoker = attachment->getUserId(procedure->owner);
 
 			procedure->setImplemented(true);
@@ -4714,7 +4714,7 @@ static void get_trigger(thread_db* tdbb, jrd_rel* relation,
 						const TEXT* name, FB_UINT64 type,
 						bool sys_trigger, USHORT flags,
 						const MetaName& engine, const string& entryPoint,
-						const bid* body, Nullable<bool> ssDefiner)
+						const bid* body, TriState ssDefiner)
 {
 /**************************************
  *
@@ -5096,7 +5096,7 @@ static void save_trigger_data(thread_db* tdbb, TrigVector** ptr, jrd_rel* relati
 							  const TEXT* name, FB_UINT64 type,
 							  bool sys_trigger, USHORT flags,
 							  const MetaName& engine, const string& entryPoint,
-							  const bid* body, Nullable<bool> ssDefiner)
+							  const bid* body, TriState ssDefiner)
 {
 /**************************************
  *
@@ -5644,7 +5644,7 @@ int MET_get_linger(thread_db* tdbb)
 	return rc;
 }
 
-Nullable<bool> MET_get_ss_definer(Jrd::thread_db* tdbb)
+TriState MET_get_ss_definer(Jrd::thread_db* tdbb)
 {
 /**************************************
  *
@@ -5658,7 +5658,7 @@ Nullable<bool> MET_get_ss_definer(Jrd::thread_db* tdbb)
  **************************************/
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
-	Nullable<bool> r;
+	TriState r;
 
 	AutoCacheRequest request(tdbb, irq_dbb_ss_definer, IRQ_REQUESTS);
 

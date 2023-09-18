@@ -29,6 +29,7 @@
 #include "../jrd/pag.h"
 #include "../jrd/val.h"
 #include "../jrd/Attachment.h"
+#include "../common/classes/TriState.h"
 
 namespace Jrd
 {
@@ -263,7 +264,7 @@ public:
 	TrigVector*	rel_post_store;			// Post-operation store trigger
 	prim		rel_primary_dpnds;		// foreign dependencies on this relation's primary key
 	frgn		rel_foreign_refs;		// foreign references to other relations' primary keys
-	Nullable<bool>	rel_ss_definer;
+	TriState	rel_ss_definer;
 
 	TriState	rel_repl_state;			// replication state
 

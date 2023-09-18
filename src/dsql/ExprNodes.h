@@ -28,6 +28,7 @@
 #include "../dsql/Nodes.h"
 #include "../dsql/NodePrinter.h"
 #include "../common/classes/init.h"
+#include "../common/classes/TriState.h"
 #include "../dsql/pass1_proto.h"
 
 class SysFunction;

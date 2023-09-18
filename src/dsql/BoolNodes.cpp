@@ -1382,7 +1382,7 @@ bool InListBoolNode::execute(thread_db* tdbb, Request* request) const
 			const auto res = lookup->find(tdbb, request, arg, argDesc);
 
 			if (res.isAssigned())
-				return res.value;
+				return res.asBool();
 
 			fb_assert(list->items.hasData());
 			request->req_flags |= req_null;

@@ -6830,7 +6830,7 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	}
 
 	AutoSetRestore<jrd_rel*> autoRelationStream(&csb->csb_parent_relation,
-		relation->rel_ss_definer.value ? relation : NULL);
+		relation->rel_ss_definer.asBool() ? relation : NULL);
 
 	if (relation->rel_view_rse)
 	{
@@ -13047,7 +13047,7 @@ ValueExprNode* UdfCallNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 				if (!ssRelationId && csb->csb_parent_relation)
 				{
-					fb_assert(csb->csb_parent_relation->rel_ss_definer.value);
+					fb_assert(csb->csb_parent_relation->rel_ss_definer.asBool());
 					ssRelationId = csb->csb_parent_relation->rel_id;
 				}
 

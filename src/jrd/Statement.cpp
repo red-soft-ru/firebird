@@ -779,7 +779,7 @@ void Statement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 				if (view && (view->rel_flags & REL_sql_relation))
 					userName = view->rel_owner_name;
 			}
-			else if (t.ssDefiner.specified && t.ssDefiner.value)
+			else if (t.ssDefiner.asBool())
 				userName = t.owner;
 
 			Attachment* attachment = tdbb->getAttachment();
@@ -808,7 +808,7 @@ inline void Statement::triggersExternalAccess(thread_db* tdbb, ExternalAccessLis
 
 		if (t.statement)
 		{
-			const MetaName& userName = (t.ssDefiner.specified && t.ssDefiner.value) ? t.owner : user;
+			const MetaName& userName = t.ssDefiner.asBool() ? t.owner : user;
 			t.statement->buildExternalAccess(tdbb, list, userName);
 		}
 	}
@@ -874,7 +874,7 @@ void Statement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list, c
 					continue; // should never happen, silence the compiler
 			}
 
-			item->user = relation->rel_ss_definer.orElse(false) ? relation->rel_owner_name : user;
+			item->user = relation->rel_ss_definer.asBool() ? relation->rel_owner_name : user;
 			if (list.find(*item, i))
 				continue;
 			list.insert(i, *item);

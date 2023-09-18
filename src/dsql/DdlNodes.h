@@ -34,7 +34,7 @@
 #include "../dsql/NodePrinter.h"
 #include "../common/classes/array.h"
 #include "../common/classes/ByteChunk.h"
-#include "../common/classes/Nullable.h"
+#include "../common/classes/TriState.h"
 #include "../jrd/Savepoint.h"
 #include "../dsql/errd_proto.h"
 
@@ -480,7 +480,7 @@ public:
 	bool privateScope;
 	bool preserveDefaults;
 	SLONG udfReturnPos;
-	Nullable<bool> ssDefiner;
+	TriState ssDefiner;
 };
 
 
@@ -614,7 +614,7 @@ public:
 	MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
-	Nullable<bool> ssDefiner;
+	TriState ssDefiner;
 };
 
 
@@ -698,7 +698,7 @@ public:
 	MetaName name;
 	MetaName relationName;
 	std::optional<FB_UINT64> type;
-	Nullable<bool> active;
+	TriState active;
 	std::optional<int> position;
 	NestConst<ExternalClause> external;
 	Firebird::string source;
@@ -988,7 +988,7 @@ public:
 	NestConst<ValueSourceClause> setDefault;
 	MetaName renameTo;
 	Firebird::AutoPtr<dsql_fld> type;
-	Nullable<bool> notNullFlag;	// true = NOT NULL / false = NULL
+	TriState notNullFlag;	// true = NOT NULL / false = NULL
 };
 
 
@@ -1212,7 +1212,7 @@ public:
 		MetaName identitySequence;
 		std::optional<IdentityType> identityType;
 		std::optional<USHORT> collationId;
-		Nullable<bool> notNullFlag;	// true = NOT NULL / false = NULL
+		TriState notNullFlag;	// true = NOT NULL / false = NULL
 		std::optional<USHORT> position;
 		Firebird::string defaultSource;
 		Firebird::ByteChunk defaultValue;
@@ -1551,8 +1551,8 @@ public:
 	NestConst<RelationSourceNode> dsqlNode;
 	MetaName name;
 	Firebird::Array<NestConst<Clause> > clauses;
-	Nullable<bool> ssDefiner;
-	Nullable<bool> replicationState;
+	TriState ssDefiner;
+	TriState replicationState;
 };
 
 
@@ -1724,9 +1724,9 @@ public:
 
 		MetaName relation;
 		Firebird::ObjectsArray<MetaName> columns;
-		Nullable<bool> unique;
-		Nullable<bool> descending;
-		Nullable<bool> inactive;
+		TriState unique;
+		TriState descending;
+		TriState inactive;
 		SSHORT type;
 		bid expressionBlr;
 		bid expressionSource;
@@ -2217,8 +2217,8 @@ public:
 	Firebird::string* lastName;
 	MetaName* plugin;
 	Firebird::string* comment;
-	Nullable<bool> adminRole;
-	Nullable<bool> active;
+	TriState adminRole;
+	TriState active;
 	Mode mode;
 
 	void addProperty(MetaName* pr, Firebird::string* val = NULL)
@@ -2459,7 +2459,7 @@ public:
 	Firebird::Array<NestConst<DbFileClause> > files;
 	MetaName cryptPlugin;
 	MetaName keyName;
-	Nullable<bool> ssDefiner;
+	TriState ssDefiner;
 	Firebird::Array<MetaName> pubTables;
 };
 

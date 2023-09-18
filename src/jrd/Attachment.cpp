@@ -1138,7 +1138,7 @@ void Attachment::invalidateReplSet(thread_db* tdbb, bool broadcast)
 		for (auto relation : *att_relations)
 		{
 			if (relation)
-				relation->rel_repl_state.invalidate();
+				relation->rel_repl_state.reset();
 		}
 	}
 

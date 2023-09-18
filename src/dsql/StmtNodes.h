@@ -32,6 +32,7 @@
 #include "../dsql/DdlNodes.h"
 #include "../dsql/NodePrinter.h"
 #include "../common/DecFloat.h"
+#include "../common/classes/TriState.h"
 
 namespace Jrd {
 
@@ -1625,12 +1626,12 @@ public:
 	std::optional<CommitNumber> atSnapshotNumber;
 	std::optional<unsigned> isoLevel;
 	std::optional<USHORT> lockTimeout;
-	Nullable<bool> readOnly;
-	Nullable<bool> wait;
-	Nullable<bool> noAutoUndo;
-	Nullable<bool> ignoreLimbo;
-	Nullable<bool> restartRequests;
-	Nullable<bool> autoCommit;
+	TriState readOnly;
+	TriState wait;
+	TriState noAutoUndo;
+	TriState ignoreLimbo;
+	TriState restartRequests;
+	TriState autoCommit;
 };
 
 

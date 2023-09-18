@@ -9018,11 +9018,11 @@ SetTransactionNode* SetTransactionNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	// Stuff some version info.
 	dsqlScratch->appendUChar(isc_tpb_version1);
 
-	if (readOnly.specified)
-		dsqlScratch->appendUChar(readOnly.value ? isc_tpb_read : isc_tpb_write);
+	if (readOnly.isAssigned())
+		dsqlScratch->appendUChar(readOnly.asBool() ? isc_tpb_read : isc_tpb_write);
 
-	if (wait.specified)
-		dsqlScratch->appendUChar(wait.value ? isc_tpb_wait : isc_tpb_nowait);
+	if (wait.isAssigned())
+		dsqlScratch->appendUChar(wait.asBool() ? isc_tpb_wait : isc_tpb_nowait);
 
 	if (isoLevel.has_value())
 	{
@@ -9046,16 +9046,16 @@ SetTransactionNode* SetTransactionNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 		}
 	}
 
-	if (noAutoUndo.specified)
+	if (noAutoUndo.isAssigned())
 		dsqlScratch->appendUChar(isc_tpb_no_auto_undo);
 
-	if (ignoreLimbo.specified)
+	if (ignoreLimbo.isAssigned())
 		dsqlScratch->appendUChar(isc_tpb_ignore_limbo);
 
-	if (restartRequests.specified)
+	if (restartRequests.isAssigned())
 		dsqlScratch->appendUChar(isc_tpb_restart_requests);
 
-	if (autoCommit.specified)
+	if (autoCommit.isAssigned())
 		dsqlScratch->appendUChar(isc_tpb_autocommit);
 
 	if (lockTimeout.has_value())

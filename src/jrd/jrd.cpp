@@ -941,7 +941,7 @@ void Trigger::compile(thread_db* tdbb)
 		}
 
 		statement->triggerName = name;
-		if (ssDefiner.orElse(false))
+		if (ssDefiner.asBool())
 			statement->triggerInvoker = att->getUserId(owner);
 
 		if (sysTrigger)

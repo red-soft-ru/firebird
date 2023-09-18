@@ -733,7 +733,7 @@ using namespace Firebird;
 	{}
 
 	std::optional<int> nullableIntVal;
-	BaseNullable<bool> nullableBoolVal;
+	TriState triState;
 	std::optional<Jrd::TriggerDefinition::SqlSecurity> nullableSqlSecurityVal;
 	std::optional<Jrd::OverrideClause> nullableOverrideClause;
 	struct { bool first; bool second; } boolPair;
@@ -2262,10 +2262,10 @@ sql_security_clause
 	| SQL SECURITY INVOKER		{ $$ = false; }
 	;
 
-%type <nullableBoolVal> sql_security_clause_opt
+%type <triState> sql_security_clause_opt
 sql_security_clause_opt
-	: /* nothing */				{ $$ = Nullable<bool>::empty(); }
-	| sql_security_clause		{ $$ = Nullable<bool>::val($1); }
+	: /* nothing */				{ $$ = TriState(); }
+	| sql_security_clause		{ $$ = $1; }
 	;
 
 %type <boolVal> publication_state
@@ -3902,14 +3902,14 @@ replace_trigger_clause
 		}
 	;
 
-%type <nullableBoolVal> trigger_active
+%type <triState> trigger_active
 trigger_active
 	: ACTIVE
-		{ $$ = Nullable<bool>::val(true); }
+		{ $$ = TriState(true); }
 	| INACTIVE
-		{ $$ = Nullable<bool>::val(false); }
+		{ $$ = TriState(false); }
 	| // nothing
-		{ $$ = Nullable<bool>::empty(); }
+		{ $$ = TriState(); }
 	;
 
 %type <uint64Val> trigger_type(<createAlterTriggerNode>)
@@ -4236,7 +4236,7 @@ alter_op($relationNode)
 		}
 	| DROP SQL SECURITY
 		{
-			setClause($relationNode->ssDefiner, "SQL SECURITY", Nullable<bool>::empty());
+			setClause($relationNode->ssDefiner, "SQL SECURITY", TriState());
 			RelationNode::Clause* clause =
 				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_SQL_SECURITY);
 			$relationNode->clauses.add(clause);
@@ -5836,12 +5836,12 @@ skip_locked_clause_opt
 	| SKIP LOCKED			{ $$ = true; }
 	;
 
-%type <nullableBoolVal>	optimize_clause
+%type <triState> optimize_clause
 optimize_clause
 	: OPTIMIZE optimize_mode
-		{ $$ = Nullable<bool>::val($2); }
+		{ $$ = TriState($2); }
 	| // nothing
-		{ $$ = Nullable<bool>::empty(); }
+		{ $$ = TriState(); }
 	;
 
 %type <boolVal> optimize_mode

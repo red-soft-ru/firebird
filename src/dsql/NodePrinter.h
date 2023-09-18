@@ -25,6 +25,7 @@
 
 #include <optional>
 #include "../dsql/Nodes.h"
+#include "../common/classes/TriState.h"
 
 #define NODE_PRINT(var, property)	var.print(STRINGIZE(property), property)
 #define NODE_PRINT_ENUM(var, property)	var.print(STRINGIZE(property), (int) property)
@@ -266,11 +267,10 @@ public:
 			print(s, *array);
 	}
 
-	template <typename T>
-	void print(const Firebird::string& s, const BaseNullable<T>& nullable)
+	void print(const Firebird::string& s, const TriState& triState)
 	{
-		if (nullable.specified)
-			print(s, nullable.value);
+		if (triState.isAssigned())
+			print(s, triState.asBool());
 	}
 
 	template <typename T>

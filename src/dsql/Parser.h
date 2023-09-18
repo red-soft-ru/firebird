@@ -33,7 +33,7 @@
 #include "../dsql/PackageNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/RecordSourceNodes.h"
-#include "../common/classes/Nullable.h"
+#include "../common/classes/TriState.h"
 #include "../common/classes/stack.h"
 
 #include "gen/parse.h"
@@ -245,27 +245,10 @@ private:
 	}
 
 	template <typename T>
-	void setClause(BaseNullable<T>& clause, const char* duplicateMsg, const T& value)
-	{
-		checkDuplicateClause(clause, duplicateMsg);
-		clause = value;
-	}
-
-	template <typename T>
 	void setClause(std::optional<T>& clause, const char* duplicateMsg, const T& value)
 	{
 		checkDuplicateClause(clause, duplicateMsg);
 		clause = value;
-	}
-
-	template <typename T>
-	void setClause(BaseNullable<T>& clause, const char* duplicateMsg, const BaseNullable<T>& value)
-	{
-		if (value.specified)
-		{
-			checkDuplicateClause(clause, duplicateMsg);
-			clause = value.value;
-		}
 	}
 
 	template <typename T>
@@ -275,6 +258,21 @@ private:
 		{
 			checkDuplicateClause(clause, duplicateMsg);
 			clause = value.value();
+		}
+	}
+
+	void setClause(TriState& clause, const char* duplicateMsg, bool value)
+	{
+		checkDuplicateClause(clause, duplicateMsg);
+		clause = value;
+	}
+
+	void setClause(TriState& clause, const char* duplicateMsg, const TriState& value)
+	{
+		if (value.isAssigned())
+		{
+			checkDuplicateClause(clause, duplicateMsg);
+			clause = value;
 		}
 	}
 
@@ -324,10 +322,9 @@ private:
 		return clause.hasData();
 	}
 
-	template <typename T>
-	bool isDuplicateClause(const BaseNullable<T>& clause)
+	bool isDuplicateClause(const TriState& clause)
 	{
-		return clause.specified;
+		return clause.isAssigned();
 	}
 
 	template <typename T>

@@ -608,7 +608,7 @@ void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 	if (rse->firstRows.isAssigned())
 	{
 		dsqlScratch->appendUChar(blr_optimize);
-		dsqlScratch->appendUChar(rse->firstRows.value);
+		dsqlScratch->appendUChar(static_cast<UCHAR>(rse->firstRows.asBool()));
 	}
 
 	dsqlScratch->appendUChar(blr_end);

@@ -29,7 +29,6 @@
 #include "../common/PerformanceStopWatch.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/fb_string.h"
-#include "../common/classes/Nullable.h"
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/TimerImpl.h"
 #include "../jrd/recsrc/RecordSource.h"
