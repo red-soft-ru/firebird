@@ -77,7 +77,7 @@ static dsql_par* dsqlFindDbKey(const DsqlDmlStatement*, const RelationSourceNode
 static dsql_par* dsqlFindRecordVersion(const DsqlDmlStatement*, const RelationSourceNode*);
 static void dsqlGenEofAssignment(DsqlCompilerScratch* dsqlScratch, SSHORT value);
 static void dsqlGenReturning(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
-	Nullable<USHORT> localTableNumber);
+	std::optional<USHORT> localTableNumber);
 static void dsqlGenReturningLocalTableCursor(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
 	USHORT localTableNumber);
 static void dsqlGenReturningLocalTableDecl(DsqlCompilerScratch* dsqlScratch, USHORT tableNumber);
@@ -111,7 +111,7 @@ static void postTriggerAccess(CompilerScratch* csb, jrd_rel* ownerRelation,
 static void preModifyEraseTriggers(thread_db* tdbb, TrigVector** trigs,
 	StmtNode::WhichTrigger whichTrig, record_param* rpb, record_param* rec, TriggerAction op);
 static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
-	StreamType stream, CompoundStmtNode* compoundNode, const Nullable<OverrideClause>* insertOverride);
+	StreamType stream, CompoundStmtNode* compoundNode, const std::optional<OverrideClause>* insertOverride);
 static void restartRequest(const Request* request, jrd_tra* transaction);
 static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& validations);
 
@@ -207,7 +207,7 @@ void AssignmentNode::validateTarget(CompilerScratch* csb, const ValueExprNode* t
 
 		// Assignment to cursor fields are always prohibited.
 		// But we cannot detect FOR cursors here. They are treated in dsqlPass.
-		else if (fieldNode->cursorNumber.specified)
+		else if (fieldNode->cursorNumber.has_value())
 			error = true;
 
 		if (error)
@@ -1637,7 +1637,7 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	dsqlFunction->udf_scale = returnType->scale;
 	dsqlFunction->udf_sub_type = returnType->subType;
 	dsqlFunction->udf_length = returnType->length;
-	dsqlFunction->udf_character_set_id = returnType->charSetId.value;
+	dsqlFunction->udf_character_set_id = returnType->charSetId.value_or(CS_NONE);
 
 	if (dsqlDeterministic)
 		dsqlSignature.flags |= Signature::FLAG_DETERMINISTIC;
@@ -2358,7 +2358,7 @@ string EraseNode::internalPrint(NodePrinter& printer) const
 
 void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	Nullable<USHORT> tableNumber;
+	std::optional<USHORT> tableNumber;
 
 	if (dsqlReturning && !dsqlScratch->isPsql())
 	{
@@ -2367,7 +2367,7 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->appendUChar(blr_begin);
 
 			tableNumber = dsqlScratch->localTableNumber++;
-			dsqlGenReturningLocalTableDecl(dsqlScratch, tableNumber.value);
+			dsqlGenReturningLocalTableDecl(dsqlScratch, tableNumber.value());
 		}
 		else
 		{
@@ -2403,7 +2403,7 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 		if (!dsqlScratch->isPsql() && dsqlCursorName.isEmpty())
 		{
-			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, tableNumber.value);
+			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, tableNumber.value());
 
 			dsqlScratch->appendUChar(blr_end);
 		}
@@ -6164,14 +6164,14 @@ string MergeNode::internalPrint(NodePrinter& printer) const
 
 void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	Nullable<USHORT> tableNumber;
+	std::optional<USHORT> tableNumber;
 
 	if (returning && !dsqlScratch->isPsql())
 	{
 		dsqlScratch->appendUChar(blr_begin);
 
 		tableNumber = dsqlScratch->localTableNumber++;
-		dsqlGenReturningLocalTableDecl(dsqlScratch, tableNumber.value);
+		dsqlGenReturningLocalTableDecl(dsqlScratch, tableNumber.value());
 	}
 
 	// Put src info for blr_for.
@@ -6311,10 +6311,10 @@ void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			}
 		}
 
-		dsqlScratch->appendUChar(notMatched->overrideClause.specified ? blr_store3 : (returning ? blr_store2 : blr_store));
+		dsqlScratch->appendUChar(notMatched->overrideClause.has_value() ? blr_store3 : (returning ? blr_store2 : blr_store));
 
-		if (notMatched->overrideClause.specified)
-			dsqlScratch->appendUChar(UCHAR(notMatched->overrideClause.value));
+		if (notMatched->overrideClause.has_value())
+			dsqlScratch->appendUChar(UCHAR(notMatched->overrideClause.value()));
 
 		GEN_expr(dsqlScratch, notMatched->storeRelation);
 
@@ -6332,7 +6332,7 @@ void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 		if (returning)
 			dsqlGenReturning(dsqlScratch, notMatched->processedReturning, tableNumber);
-		else if (notMatched->overrideClause.specified)
+		else if (notMatched->overrideClause.has_value())
 			dsqlScratch->appendUChar(blr_null);
 
 		if (notMatched->condition && isLast)
@@ -6414,7 +6414,7 @@ void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (returning && !dsqlScratch->isPsql())
 	{
-		dsqlGenReturningLocalTableCursor(dsqlScratch, returning, tableNumber.value);
+		dsqlGenReturningLocalTableCursor(dsqlScratch, returning, tableNumber.value());
 
 		dsqlScratch->appendUChar(blr_end);
 	}
@@ -6635,7 +6635,7 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 	if (dsqlReturning && !dsqlScratch->isPsql() && dsqlCursorName.isEmpty())
 	{
 		node->dsqlReturningLocalTableNumber = updateOrInsert ?
-			dsqlReturningLocalTableNumber.value :
+			dsqlReturningLocalTableNumber.value() :
 			dsqlScratch->localTableNumber++;
 	}
 
@@ -6824,7 +6824,7 @@ void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (dsqlReturning && !dsqlScratch->isPsql())
 	{
 		if (dsqlCursorName.isEmpty())
-			dsqlGenReturningLocalTableDecl(dsqlScratch, dsqlReturningLocalTableNumber.value);
+			dsqlGenReturningLocalTableDecl(dsqlScratch, dsqlReturningLocalTableNumber.value());
 		else
 		{
 			dsqlScratch->appendUChar(blr_send);
@@ -6869,7 +6869,7 @@ void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT) &&
 			dsqlCursorName.isEmpty())
 		{
-			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber.value);
+			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber.value());
 		}
 	}
 }
@@ -7600,7 +7600,7 @@ DmlNode* StoreNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 	{
 		node->overrideClause = static_cast<OverrideClause>(csb->csb_blr_reader.getByte());
 
-		switch (node->overrideClause.value)
+		switch (node->overrideClause.value())
 		{
 			case OverrideClause::USER_VALUE:
 			case OverrideClause::SYSTEM_VALUE:
@@ -7851,7 +7851,7 @@ void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (dsqlReturning && !dsqlScratch->isPsql())
 	{
 		if (dsqlRse)
-			dsqlGenReturningLocalTableDecl(dsqlScratch, dsqlReturningLocalTableNumber.value);
+			dsqlGenReturningLocalTableDecl(dsqlScratch, dsqlReturningLocalTableNumber.value());
 		else if (!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT))
 		{
 			dsqlScratch->appendUChar(blr_send);
@@ -7866,10 +7866,10 @@ void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		GEN_expr(dsqlScratch, dsqlRse);
 	}
 
-	dsqlScratch->appendUChar(overrideClause.specified ? blr_store3 : (dsqlReturning ? blr_store2 : blr_store));
+	dsqlScratch->appendUChar(overrideClause.has_value() ? blr_store3 : (dsqlReturning ? blr_store2 : blr_store));
 
-	if (overrideClause.specified)
-		dsqlScratch->appendUChar(UCHAR(overrideClause.value));
+	if (overrideClause.has_value())
+		dsqlScratch->appendUChar(UCHAR(overrideClause.value()));
 
 	GEN_expr(dsqlScratch, target);
 
@@ -7879,15 +7879,15 @@ void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		dsqlGenReturning(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber);
 
-		if (dsqlReturningLocalTableNumber.isAssigned())
+		if (dsqlReturningLocalTableNumber.has_value())
 		{
 			if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT)
 				dsqlScratch->appendUChar(blr_end);	// close blr_if (blr_eql, blr_internal_info)
 
-			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber.value);
+			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber.value());
 		}
 	}
-	else if (overrideClause.specified)
+	else if (overrideClause.has_value())
 		dsqlScratch->appendUChar(blr_null);
 }
 
@@ -9013,8 +9013,7 @@ SetTransactionNode* SetTransactionNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 
 	// Find out isolation level - if specified. This is required for
 	// specifying the correct lock level in reserving clause.
-	const USHORT lockLevel = isoLevel.specified && isoLevel.value == ISO_LEVEL_CONSISTENCY ?
-		isc_tpb_protected : isc_tpb_shared;
+	const USHORT lockLevel = isoLevel == ISO_LEVEL_CONSISTENCY ? isc_tpb_protected : isc_tpb_shared;
 
 	// Stuff some version info.
 	dsqlScratch->appendUChar(isc_tpb_version1);
@@ -9025,23 +9024,23 @@ SetTransactionNode* SetTransactionNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	if (wait.specified)
 		dsqlScratch->appendUChar(wait.value ? isc_tpb_wait : isc_tpb_nowait);
 
-	if (isoLevel.specified)
+	if (isoLevel.has_value())
 	{
-		if (isoLevel.value == ISO_LEVEL_CONCURRENCY)
+		if (isoLevel == ISO_LEVEL_CONCURRENCY)
 			dsqlScratch->appendUChar(isc_tpb_concurrency);
-		else if (isoLevel.value == ISO_LEVEL_CONSISTENCY)
+		else if (isoLevel == ISO_LEVEL_CONSISTENCY)
 			dsqlScratch->appendUChar(isc_tpb_consistency);
 		else
 		{
 			dsqlScratch->appendUChar(isc_tpb_read_committed);
 
-			if (isoLevel.value == ISO_LEVEL_READ_COMMITTED_READ_CONSISTENCY)
+			if (isoLevel == ISO_LEVEL_READ_COMMITTED_READ_CONSISTENCY)
 				dsqlScratch->appendUChar(isc_tpb_read_consistency);
-			else if (isoLevel.value == ISO_LEVEL_READ_COMMITTED_REC_VERSION)
+			else if (isoLevel == ISO_LEVEL_READ_COMMITTED_REC_VERSION)
 				dsqlScratch->appendUChar(isc_tpb_rec_version);
 			else
 			{
-				fb_assert(isoLevel.value == ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION);
+				fb_assert(isoLevel == ISO_LEVEL_READ_COMMITTED_NO_REC_VERSION);
 				dsqlScratch->appendUChar(isc_tpb_no_rec_version);
 			}
 		}
@@ -9059,22 +9058,22 @@ SetTransactionNode* SetTransactionNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	if (autoCommit.specified)
 		dsqlScratch->appendUChar(isc_tpb_autocommit);
 
-	if (lockTimeout.specified)
+	if (lockTimeout.has_value())
 	{
 		dsqlScratch->appendUChar(isc_tpb_lock_timeout);
 		dsqlScratch->appendUChar(2);
-		dsqlScratch->appendUShort(lockTimeout.value);
+		dsqlScratch->appendUShort(lockTimeout.value());
 	}
 
 	for (RestrictionOption** i = reserveList.begin(); i != reserveList.end(); ++i)
 		genTableLock(dsqlScratch, **i, lockLevel);
 
-	if (atSnapshotNumber.specified)
+	if (atSnapshotNumber.has_value())
 	{
 		dsqlScratch->appendUChar(isc_tpb_at_snapshot_number);
 		static_assert(sizeof(CommitNumber) == sizeof(FB_UINT64), "sizeof(CommitNumber) == sizeof(FB_UINT64)");
 		dsqlScratch->appendUChar(sizeof(CommitNumber));
-		dsqlScratch->appendUInt64(atSnapshotNumber.value);
+		dsqlScratch->appendUInt64(atSnapshotNumber.value());
 	}
 
 	if (dsqlScratch->getBlrData().getCount() > 1)	// 1 -> isc_tpb_version1
@@ -9643,7 +9642,7 @@ void UpdateOrInsertNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	storeNode->genBlr(dsqlScratch);
 
 	// StoreNode::genBlr closes our blr_if when RETURNING in DSQL is used.
-	if (storeNode->dsqlReturningLocalTableNumber.isUnknown())
+	if (!storeNode->dsqlReturningLocalTableNumber.has_value())
 		dsqlScratch->appendUChar(blr_end);	// blr_if
 
 	dsqlScratch->appendUChar(blr_end);
@@ -9908,16 +9907,16 @@ static void dsqlGenEofAssignment(DsqlCompilerScratch* dsqlScratch, SSHORT value)
 }
 
 static void dsqlGenReturning(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
-	Nullable<USHORT> localTableNumber)
+	std::optional<USHORT> localTableNumber)
 {
-	if (localTableNumber.isAssigned())
+	if (localTableNumber.has_value())
 	{
 		const USHORT localStoreContext = dsqlScratch->contextNumber++;
 
 		dsqlScratch->appendUChar(blr_store);
 		dsqlScratch->putBlrMarkers(StmtNode::MARK_AVOID_COUNTERS);
 		dsqlScratch->appendUChar(blr_local_table_id);
-		dsqlScratch->appendUShort(localTableNumber.value);
+		dsqlScratch->appendUShort(localTableNumber.value());
 		dsqlScratch->appendMetaString("");	// alias
 		GEN_stuff_context_number(dsqlScratch, localStoreContext);
 
@@ -11025,7 +11024,7 @@ static void preModifyEraseTriggers(thread_db* tdbb, TrigVector** trigs,
 // 1. Remove assignments of DEFAULT to computed fields.
 // 2. Remove assignments to identity column when OVERRIDING USER VALUE is specified in INSERT.
 static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
-	StreamType stream, CompoundStmtNode* compoundNode, const Nullable<OverrideClause>* insertOverride)
+	StreamType stream, CompoundStmtNode* compoundNode, const std::optional<OverrideClause>* insertOverride)
 {
 	if (!compoundNode)
 		return;
@@ -11036,7 +11035,7 @@ static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
 	if (!relation)
 		return;
 
-	Nullable<IdentityType> identityType;
+	std::optional<IdentityType> identityType;
 
 	for (FB_SIZE_T i = compoundNode->statements.getCount(); i--; )
 	{
@@ -11058,9 +11057,9 @@ static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
 				if (assignToField->fieldStream == stream &&
 					(fld = MET_get_field(relation, fieldId)))
 				{
-					if (insertOverride && fld->fld_identity_type.specified)
+					if (insertOverride && fld->fld_identity_type.has_value())
 					{
-						if (insertOverride->specified || !nodeIs<DefaultNode>(assignFrom))
+						if (insertOverride->has_value() || !nodeIs<DefaultNode>(assignFrom))
 							identityType = fld->fld_identity_type;
 
 						if (*insertOverride == OverrideClause::USER_VALUE)
@@ -11096,9 +11095,9 @@ static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
 	if (!insertOverride)
 		return;
 
-	if (insertOverride->specified)
+	if (insertOverride->has_value())
 	{
-		if (!identityType.specified)
+		if (!identityType.has_value())
 			ERR_post(Arg::Gds(isc_overriding_without_identity) << relation->rel_name);
 
 		if (identityType == IDENT_TYPE_BY_DEFAULT && *insertOverride == OverrideClause::SYSTEM_VALUE)

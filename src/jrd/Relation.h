@@ -22,6 +22,7 @@
 #ifndef JRD_RELATION_H
 #define JRD_RELATION_H
 
+#include <optional>
 #include "../jrd/jrd.h"
 #include "../jrd/btr.h"
 #include "../jrd/lck.h"
@@ -490,7 +491,7 @@ public:
 	MetaName	fld_security_name;	// security class name for field
 	MetaName	fld_generator_name;	// identity generator name
 	MetaNamePair	fld_source_rel_field;	// Relation/field source name
-	Nullable<IdentityType> fld_identity_type;
+	std::optional<IdentityType> fld_identity_type;
 	USHORT fld_flags;
 
 public:

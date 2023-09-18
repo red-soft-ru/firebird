@@ -23,6 +23,7 @@
 #ifndef DSQL_NODE_PRINTER_H
 #define DSQL_NODE_PRINTER_H
 
+#include <optional>
 #include "../dsql/Nodes.h"
 
 #define NODE_PRINT(var, property)	var.print(STRINGIZE(property), property)
@@ -270,6 +271,13 @@ public:
 	{
 		if (nullable.specified)
 			print(s, nullable.value);
+	}
+
+	template <typename T>
+	void print(const Firebird::string& s, const std::optional<T>& optional)
+	{
+		if (optional.has_value())
+			print(s, optional.value());
 	}
 
 	template <typename T>

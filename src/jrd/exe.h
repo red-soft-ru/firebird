@@ -32,6 +32,7 @@
 #ifndef JRD_EXE_H
 #define JRD_EXE_H
 
+#include <optional>
 #include "../jrd/blb.h"
 #include "../jrd/Relation.h"
 #include "../common/classes/array.h"
@@ -610,7 +611,7 @@ public:
 		void activate(bool subStream = false);
 		void deactivate();
 
-		Nullable<USHORT> csb_cursor_number;	// Cursor number for this stream
+		std::optional<USHORT> csb_cursor_number;	// Cursor number for this stream
 		StreamType csb_stream;			// Map user context to internal stream
 		StreamType csb_view_stream;		// stream number for view relation, below
 		USHORT csb_flags;

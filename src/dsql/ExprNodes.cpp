@@ -2802,7 +2802,7 @@ dsc* ArithmeticNode::addSqlTime(thread_db* tdbb, const dsc* desc, impure_value* 
 	bool op1_is_time = op1_desc->isTime();
 	bool op2_is_time = op2_desc->isTime();
 
-	Nullable<USHORT> op1_tz, op2_tz;
+	std::optional<USHORT> op1_tz, op2_tz;
 
 	if (op1_desc->dsc_dtype == dtype_sql_time_tz)
 		op1_tz = ((ISC_TIME_TZ*) op1_desc->dsc_address)->time_zone;
@@ -2813,14 +2813,14 @@ dsc* ArithmeticNode::addSqlTime(thread_db* tdbb, const dsc* desc, impure_value* 
 	dsc op1_tz_desc, op2_tz_desc;
 	ISC_TIME_TZ op1_time_tz, op2_time_tz;
 
-	if (op1_desc->dsc_dtype == dtype_sql_time && op2_is_time && op2_tz.specified)
+	if (op1_desc->dsc_dtype == dtype_sql_time && op2_is_time && op2_tz.has_value())
 	{
 		op1_tz_desc.makeTimeTz(&op1_time_tz);
 		MOV_move(tdbb, const_cast<dsc*>(op1_desc), &op1_tz_desc);
 		op1_desc = &op1_tz_desc;
 	}
 
-	if (op2_desc->dsc_dtype == dtype_sql_time && op1_is_time && op1_tz.specified)
+	if (op2_desc->dsc_dtype == dtype_sql_time && op1_is_time && op1_tz.has_value())
 	{
 		op2_tz_desc.makeTimeTz(&op2_time_tz);
 		MOV_move(tdbb, const_cast<dsc*>(op2_desc), &op2_tz_desc);
@@ -2888,18 +2888,18 @@ dsc* ArithmeticNode::addSqlTime(thread_db* tdbb, const dsc* desc, impure_value* 
 
 	value->vlu_misc.vlu_sql_time_tz.utc_time = d2;
 
-	result->dsc_dtype = op1_tz.specified || op2_tz.specified ? dtype_sql_time_tz : dtype_sql_time;
+	result->dsc_dtype = op1_tz.has_value() || op2_tz.has_value() ? dtype_sql_time_tz : dtype_sql_time;
 	result->dsc_length = type_lengths[result->dsc_dtype];
 	result->dsc_scale = 0;
 	result->dsc_sub_type = 0;
 	result->dsc_address = (UCHAR*) &value->vlu_misc.vlu_sql_time_tz;
 
-	fb_assert(!(op1_tz.specified && op2_tz.specified));
+	fb_assert(!(op1_tz.has_value() && op2_tz.has_value()));
 
-	if (op1_tz.specified)
-		value->vlu_misc.vlu_sql_time_tz.time_zone = op1_tz.value;
-	else if (op2_tz.specified)
-		value->vlu_misc.vlu_sql_time_tz.time_zone = op2_tz.value;
+	if (op1_tz.has_value())
+		value->vlu_misc.vlu_sql_time_tz.time_zone = op1_tz.value();
+	else if (op2_tz.has_value())
+		value->vlu_misc.vlu_sql_time_tz.time_zone = op2_tz.value();
 
 	return result;
 }
@@ -2917,7 +2917,7 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 	const dsc* op1_desc = &value->vlu_desc;
 	const dsc* op2_desc = desc;
 
-	Nullable<USHORT> op1_tz, op2_tz;
+	std::optional<USHORT> op1_tz, op2_tz;
 
 	if (op1_desc->dsc_dtype == dtype_sql_time_tz)
 		op1_tz = ((ISC_TIME_TZ*) op1_desc->dsc_address)->time_zone;
@@ -2934,7 +2934,7 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 	ISC_TIME_TZ op1_time_tz, op2_time_tz;
 
 	if ((op1_desc->dsc_dtype == dtype_sql_time || op1_desc->dsc_dtype == dtype_timestamp) &&
-		op2_desc->isDateTime() && op2_tz.specified)
+		op2_desc->isDateTime() && op2_tz.has_value())
 	{
 		if (op1_desc->dsc_dtype == dtype_sql_time)
 			op1_tz_desc.makeTimeTz(&op1_time_tz);
@@ -2946,7 +2946,7 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 	}
 
 	if ((op2_desc->dsc_dtype == dtype_sql_time || op2_desc->dsc_dtype == dtype_timestamp) &&
-		op1_desc->isDateTime() && op1_tz.specified)
+		op1_desc->isDateTime() && op1_tz.has_value())
 	{
 		if (op2_desc->dsc_dtype == dtype_sql_time)
 			op2_tz_desc.makeTimeTz(&op2_time_tz);
@@ -3122,18 +3122,18 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 			ERR_post(Arg::Gds(isc_datetime_range_exceeded));
 	}
 
-	fb_assert(!(op1_tz.specified && op2_tz.specified));
+	fb_assert(!(op1_tz.has_value() && op2_tz.has_value()));
 
-	result->dsc_dtype = op1_tz.specified || op2_tz.specified ? dtype_timestamp_tz : dtype_timestamp;
+	result->dsc_dtype = op1_tz.has_value() || op2_tz.has_value() ? dtype_timestamp_tz : dtype_timestamp;
 	result->dsc_length = type_lengths[result->dsc_dtype];
 	result->dsc_scale = 0;
 	result->dsc_sub_type = 0;
 	result->dsc_address = (UCHAR*) &value->vlu_misc.vlu_timestamp_tz;
 
-	if (op1_tz.specified)
-		value->vlu_misc.vlu_timestamp_tz.time_zone = op1_tz.value;
-	else if (op2_tz.specified)
-		value->vlu_misc.vlu_timestamp_tz.time_zone = op2_tz.value;
+	if (op1_tz.has_value())
+		value->vlu_misc.vlu_timestamp_tz.time_zone = op1_tz.value();
+	else if (op2_tz.has_value())
+		value->vlu_misc.vlu_timestamp_tz.time_zone = op2_tz.value();
 
 	return result;
 }
@@ -5180,7 +5180,7 @@ ValueExprNode* DerivedExprNode::copy(thread_db* tdbb, NodeCopier& copier) const
 			i = copier.remap[i];
 	}
 
-	fb_assert(!cursorNumber.specified);
+	fb_assert(!cursorNumber.has_value());
 
 	return node;
 }
@@ -5230,8 +5230,8 @@ ValueExprNode* DerivedExprNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 dsc* DerivedExprNode::execute(thread_db* tdbb, Request* request) const
 {
-	if (cursorNumber.specified)
-		request->req_cursors[cursorNumber.value]->checkState(request);
+	if (cursorNumber.has_value())
+		request->req_cursors[cursorNumber.value()]->checkState(request);
 
 	dsc* value = NULL;
 
@@ -6652,7 +6652,7 @@ ValueExprNode* FieldNode::copy(thread_db* tdbb, NodeCopier& copier) const
 		stream = copier.remap[stream];
 	}
 
-	fb_assert(!cursorNumber.specified);
+	fb_assert(!cursorNumber.has_value());
 	return PAR_gen_field(tdbb, stream, fldId, byId);
 }
 
@@ -6910,8 +6910,8 @@ dsc* FieldNode::execute(thread_db* tdbb, Request* request) const
 {
 	impure_value* const impure = request->getImpure<impure_value>(impureOffset);
 
-	if (cursorNumber.specified)
-		request->req_cursors[cursorNumber.value]->checkState(request);
+	if (cursorNumber.has_value())
+		request->req_cursors[cursorNumber.value()]->checkState(request);
 
 	record_param& rpb = request->req_rpb[fieldStream];
 	Record* record = rpb.rpb_record;

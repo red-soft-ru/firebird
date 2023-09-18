@@ -291,7 +291,7 @@ public:
 	MetaName prm_field_source;
 	MetaName prm_type_of_column;
 	MetaName prm_type_of_table;
-	Nullable<USHORT> prm_text_type;
+	std::optional<USHORT> prm_text_type;
 	FUN_T		prm_fun_mechanism;
 
 public:

@@ -4290,7 +4290,7 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 			case RSR_field_generator_name:
 				field->fld_generator_name = (const TEXT*) p;
-				if (!field->fld_identity_type.specified)
+				if (!field->fld_identity_type.has_value())
 					field->fld_identity_type = IDENT_TYPE_BY_DEFAULT;
 				break;
 

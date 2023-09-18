@@ -23,6 +23,7 @@
 #ifndef DSQL_PARSER_H
 #define DSQL_PARSER_H
 
+#include <optional>
 #include "../dsql/dsql.h"
 #include "../dsql/DdlNodes.h"
 #include "../dsql/BoolNodes.h"
@@ -251,12 +252,29 @@ private:
 	}
 
 	template <typename T>
+	void setClause(std::optional<T>& clause, const char* duplicateMsg, const T& value)
+	{
+		checkDuplicateClause(clause, duplicateMsg);
+		clause = value;
+	}
+
+	template <typename T>
 	void setClause(BaseNullable<T>& clause, const char* duplicateMsg, const BaseNullable<T>& value)
 	{
 		if (value.specified)
 		{
 			checkDuplicateClause(clause, duplicateMsg);
 			clause = value.value;
+		}
+	}
+
+	template <typename T>
+	void setClause(std::optional<T>& clause, const char* duplicateMsg, const std::optional<T>& value)
+	{
+		if (value.has_value())
+		{
+			checkDuplicateClause(clause, duplicateMsg);
+			clause = value.value();
 		}
 	}
 
@@ -310,6 +328,12 @@ private:
 	bool isDuplicateClause(const BaseNullable<T>& clause)
 	{
 		return clause.specified;
+	}
+
+	template <typename T>
+	bool isDuplicateClause(const std::optional<T>& clause)
+	{
+		return clause.has_value();
 	}
 
 	template <typename T>

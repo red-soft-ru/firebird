@@ -23,6 +23,7 @@
 #ifndef DSQL_STMT_NODES_H
 #define DSQL_STMT_NODES_H
 
+#include <optional>
 #include "../jrd/MetaName.h"
 #include "firebird/impl/blr.h"
 #include "../jrd/Function.h"
@@ -1072,7 +1073,7 @@ public:
 		Firebird::Array<NestConst<FieldNode>> fields;
 		NestConst<ValueListNode> values;
 		NestConst<BoolExprNode> condition;
-		Nullable<OverrideClause> overrideClause;
+		std::optional<OverrideClause> overrideClause;
 
 		NestConst<Jrd::RecordSourceNode> storeRelation;
 		NestValueArray processedFields;
@@ -1188,7 +1189,7 @@ public:
 	StreamType newStream = 0;
 	unsigned marks = 0;						// see StmtNode::IUD_MARK_xxx
 	USHORT dsqlRseFlags = 0;
-	Nullable<USHORT> dsqlReturningLocalTableNumber;
+	std::optional<USHORT> dsqlReturningLocalTableNumber;
 };
 
 
@@ -1315,8 +1316,8 @@ public:
 	NestConst<StmtNode> subStore;
 	Firebird::Array<ValidateInfo> validations;
 	unsigned marks;
-	Nullable<USHORT> dsqlReturningLocalTableNumber;
-	Nullable<OverrideClause> overrideClause;
+	std::optional<USHORT> dsqlReturningLocalTableNumber;
+	std::optional<OverrideClause> overrideClause;
 };
 
 
@@ -1621,9 +1622,9 @@ private:
 public:
 	Firebird::Array<RestrictionOption*> reserveList;
 	Firebird::UCharBuffer tpb;
-	Nullable<CommitNumber> atSnapshotNumber;
-	Nullable<unsigned> isoLevel;
-	Nullable<USHORT> lockTimeout;
+	std::optional<CommitNumber> atSnapshotNumber;
+	std::optional<unsigned> isoLevel;
+	std::optional<USHORT> lockTimeout;
 	Nullable<bool> readOnly;
 	Nullable<bool> wait;
 	Nullable<bool> noAutoUndo;
@@ -2001,7 +2002,7 @@ public:
 	NestConst<ValueListNode> order;
 	NestConst<RowsClause> rows;
 	NestConst<ReturningClause> returning;
-	Nullable<OverrideClause> overrideClause;
+	std::optional<OverrideClause> overrideClause;
 	NestConst<StoreNode> storeNode;
 	NestConst<ModifyNode> modifyNode;
 	Firebird::Array<NestConst<AssignmentNode>> varAssignments;

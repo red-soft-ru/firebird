@@ -727,23 +727,24 @@ using namespace Firebird;
 %nonassoc ALTER
 %nonassoc COLUMN
 
-%union
+%union YYSTYPE
 {
-	BaseNullable<int> nullableIntVal;
+	YYSTYPE()
+	{}
+
+	std::optional<int> nullableIntVal;
 	BaseNullable<bool> nullableBoolVal;
-	BaseNullable<Jrd::TriggerDefinition::SqlSecurity> nullableSqlSecurityVal;
-	BaseNullable<Jrd::OverrideClause> nullableOverrideClause;
+	std::optional<Jrd::TriggerDefinition::SqlSecurity> nullableSqlSecurityVal;
+	std::optional<Jrd::OverrideClause> nullableOverrideClause;
 	struct { bool first; bool second; } boolPair;
 	bool boolVal;
 	int intVal;
 	unsigned uintVal;
 	SLONG int32Val;
-	BaseNullable<SLONG> nullableInt32Val;
 	SINT64 int64Val;
 	FB_UINT64 uint64Val;
-	BaseNullable<SINT64> nullableInt64Val;
-	BaseNullable<BaseNullable<SINT64> > nullableNullableInt64Val;
-	BaseNullable<FB_UINT64> nullableUint64Val;
+	std::optional<SINT64> nullableInt64Val;
+	std::optional<FB_UINT64> nullableUint64Val;
 	Jrd::ScaledNumber scaledNumber;
 	UCHAR blrOp;
 	Jrd::OrderNode::NullsPlacement nullsPlacement;
@@ -1449,10 +1450,10 @@ arg_desc($parameters)
 
 %type <nullableIntVal> param_mechanism
 param_mechanism
-	: /* nothing */		{ $$ = Nullable<int>::empty(); }	// Beware: This means FUN_reference or FUN_blob_struct.
-	| BY DESCRIPTOR		{ $$ = Nullable<int>::val(FUN_descriptor); }
-	| BY SCALAR_ARRAY	{ $$ = Nullable<int>::val(FUN_scalar_array); }
-	| NULL				{ $$ = Nullable<int>::val(FUN_ref_with_null); }
+	: /* nothing */		{ $$ = std::nullopt; }	// Beware: This means FUN_reference or FUN_blob_struct.
+	| BY DESCRIPTOR		{ $$ = FUN_descriptor; }
+	| BY SCALAR_ARRAY	{ $$ = FUN_scalar_array; }
+	| NULL				{ $$ = FUN_ref_with_null; }
 	;
 
 %type return_value1(<createAlterFunctionNode>)
@@ -1852,7 +1853,7 @@ replace_sequence_clause
 	  replace_sequence_options($2)
 		{
 			// Remove this to implement CORE-5137
-			if (!$2->restartSpecified && !$2->step.specified)
+			if (!$2->restartSpecified && !$2->step.has_value())
 				yyerrorIncompleteCmd(YYPOSNARG(3));
 			$$ = $2;
 		}
@@ -1885,7 +1886,7 @@ alter_sequence_clause
 		}
 	  alter_sequence_options($2)
 		{
-			if (!$2->restartSpecified && !$2->value.specified && !$2->step.specified)
+			if (!$2->restartSpecified && !$2->value.has_value() && !$2->step.has_value())
 				yyerrorIncompleteCmd(YYPOSNARG(3));
 			$$ = $2;
 		}
@@ -1913,8 +1914,8 @@ restart_option($seqNode)
 
 %type <nullableInt64Val> with_opt
 with_opt
-	: /* Nothign */			{ $$ = BaseNullable<SINT64>::empty(); }
-	| WITH sequence_value	{ $$ = BaseNullable<SINT64>::val($2); }
+	: /* Nothign */			{ $$ = std::nullopt; }
+	| WITH sequence_value	{ $$ = $2; }
 	;
 
 %type <createAlterSequenceNode> set_generator_clause
@@ -1926,7 +1927,7 @@ set_generator_clause
 			node->alter = true;
 			node->legacy = true;
 			node->restartSpecified = true;
-			node->value = BaseNullable<SINT64>::val($5);
+			node->value = $5;
 			$$ = node;
 		}
 	;
@@ -2278,12 +2279,12 @@ gtt_table_clause
 	: simple_table_name
 			{
 				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
-				$<createRelationNode>$->relationType = Nullable<rel_t>::empty();
+				$<createRelationNode>$->relationType = std::nullopt;
 			}
 		'(' table_elements($2) ')' gtt_ops($2)
 			{
 				$$ = $2;
-				if (!$$->relationType.specified)
+				if (!$$->relationType.has_value())
 					$$->relationType = rel_global_temp_delete;
 			}
 	;
@@ -4025,8 +4026,8 @@ trigger_type_suffix
 
 %type <nullableIntVal> trigger_position
 trigger_position
-	: /* nothing */					{ $$ = Nullable<int>::empty(); }
-	| POSITION nonneg_short_integer	{ $$ = Nullable<int>::val($2); }
+	: /* nothing */					{ $$ = std::nullopt; }
+	| POSITION nonneg_short_integer	{ $$ = $2; }
 	;
 
 // ALTER statement
@@ -4594,21 +4595,21 @@ alter_trigger_clause
 %type <nullableUint64Val> trigger_type_opt
 trigger_type_opt	// we do not allow alter database triggers, hence we do not use trigger_type here
 	: trigger_type_prefix trigger_type_suffix
-		{ $$ = Nullable<FB_UINT64>::val($1 + $2 - 1); }
+		{ $$ = $1 + $2 - 1; }
 	|
-		{ $$ = Nullable<FB_UINT64>::empty(); }
+		{ $$ = std::nullopt; }
 	;
 
 %type <nullableSqlSecurityVal> trg_sql_security_clause
 trg_sql_security_clause
 	: // nothing
-		{ $$ = Nullable<TriggerDefinition::SqlSecurity>::empty(); }
+		{ $$ = std::nullopt; }
 	| SQL SECURITY DEFINER
-		{ $$ = Nullable<TriggerDefinition::SqlSecurity>::val(TriggerDefinition::SS_DEFINER); }
+		{ $$ = TriggerDefinition::SS_DEFINER; }
 	| SQL SECURITY INVOKER
-		{ $$ = Nullable<TriggerDefinition::SqlSecurity>::val(TriggerDefinition::SS_INVOKER); }
+		{ $$ = TriggerDefinition::SS_INVOKER; }
 	| DROP SQL SECURITY
-		{ $$ = Nullable<TriggerDefinition::SqlSecurity>::val(TriggerDefinition::SS_DROP); }
+		{ $$ = TriggerDefinition::SS_DROP; }
 	;
 
 // DROP metadata operations
@@ -6619,9 +6620,9 @@ insert_start
 
 %type <nullableOverrideClause> override_opt
 override_opt
-	: /* nothing */				{ $$ = Nullable<OverrideClause>::empty(); }
-	| OVERRIDING USER VALUE		{ $$ = Nullable<OverrideClause>::val(OverrideClause::USER_VALUE); }
-	| OVERRIDING SYSTEM VALUE	{ $$ = Nullable<OverrideClause>::val(OverrideClause::SYSTEM_VALUE); }
+	: /* nothing */				{ $$ = std::nullopt; }
+	| OVERRIDING USER VALUE		{ $$ = OverrideClause::USER_VALUE; }
+	| OVERRIDING SYSTEM VALUE	{ $$ = OverrideClause::SYSTEM_VALUE; }
 	;
 
 %type <valueListNode> value_or_default_list

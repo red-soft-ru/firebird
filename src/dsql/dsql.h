@@ -226,7 +226,7 @@ public:
 	USHORT segLength = 0;				// Segment length for blobs
 	USHORT precision = 0;				// Precision for exact numeric types
 	USHORT charLength = 0;				// Length of field in characters
-	Nullable<SSHORT> charSetId;
+	std::optional<SSHORT> charSetId;
 	SSHORT collationId = 0;
 	SSHORT textType = 0;
 	bool fullDomain = false;			// Domain name without TYPE OF prefix
@@ -725,19 +725,19 @@ struct SignatureParameter
 	MetaName charSetName;
 	MetaName collationName;
 	MetaName subTypeName;
-	Nullable<SSHORT> collationId;
-	Nullable<SSHORT> nullFlag;
+	std::optional<SSHORT> collationId;
+	std::optional<SSHORT> nullFlag;
 	SSHORT mechanism = 0;
-	Nullable<SSHORT> fieldLength;
-	Nullable<SSHORT> fieldScale;
-	Nullable<SSHORT> fieldType;
-	Nullable<SSHORT> fieldSubType;
-	Nullable<SSHORT> fieldSegmentLength;
-	Nullable<SSHORT> fieldNullFlag;
-	Nullable<SSHORT> fieldCharLength;
-	Nullable<SSHORT> fieldCollationId;
-	Nullable<SSHORT> fieldCharSetId;
-	Nullable<SSHORT> fieldPrecision;
+	std::optional<SSHORT> fieldLength;
+	std::optional<SSHORT> fieldScale;
+	std::optional<SSHORT> fieldType;
+	std::optional<SSHORT> fieldSubType;
+	std::optional<SSHORT> fieldSegmentLength;
+	std::optional<SSHORT> fieldNullFlag;
+	std::optional<SSHORT> fieldCharLength;
+	std::optional<SSHORT> fieldCollationId;
+	std::optional<SSHORT> fieldCharSetId;
+	std::optional<SSHORT> fieldPrecision;
 
 	bool operator >(const SignatureParameter& o) const
 	{
@@ -755,19 +755,19 @@ struct SignatureParameter
 			fieldName == o.fieldName &&
 			relationName == o.relationName &&
 			collationId == o.collationId &&
-			nullFlag.orElse(FALSE) == o.nullFlag.orElse(FALSE) &&
+			nullFlag.value_or(FALSE) == o.nullFlag.value_or(FALSE) &&
 			mechanism == o.mechanism &&
 			fieldLength == o.fieldLength &&
 			fieldScale == o.fieldScale &&
 			fieldType == o.fieldType &&
-			fieldSubType.orElse(0) == o.fieldSubType.orElse(0) &&
+			fieldSubType.value_or(0) == o.fieldSubType.value_or(0) &&
 			fieldSegmentLength == o.fieldSegmentLength &&
-			fieldNullFlag.orElse(FALSE) == o.fieldNullFlag.orElse(FALSE) &&
+			fieldNullFlag.value_or(FALSE) == o.fieldNullFlag.value_or(FALSE) &&
 			fieldCharLength == o.fieldCharLength &&
 			charSetName == o.charSetName &&
 			collationName == o.collationName &&
 			subTypeName == o.subTypeName &&
-			fieldCollationId.orElse(0) == o.fieldCollationId.orElse(0) &&
+			fieldCollationId.value_or(0) == o.fieldCollationId.value_or(0) &&
 			fieldCharSetId == o.fieldCharSetId &&
 			fieldPrecision == o.fieldPrecision;
 	}

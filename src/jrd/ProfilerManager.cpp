@@ -335,8 +335,8 @@ void ProfilerPackage::startSessionFunction(ThrowStatusExceptionWrapper* /*status
 	}
 
 	const string description(in->description.str, in->descriptionNull ? 0 : in->description.length);
-	const Nullable<SLONG> flushInterval(in->flushIntervalNull ?
-		Nullable<SLONG>() : Nullable<SLONG>(in->flushInterval));
+	const std::optional<SLONG> flushInterval(in->flushIntervalNull ?
+		std::nullopt : std::optional{in->flushInterval});
 	const PathName pluginName(in->pluginName.str, in->pluginNameNull ? 0 : in->pluginName.length);
 	const string pluginOptions(in->pluginOptions.str, in->pluginOptionsNull ? 0 : in->pluginOptions.length);
 
@@ -398,11 +398,11 @@ int ProfilerManager::blockingAst(void* astObject)
 	return 0;
 }
 
-SINT64 ProfilerManager::startSession(thread_db* tdbb, Nullable<SLONG> flushInterval,
+SINT64 ProfilerManager::startSession(thread_db* tdbb, std::optional<SLONG> flushInterval,
 	const PathName& pluginName, const string& description, const string& options)
 {
-	if (flushInterval.isAssigned())
-		checkFlushInterval(flushInterval.value);
+	if (flushInterval.has_value())
+		checkFlushInterval(flushInterval.value());
 
 	AutoSetRestore<bool> pauseProfiler(&paused, true);
 
@@ -460,8 +460,8 @@ SINT64 ProfilerManager::startSession(thread_db* tdbb, Nullable<SLONG> flushInter
 
 	paused = false;
 
-	if (flushInterval.isAssigned())
-		setFlushInterval(flushInterval.value);
+	if (flushInterval.has_value())
+		setFlushInterval(flushInterval.value());
 
 	return currentSession->pluginSession->getId();
 }
@@ -1038,8 +1038,8 @@ void ProfilerListener::processCommand(thread_db* tdbb)
 
 			const string description(in->description.str,
 				in->descriptionNull ? 0 : in->description.length);
-			const Nullable<SLONG> flushInterval(in->flushIntervalNull ?
-				Nullable<SLONG>() : Nullable<SLONG>(in->flushInterval));
+			const std::optional<SLONG> flushInterval(in->flushIntervalNull ?
+				std::nullopt : std::optional{in->flushInterval});
 			const PathName pluginName(in->pluginName.str,
 				in->pluginNameNull ? 0 : in->pluginName.length);
 			const string pluginOptions(in->pluginOptions.str,

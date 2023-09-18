@@ -1039,10 +1039,10 @@ namespace
 							dependencies.push(dependency);
 						}
 
-						if (parameter->prm_text_type.isAssigned())
+						if (parameter->prm_text_type.has_value())
 						{
 							CompilerScratch::Dependency dependency(obj_collation);
-							dependency.number = parameter->prm_text_type.value;
+							dependency.number = parameter->prm_text_type.value();
 							dependencies.push(dependency);
 						}
 					}

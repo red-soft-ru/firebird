@@ -29,6 +29,7 @@
 #ifndef BURP_BURP_H
 #define BURP_BURP_H
 
+#include <optional>
 #include <stdio.h>
 #include "ibase.h"
 #include "firebird/Interface.h"
@@ -1033,7 +1034,7 @@ public:
 	ULONG		io_buffer_size;
 	redirect_vals	sw_redirect;
 	bool		burp_throw;
-	Nullable<ReplicaMode>	gbl_sw_replica;
+	std::optional<ReplicaMode>	gbl_sw_replica;
 
 	UCHAR*		blk_io_ptr;
 	int			blk_io_cnt;

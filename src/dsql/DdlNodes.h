@@ -23,6 +23,7 @@
 #ifndef DSQL_DDL_NODES_H
 #define DSQL_DDL_NODES_H
 
+#include <optional>
 #include "firebird/impl/blr.h"
 #include "../jrd/dyn.h"
 #include "../common/msg_encode.h"
@@ -174,7 +175,7 @@ public:
 	NestConst<dsql_fld> type;
 	NestConst<ValueSourceClause> defaultClause;
 	NestConst<ValueExprNode> parameterExpr;
-	Nullable<int> udfMechanism;
+	std::optional<int> udfMechanism;
 };
 
 
@@ -696,16 +697,16 @@ protected:
 public:
 	MetaName name;
 	MetaName relationName;
-	Nullable<FB_UINT64> type;
+	std::optional<FB_UINT64> type;
 	Nullable<bool> active;
-	Nullable<int> position;
+	std::optional<int> position;
 	NestConst<ExternalClause> external;
 	Firebird::string source;
 	Firebird::ByteChunk blrData;
 	Firebird::ByteChunk debugData;
 	USHORT systemFlag;
 	bool fkTrigger;
-	Nullable<SqlSecurity> ssDefiner;
+	std::optional<SqlSecurity> ssDefiner;
 };
 
 
@@ -1116,7 +1117,6 @@ public:
 													Arg::Num(this->column));
 		}
 		*/
-		value.specified = false;
 	}
 
 	static SSHORT store(thread_db* tdbb, jrd_tra* transaction, const MetaName& name,
@@ -1147,8 +1147,8 @@ public:
 	bool legacy;
 	bool restartSpecified;
 	const MetaName name;
-	BaseNullable<SINT64> value;
-	Nullable<SLONG> step;
+	std::optional<SINT64> value;
+	std::optional<SLONG> step;
 };
 
 
@@ -1210,13 +1210,13 @@ public:
 		MetaName relationName;
 		MetaName fieldSource;
 		MetaName identitySequence;
-		Nullable<IdentityType> identityType;
-		Nullable<USHORT> collationId;
+		std::optional<IdentityType> identityType;
+		std::optional<USHORT> collationId;
 		Nullable<bool> notNullFlag;	// true = NOT NULL / false = NULL
-		Nullable<USHORT> position;
+		std::optional<USHORT> position;
 		Firebird::string defaultSource;
 		Firebird::ByteChunk defaultValue;
-		Nullable<USHORT> viewContext;
+		std::optional<USHORT> viewContext;
 		MetaName baseField;
 	};
 
@@ -1386,9 +1386,9 @@ public:
 		{
 		}
 
-		Nullable<IdentityType> type;
-		Nullable<SINT64> startValue;
-		Nullable<SLONG> increment;
+		std::optional<IdentityType> type;
+		std::optional<SINT64> startValue;
+		std::optional<SLONG> increment;
 		bool restart;	// used in ALTER
 	};
 
@@ -1562,8 +1562,7 @@ public:
 	CreateRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode,
 				const Firebird::string* aExternalFile = NULL)
 		: RelationNode(p, aDsqlNode),
-		  externalFile(aExternalFile),
-		  relationType(rel_persistent)
+		  externalFile(aExternalFile)
 	{
 	}
 
@@ -1583,7 +1582,7 @@ private:
 
 public:
 	const Firebird::string* externalFile;
-	Nullable<rel_t> relationType;
+	std::optional<rel_t> relationType = rel_persistent;
 	bool preserveRowsOpt;
 	bool deleteRowsOpt;
 };
@@ -1977,7 +1976,6 @@ public:
 	SSHORT number;
 	bool manual;
 	bool conditional;
-	Nullable<SLONG> firstLength;
 	Firebird::Array<NestConst<DbFileClause> > files;
 };
 
@@ -2467,15 +2465,5 @@ public:
 
 
 } // namespace
-
-template <>
-class NullableClear<Jrd::TriggerDefinition::SqlSecurity>	// TriggerDefinition::SqlSecurity especialization for NullableClear
-{
-public:
-	static void clear(Jrd::TriggerDefinition::SqlSecurity& v)
-	{
-		v = Jrd::TriggerDefinition::SS_INVOKER;
-	}
-};
 
 #endif // DSQL_DDL_NODES_H

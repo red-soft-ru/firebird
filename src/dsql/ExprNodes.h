@@ -23,6 +23,7 @@
 #ifndef DSQL_EXPR_NODES_H
 #define DSQL_EXPR_NODES_H
 
+#include <optional>
 #include "firebird/impl/blr.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/NodePrinter.h"
@@ -683,7 +684,7 @@ public:
 public:
 	NestConst<ValueExprNode> arg;
 	Firebird::Array<StreamType> internalStreamList;
-	Nullable<USHORT> cursorNumber;
+	std::optional<USHORT> cursorNumber;
 };
 
 
@@ -825,7 +826,7 @@ public:
 	NestConst<ValueListNode> dsqlIndices;
 	const Format* format;
 	const StreamType fieldStream;
-	Nullable<USHORT> cursorNumber;
+	std::optional<USHORT> cursorNumber;
 	const USHORT fieldId;
 	const bool byId;
 	bool dsqlCursorField;
