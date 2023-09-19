@@ -13545,6 +13545,7 @@ ValueExprNode* ValueIfNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		doDsqlPass(dsqlScratch, condition),
 		doDsqlPass(dsqlScratch, trueValue),
 		doDsqlPass(dsqlScratch, falseValue));
+	node->dsqlGenCast = dsqlGenCast;
 
 	PASS1_set_parameter_type(dsqlScratch, node->trueValue, node->falseValue, false);
 	PASS1_set_parameter_type(dsqlScratch, node->falseValue, node->trueValue, false);
@@ -13568,8 +13569,12 @@ void ValueIfNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsc desc;
 	make(dsqlScratch, &desc);
-	dsqlScratch->appendUChar(blr_cast);
-	GEN_descriptor(dsqlScratch, &desc, true);
+
+	if (dsqlGenCast)
+	{
+		dsqlScratch->appendUChar(blr_cast);
+		GEN_descriptor(dsqlScratch, &desc, true);
+	}
 
 	dsqlScratch->appendUChar(blr_value_if);
 	GEN_expr(dsqlScratch, condition);

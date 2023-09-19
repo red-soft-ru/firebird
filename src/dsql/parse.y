@@ -8712,6 +8712,8 @@ searched_when_clause
 	| searched_when_clause WHEN search_condition THEN case_result
 		{
 			ValueIfNode* cond = newNode<ValueIfNode>($3, $5, NullNode::instance());
+			cond->dsqlGenCast = false;
+
 			ValueIfNode* last = $1;
 			ValueIfNode* next;
 

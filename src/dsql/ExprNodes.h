@@ -2220,6 +2220,7 @@ public:
 	NestConst<BoolExprNode> condition;
 	NestConst<ValueExprNode> trueValue;
 	NestConst<ValueExprNode> falseValue;
+	bool dsqlGenCast = true;
 };
 
 
