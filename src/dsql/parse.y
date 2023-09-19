@@ -699,6 +699,8 @@ using namespace Firebird;
 // tokens added for Firebird 6.0
 
 %token <metaNamePtr> ANY_VALUE
+%token <metaNamePtr> CALL
+%token <metaNamePtr> NAMED_ARG_ASSIGN
 
 // precedence declarations for expression evaluation
 
@@ -761,6 +763,8 @@ using namespace Firebird;
 	Jrd::DbFileClause* dbFileClause;
 	Firebird::Array<NestConst<Jrd::DbFileClause> >* dbFilesClause;
 	Jrd::ExternalClause* externalClause;
+	Firebird::NonPooledPair<Jrd::MetaName*, Jrd::ValueExprNode*>* namedArgument;
+	Firebird::NonPooledPair<Firebird::ObjectsArray<Jrd::MetaName>*, Jrd::ValueListNode*>* namedArguments;
 	Firebird::Array<NestConst<Jrd::ParameterClause> >* parametersClause;
 	Jrd::WindowClause* windowClause;
 	Jrd::WindowClause::FrameExtent* windowClauseFrameExtent;
@@ -887,6 +891,7 @@ dml_statement
 	| insert									{ $$ = $1; }
 	| merge										{ $$ = $1; }
 	| exec_procedure							{ $$ = $1; }
+	| call										{ $$ = $1; }
 	| exec_block								{ $$ = $1; }
 	| select									{ $$ = $1; }
 	| update									{ $$ = $1; }
@@ -3275,6 +3280,7 @@ simple_proc_statement
 	| delete
 	| singleton_select
 	| exec_procedure
+	| call				{ $$ = $1; }
 	| exec_sql			{ $$ = $1; }
 	| exec_into			{ $$ = $1; }
 	| exec_function
@@ -3753,16 +3759,28 @@ fetch_scroll($cursorStmtNode)
 %type <stmtNode> exec_procedure
 exec_procedure
 	: EXECUTE PROCEDURE symbol_procedure_name proc_inputs proc_outputs_opt
-		{ $$ = newNode<ExecProcedureNode>(QualifiedName(*$3), $4, $5); }
+		{
+			$$ = newNode<ExecProcedureNode>(
+				QualifiedName(*$3),
+				($4 ? $4->second : nullptr),
+				$5,
+				($4 ? $4->first : nullptr));
+		}
 	| EXECUTE PROCEDURE symbol_package_name '.' symbol_procedure_name proc_inputs proc_outputs_opt
-		{ $$ = newNode<ExecProcedureNode>(QualifiedName(*$5, *$3), $6, $7); }
+		{
+			$$ = newNode<ExecProcedureNode>(
+				QualifiedName(*$5, *$3),
+				($6 ? $6->second : nullptr),
+				$7,
+				($6 ? $6->first : nullptr));
+		}
 	;
 
-%type <valueListNode> proc_inputs
+%type <namedArguments> proc_inputs
 proc_inputs
-	: /* nothing */			{ $$ = NULL; }
-	| value_list			{ $$ = $1; }
-	| '(' value_list ')'	{ $$ = $2; }
+	: /* nothing */			{ $$ = nullptr; }
+	| argument_list			{ $$ = $1; }
+	| '(' argument_list ')'	{ $$ = $2; }
 	;
 
 %type <valueListNode> proc_outputs_opt
@@ -3770,6 +3788,31 @@ proc_outputs_opt
 	: /* nothing */								{ $$ = NULL; }
 	| RETURNING_VALUES variable_list			{ $$ = $2; }
 	| RETURNING_VALUES '(' variable_list ')'	{ $$ = $3; }
+	;
+
+// CALL
+
+%type <stmtNode> call
+call
+	: CALL symbol_procedure_name '(' argument_list_opt ')'
+		{
+			auto node = newNode<ExecProcedureNode>(QualifiedName(*$2),
+				($4 ? $4->second : nullptr),
+				nullptr,
+				($4 ? $4->first : nullptr));
+			node->dsqlCallSyntax = true;
+			$$ = node;
+		}
+	| CALL symbol_package_name '.' symbol_procedure_name '(' argument_list_opt ')'
+			into_variable_list_opt
+		{
+			auto node = newNode<ExecProcedureNode>(QualifiedName(*$4, *$2),
+				($6 ? $6->second : nullptr),
+				nullptr,
+				($6 ? $6->first : nullptr));
+			node->dsqlCallSyntax = true;
+			$$ = node;
+		}
 	;
 
 // EXECUTE BLOCK
@@ -4361,6 +4404,7 @@ keyword_or_column
 	| VARBINARY
 	| WINDOW
 	| WITHOUT
+	| CALL					// added in FB 6.0
 	;
 
 col_opt
@@ -6248,38 +6292,42 @@ named_columns_join
 table_proc
 	: symbol_procedure_name table_proc_inputs as_noise symbol_table_alias_name
 		{
-			ProcedureSourceNode* node = newNode<ProcedureSourceNode>(QualifiedName(*$1));
-			node->sourceList = $2;
+			const auto node = newNode<ProcedureSourceNode>(QualifiedName(*$1));
+			node->inputSources = $2 ? $2->second : nullptr;
+			node->dsqlInputArgNames = $2 ? $2->first : nullptr;
 			node->alias = $4->c_str();
 			$$ = node;
 		}
 	| symbol_procedure_name table_proc_inputs
 		{
-			ProcedureSourceNode* node = newNode<ProcedureSourceNode>(QualifiedName(*$1));
-			node->sourceList = $2;
+			const auto node = newNode<ProcedureSourceNode>(QualifiedName(*$1));
+			node->inputSources = $2 ? $2->second : nullptr;
+			node->dsqlInputArgNames = $2 ? $2->first : nullptr;
 			$$ = node;
 		}
 	| symbol_package_name '.' symbol_procedure_name table_proc_inputs as_noise symbol_table_alias_name
 		{
-			ProcedureSourceNode* node = newNode<ProcedureSourceNode>(
+			const auto node = newNode<ProcedureSourceNode>(
 				QualifiedName(*$3, *$1));
-			node->sourceList = $4;
+			node->inputSources = $4 ? $4->second : nullptr;
+			node->dsqlInputArgNames = $4 ? $4->first : nullptr;
 			node->alias = $6->c_str();
 			$$ = node;
 		}
 	| symbol_package_name '.' symbol_procedure_name table_proc_inputs
 		{
-			ProcedureSourceNode* node = newNode<ProcedureSourceNode>(
+			const auto node = newNode<ProcedureSourceNode>(
 				QualifiedName(*$3, *$1));
-			node->sourceList = $4;
+			node->inputSources = $4 ? $4->second : nullptr;
+			node->dsqlInputArgNames = $4 ? $4->first : nullptr;
 			$$ = node;
 		}
 	;
 
-%type <valueListNode> table_proc_inputs
+%type <namedArguments> table_proc_inputs
 table_proc_inputs
-	: /* nothing */			{ $$ = NULL; }
-	| '(' value_list ')'	{ $$ = $2; }
+	: /* nothing */			{ $$ = nullptr; }
+	| '(' argument_list ')'	{ $$ = $2; }
 	;
 
 %type <relSourceNode> table_name
@@ -8580,14 +8628,64 @@ trim_specification
 
 %type <valueExprNode> udf
 udf
-	: symbol_UDF_call_name '(' value_list ')'
-		{ $$ = newNode<UdfCallNode>(QualifiedName(*$1, ""), $3); }
-	| symbol_UDF_call_name '(' ')'
-		{ $$ = newNode<UdfCallNode>(QualifiedName(*$1, ""), newNode<ValueListNode>(0)); }
-	| symbol_package_name '.' symbol_UDF_name '(' value_list ')'
-		{ $$ = newNode<UdfCallNode>(QualifiedName(*$3, *$1), $5); }
-	| symbol_package_name '.' symbol_UDF_name '(' ')'
-		{ $$ = newNode<UdfCallNode>(QualifiedName(*$3, *$1), newNode<ValueListNode>(0)); }
+	: symbol_UDF_call_name '(' argument_list_opt ')'
+		{ $$ = newNode<UdfCallNode>(QualifiedName(*$1, ""), $3->second, $3->first); }
+	| symbol_package_name '.' symbol_UDF_name '(' argument_list_opt ')'
+		{ $$ = newNode<UdfCallNode>(QualifiedName(*$3, *$1), $5->second, $5->first); }
+	;
+
+%type <namedArguments> argument_list_opt
+argument_list_opt
+	: // nothing
+		{
+			$$ = newNode<NonPooledPair<ObjectsArray<MetaName>*, ValueListNode*>>();
+			$$->second = newNode<ValueListNode>();
+		}
+	| argument_list
+	;
+
+%type <namedArguments> argument_list
+argument_list
+	: named_argument_list
+	| value_or_default_list
+		{
+			$$ = newNode<NonPooledPair<ObjectsArray<MetaName>*, ValueListNode*>>();
+			$$->second = $1;
+		}
+	| value_or_default_list ',' named_argument_list
+		{
+			$$ = $3;
+
+			for (auto item : $$->second->items)
+				$1->add(item);
+
+			delete $$->second;
+			$$->second = $1;
+		}
+	;
+
+%type <namedArguments> named_argument_list
+named_argument_list
+	: named_argument
+		{
+			$$ = newNode<NonPooledPair<ObjectsArray<MetaName>*, ValueListNode*>>();
+			$$->first = newNode<ObjectsArray<MetaName>>();
+			$$->first->add(*$1->first);
+			$$->second = newNode<ValueListNode>();
+			$$->second->add($1->second);
+		}
+	| named_argument_list ',' named_argument
+		{
+			$$ = $1;
+			$$->first->add(*$3->first);
+			$$->second->add($3->second);
+		}
+	;
+
+%type <namedArgument> named_argument
+named_argument
+	: symbol_column_name NAMED_ARG_ASSIGN value_or_default
+		{ $$ = newNode<NonPooledPair<MetaName*, ValueExprNode*>>($1, $3); }
 	;
 
 %type <valueExprNode> cast_specification

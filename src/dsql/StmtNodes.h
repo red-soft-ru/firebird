@@ -589,23 +589,20 @@ class ExecProcedureNode final : public TypedNode<StmtNode, StmtNode::TYPE_EXEC_P
 public:
 	explicit ExecProcedureNode(MemoryPool& pool,
 				const QualifiedName& aDsqlName = QualifiedName(),
-				ValueListNode* aInputs = NULL, ValueListNode* aOutputs = NULL)
+				ValueListNode* aInputs = nullptr, ValueListNode* aOutputs = nullptr,
+				Firebird::ObjectsArray<MetaName>* aDsqlInputArgNames = nullptr)
 		: TypedNode<StmtNode, StmtNode::TYPE_EXEC_PROCEDURE>(pool),
 		  dsqlName(pool, aDsqlName),
-		  dsqlProcedure(NULL),
 		  inputSources(aInputs),
-		  inputTargets(NULL),
-		  inputMessage(NULL),
-		  outputSources(aOutputs),
-		  outputTargets(NULL),
-		  outputMessage(NULL),
-		  procedure(NULL)
+		  outputTargets(aOutputs),
+		  dsqlInputArgNames(aDsqlInputArgNames)
 	{
 	}
 
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
+public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual ExecProcedureNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
@@ -619,7 +616,7 @@ private:
 
 public:
 	QualifiedName dsqlName;
-	dsql_prc* dsqlProcedure;
+	dsql_prc* dsqlProcedure = nullptr;
 	NestConst<ValueListNode> inputSources;
 	NestConst<ValueListNode> inputTargets;
 	NestConst<MessageNode> inputMessage;
@@ -627,6 +624,9 @@ public:
 	NestConst<ValueListNode> outputTargets;
 	NestConst<MessageNode> outputMessage;
 	NestConst<jrd_prc> procedure;
+	NestConst<Firebird::ObjectsArray<MetaName>> dsqlInputArgNames;
+	NestConst<Firebird::ObjectsArray<MetaName>> dsqlOutputArgNames;
+	bool dsqlCallSyntax = false;
 };
 
 

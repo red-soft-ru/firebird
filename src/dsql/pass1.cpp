@@ -371,19 +371,16 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 	{
 		// No processing needed here for derived tables.
 	}
-	else if (procNode && (procNode->dsqlName.package.hasData() || procNode->sourceList))
+	else if (procNode && (procNode->dsqlName.package.hasData() || procNode->inputSources))
 	{
 		if (procNode->dsqlName.package.isEmpty())
 		{
-			DeclareSubProcNode* subProcedure = dsqlScratch->getSubProcedure(procNode->dsqlName.identifier);
+			const auto subProcedure = dsqlScratch->getSubProcedure(procNode->dsqlName.identifier);
 			procedure = subProcedure ? subProcedure->dsqlProcedure : NULL;
 		}
 
 		if (!procedure)
-		{
-			procedure = METD_get_procedure(dsqlScratch->getTransaction(), dsqlScratch,
-				procNode->dsqlName);
-		}
+			procedure = METD_get_procedure(dsqlScratch->getTransaction(), dsqlScratch, procNode->dsqlName);
 
 		if (!procedure)
 		{
@@ -401,7 +398,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 	{
 		if (procNode && procNode->dsqlName.package.isEmpty())
 		{
-			DeclareSubProcNode* subProcedure = dsqlScratch->getSubProcedure(procNode->dsqlName.identifier);
+			const auto subProcedure = dsqlScratch->getSubProcedure(procNode->dsqlName.identifier);
 			procedure = subProcedure ? subProcedure->dsqlProcedure : NULL;
 		}
 
@@ -409,10 +406,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 			relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, relation_name);
 
 		if (!relation && !procedure && procNode)
-		{
-			procedure = METD_get_procedure(dsqlScratch->getTransaction(),
-				dsqlScratch, procNode->dsqlName);
-		}
+			procedure = METD_get_procedure(dsqlScratch->getTransaction(), dsqlScratch, procNode->dsqlName);
 
 		if (!relation && !procedure)
 		{
@@ -433,7 +427,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 	}
 
 	// Set up context block.
-	dsql_ctx* context = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_ctx(*tdbb->getDefaultPool());
+	const auto context = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_ctx(*tdbb->getDefaultPool());
 	context->ctx_relation = relation;
 	context->ctx_procedure = procedure;
 
@@ -535,34 +529,73 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 	{
 		USHORT count = 0;
 
-		if (procNode->sourceList)
+		if (procNode->inputSources)
 		{
-			context->ctx_proc_inputs = Node::doDsqlPass(dsqlScratch, procNode->sourceList, false);
+			context->ctx_proc_inputs = Node::doDsqlPass(dsqlScratch, procNode->inputSources, false);
 			count = context->ctx_proc_inputs->items.getCount();
 		}
 
 		if (count > procedure->prc_in_count ||
 			count < procedure->prc_in_count - procedure->prc_def_count)
 		{
-			ERRD_post(Arg::Gds(isc_prcmismat) << Arg::Str(procNode->dsqlName.toString()));
+			ERRD_post(Arg::Gds(isc_prcmismat) << procNode->dsqlName.toString());
 		}
 
 		if (count)
 		{
-			// Initialize this stack variable, and make it look like a node
-			dsc desc_node;
-			ValueListNode* inputList = context->ctx_proc_inputs;
-			NestConst<ValueExprNode>* input = inputList->items.begin();
+			auto inputList = context->ctx_proc_inputs;
+			auto argIt = inputList->items.begin();
+			const auto argEnd = inputList->items.end();
 
-			for (dsql_fld* field = procedure->prc_inputs;
-				 input != inputList->items.end();
-				 ++input, field = field->fld_next)
+			const auto positionalArgCount = inputList->items.getCount() -
+				(procNode->dsqlInputArgNames ? procNode->dsqlInputArgNames->getCount() : 0);
+			const auto* field = procedure->prc_inputs;
+			unsigned pos = 0;
+
+			while (pos < positionalArgCount && field && argIt != argEnd)
 			{
-				DEV_BLKCHK(field, dsql_type_fld);
-				DsqlDescMaker::fromField(&desc_node, field);
-				PASS1_set_parameter_type(dsqlScratch, *input,
-					[&] (dsc* desc) { *desc = desc_node; },
+				dsc descNode;
+				DsqlDescMaker::fromField(&descNode, field);
+
+				PASS1_set_parameter_type(dsqlScratch, *argIt,
+					[&] (dsc* desc) { *desc = descNode; },
 					false);
+
+				field = field->fld_next;
+				++pos;
+				++argIt;
+			}
+
+			if (procNode->dsqlInputArgNames)
+			{
+				fb_assert(procNode->dsqlInputArgNames->getCount() <= inputList->items.getCount());
+
+				LeftPooledMap<MetaName, const dsql_fld*> argsByName;
+
+				for (const auto* field = procedure->prc_inputs; field; field = field->fld_next)
+					argsByName.put(field->fld_name, field);
+
+				Arg::StatusVector mismatchStatus;
+
+				for (const auto& argName : *procNode->dsqlInputArgNames)
+				{
+					if (const auto field = argsByName.get(argName))
+					{
+						dsc descNode;
+						DsqlDescMaker::fromField(&descNode, *field);
+
+						PASS1_set_parameter_type(dsqlScratch, *argIt,
+							[&] (dsc* desc) { *desc = descNode; },
+							false);
+					}
+					else
+						mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
+
+					++argIt;
+				}
+
+				if (mismatchStatus.hasData())
+					status_exception::raise(Arg::Gds(isc_prcmismat) << procNode->dsqlName.toString() << mismatchStatus);
 			}
 		}
 	}
@@ -1677,21 +1710,22 @@ RecordSourceNode* PASS1_relation(DsqlCompilerScratch* dsqlScratch, RecordSourceN
 
 	DEV_BLKCHK(dsqlScratch, dsql_type_req);
 
-	dsql_ctx* context = PASS1_make_context(dsqlScratch, input);
-	RecordSourceNode* node = NULL;
+	const auto context = PASS1_make_context(dsqlScratch, input);
 
 	if (context->ctx_relation)
 	{
-		RelationSourceNode* relNode = FB_NEW_POOL(*tdbb->getDefaultPool()) RelationSourceNode(
+		const auto relNode = FB_NEW_POOL(*tdbb->getDefaultPool()) RelationSourceNode(
 			*tdbb->getDefaultPool(), context->ctx_relation->rel_name);
 		relNode->dsqlContext = context;
 		return relNode;
 	}
 	else if (context->ctx_procedure)
 	{
-		ProcedureSourceNode* procNode = FB_NEW_POOL(*tdbb->getDefaultPool()) ProcedureSourceNode(
+		const auto procNode = FB_NEW_POOL(*tdbb->getDefaultPool()) ProcedureSourceNode(
 			*tdbb->getDefaultPool(), context->ctx_procedure->prc_name);
 		procNode->dsqlContext = context;
+		procNode->inputSources = context->ctx_proc_inputs;
+		procNode->dsqlInputArgNames = nodeAs<ProcedureSourceNode>(input)->dsqlInputArgNames;
 		return procNode;
 	}
 	//// TODO: LocalTableSourceNode

@@ -486,11 +486,16 @@ public:
 		}
 	}
 
+	void ensureCapacity(size_type newcapacity)
+	{
+		ensureCapacity(newcapacity, true);
+	}
+
 protected:
 	size_type count, capacity;
 	T* data;
 
-	void ensureCapacity(size_type newcapacity, bool preserve = true)
+	void ensureCapacity(size_type newcapacity, bool preserve)
 	{
 		if (newcapacity > capacity)
 		{

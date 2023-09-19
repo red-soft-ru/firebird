@@ -319,6 +319,19 @@ enum prc_flags_vals {
 class dsql_udf : public pool_alloc<dsql_type_udf>
 {
 public:
+	class Argument
+	{
+	public:
+		Argument(MemoryPool& p)
+			: name(p)
+		{}
+
+	public:
+		MetaName name;
+		dsc desc;
+	};
+
+public:
 	explicit dsql_udf(MemoryPool& p)
 		: udf_name(p),
 		  udf_arguments(p)
@@ -332,7 +345,7 @@ public:
 	SSHORT udf_character_set_id = 0;
 	USHORT udf_flags = 0;
 	QualifiedName udf_name;
-	Firebird::Array<dsc> udf_arguments;
+	Firebird::ObjectsArray<Argument> udf_arguments;
 	bool udf_private = false;	// Packaged private function
 	SSHORT udf_def_count = 0;	// number of inputs with default values
 };
