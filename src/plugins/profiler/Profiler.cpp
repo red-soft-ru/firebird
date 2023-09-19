@@ -35,7 +35,6 @@
 #include "../common/status.h"
 #include "../intl/charsets.h"
 #include "../jrd/intl.h"
-#include <unicode/utf8.h>
 
 using namespace Firebird;
 
@@ -45,7 +44,6 @@ namespace
 
 class ProfilerPlugin;
 
-constexpr unsigned MAX_ACCESS_PATH_CHAR_LEN = 255;
 static const CInt128 ONE_SECOND_IN_NS{1'000'000'000};
 static CInt128 ticksFrequency{0};
 
@@ -454,7 +452,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 		(FB_INTEGER, recordSourceId)
 		(FB_INTEGER, parentRecordSourceId)
 		(FB_INTEGER, level)
-		(FB_INTL_VARCHAR(MAX_ACCESS_PATH_CHAR_LEN * 4, CS_UTF8), accessPath)
+		(FB_BLOB, accessPath)
 	) recSrcMessage(status, MasterInterfacePtr());
 	recSrcMessage.clear();
 
@@ -779,7 +777,13 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 			recSrcMessage->level = recSrc.level;
 
 			recSrcMessage->accessPathNull = FB_FALSE;
-			recSrcMessage->accessPath.set(recSrc.accessPath.c_str());
+			{	// scope
+				auto blob = makeNoIncRef(
+					userAttachment->createBlob(status, transaction, &recSrcMessage->accessPath, 0, nullptr));
+				blob->putSegment(status, recSrc.accessPath.length(), recSrc.accessPath.c_str());
+				blob->close(status);
+				blob.clear();
+			}
 
 			recSrcStmt->execute(status, transaction, recSrcMessage.getMetadata(),
 				recSrcMessage.getData(), nullptr, nullptr);
@@ -1047,7 +1051,7 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		    record_source_id integer not null,
 		    parent_record_source_id integer,
 		    level integer not null,
-		    access_path varchar(255) character set utf8 not null,
+		    access_path blob sub_type text character set utf8 not null,
 		    constraint plg$prof_record_sources_pk
 		        primary key (profile_id, statement_id, cursor_id, record_source_id)
 		        using index plg$prof_record_sources_profile_statement_cursor_recsource,
@@ -1458,30 +1462,6 @@ void Session::defineRecordSource(SINT64 statementId, unsigned cursorId, unsigned
 
 	recSource->level = level;
 	recSource->accessPath = accessPath;
-
-	if (unsigned len = recSource->accessPath.length(); len > MAX_ACCESS_PATH_CHAR_LEN)
-	{
-		const auto str = recSource->accessPath.c_str();
-		unsigned charLen = 0;
-		unsigned pos = 0;
-		unsigned truncPos = 0;
-
-		while (pos < len && charLen <= MAX_ACCESS_PATH_CHAR_LEN)
-		{
-			UChar32 c;
-			U8_NEXT_UNSAFE(str, pos, c);
-			++charLen;
-
-			if (charLen == MAX_ACCESS_PATH_CHAR_LEN - 3)
-				truncPos = pos;
-		}
-
-		if (charLen > MAX_ACCESS_PATH_CHAR_LEN)
-		{
-			recSource->accessPath.resize(truncPos);
-			recSource->accessPath += "...";
-		}
-	}
 
 	if (parentRecordSourceId)
 		recSource->parentId = parentRecordSourceId;
