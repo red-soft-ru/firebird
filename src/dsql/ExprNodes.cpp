@@ -91,6 +91,28 @@ namespace
 		return false;
 	}
 
+	// In previous versions COALESCE is automatically wrapped by a CAST.
+	bool sameNodes(const CoalesceNode* coalesceNode, const CastNode* castNode, bool ignoreStreams)
+	{
+		if (coalesceNode && castNode)
+		{
+			if (const auto castCoalesceNode = nodeAs<CoalesceNode>(castNode->source))
+			{
+				const auto desc1 = &castCoalesceNode->castDesc;
+				const auto desc2 = &castNode->castDesc;
+
+				if (DSC_EQUIV(desc1, desc2, true) ||
+					(desc1->isText() && desc2->isText() && desc1->getTextType() == desc2->getTextType()) ||
+					(desc1->isNumeric() && desc2->isNumeric()))
+				{
+					return castCoalesceNode->sameAs(coalesceNode, ignoreStreams);
+				}
+			}
+		}
+
+		return false;
+	}
+
 	// Try to expand the given stream. If it's a view reference, collect its base streams
 	// (the ones directly residing in the FROM clause) and recurse.
 	void expandViewStreams(CompilerScratch* csb, StreamType baseStream, SortedStreamList& streams)
@@ -3446,7 +3468,7 @@ dsc* BoolAsValueNode::execute(thread_db* tdbb, Request* request) const
 	if (request->req_flags & req_null)
 		return NULL;
 
-	impure_value* impure = request->getImpure<impure_value>(impureOffset);
+	const auto impure = request->getImpure<impure_value>(impureOffset);
 
 	dsc desc;
 	desc.makeBoolean(&booleanVal);
@@ -3622,6 +3644,9 @@ bool CastNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other
 
 bool CastNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 {
+	if (sameNodes(nodeAs<CoalesceNode>(other), this, ignoreStreams))
+		return true;
+
 	if (!ExprNode::sameAs(other, ignoreStreams))
 		return false;
 
@@ -3664,17 +3689,24 @@ dsc* CastNode::execute(thread_db* tdbb, Request* request) const
 	dsc* value = EVL_expr(tdbb, request, source);
 
 	if (request->req_flags & req_null)
-		value = NULL;
+		value = nullptr;
 
+	const auto impure = request->getImpure<impure_value>(impureOffset);
+
+	return perform(tdbb, impure, value, &castDesc, itemInfo);
+}
+
+// Cast from one datatype to another.
+dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
+	const dsc* castDesc, const ItemInfo* itemInfo)
+{
 	// If validation is not required and the source value is either NULL
 	// or already in the desired data type, simply return it "as is"
 
-	if (!itemInfo && (!value || DSC_EQUIV(value, &castDesc, true)))
+	if (!itemInfo && (!value || DSC_EQUIV(value, castDesc, true)))
 		return value;
 
-	impure_value* impure = request->getImpure<impure_value>(impureOffset);
-
-	impure->vlu_desc = castDesc;
+	impure->vlu_desc = *castDesc;
 	impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
 
 	if (DTYPE_IS_TEXT(impure->vlu_desc.dsc_dtype))
@@ -3699,12 +3731,12 @@ dsc* CastNode::execute(thread_db* tdbb, Request* request) const
 
 		// Allocate a string block of sufficient size.
 
-		VaryingString* string = impure->vlu_string;
+		auto string = impure->vlu_string;
 
 		if (string && string->str_length < length)
 		{
 			delete string;
-			string = NULL;
+			string = nullptr;
 		}
 
 		if (!string)
@@ -3717,10 +3749,10 @@ dsc* CastNode::execute(thread_db* tdbb, Request* request) const
 	}
 
 	EVL_validate(tdbb, Item(Item::TYPE_CAST), itemInfo,
-		value, value == NULL || (value->dsc_flags & DSC_null));
+		value, !value || (value->dsc_flags & DSC_null));
 
 	if (!value)
-		return NULL;
+		return nullptr;
 
 	MOV_move(tdbb, value, &impure->vlu_desc);
 
@@ -3778,11 +3810,6 @@ bool CoalesceNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 
 void CoalesceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	dsc desc;
-	make(dsqlScratch, &desc);
-	dsqlScratch->appendUChar(blr_cast);
-	GEN_descriptor(dsqlScratch, &desc, true);
-
 	dsqlScratch->appendUChar(blr_coalesce);
 	dsqlScratch->appendUChar(args->items.getCount());
 
@@ -3818,6 +3845,7 @@ ValueExprNode* CoalesceNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
 	CoalesceNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) CoalesceNode(*tdbb->getDefaultPool());
 	node->args = copier.copy(tdbb, args);
+	node->castDesc = castDesc;
 	return node;
 }
 
@@ -3826,30 +3854,38 @@ bool CoalesceNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 	if (ExprNode::sameAs(other, ignoreStreams))
 		return true;
 
-	return sameNodes(nodeAs<ValueIfNode>(other), this, ignoreStreams);
+	return sameNodes(this, nodeAs<CastNode>(other), ignoreStreams) ||
+		sameNodes(nodeAs<ValueIfNode>(other), this, ignoreStreams);
 }
 
 ValueExprNode* CoalesceNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	ValueExprNode::pass2(tdbb, csb);
 
-	dsc desc;
-	getDesc(tdbb, csb, &desc);
+	getDesc(tdbb, csb, &castDesc);
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
 
 dsc* CoalesceNode::execute(thread_db* tdbb, Request* request) const
 {
+	dsc* value = nullptr;
+
 	for (auto& item : args->items)
 	{
-		dsc* desc = EVL_expr(tdbb, request, item);
+		value = EVL_expr(tdbb, request, item);
 
-		if (desc && !(request->req_flags & req_null))
-			return desc;
+		if (value)
+			break;
 	}
 
-	return NULL;
+	if (!value || DSC_EQUIV(value, &castDesc, true))
+		return value;
+
+	const auto impure = request->getImpure<impure_value>(impureOffset);
+
+	return CastNode::perform(tdbb, impure, value, &castDesc, nullptr);
 }
 
 

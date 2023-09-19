@@ -273,6 +273,9 @@ public:
 	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual dsc* execute(thread_db* tdbb, Request* request) const;
 
+	static dsc* perform(thread_db* tdbb, impure_value* impure, dsc* value,
+		const dsc* castDesc, const ItemInfo* itemInfo);
+
 public:
 	MetaName dsqlAlias;
 	dsql_fld* dsqlField;
@@ -290,6 +293,7 @@ public:
 		: TypedNode<ValueExprNode, ExprNode::TYPE_COALESCE>(pool),
 		  args(aArgs)
 	{
+		castDesc.clear();
 	}
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
@@ -326,6 +330,7 @@ public:
 
 public:
 	NestConst<ValueListNode> args;
+	dsc castDesc;
 };
 
 
