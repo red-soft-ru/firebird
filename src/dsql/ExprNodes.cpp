@@ -12875,101 +12875,274 @@ dsc* TrimNode::execute(thread_db* tdbb, Request* request) const
 //--------------------
 
 
-static RegisterNode<UdfCallNode> regUdfCallNode({blr_function, blr_function2, blr_subfunc});
+static RegisterNode<UdfCallNode> regUdfCallNode({blr_function, blr_function2, blr_subfunc, blr_invoke_function});
 
-UdfCallNode::UdfCallNode(MemoryPool& pool, const QualifiedName& aName, ValueListNode* aArgs)
+UdfCallNode::UdfCallNode(MemoryPool& pool, const QualifiedName& aName,
+		ValueListNode* aArgs, ObjectsArray<MetaName>* aDsqlArgNames)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_UDF_CALL>(pool),
 	  name(pool, aName),
 	  args(aArgs),
-	  function(NULL),
-	  dsqlFunction(NULL),
-	  isSubRoutine(false)
+	  dsqlArgNames(aDsqlArgNames)
 {
 }
 
 DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 	const UCHAR blrOp)
 {
-	const UCHAR* savePos = csb->csb_blr_reader.getPos();
+	const auto predateCheck = [&](bool condition, const char* preVerb, const char* postVerb)
+	{
+		if (!condition)
+		{
+			string str;
+			str.printf("%s should predate %s", preVerb, postVerb);
+			PAR_error(csb, Arg::Gds(isc_random) << str);
+		}
+	};
 
+	auto& blrReader = csb->csb_blr_reader;
+	const UCHAR* startPos = csb->csb_blr_reader.getPos();
+
+	const UCHAR* argNamesPos = nullptr;
+	ObjectsArray<MetaName>* argNames = nullptr;
+	USHORT argCount = 0;
 	QualifiedName name;
 
-	if (blrOp == blr_function2)
-		csb->csb_blr_reader.getMetaName(name.package);
+	const auto node = FB_NEW_POOL(pool) UdfCallNode(pool);
 
-	csb->csb_blr_reader.getMetaName(name.identifier);
-
-	const USHORT count = name.package.length() + name.identifier.length();
-
-	UdfCallNode* node = FB_NEW_POOL(pool) UdfCallNode(pool, name);
-
-	if (blrOp == blr_function &&
-		(name.identifier == "RDB$GET_CONTEXT" || name.identifier == "RDB$SET_CONTEXT"))
+	if (blrOp == blr_invoke_function)
 	{
-		csb->csb_blr_reader.setPos(savePos);
-		return SysFuncCallNode::parse(tdbb, pool, csb, blr_sys_function);
-	}
+		UCHAR subCode;
 
-	if (blrOp == blr_subfunc)
-	{
-		DeclareSubFuncNode* declareNode;
-
-		for (auto curCsb = csb; curCsb && !node->function; curCsb = curCsb->mainCsb)
+		while ((subCode = blrReader.getByte()) != blr_end)
 		{
-			if (curCsb->subFunctions.get(name.identifier, declareNode))
-				node->function = declareNode->routine;
-		}
-	}
-	else if (!node->function)
-		node->function = Function::lookup(tdbb, name, false);
-
-	Function* function = node->function;
-
-	if (function)
-	{
-		if (function->isImplemented() && !function->isDefined())
-		{
-			if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
+			switch (subCode)
 			{
-				PAR_warning(Arg::Warning(isc_funnotdef) << Arg::Str(name.toString()) <<
-							Arg::Warning(isc_modnotfound));
-			}
-			else
-			{
-				csb->csb_blr_reader.seekBackward(count);
-				PAR_error(csb, Arg::Gds(isc_funnotdef) << Arg::Str(name.toString()) <<
-						   Arg::Gds(isc_modnotfound));
+				case blr_invoke_function_type:
+				{
+					UCHAR functionType = blrReader.getByte();
+
+					switch (functionType)
+					{
+						case blr_invoke_function_type_packaged:
+							blrReader.getMetaName(name.package);
+							break;
+
+						case blr_invoke_function_type_standalone:
+						case blr_invoke_function_type_sub:
+							break;
+
+						default:
+							PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_function_type");
+							break;
+					}
+
+					blrReader.getMetaName(name.identifier);
+
+					if (functionType == blr_invoke_function_type_sub)
+					{
+						for (auto curCsb = csb; curCsb && !node->function; curCsb = curCsb->mainCsb)
+						{
+							if (DeclareSubFuncNode* declareNode; curCsb->subFunctions.get(name.identifier, declareNode))
+								node->function = declareNode->routine;
+						}
+					}
+					else if (!node->function)
+						node->function = Function::lookup(tdbb, name, false);
+
+					break;
+				}
+
+				case blr_invoke_function_arg_names:
+				{
+					predateCheck(node->function, "blr_invoke_function_type", "blr_invoke_function_arg_names");
+					predateCheck(!node->args, "blr_invoke_function_arg_names", "blr_invoke_function_arg_names");
+
+					argNamesPos = blrReader.getPos();
+					USHORT argNamesCount = blrReader.getWord();
+					MetaName argName;
+
+					argNames = FB_NEW_POOL(pool) ObjectsArray<MetaName>(pool);
+
+					while (argNamesCount--)
+					{
+						blrReader.getMetaName(argName);
+						argNames->add(argName);
+					}
+
+					break;
+				}
+
+				case blr_invoke_function_args:
+					predateCheck(node->function, "blr_invoke_function_type", "blr_invoke_function_args");
+
+					argCount = blrReader.getWord();
+					node->args = PAR_args(tdbb, csb, argCount, (argNames ? argCount : MAX(argCount, node->function->fun_inputs)));
+					break;
+
+				default:
+					PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_function sub code");
 			}
 		}
 	}
 	else
 	{
-		csb->csb_blr_reader.seekBackward(count);
-		PAR_error(csb, Arg::Gds(isc_funnotdef) << Arg::Str(name.toString()));
+		if (blrOp == blr_function2)
+			blrReader.getMetaName(name.package);
+
+		blrReader.getMetaName(name.identifier);
+
+		if (blrOp == blr_function &&
+			(name.identifier == "RDB$GET_CONTEXT" || name.identifier == "RDB$SET_CONTEXT"))
+		{
+			blrReader.setPos(startPos);
+			return SysFuncCallNode::parse(tdbb, pool, csb, blr_sys_function);
+		}
+
+		if (blrOp == blr_subfunc)
+		{
+			for (auto curCsb = csb; curCsb && !node->function; curCsb = curCsb->mainCsb)
+			{
+				if (DeclareSubFuncNode* declareNode; curCsb->subFunctions.get(name.identifier, declareNode))
+					node->function = declareNode->routine;
+			}
+		}
+		else if (!node->function)
+			node->function = Function::lookup(tdbb, name, false);
+
+		argCount = blrReader.getByte();
+		node->args = PAR_args(tdbb, csb, argCount, node->function->fun_inputs);
 	}
 
-	node->isSubRoutine = function->isSubRoutine();
-
-	const UCHAR argCount = csb->csb_blr_reader.getByte();
-
-	// Check to see if the argument count matches.
-	if (argCount < function->fun_inputs - function->getDefaultCount() || argCount > function->fun_inputs)
-		PAR_error(csb, Arg::Gds(isc_funmismat) << name.toString());
-
-	node->args = PAR_args(tdbb, csb, argCount, function->fun_inputs);
-
-	for (USHORT i = argCount; i < function->fun_inputs; ++i)
+	if (!node->function)
 	{
-		Parameter* const parameter = function->getInputFields()[i];
-		node->args->items[i] = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+		blrReader.setPos(startPos);
+		PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString());
 	}
+
+	if (node->function->isImplemented() && !node->function->isDefined())
+	{
+		if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
+		{
+			PAR_warning(Arg::Warning(isc_funnotdef) << name.toString() <<
+						Arg::Warning(isc_modnotfound));
+		}
+		else
+		{
+			blrReader.setPos(startPos);
+			PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString() <<
+						Arg::Gds(isc_modnotfound));
+		}
+	}
+
+	node->name = name;
+	node->isSubRoutine = node->function->isSubRoutine();
+
+	Arg::StatusVector mismatchStatus;
+	mismatchStatus << Arg::Gds(isc_fun_param_mismatch) << name.toString();
+	const auto mismatchInitialLength = mismatchStatus.length();
+
+	if (!node->args)
+		node->args = FB_NEW_POOL(pool) ValueListNode(pool);
+
+	if (argNames && argNames->getCount() != node->args->items.getCount())
+	{
+		blrReader.setPos(argNamesPos);
+		PAR_error(csb,
+			Arg::Gds(isc_random) << "blr_invoke_function_arg_names count differs from blr_invoke_function_args");
+	}
+
+	if (argNames)
+	{
+		LeftPooledMap<MetaName, NestConst<ValueExprNode>> argsByName;
+		auto argIt = node->args->items.begin();
+
+		for (const auto& argName : *argNames)
+		{
+			if (argsByName.put(argName, *argIt++))
+				mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << argName;
+		}
+
+		node->args->items.resize(node->function->getInputFields().getCount());
+		argIt = node->args->items.begin();
+
+		for (auto& parameter : node->function->getInputFields())
+		{
+			if (const auto argValue = argsByName.get(parameter->prm_name))
+			{
+				*argIt = *argValue;
+				argsByName.remove(parameter->prm_name);
+			}
+			else
+			{
+				if (parameter->prm_default_value)
+					*argIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+				else
+					mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+			}
+
+			++argIt;
+		}
+
+		if (argsByName.hasData())
+		{
+			for (const auto& argPair : argsByName)
+				mismatchStatus << Arg::Gds(isc_param_not_exist) << argPair.first;
+		}
+	}
+	else
+	{
+		// Check to see if the argument count matches.
+
+		if (argCount > node->function->fun_inputs)
+			mismatchStatus << Arg::Gds(isc_wronumarg);
+		else if (argCount < node->function->fun_inputs - node->function->getDefaultCount())
+		{
+			unsigned pos = 0;
+
+			for (auto& parameter : node->function->getInputFields())
+			{
+				if (++pos <= argCount)
+					continue;
+
+				mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+
+				if (pos >= node->function->fun_inputs - node->function->getDefaultCount())
+					break;
+			}
+		}
+		else
+		{
+			for (unsigned pos = argCount; pos < node->function->getInputFields().getCount(); ++pos)
+			{
+				auto parameter = node->function->getInputFields()[pos];
+				fb_assert(parameter->prm_default_value);
+				node->args->items[pos] = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+			}
+		}
+	}
+
+	if (mismatchStatus.length() > mismatchInitialLength)
+		status_exception::raise(mismatchStatus);
 
 	// CVC: I will track ufds only if a function is not being dropped.
-	if (!function->isSubRoutine() && csb->collectingDependencies())
+	if (!node->function->isSubRoutine() && csb->collectingDependencies())
 	{
-		CompilerScratch::Dependency dependency(obj_udf);
-		dependency.function = function;
-		csb->addDependency(dependency);
+		{	// scope
+			CompilerScratch::Dependency dependency(obj_udf);
+			dependency.function = node->function;
+			csb->addDependency(dependency);
+		}
+
+		if (argNames)
+		{
+			for (const auto& argName : *argNames)
+			{
+				CompilerScratch::Dependency dependency(obj_udf);
+				dependency.function = node->function;
+				dependency.subName = &argName;
+				csb->addDependency(dependency);
+			}
+		}
 	}
 
 	return node;
@@ -12992,6 +13165,45 @@ void UdfCallNode::setParameterName(dsql_par* parameter) const
 
 void UdfCallNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	if (dsqlArgNames || args->items.getCount() >= UCHAR_MAX)
+	{
+		dsqlScratch->appendUChar(blr_invoke_function);
+
+		dsqlScratch->appendUChar(blr_invoke_function_type);
+
+		if (dsqlFunction->udf_name.package.hasData())
+		{
+			dsqlScratch->appendUChar(blr_invoke_function_type_packaged);
+			dsqlScratch->appendMetaString(dsqlFunction->udf_name.package.c_str());
+		}
+		else
+		{
+			dsqlScratch->appendUChar((dsqlFunction->udf_flags & UDF_subfunc) ?
+				blr_invoke_function_type_sub : blr_invoke_function_type_standalone);
+		}
+
+		dsqlScratch->appendMetaString(dsqlFunction->udf_name.identifier.c_str());
+
+		if (dsqlArgNames && dsqlArgNames->hasData())
+		{
+			dsqlScratch->appendUChar(blr_invoke_function_arg_names);
+			dsqlScratch->appendUShort(dsqlArgNames->getCount());
+
+			for (auto& argName : *dsqlArgNames)
+				dsqlScratch->appendMetaString(argName.c_str());
+		}
+
+		dsqlScratch->appendUChar(blr_invoke_function_args);
+		dsqlScratch->appendUShort(args->items.getCount());
+
+		for (auto& arg : args->items)
+			GEN_expr(dsqlScratch, arg);
+
+		dsqlScratch->appendUChar(blr_end);
+
+		return;
+	}
+
 	if (dsqlFunction->udf_name.package.isEmpty())
 		dsqlScratch->appendUChar((dsqlFunction->udf_flags & UDF_subfunc) ? blr_subfunc : blr_function);
 	else
@@ -13355,8 +13567,11 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 
 ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	UdfCallNode* node = FB_NEW_POOL(dsqlScratch->getPool()) UdfCallNode(dsqlScratch->getPool(), name,
-		doDsqlPass(dsqlScratch, args));
+	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) UdfCallNode(dsqlScratch->getPool(), name,
+		doDsqlPass(dsqlScratch, args),
+		dsqlArgNames ?
+			FB_NEW_POOL(dsqlScratch->getPool()) ObjectsArray<MetaName>(dsqlScratch->getPool(), *dsqlArgNames) :
+			nullptr);
 
 	if (name.package.isEmpty())
 	{
@@ -13374,28 +13589,56 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				  Arg::Gds(isc_random) << Arg::Str(name.toString()));
 	}
 
-	const USHORT arg_count = node->dsqlFunction->udf_arguments.getCount();
-	const USHORT count = node->args->items.getCount();
-	if (count > arg_count || count < arg_count - node->dsqlFunction->udf_def_count)
-		ERRD_post(Arg::Gds(isc_fun_param_mismatch) << Arg::Str(name.toString()));
-
-	unsigned pos = 0;
-
-	for (auto& arg : node->args->items)
+	if (node->dsqlArgNames)
 	{
-		if (pos < node->dsqlFunction->udf_arguments.getCount())
+		fb_assert(node->dsqlArgNames->getCount() == node->args->items.getCount());
+
+		LeftPooledMap<MetaName, const dsc*> argsByName;
+
+		for (const auto& arg : node->dsqlFunction->udf_arguments)
+			argsByName.put(arg.name, &arg.desc);
+
+		bool mismatchError = false;
+		Arg::StatusVector mismatchStatus;
+		mismatchStatus << Arg::Gds(isc_fun_param_mismatch) << Arg::Str(name.toString());
+
+		auto argIt = node->args->items.begin();
+
+		for (const auto& argName : *node->dsqlArgNames)
 		{
-			PASS1_set_parameter_type(dsqlScratch, arg,
-				[&] (dsc* desc) { *desc = node->dsqlFunction->udf_arguments[pos]; },
-				false);
-		}
-		else
-		{
-			// We should complain here in the future! The parameter is
-			// out of bounds or the function doesn't declare input params.
+			if (const auto argDescPtr = argsByName.get(argName))
+			{
+				PASS1_set_parameter_type(dsqlScratch, *argIt,
+					[&] (dsc* desc) { *desc = **argDescPtr; },
+					false);
+			}
+			else
+			{
+				mismatchError = true;
+				mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
+			}
+
+			++argIt;
 		}
 
-		++pos;
+		if (mismatchError)
+			status_exception::raise(mismatchStatus);
+	}
+	else
+	{
+		unsigned pos = 0;
+
+		for (auto& arg : node->args->items)
+		{
+			if (pos < node->dsqlFunction->udf_arguments.getCount())
+			{
+				PASS1_set_parameter_type(dsqlScratch, arg,
+					[&] (dsc* desc) { *desc = node->dsqlFunction->udf_arguments[pos].desc; },
+					false);
+			}
+
+			++pos;
+		}
 	}
 
 	return node;

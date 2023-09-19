@@ -46,6 +46,7 @@ PARSER_TOKEN('<', "<", false)
 PARSER_TOKEN(TOK_LEQ, "<=", false)
 PARSER_TOKEN(TOK_NEQ, "<>", false)	// Alias of !=
 PARSER_TOKEN('=', "=", false)
+PARSER_TOKEN(TOK_NAMED_ARG_ASSIGN, "=>", false)
 PARSER_TOKEN('>', ">", false)
 PARSER_TOKEN(TOK_GEQ, ">=", false)
 PARSER_TOKEN(TOK_BIND_PARAM, ":=", false)

@@ -255,5 +255,8 @@ static const struct
 	{"outer_map", outer_map},
 	{NULL, NULL},	// blr_json_function
 	{"skip_locked", zero},
+	{"invoke_function", invoke_function},
+	{"invoke_procedure", invsel_procedure},
+	{"select_procedure", invsel_procedure},
 	{0, 0}
 };

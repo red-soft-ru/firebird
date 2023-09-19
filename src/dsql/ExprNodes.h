@@ -2134,11 +2134,12 @@ private:
 	};
 
 public:
-	explicit UdfCallNode(MemoryPool& pool, const QualifiedName& aName,
-		ValueListNode* aArgs = NULL);
+	UdfCallNode(MemoryPool& pool, const QualifiedName& aName = {},
+		ValueListNode* aArgs = nullptr, Firebird::ObjectsArray<MetaName>* aDsqlArgNames = nullptr);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
+public:
 	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
 	{
 		ValueExprNode::getChildren(holder, dsql);
@@ -2172,11 +2173,12 @@ public:
 public:
 	QualifiedName name;
 	NestConst<ValueListNode> args;
+	NestConst<Firebird::ObjectsArray<MetaName>> dsqlArgNames;
 	NestConst<Function> function;
 
 private:
-	dsql_udf* dsqlFunction;
-	bool isSubRoutine;
+	dsql_udf* dsqlFunction = nullptr;
+	bool isSubRoutine = false;
 };
 
 

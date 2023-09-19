@@ -1664,8 +1664,8 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 
 		if (!implemetingForward)
 		{
-			// ASF: dsqlFunction->udf_arguments is only checked for its count for now.
-			dsqlFunction->udf_arguments.add(dsc());
+			// ASF: dsqlFunction->udf_arguments types (desc) are not checked for now.
+			dsqlFunction->udf_arguments.add().name = param->name;
 		}
 
 		if (param->defaultClause)
@@ -2905,79 +2905,304 @@ const StmtNode* ErrorHandlerNode::execute(thread_db* /*tdbb*/, Request* request,
 
 
 static RegisterNode<ExecProcedureNode> regExecProcedureNode(
-	{blr_exec_proc, blr_exec_proc2, blr_exec_pid, blr_exec_subproc});
+	{blr_exec_proc, blr_exec_proc2, blr_exec_pid, blr_exec_subproc, blr_invoke_procedure});
 
 // Parse an execute procedure reference.
 DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
-	SET_TDBB(tdbb);
+	const auto predateCheck = [&](bool condition, const char* preVerb, const char* postVerb)
+	{
+		if (!condition)
+		{
+			string str;
+			str.printf("%s should predate %s", preVerb, postVerb);
+			PAR_error(csb, Arg::Gds(isc_random) << str);
+		}
+	};
 
-	const auto blrStartPos = csb->csb_blr_reader.getPos();
-	jrd_prc* procedure = NULL;
+	auto& blrReader = csb->csb_blr_reader;
+	const auto blrStartPos = blrReader.getPos();
+
+	const UCHAR* inArgNamesPos = nullptr;
+	ObjectsArray<MetaName>* inArgNames = nullptr;
+	USHORT inArgCount = 0;
+	const UCHAR* outArgNamesPos = nullptr;
+	ObjectsArray<MetaName>* outArgNames = nullptr;
+	USHORT outArgCount = 0;
 	QualifiedName name;
 
-	if (blrOp == blr_exec_pid)
-	{
-		const USHORT pid = csb->csb_blr_reader.getWord();
-		if (!(procedure = MET_lookup_procedure_id(tdbb, pid, false, false, 0)))
-			name.identifier.printf("id %d", pid);
-	}
-	else
-	{
-		if (blrOp == blr_exec_proc2)
-			csb->csb_blr_reader.getMetaName(name.package);
+	const auto node = FB_NEW_POOL(pool) ExecProcedureNode(pool);
 
-		csb->csb_blr_reader.getMetaName(name.identifier);
-
-		if (blrOp == blr_exec_subproc)
+	switch (blrOp)
+	{
+		case blr_invoke_procedure:
 		{
-			DeclareSubProcNode* declareNode;
+			UCHAR subCode;
 
-			for (auto curCsb = csb; curCsb && !procedure; curCsb = curCsb->mainCsb)
+			while ((subCode = blrReader.getByte()) != blr_end)
 			{
-				if (curCsb->subProcedures.get(name.identifier, declareNode))
-					procedure = declareNode->routine;
+				switch (subCode)
+				{
+					case blr_invsel_procedure_type:
+					{
+						UCHAR procedureType = blrReader.getByte();
+
+						switch (procedureType)
+						{
+							case blr_invsel_procedure_type_packaged:
+								blrReader.getMetaName(name.package);
+								break;
+
+							case blr_invsel_procedure_type_standalone:
+							case blr_invsel_procedure_type_sub:
+								break;
+
+							default:
+								PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invsel_procedure_type");
+								break;
+						}
+
+						blrReader.getMetaName(name.identifier);
+
+						if (procedureType == blr_invsel_procedure_type_sub)
+						{
+							for (auto curCsb = csb; curCsb && !node->procedure; curCsb = curCsb->mainCsb)
+							{
+								if (const auto declareNode = curCsb->subProcedures.get(name.identifier))
+									node->procedure = (*declareNode)->routine;
+							}
+						}
+						else if (!node->procedure)
+							node->procedure = MET_lookup_procedure(tdbb, name, false);
+
+						break;
+					}
+
+					case blr_invsel_procedure_in_arg_names:
+					{
+						predateCheck(node->procedure, "blr_invsel_procedure_type", "blr_invsel_procedure_in_arg_names");
+						predateCheck(!node->inputSources,
+							"blr_invsel_procedure_in_arg_names", "blr_invsel_procedure_in_args");
+
+						inArgNamesPos = blrReader.getPos();
+						USHORT inArgNamesCount = blrReader.getWord();
+						MetaName argName;
+
+						inArgNames = FB_NEW_POOL(pool) ObjectsArray<MetaName>(pool);
+
+						while (inArgNamesCount--)
+						{
+							blrReader.getMetaName(argName);
+							inArgNames->add(argName);
+						}
+
+						break;
+					}
+
+					case blr_invsel_procedure_in_args:
+						predateCheck(node->procedure, "blr_invsel_procedure_type", "blr_invsel_procedure_in_args");
+						inArgCount = blrReader.getWord();
+						node->inputSources = PAR_args(tdbb, csb, inArgCount,
+							(inArgNames ? inArgCount : MAX(inArgCount, node->procedure->getInputFields().getCount())));
+						break;
+
+					case blr_invsel_procedure_out_arg_names:
+					{
+						predateCheck(node->procedure,
+							"blr_invsel_procedure_type", "blr_invsel_procedure_out_arg_names");
+
+						predateCheck(!node->outputTargets,
+							"blr_invsel_procedure_out_arg_names", "blr_invsel_procedure_out_args");
+
+						outArgNamesPos = blrReader.getPos();
+						USHORT outArgNamesCount = blrReader.getWord();
+						MetaName argName;
+
+						outArgNames = FB_NEW_POOL(pool) ObjectsArray<MetaName>(pool);
+
+						while (outArgNamesCount--)
+						{
+							blrReader.getMetaName(argName);
+							outArgNames->add(argName);
+						}
+
+						break;
+					}
+
+					case blr_invsel_procedure_out_args:
+						predateCheck(node->procedure, "blr_invsel_procedure_type", "blr_invsel_procedure_out_args");
+						outArgCount = blrReader.getWord();
+						node->outputTargets = PAR_args(tdbb, csb, outArgCount, outArgCount);
+						break;
+
+					default:
+						PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_procedure sub code");
+				}
 			}
-		}
-		else
-			procedure = MET_lookup_procedure(tdbb, name, false);
-	}
 
-	if (!procedure)
-		PAR_error(csb, Arg::Gds(isc_prcnotdef) << Arg::Str(name.toString()));
-	else
-	{
-		if (procedure->isImplemented() && !procedure->isDefined())
+			break;
+		}
+
+		case blr_exec_pid:
 		{
-			if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
+			const USHORT pid = blrReader.getWord();
+			if (!(node->procedure = MET_lookup_procedure_id(tdbb, pid, false, false, 0)))
+				name.identifier.printf("id %d", pid);
+			break;
+		}
+
+		default:
+			if (blrOp == blr_exec_proc2)
+				blrReader.getMetaName(name.package);
+
+			blrReader.getMetaName(name.identifier);
+
+			if (blrOp == blr_exec_subproc)
 			{
-				PAR_warning(
-					Arg::Warning(isc_prcnotdef) << Arg::Str(name.toString()) <<
-					Arg::Warning(isc_modnotfound));
+				for (auto curCsb = csb; curCsb && !node->procedure; curCsb = curCsb->mainCsb)
+				{
+					if (const auto declareNode = curCsb->subProcedures.get(name.identifier))
+						node->procedure = (*declareNode)->routine;
+				}
 			}
 			else
+				node->procedure = MET_lookup_procedure(tdbb, name, false);
+
+			break;
+	}
+
+	if (!node->procedure)
+	{
+		blrReader.setPos(blrStartPos);
+		PAR_error(csb, Arg::Gds(isc_prcnotdef) << name.toString());
+	}
+
+	if (blrOp != blr_invoke_procedure)
+	{
+		inArgCount = blrReader.getWord();
+		node->inputSources = PAR_args(tdbb, csb, inArgCount, inArgCount);
+
+		outArgCount = blrReader.getWord();
+		node->outputTargets = PAR_args(tdbb, csb, outArgCount, outArgCount);
+	}
+
+	if (!node->inputSources)
+		node->inputSources = FB_NEW_POOL(pool) ValueListNode(pool);
+
+	if (!node->outputTargets)
+		node->outputTargets = FB_NEW_POOL(pool) ValueListNode(pool);
+
+	if (inArgNames && inArgNames->getCount() != node->inputSources->items.getCount())
+	{
+		blrReader.setPos(inArgNamesPos);
+		PAR_error(csb,
+			Arg::Gds(isc_random) <<
+			"blr_invsel_procedure_in_arg_names count differs from blr_invsel_procedure_in_args");
+	}
+
+	if (outArgNames && outArgNames->getCount() != node->outputTargets->items.getCount())
+	{
+		blrReader.setPos(outArgNamesPos);
+		PAR_error(csb,
+			Arg::Gds(isc_random) <<
+			"blr_invsel_procedure_out_arg_names count differs from blr_invsel_procedure_out_args");
+	}
+
+	if (node->procedure->isImplemented() && !node->procedure->isDefined())
+	{
+		if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
+		{
+			PAR_warning(
+				Arg::Warning(isc_prcnotdef) << name.toString() <<
+				Arg::Warning(isc_modnotfound));
+		}
+		else
+		{
+			csb->csb_blr_reader.setPos(blrStartPos);
+			PAR_error(csb,
+				Arg::Gds(isc_prcnotdef) << name.toString() <<
+				Arg::Gds(isc_modnotfound));
+		}
+	}
+
+	Arg::StatusVector mismatchStatus;
+	mismatchStatus << Arg::Gds(isc_prcmismat) << node->procedure->getName().toString();
+	const auto mismatchInitialLength = mismatchStatus.length();
+
+	node->inputTargets = FB_NEW_POOL(pool) ValueListNode(pool, node->procedure->getInputFields().getCount());
+
+	mismatchStatus << CMP_procedure_arguments(
+		tdbb,
+		csb,
+		node->procedure,
+		true,
+		inArgCount,
+		inArgNames,
+		node->inputSources,
+		node->inputTargets,
+		node->inputMessage);
+
+	mismatchStatus << CMP_procedure_arguments(
+		tdbb,
+		csb,
+		node->procedure,
+		false,
+		outArgCount,
+		outArgNames,
+		node->outputTargets,
+		node->outputSources,
+		node->outputMessage);
+
+	if (mismatchStatus.length() > mismatchInitialLength)
+		status_exception::raise(mismatchStatus);
+
+	if (csb->collectingDependencies() && !node->procedure->isSubRoutine())
+	{
+		{	// scope
+			CompilerScratch::Dependency dependency(obj_procedure);
+			dependency.procedure = node->procedure;
+			csb->addDependency(dependency);
+		}
+
+		if (inArgNames)
+		{
+			for (const auto& argName : *inArgNames)
 			{
-				csb->csb_blr_reader.setPos(blrStartPos);
-				PAR_error(csb,
-					Arg::Gds(isc_prcnotdef) << Arg::Str(name.toString()) <<
-					Arg::Gds(isc_modnotfound));
+				CompilerScratch::Dependency dependency(obj_procedure);
+				dependency.procedure = node->procedure;
+				dependency.subName = &argName;
+				csb->addDependency(dependency);
+			}
+		}
+
+		if (outArgNames)
+		{
+			for (const auto& argName : *outArgNames)
+			{
+				CompilerScratch::Dependency dependency(obj_procedure);
+				dependency.procedure = node->procedure;
+				dependency.subName = &argName;
+				csb->addDependency(dependency);
 			}
 		}
 	}
 
-	ExecProcedureNode* node = FB_NEW_POOL(pool) ExecProcedureNode(pool);
-	node->procedure = procedure;
-
-	PAR_procedure_parms(tdbb, csb, procedure, node->inputMessage.getAddress(),
-		node->inputSources.getAddress(), node->inputTargets.getAddress(), true);
-	PAR_procedure_parms(tdbb, csb, procedure, node->outputMessage.getAddress(),
-		node->outputSources.getAddress(), node->outputTargets.getAddress(), false);
-
-	if (csb->collectingDependencies() && !procedure->isSubRoutine())
+	if (node->inputSources && node->inputSources->items.isEmpty())
 	{
-		CompilerScratch::Dependency dependency(obj_procedure);
-		dependency.procedure = procedure;
-		csb->addDependency(dependency);
+		delete node->inputSources.getObject();
+		node->inputSources = nullptr;
+
+		delete node->inputTargets.getObject();
+		node->inputTargets = nullptr;
+	}
+
+	if (node->outputSources && node->outputSources->items.isEmpty())
+	{
+		delete node->outputSources.getObject();
+		node->outputSources = nullptr;
+
+		delete node->outputTargets.getObject();
+		node->outputTargets = nullptr;
 	}
 
 	return node;
@@ -3007,7 +3232,13 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (!dsqlScratch->isPsql())
 		dsqlScratch->getDsqlStatement()->setType(DsqlStatement::TYPE_EXEC_PROCEDURE);
 
-	ExecProcedureNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ExecProcedureNode(dsqlScratch->getPool(), dsqlName);
+	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) ExecProcedureNode(dsqlScratch->getPool(), dsqlName,
+		doDsqlPass(dsqlScratch, inputSources),
+		nullptr,
+		dsqlInputArgNames ?
+			FB_NEW_POOL(dsqlScratch->getPool()) ObjectsArray<MetaName>(dsqlScratch->getPool(), *dsqlInputArgNames) :
+			nullptr);
+
 	node->dsqlProcedure = procedure;
 
 	if (node->dsqlName.package.isEmpty() && procedure->prc_name.package.hasData())
@@ -3015,28 +3246,63 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	// Handle input parameters.
 
-	const USHORT count = inputSources ? inputSources->items.getCount() : 0;
-	if (count > procedure->prc_in_count || count < procedure->prc_in_count - procedure->prc_def_count)
-		ERRD_post(Arg::Gds(isc_prcmismat) << Arg::Str(dsqlName.toString()));
-
-	node->inputSources = doDsqlPass(dsqlScratch, inputSources);
-
-	if (count)
+	if (node->dsqlInputArgNames)
 	{
-		// Initialize this stack variable, and make it look like a node.
-		dsc desc_node;
+		fb_assert(node->dsqlInputArgNames->getCount() == node->inputSources->items.getCount());
 
-		NestConst<ValueExprNode>* ptr = node->inputSources->items.begin();
-		const NestConst<ValueExprNode>* end = node->inputSources->items.end();
+		LeftPooledMap<MetaName, const dsql_fld*> argsByName;
 
-		for (const dsql_fld* field = procedure->prc_inputs; ptr != end; ++ptr, field = field->fld_next)
+		for (const auto* field = procedure->prc_inputs; field; field = field->fld_next)
+			argsByName.put(field->fld_name, field);
+
+		bool mismatchError = false;
+		Arg::StatusVector mismatchStatus;
+		mismatchStatus << Arg::Gds(isc_prcmismat) << Arg::Str(dsqlName.toString());
+
+		auto argIt = node->inputSources->items.begin();
+
+		for (const auto& argName : *node->dsqlInputArgNames)
 		{
-			DEV_BLKCHK(field, dsql_type_fld);
-			DEV_BLKCHK(*ptr, dsql_type_nod);
-			DsqlDescMaker::fromField(&desc_node, field);
-			PASS1_set_parameter_type(dsqlScratch, *ptr,
-				[&] (dsc* desc) { *desc = desc_node; },
-				false);
+			if (const auto field = argsByName.get(argName))
+			{
+				dsc descNode;
+				DsqlDescMaker::fromField(&descNode, *field);
+
+				PASS1_set_parameter_type(dsqlScratch, *argIt,
+					[&] (dsc* desc) { *desc = descNode; },
+					false);
+			}
+			else
+			{
+				mismatchError = true;
+				mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
+			}
+
+			++argIt;
+		}
+
+		if (mismatchError)
+			status_exception::raise(mismatchStatus);
+	}
+	else
+	{
+		if (inputSources && inputSources->items.hasData())
+		{
+			// Initialize this stack variable, and make it look like a node.
+			dsc descNode;
+
+			auto ptr = node->inputSources->items.begin();
+			const auto end = node->inputSources->items.end();
+
+			for (const dsql_fld* field = procedure->prc_inputs; field && ptr != end; ++ptr, field = field->fld_next)
+			{
+				DEV_BLKCHK(field, dsql_type_fld);
+				DEV_BLKCHK(*ptr, dsql_type_nod);
+				DsqlDescMaker::fromField(&descNode, field);
+				PASS1_set_parameter_type(dsqlScratch, *ptr,
+					[&] (dsc* desc) { *desc = descNode; },
+					false);
+			}
 		}
 	}
 
@@ -3125,7 +3391,7 @@ string ExecProcedureNode::internalPrint(NodePrinter& printer) const
 
 void ExecProcedureNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	const dsql_msg* message = NULL;
+	const dsql_msg* message = nullptr;
 
 	if (dsqlScratch->getDsqlStatement()->getType() == DsqlStatement::TYPE_EXEC_PROCEDURE)
 	{
@@ -3137,43 +3403,93 @@ void ExecProcedureNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		}
 	}
 
-	if (dsqlName.package.hasData())
+	if (dsqlInputArgNames)
 	{
-		dsqlScratch->appendUChar(blr_exec_proc2);
-		dsqlScratch->appendMetaString(dsqlName.package.c_str());
+		dsqlScratch->appendUChar(blr_invoke_procedure);
+
+		dsqlScratch->appendUChar(blr_invsel_procedure_type);
+
+		if (dsqlName.package.hasData())
+		{
+			dsqlScratch->appendUChar(blr_invsel_procedure_type_packaged);
+			dsqlScratch->appendMetaString(dsqlName.package.c_str());
+		}
+		else
+		{
+			dsqlScratch->appendUChar((dsqlProcedure->prc_flags & PRC_subproc) ?
+				blr_invsel_procedure_type_sub : blr_invsel_procedure_type_standalone);
+		}
+
+		dsqlScratch->appendMetaString(dsqlName.identifier.c_str());
+
+		// Input parameters.
+		if (inputSources)
+		{
+			if (dsqlInputArgNames && dsqlInputArgNames->hasData())
+			{
+				dsqlScratch->appendUChar(blr_invsel_procedure_in_arg_names);
+				dsqlScratch->appendUShort(dsqlInputArgNames->getCount());
+
+				for (auto& argName : *dsqlInputArgNames)
+					dsqlScratch->appendMetaString(argName.c_str());
+			}
+
+			dsqlScratch->appendUChar(blr_invsel_procedure_in_args);
+			dsqlScratch->appendUShort(inputSources->items.getCount());
+
+			for (auto& arg : inputSources->items)
+				GEN_expr(dsqlScratch, arg);
+		}
+
+		// Output parameters.
+		if (outputSources)
+		{
+			dsqlScratch->appendUChar(blr_invsel_procedure_out_args);
+			dsqlScratch->appendUShort(outputSources->items.getCount());
+
+			for (auto& arg : outputSources->items)
+				GEN_expr(dsqlScratch, arg);
+		}
+
+		dsqlScratch->appendUChar(blr_end);
 	}
 	else
 	{
-		dsqlScratch->appendUChar(
-			(dsqlProcedure->prc_flags & PRC_subproc) ? blr_exec_subproc : blr_exec_proc);
+		if (dsqlName.package.hasData())
+		{
+			dsqlScratch->appendUChar(blr_exec_proc2);
+			dsqlScratch->appendMetaString(dsqlName.package.c_str());
+		}
+		else
+			dsqlScratch->appendUChar((dsqlProcedure->prc_flags & PRC_subproc) ? blr_exec_subproc : blr_exec_proc);
+
+		dsqlScratch->appendMetaString(dsqlName.identifier.c_str());
+
+		// Input parameters.
+		if (inputSources)
+		{
+			dsqlScratch->appendUShort(inputSources->items.getCount());
+			auto ptr = inputSources->items.begin();
+			const auto end = inputSources->items.end();
+
+			while (ptr < end)
+				GEN_expr(dsqlScratch, *ptr++);
+		}
+		else
+			dsqlScratch->appendUShort(0);
+
+		// Output parameters.
+		if (outputSources)
+		{
+			dsqlScratch->appendUShort(outputSources->items.getCount());
+			auto ptr = outputSources->items.begin();
+
+			for (const auto end = outputSources->items.end(); ptr != end; ++ptr)
+				GEN_expr(dsqlScratch, *ptr);
+		}
+		else
+			dsqlScratch->appendUShort(0);
 	}
-
-	dsqlScratch->appendMetaString(dsqlName.identifier.c_str());
-
-	// Input parameters.
-	if (inputSources)
-	{
-		dsqlScratch->appendUShort(inputSources->items.getCount());
-		NestConst<ValueExprNode>* ptr = inputSources->items.begin();
-		const NestConst<ValueExprNode>* end = inputSources->items.end();
-
-		while (ptr < end)
-			GEN_expr(dsqlScratch, *ptr++);
-	}
-	else
-		dsqlScratch->appendUShort(0);
-
-	// Output parameters.
-	if (outputSources)
-	{
-		dsqlScratch->appendUShort(outputSources->items.getCount());
-		NestConst<ValueExprNode>* ptr = outputSources->items.begin();
-
-		for (const NestConst<ValueExprNode>* end = outputSources->items.end(); ptr != end; ++ptr)
-			GEN_expr(dsqlScratch, *ptr);
-	}
-	else
-		dsqlScratch->appendUShort(0);
 
 	if (message)
 		dsqlScratch->appendUChar(blr_end);

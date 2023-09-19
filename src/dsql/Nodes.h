@@ -1270,6 +1270,12 @@ public:
 		items.push(arg1);
 	}
 
+	ValueListNode(MemoryPool& pool)
+		: TypedNode<ListExprNode, ExprNode::TYPE_VALUE_LIST>(pool),
+		  items(pool, INITIAL_CAPACITY)
+	{
+	}
+
 	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
 	{
 		ListExprNode::getChildren(holder, dsql);
