@@ -30,13 +30,18 @@ named arguments.
     [ {<positional arguments>,} ] <named arguments>
 
 <positional arguments> ::=
-    <value> [ {, <value>}... ]
+    <value or default> [ {, <value or default>}... ]
 
 <named arguments> ::=
     <named argument> [ {, <named argument>}... ]
 
 <named argument> ::=
-    <argument name> => <value>
+    <argument name> => <value or default>
+
+
+<value or default> ::=
+    <value> |
+    DEFAULT
 ```
 
 ## Examples
@@ -48,6 +53,11 @@ select function_name(parameter2 => 'Two', parameter1 => 1)
 
 ```
 select function_name(1, parameter2 => 'Two')
+  from rdb$database
+```
+
+```
+select function_name(default, parameter2 => 'Two')
   from rdb$database
 ```
 

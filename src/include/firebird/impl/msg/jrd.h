@@ -970,5 +970,5 @@ FB_IMPL_MSG(JRD, 967, idx_expr_not_found, -902, "42", "000", "Definition of inde
 FB_IMPL_MSG(JRD, 968, idx_cond_not_found, -902, "42", "000", "Definition of index condition is not found for index @1")
 FB_IMPL_MSG(JRD, 969, uninitialized_var, -625, "42", "000", "Variable @1 is not initialized")
 FB_IMPL_MSG(JRD, 970, param_not_exist, -170, "07", "001", "Parameter @1 does not exist")
-FB_IMPL_MSG(JRD, 971, param_no_default_not_specified, -170, "07", "001", "Parameter @1 has no default value and was not specified")
+FB_IMPL_MSG(JRD, 971, param_no_default_not_specified, -170, "07", "001", "Parameter @1 has no default value and was not specified or was specified with DEFAULT")
 FB_IMPL_MSG(JRD, 972, param_multiple_assignments, -170, "07", "001", "Parameter @1 has multiple assignments")

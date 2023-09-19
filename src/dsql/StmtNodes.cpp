@@ -3430,7 +3430,7 @@ void ExecProcedureNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->appendUShort(inputSources->items.getCount());
 
 			for (auto& arg : inputSources->items)
-				GEN_expr(dsqlScratch, arg);
+				GEN_arg(dsqlScratch, arg);
 		}
 
 		// Output parameters.
@@ -3461,11 +3461,9 @@ void ExecProcedureNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		if (inputSources)
 		{
 			dsqlScratch->appendUShort(inputSources->items.getCount());
-			auto ptr = inputSources->items.begin();
-			const auto end = inputSources->items.end();
 
-			while (ptr < end)
-				GEN_expr(dsqlScratch, *ptr++);
+			for (auto& arg : inputSources->items)
+				GEN_arg(dsqlScratch, arg);
 		}
 		else
 			dsqlScratch->appendUShort(0);
@@ -3474,10 +3472,9 @@ void ExecProcedureNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		if (outputSources)
 		{
 			dsqlScratch->appendUShort(outputSources->items.getCount());
-			auto ptr = outputSources->items.begin();
 
-			for (const auto end = outputSources->items.end(); ptr != end; ++ptr)
-				GEN_expr(dsqlScratch, *ptr);
+			for (auto& arg : outputSources->items)
+				GEN_expr(dsqlScratch, arg);
 		}
 		else
 			dsqlScratch->appendUShort(0);

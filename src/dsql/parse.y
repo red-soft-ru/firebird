@@ -8618,12 +8618,12 @@ argument_list_opt
 %type <namedArguments> argument_list
 argument_list
 	: named_argument_list
-	| value_list
+	| value_or_default_list
 		{
 			$$ = newNode<NonPooledPair<ObjectsArray<MetaName>*, ValueListNode*>>();
 			$$->second = $1;
 		}
-	| value_list ',' named_argument_list
+	| value_or_default_list ',' named_argument_list
 		{
 			$$ = $3;
 
@@ -8655,7 +8655,7 @@ named_argument_list
 
 %type <namedArgument> named_argument
 named_argument
-	: symbol_column_name NAMED_ARG_ASSIGN value
+	: symbol_column_name NAMED_ARG_ASSIGN value_or_default
 		{ $$ = newNode<NonPooledPair<MetaName*, ValueExprNode*>>($1, $3); }
 	;
 

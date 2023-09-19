@@ -804,7 +804,12 @@ ValueListNode* PAR_args(thread_db* tdbb, CompilerScratch* csb, USHORT count, USH
 	{
 		do
 		{
-			*ptr++ = PAR_parse_value(tdbb, csb);
+			if (csb->csb_blr_reader.peekByte() == blr_default_arg)
+				csb->csb_blr_reader.getByte();
+			else
+				*ptr = PAR_parse_value(tdbb, csb);
+
+			++ptr;
 		} while (--count);
 	}
 

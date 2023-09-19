@@ -553,12 +553,15 @@ Arg::StatusVector CMP_procedure_arguments(
 
 		for (auto& parameter : fields)
 		{
-			if (const auto argValue = argsByName.get(parameter->prm_name))
+			const auto argValue = argsByName.get(parameter->prm_name);
+
+			if (argValue)
 			{
 				*sourceArgIt = *argValue;
 				argsByName.remove(parameter->prm_name);
 			}
-			else if (isInput)
+
+			if (isInput && (!argValue || !*argValue))
 			{
 				if (parameter->prm_default_value)
 					*sourceArgIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);

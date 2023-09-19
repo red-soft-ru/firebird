@@ -492,4 +492,6 @@
 #define blr_invsel_procedure_context				(unsigned char) 6
 #define blr_invsel_procedure_alias					(unsigned char) 7
 
+#define blr_default_arg								(unsigned char) 227
+
 #endif // FIREBIRD_IMPL_BLR_H

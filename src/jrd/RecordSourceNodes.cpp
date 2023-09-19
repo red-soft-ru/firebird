@@ -1294,7 +1294,7 @@ void ProcedureSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->appendUShort(inputSources->items.getCount());
 
 			for (auto& arg : inputSources->items)
-				GEN_expr(dsqlScratch, arg);
+				GEN_arg(dsqlScratch, arg);
 		}
 
 		if (dsqlContext->ctx_context > MAX_UCHAR)
@@ -1355,7 +1355,7 @@ void ProcedureSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->appendUShort(inputSources->items.getCount());
 
 		for (auto& arg : inputSources->items)
-			GEN_expr(dsqlScratch, arg);
+			GEN_arg(dsqlScratch, arg);
 	}
 	else
 		dsqlScratch->appendUShort(0);

@@ -65,6 +65,17 @@ using namespace Firebird;
 static void gen_plan(DsqlCompilerScratch*, const PlanNode*);
 
 
+// Generate blr for an argument.
+// When it is nullptr, generate blr_default_arg.
+void GEN_arg(DsqlCompilerScratch* dsqlScratch, ExprNode* node)
+{
+	if (node)
+		GEN_expr(dsqlScratch, node);
+	else
+		dsqlScratch->appendUChar(blr_default_arg);
+}
+
+
 void GEN_hidden_variables(DsqlCompilerScratch* dsqlScratch)
 {
 /**************************************
