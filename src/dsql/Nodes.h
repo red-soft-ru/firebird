@@ -1296,6 +1296,11 @@ public:
 		return this;
 	}
 
+	void ensureCapacity(unsigned count)
+	{
+		items.ensureCapacity(count);
+	}
+
 	void clear()
 	{
 		items.clear();

@@ -699,6 +699,7 @@ using namespace Firebird;
 // tokens added for Firebird 6.0
 
 %token <metaNamePtr> ANY_VALUE
+%token <metaNamePtr> CALL
 %token <metaNamePtr> NAMED_ARG_ASSIGN
 
 // precedence declarations for expression evaluation
@@ -890,6 +891,7 @@ dml_statement
 	| insert									{ $$ = $1; }
 	| merge										{ $$ = $1; }
 	| exec_procedure							{ $$ = $1; }
+	| call										{ $$ = $1; }
 	| exec_block								{ $$ = $1; }
 	| select									{ $$ = $1; }
 	| update									{ $$ = $1; }
@@ -3278,6 +3280,7 @@ simple_proc_statement
 	| delete
 	| singleton_select
 	| exec_procedure
+	| call				{ $$ = $1; }
 	| exec_sql			{ $$ = $1; }
 	| exec_into			{ $$ = $1; }
 	| exec_function
@@ -3785,6 +3788,31 @@ proc_outputs_opt
 	: /* nothing */								{ $$ = NULL; }
 	| RETURNING_VALUES variable_list			{ $$ = $2; }
 	| RETURNING_VALUES '(' variable_list ')'	{ $$ = $3; }
+	;
+
+// CALL
+
+%type <stmtNode> call
+call
+	: CALL symbol_procedure_name '(' argument_list_opt ')'
+		{
+			auto node = newNode<ExecProcedureNode>(QualifiedName(*$2),
+				($4 ? $4->second : nullptr),
+				nullptr,
+				($4 ? $4->first : nullptr));
+			node->dsqlCallSyntax = true;
+			$$ = node;
+		}
+	| CALL symbol_package_name '.' symbol_procedure_name '(' argument_list_opt ')'
+			into_variable_list_opt
+		{
+			auto node = newNode<ExecProcedureNode>(QualifiedName(*$4, *$2),
+				($6 ? $6->second : nullptr),
+				nullptr,
+				($6 ? $6->first : nullptr));
+			node->dsqlCallSyntax = true;
+			$$ = node;
+		}
 	;
 
 // EXECUTE BLOCK
@@ -4376,6 +4404,7 @@ keyword_or_column
 	| VARBINARY
 	| WINDOW
 	| WITHOUT
+	| CALL					// added in FB 6.0
 	;
 
 col_opt

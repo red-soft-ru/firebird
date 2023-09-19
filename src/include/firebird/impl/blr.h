@@ -489,8 +489,10 @@
 #define blr_invsel_procedure_in_args				(unsigned char) 3
 #define blr_invsel_procedure_out_arg_names			(unsigned char) 4
 #define blr_invsel_procedure_out_args				(unsigned char) 5
-#define blr_invsel_procedure_context				(unsigned char) 6
-#define blr_invsel_procedure_alias					(unsigned char) 7
+#define blr_invsel_procedure_inout_arg_names		(unsigned char) 6
+#define blr_invsel_procedure_inout_args				(unsigned char) 7
+#define blr_invsel_procedure_context				(unsigned char) 8
+#define blr_invsel_procedure_alias					(unsigned char) 9
 
 #define blr_default_arg								(unsigned char) 227
 

@@ -594,7 +594,7 @@ public:
 		: TypedNode<StmtNode, StmtNode::TYPE_EXEC_PROCEDURE>(pool),
 		  dsqlName(pool, aDsqlName),
 		  inputSources(aInputs),
-		  outputSources(aOutputs),
+		  outputTargets(aOutputs),
 		  dsqlInputArgNames(aDsqlInputArgNames)
 	{
 	}
@@ -625,6 +625,8 @@ public:
 	NestConst<MessageNode> outputMessage;
 	NestConst<jrd_prc> procedure;
 	NestConst<Firebird::ObjectsArray<MetaName>> dsqlInputArgNames;
+	NestConst<Firebird::ObjectsArray<MetaName>> dsqlOutputArgNames;
+	bool dsqlCallSyntax = false;
 };
 
 
