@@ -13,6 +13,9 @@
 
 ## Improvements
 
+* [#7752](https://github.com/FirebirdSQL/firebird/issues/7752): Avoid the access path information inside the `PLG$PROF_RECORD_SOURCES` table from being truncated to 255 characters  
+  Contributor(s): Adriano dos Santos Fernandes
+
 * [#7720](https://github.com/FirebirdSQL/firebird/pull/7720): MacOS: build _libicu_ and static _libc++_ using _vcpkg_  
   Contributor(s): Adriano dos Santos Fernandes
 
