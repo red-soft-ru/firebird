@@ -80,10 +80,17 @@ o Be sure to install as an administrator. ie, if
   may be unable to start the Firebird service at
   the end of installation.
 
-o Libraries deployed by instclient may fail to load if
-  the MS runtime libraries have not been installed. 
-  This may be a problem if installing on older Windows
-  platforms.
+o Installation may fail on older versions of windows up
+  to Win 8.1 and Windows Server 2008 if the most recent
+  security updates have not been installed. This will
+  also affect users of the zip packs as the problem
+  lies with runtime library dependencies of
+  applications such as instclient and instsvc.
+
+  If you do run into this problem you should consult
+  the microsoft knowledge base article KB2999226 for more
+  information on how to upgrage your version of windows
+  to use the latest run time libraries.
 
 
 Uninstallation
