@@ -89,7 +89,7 @@ o Installation may fail on older versions of windows up
 
   If you do run into this problem you should consult
   the microsoft knowledge base article KB2999226 for more
-  information on how to upgrage your version of windows
+  information on how to upgrade your version of windows
   to use the latest run time libraries.
 
 
