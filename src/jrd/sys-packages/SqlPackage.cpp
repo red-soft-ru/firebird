@@ -131,6 +131,7 @@ SqlPackage::ExplainResultSet::ExplainResultSet(ThrowStatusExceptionWrapper* stat
 
 		constexpr UCHAR bpb[] = {
 			isc_bpb_version1,
+			isc_bpb_type, 1, isc_bpb_type_stream,
 			isc_bpb_storage, 1, isc_bpb_storage_temp
 		};
 
