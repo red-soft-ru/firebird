@@ -125,6 +125,7 @@ private:
 		ULONG getSize() const;
 		ULONG getCapacity() const;
 		void clear();
+		void flush();
 
 	private:
 		typedef Firebird::Array<UCHAR> Cache;
