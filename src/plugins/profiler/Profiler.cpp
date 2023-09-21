@@ -44,6 +44,12 @@ namespace
 
 class ProfilerPlugin;
 
+
+static constexpr UCHAR STREAM_BLOB_BPB[] = {
+	isc_bpb_version1,
+	isc_bpb_type, 1, isc_bpb_type_stream,
+};
+
 static const CInt128 ONE_SECOND_IN_NS{1'000'000'000};
 static CInt128 ticksFrequency{0};
 
@@ -712,7 +718,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 				if (profileStatement.sqlText.hasData())
 				{
 					auto blob = makeNoIncRef(userAttachment->createBlob(
-						status, transaction, &statementMessage->sqlText, 0, nullptr));
+						status, transaction, &statementMessage->sqlText, sizeof(STREAM_BLOB_BPB), STREAM_BLOB_BPB));
 					blob->putSegment(status, profileStatement.sqlText.length(), profileStatement.sqlText.c_str());
 					blob->close(status);
 					blob.clear();
@@ -778,8 +784,8 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 
 			recSrcMessage->accessPathNull = FB_FALSE;
 			{	// scope
-				auto blob = makeNoIncRef(
-					userAttachment->createBlob(status, transaction, &recSrcMessage->accessPath, 0, nullptr));
+				auto blob = makeNoIncRef(userAttachment->createBlob(status, transaction, &recSrcMessage->accessPath,
+					sizeof(STREAM_BLOB_BPB), STREAM_BLOB_BPB));
 				blob->putSegment(status, recSrc.accessPath.length(), recSrc.accessPath.c_str());
 				blob->close(status);
 				blob.clear();
