@@ -164,7 +164,7 @@ set /A FBBUILD_PACKAGE_NUMBER+=1
   if "%%~a" == "Release"  (
     set FBBUILD_FILENAME_SUFFIX=-RC%%~c
   ) else (
-    set FBBUILD_FILENAME_SUFFIX=-%%~a%%~c
+    set FBBUILD_FILENAME_SUFFIX=-%%~a%%~b
   )
 )
 
