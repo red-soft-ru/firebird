@@ -257,8 +257,8 @@ void RecursiveStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, uns
 {
 	planEntry.className = "RecursiveStream";
 
-	planEntry.description.add() = "Recursion";
-	printOptInfo(planEntry.description);
+	planEntry.lines.add().text = "Recursion";
+	printOptInfo(planEntry.lines);
 
 	if (recurse)
 	{

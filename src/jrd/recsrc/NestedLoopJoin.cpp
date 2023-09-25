@@ -229,31 +229,31 @@ void NestedLoopJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 {
 	planEntry.className = "NestedLoopJoin";
 
-	planEntry.description.add() = "Nested Loop Join ";
+	planEntry.lines.add().text = "Nested Loop Join ";
 
 	switch (m_joinType)
 	{
 		case INNER_JOIN:
-			planEntry.description.back() += "(inner)";
+			planEntry.lines.back().text += "(inner)";
 			break;
 
 		case OUTER_JOIN:
-			planEntry.description.back() += "(outer)";
+			planEntry.lines.back().text += "(outer)";
 			break;
 
 		case SEMI_JOIN:
-			planEntry.description.back() += "(semi)";
+			planEntry.lines.back().text += "(semi)";
 			break;
 
 		case ANTI_JOIN:
-			planEntry.description.back() += "(anti)";
+			planEntry.lines.back().text += "(anti)";
 			break;
 
 		default:
 			fb_assert(false);
 	}
 
-	printOptInfo(planEntry.description);
+	printOptInfo(planEntry.lines);
 
 	if (recurse)
 	{

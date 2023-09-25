@@ -129,8 +129,8 @@ void FirstRowsStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, uns
 {
 	planEntry.className = "FirstRowsStream";
 
-	planEntry.description.add() = "First N Records";
-	printOptInfo(planEntry.description);
+	planEntry.lines.add().text = "First N Records";
+	printOptInfo(planEntry.lines);
 
 	if (recurse)
 	{

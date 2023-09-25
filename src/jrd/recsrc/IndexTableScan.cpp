@@ -359,14 +359,14 @@ void IndexTableScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level
 
 	plan += printName(tdbb, m_alias, false) + " ORDER ";
 	string index;
-	printInversion(tdbb, m_index, index, false, level);
+	printLegacyInversion(tdbb, m_index, index);
 	plan += index;
 
 	if (m_inversion)
 	{
 		plan += " INDEX (";
 		string indices;
-		printInversion(tdbb, m_inversion, indices, false, level);
+		printLegacyInversion(tdbb, m_inversion, indices);
 		plan += indices + ")";
 	}
 
@@ -378,10 +378,10 @@ void IndexTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 {
 	planEntry.className = "IndexTableScan";
 
-	planEntry.description.add() = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
-	printOptInfo(planEntry.description);
+	planEntry.lines.add().text = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	printOptInfo(planEntry.lines);
 
-	printInversion(tdbb, m_index, planEntry.description, true, true);
+	printInversion(tdbb, m_index, planEntry.lines, true, 1, true);
 
 	planEntry.objectType = m_relation->getObjectType();
 	planEntry.objectName = m_relation->rel_name;
@@ -390,7 +390,7 @@ void IndexTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 		planEntry.alias = m_alias;
 
 	if (m_inversion)
-		printInversion(tdbb, m_inversion, planEntry.description, true);
+		printInversion(tdbb, m_inversion, planEntry.lines, true, 1, false);
 }
 
 int IndexTableScan::compareKeys(const index_desc* idx,

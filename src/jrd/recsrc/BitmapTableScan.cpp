@@ -129,7 +129,7 @@ void BitmapTableScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned leve
 
 	plan += printName(tdbb, m_alias, false) + " INDEX (";
 	string indices;
-	printInversion(tdbb, m_inversion, indices, false, level);
+	printLegacyInversion(tdbb, m_inversion, indices);
 	plan += indices + ")";
 
 	if (!level)
@@ -140,10 +140,10 @@ void BitmapTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, uns
 {
 	planEntry.className = "BitmapTableScan";
 
-	planEntry.description.add() = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
-	printOptInfo(planEntry.description);
+	planEntry.lines.add().text = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	printOptInfo(planEntry.lines);
 
-	printInversion(tdbb, m_inversion, planEntry.description, true);
+	printInversion(tdbb, m_inversion, planEntry.lines, true, 1, false);
 
 	planEntry.objectType = m_relation->getObjectType();
 	planEntry.objectName = m_relation->rel_name;

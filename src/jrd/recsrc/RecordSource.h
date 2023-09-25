@@ -97,6 +97,17 @@ namespace Jrd
 	class PlanEntry final : public Firebird::AutoStorage
 	{
 	public:
+		struct Line
+		{
+			explicit Line(MemoryPool& pool)
+				: text(pool)
+			{}
+
+			unsigned level = 0;
+			Firebird::string text;
+		};
+
+	public:
 		explicit PlanEntry(MemoryPool& pool)
 			: AutoStorage(pool)
 		{
@@ -111,7 +122,7 @@ namespace Jrd
 
 	public:
 		Firebird::string className{getPool()};
-		Firebird::ObjectsArray<Firebird::string> description{getPool()};
+		Firebird::ObjectsArray<Line> lines{getPool()};
 		Firebird::ObjectsArray<PlanEntry> children{getPool()};
 		std::optional<ObjectType> objectType;
 		MetaName packageName;
@@ -172,14 +183,12 @@ namespace Jrd
 										  const Firebird::string& alias);
 
 		static void printInversion(thread_db* tdbb, const InversionNode* inversion,
-								   Firebird::ObjectsArray<Firebird::string>& planLines, bool detailed,
-								   bool navigation = false);
+								   Firebird::ObjectsArray<PlanEntry::Line>& planLines,
+								   bool detailed, unsigned level, bool navigation);
 
-		static void printInversion(thread_db* tdbb, const InversionNode* inversion,
-								   Firebird::string& plan, bool detailed,
-								   unsigned level, bool navigation = false);
+		static void printLegacyInversion(thread_db* tdbb, const InversionNode* inversion, Firebird::string& plan);
 
-		void printOptInfo(Firebird::ObjectsArray<Firebird::string>& plan) const;
+		void printOptInfo(Firebird::ObjectsArray<PlanEntry::Line>& plan) const;
 
 		static void saveRecord(thread_db* tdbb, record_param* rpb);
 		static void restoreRecord(thread_db* tdbb, record_param* rpb);

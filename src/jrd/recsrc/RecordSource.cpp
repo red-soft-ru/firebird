@@ -68,21 +68,22 @@ void AccessPath::getPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, 
 
 void PlanEntry::getDescriptionAsString(string& str, bool initialIndentation) const
 {
-	auto indentLevel = initialIndentation ? level : 0;
+	const auto indentLevel = initialIndentation ? level : 0;
+	bool firstLine = true;
 
-	for (const auto& line : description)
+	for (const auto& line : lines)
 	{
-		const string indent(indentLevel * 4, ' ');
+		const string indent((indentLevel + line.level) * 4, ' ');
 
-		if (initialIndentation || indentLevel)
+		if (initialIndentation || !firstLine)
 			str += "\n" + indent;
 
 		if (level)
 			str += "-> ";
 
-		str += line;
+		str += line.text;
 
-		++indentLevel;
+		firstLine = false;
 	}
 }
 
@@ -155,31 +156,31 @@ string RecordSource::printName(thread_db* tdbb, const string& name, const string
 }
 
 void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversion,
-	ObjectsArray<string>& planLines, bool detailed, bool navigation)
+	ObjectsArray<PlanEntry::Line>& planLines, bool detailed, unsigned level, bool navigation)
 {
-	const bool wasEmpty = planLines.isEmpty();
 	auto plan = &planLines.add();
+	plan->level = level;
 
 	switch (inversion->type)
 	{
 	case InversionNode::TYPE_AND:
 		if (detailed)
-			*plan += "Bitmap And";
-		printInversion(tdbb, inversion->node1, planLines, detailed);
-		printInversion(tdbb, inversion->node2, planLines, detailed);
+			plan->text = "Bitmap And";
+		printInversion(tdbb, inversion->node1, planLines, detailed, level + 1, false);
+		printInversion(tdbb, inversion->node2, planLines, detailed, level + 1, false);
 		break;
 
 	case InversionNode::TYPE_OR:
 	case InversionNode::TYPE_IN:
 		if (detailed)
-			*plan += "Bitmap Or";
-		printInversion(tdbb, inversion->node1, planLines, detailed);
-		printInversion(tdbb, inversion->node2, planLines, detailed);
+			plan->text = "Bitmap Or";
+		printInversion(tdbb, inversion->node1, planLines, detailed, level + 1, false);
+		printInversion(tdbb, inversion->node2, planLines, detailed, level + 1, false);
 		break;
 
 	case InversionNode::TYPE_DBKEY:
 		if (detailed)
-			*plan += "DBKEY";
+			plan->text = "DBKEY";
 		break;
 
 	case InversionNode::TYPE_INDEX:
@@ -196,8 +197,9 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 			{
 				if (!navigation)
 				{
-					*plan += "Bitmap";
+					plan->text = "Bitmap";
 					plan = &planLines.add();
+					plan->level = level + 1;
 				}
 
 				const index_desc& idx = retrieval->irb_desc;
@@ -245,11 +247,11 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 					}
 				}
 
-				*plan += "Index " + printName(tdbb, indexName.c_str()) +
+				plan->text = "Index " + printName(tdbb, indexName.c_str()) +
 					(fullscan ? " Full" : unique ? " Unique" : list ? " List" : " Range") + " Scan" + bounds;
 			}
 			else
-				*plan += (wasEmpty ? "" : ", ") + printName(tdbb, indexName.c_str(), false);
+				plan->text = printName(tdbb, indexName.c_str(), false);
 		}
 		break;
 
@@ -258,28 +260,28 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 	}
 }
 
-void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversion,
-								  string& plan, bool detailed, unsigned level, bool navigation)
+void RecordSource::printLegacyInversion(thread_db* tdbb, const InversionNode* inversion, string& plan)
 {
-	ObjectsArray<string> planLines;
-	printInversion(tdbb, inversion, planLines, detailed, navigation);
+	ObjectsArray<PlanEntry::Line> planLines;
+	printInversion(tdbb, inversion, planLines, false, 0, false);
 
 	for (const auto& line : planLines)
 	{
-		if (detailed)
-			plan += '\n' + string(++level * 4, ' ');
-		plan += line;
+		if (plan.hasData())
+			plan += ", ";
+
+		plan += line.text;
 	}
 }
 
-void RecordSource::printOptInfo(ObjectsArray<string>& planLines) const
+void RecordSource::printOptInfo(ObjectsArray<PlanEntry::Line>& planLines) const
 {
 #ifdef PRINT_OPT_INFO
 	fb_assert(planLines.hasData());
 	string info;
 	// Add 0.5 to convert double->int truncation into rounding
 	info.printf(" [rows: %" UQUADFORMAT "]", (FB_UINT64) (m_cardinality + 0.5));
-	planLines.back() += info;
+	planLines.back().text += info;
 #endif
 }
 

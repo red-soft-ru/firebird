@@ -129,6 +129,6 @@ void LocalTableStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, un
 
 	//// TODO: Use Local Table name/alias.
 
-	planEntry.description.add() = "Local Table Full Scan";
-	printOptInfo(planEntry.description);
+	planEntry.lines.add().text = "Local Table Full Scan";
+	printOptInfo(planEntry.lines);
 }

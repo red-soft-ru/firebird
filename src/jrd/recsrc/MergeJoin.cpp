@@ -363,8 +363,8 @@ void MergeJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned 
 {
 	planEntry.className = "MergeJoin";
 
-	planEntry.description.add() = "Merge Join (inner)";
-	printOptInfo(planEntry.description);
+	planEntry.lines.add().text = "Merge Join (inner)";
+	printOptInfo(planEntry.lines);
 
 	if (recurse)
 	{

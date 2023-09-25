@@ -183,8 +183,8 @@ void Union::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned leve
 {
 	planEntry.className = "Union";
 
-	planEntry.description.add() = (m_args.getCount() == 1 ? "Materialize" : "Union");
-	printOptInfo(planEntry.description);
+	planEntry.lines.add().text = (m_args.getCount() == 1 ? "Materialize" : "Union");
+	printOptInfo(planEntry.lines);
 
 	if (recurse)
 	{

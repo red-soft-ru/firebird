@@ -125,12 +125,12 @@ void FilteredStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 {
 	planEntry.className = "FilteredStream";
 
-	planEntry.description.add() = "Filter";
+	planEntry.lines.add().text = "Filter";
 
 	if (m_invariant)
-		planEntry.description.back() += " (preliminary)";
+		planEntry.lines.back().text += " (preliminary)";
 
-	printOptInfo(planEntry.description);
+	printOptInfo(planEntry.lines);
 
 	if (recurse)
 		m_next->getPlan(tdbb, planEntry.children.add(), ++level, recurse);
