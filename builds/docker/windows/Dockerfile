@@ -28,7 +28,8 @@ RUN `
         --add Microsoft.VisualStudio.Component.VC.ATLMFC `
         --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
         --add Microsoft.VisualStudio.Component.VC.CMake.Project `
-        --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+        --add Microsoft.VisualStudio.Component.VC.Redist.14.Latest `
+        --add Microsoft.VisualStudio.Component.VC.Redist.MSM `
         --add Microsoft.VisualStudio.Component.Windows10SDK.19041 `
         --add Microsoft.VisualStudio.ComponentGroup.NativeDesktop.Core `
         --add Microsoft.VisualStudio.Workload.NativeDesktop `
