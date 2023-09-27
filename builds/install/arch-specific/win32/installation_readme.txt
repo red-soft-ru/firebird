@@ -40,10 +40,10 @@ See the UNINSTALL section below for more info on this.
 Installation of the Guardian
 ----------------------------
 
-We are hoping to phase out the Guardian. It doesn't 
-work with the Classic server and the binary installer 
-does not offer it at install time if Classic is 
-chosen. If SuperServer or SuperClassic are chosen 
+We are hoping to phase out the Guardian. It doesn't
+work with the Classic server and the binary installer
+does not offer it at install time if Classic is
+chosen. If SuperServer or SuperClassic are chosen
 it is offered but not selected by default.
 
 
@@ -74,9 +74,9 @@ o The service installer (instsvc) uses the same
   installations. This is by design. Services exist
   in a single name space.
 
-o Be sure to install as an administrator. ie, if 
-  using the binary installer right click and choose 
-  'Run as administrator'. Otherwise the installer 
+o Be sure to install as an administrator. ie, if
+  using the binary installer right click and choose
+  'Run as administrator'. Otherwise the installer
   may be unable to start the Firebird service at
   the end of installation.
 
