@@ -41,11 +41,13 @@ RUN `
     choco install --no-progress --yes git --version=2.33.1 && `
     choco install --no-progress --yes 7zip.install --version=19.0 && `
     choco install --no-progress --yes innosetup --version=6.1.2 && `
+    choco install --no-progress --yes wixtoolset --version=3.11.2 && `
     `
     refreshenv && `
     setx PATH "%PATH%;C:\Program Files\Git\usr\bin"
 
 ENV SEVENZIP='C:\Program Files\7-Zip'
 ENV INNO6_SETUP_PATH='C:\Program Files (x86)\Inno Setup 6'
+ENV WIX='C:\Program Files (x86)\WiX Toolset v3.11'
 
 COPY scripts\* C:\fbscripts\
