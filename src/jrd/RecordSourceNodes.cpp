@@ -1013,7 +1013,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 
 					case blr_invsel_procedure_alias:
 						blrReader.getString(node->alias);
-						if (csbTail)
+						if (csbTail && node->alias.hasData())
 							csbTail->csb_alias = &node->alias;
 						break;
 
@@ -1118,7 +1118,8 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 			node->stream = PAR_context(csb, &node->context);
 
 			csb->csb_rpt[node->stream].csb_procedure = node->procedure;
-			csb->csb_rpt[node->stream].csb_alias = &node->alias;
+			if (node->alias.hasData())
+				csb->csb_rpt[node->stream].csb_alias = &node->alias;
 
 			inArgCount = blrReader.getWord();
 			node->inputSources = PAR_args(tdbb, csb, inArgCount, inArgCount);
