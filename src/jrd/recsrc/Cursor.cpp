@@ -109,6 +109,13 @@ void Select::initializeInvariants(Request* request) const
 
 void Select::getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const
 {
+	if (m_line || m_column)
+	{
+		string pos;
+		pos.printf("\n-- line %u, column %u", m_line, m_column);
+		plan += pos;
+	}
+
 	plan += "\nPLAN ";
 	m_root->getLegacyPlan(tdbb, plan, level);
 }
