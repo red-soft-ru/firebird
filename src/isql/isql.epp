@@ -809,25 +809,6 @@ static void atexit_fb_shutdown()
 	fb_shutdown(0, fb_shutrsn_app_stopped);
 }
 
-int CLIB_ROUTINE main(int argc, char* argv[])
-{
-/**************************************
- *
- *	m a i n
- *
- **************************************
- *
- * Functional description
- *	This calls ISQL_main, and exists to
- *	isolate main which does not exist under
- *	MS Windows.
- *
- **************************************/
-
-	return ISQL_main(argc, argv);
-}
-
-
 int ISQL_main(int argc, char* argv[])
 {
 /**************************************
