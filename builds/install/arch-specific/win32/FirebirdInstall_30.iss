@@ -477,7 +477,7 @@ Source: {#FilesDir}\fbtrace.conf; DestDir: {app}; DestName: fbtrace.conf.default
 Source: {#FilesDir}\fbtrace.conf; DestDir: {app}; DestName: fbtrace.conf; Components: ServerComponent; Flags: uninsneveruninstall onlyifdoesntexist; check: NofbtraceConfExists;
 Source: {#FilesDir}\databases.conf; DestDir: {app}; Components: ClientComponent; Flags: uninsneveruninstall onlyifdoesntexist
 Source: {#FilesDir}\security3.fdb; DestDir: {app}; Destname: security3.fdb.empty; Components: ServerComponent;
-Source: {#FilesDir}\security3.fdb; DestDir: {app}; Components: ServerComponent; Flags: uninsneveruninstall onlyifdoesntexist
+Source: {#FilesDir}\security3.fdb; DestDir: {app}; Components: ServerComponent; Check: ConfigureAuthentication; Flags: uninsneveruninstall onlyifdoesntexist
 Source: {#FilesDir}\firebird.msg; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
 Source: {#FilesDir}\firebird.log; DestDir: {app}; Components: ServerComponent; Flags: uninsneveruninstall skipifsourcedoesntexist external dontcopy
 
@@ -638,6 +638,8 @@ Var
 
   SYSDBAPassword: String;       // SYSDBA password
 
+  init_secdb: Boolean;          // Is set to true by default in InitializeSetup
+
 #ifdef setuplogging
 // Not yet implemented - leave log in %TEMP%
 //  OkToCopyLog : Boolean;        // Set when installation is complete.
@@ -729,6 +731,7 @@ begin
   InitExistingInstallRecords;
   AnalyzeEnvironment;
   result := AnalysisAssessment;
+  init_secdb := true;
 
 end;
 
@@ -1091,7 +1094,8 @@ begin
       IncrementSharedCount(Is64BitInstallMode, GetAppPath+'\fbtrace.conf', false);
       IncrementSharedCount(Is64BitInstallMode, GetAppPath+'\security3.fdb', false);
 
-      InitSecurityDB('Srp');
+      if init_secdb then
+        InitSecurityDB('Srp');
 
       //Fix up conf file
       UpdateFirebirdConf;
@@ -1241,7 +1245,7 @@ begin
     { If we are not configuring Firebird then don't prompt for SYSDBA pw. }
     if not ConfigureFirebird then
       Result := True
-    else if not ConfigureAuthentication then
+    else if not init_secdb then
       Result := True
     else
       Result := False;

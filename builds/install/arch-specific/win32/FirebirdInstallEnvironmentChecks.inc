@@ -1180,11 +1180,20 @@ end;
 
 
 function ConfigureAuthentication: boolean;
+// This function should only be called once - when the innosetup installer tries to
+// install the secdb. If it is called a second time it will always find the secdb
+// exists, even if it hasn't been configured. The only real way to test whether we
+// should configure authentication is to actually _open_ a database and read the
+// sec$users table. Except we cannot do that as we need this information before we
+// install the files needed to read the database.
 begin
   if FileExists(WizardDirValue + '\security3.fdb') then
-		Result := false
+    Result := false
 	else
-		Result := true;
+    Result := true;
+
+  init_secdb := Result;
+
 end;
 
 
