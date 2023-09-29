@@ -8,7 +8,7 @@
 ;  for the specific language governing rights and limitations under the
 ;  License.
 ;
-;  The Original Code is copyright 2001-20016 Paul Reeves for IBPhoenix.
+;  The Original Code is copyright 2001-2023 Paul Reeves for IBPhoenix.
 ;
 ;  The Initial Developer of the Original Code is Paul Reeves for IBPhoenix.
 ;
@@ -722,7 +722,7 @@ begin
     exit;
   end;
 
-  //By default we want to install and confugure,
+  //By default we want to install and configure,
   //unless subsequent analysis suggests otherwise.
   InstallAndConfigure := Install + Configure;
 
@@ -895,7 +895,7 @@ begin
 
 // DOC NOTE - we are not actually handling a non-zero result code.
 // This is a complicated subject as the installer can be run either scripted
-// or as a GUI. This needs more research. If InitSecurityDB fails do we fail 
+// or as a GUI. This needs more research. If InitSecurityDB fails do we fail
 // the entire install? Allow user to complete and fix manually? Or give both options?
   if ResultCode <> 0 then begin
     Result := False;
@@ -1266,7 +1266,7 @@ begin
         AdminUserPage.Values[0] :='';
         AdminUserPage.Values[1] :='';
         MsgBox(ExpandConstant('{cm:SYSDBAPasswordMismatch}'), mbError, MB_OK);
-    end;
+      end;
     end;
   end;
 end;
