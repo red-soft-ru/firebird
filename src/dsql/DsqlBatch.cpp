@@ -627,7 +627,7 @@ private:
 							}
 						}
 
-						blob->BLB_put_segment(tdbb, flow.data, dataSize);
+						blob->BLB_put_data(tdbb, flow.data, dataSize);
 						flow.move(dataSize);
 					}
 				}
