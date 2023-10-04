@@ -13010,7 +13010,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 			node->function = Function::lookup(tdbb, name, false);
 
 		argCount = blrReader.getByte();
-		node->args = PAR_args(tdbb, csb, argCount, node->function->fun_inputs);
+		node->args = PAR_args(tdbb, csb, argCount, MAX(argCount, node->function->fun_inputs));
 	}
 
 	if (argNames && argNames->getCount() > argCount)
@@ -13065,7 +13065,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 			{
 				const auto& parameter = node->function->getInputFields()[pos];
 
-				if (argsByName.put(parameter->prm_name, *argIt))
+				if (parameter->prm_name.hasData() && argsByName.put(parameter->prm_name, *argIt))
 					mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << parameter->prm_name;
 			}
 
@@ -13087,13 +13087,20 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 
 	for (auto& parameter : node->function->getInputFields())
 	{
-		const auto argValue = argsByName.get(parameter->prm_name);
+		NestConst<Jrd::ValueExprNode>* argValue;
 
-		if (argValue)
+		if (parameter->prm_name.hasData())
 		{
-			*argIt = *argValue;
-			argsByName.remove(parameter->prm_name);
+			argValue = argsByName.get(parameter->prm_name);
+
+			if (argValue)
+			{
+				*argIt = *argValue;
+				argsByName.remove(parameter->prm_name);
+			}
 		}
+		else	// no parameter name in UDFs
+			argValue = argIt;
 
 		if (!argValue || !*argValue)
 		{
