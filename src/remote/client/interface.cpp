@@ -5473,6 +5473,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 	int inet_af = AF_UNSPEC;
 
 	cBlock.loadClnt(pb, &parSet);
+	pb.deleteWithTag(parSet.auth_block);
 	authenticateStep0(cBlock);
 
 #ifdef WIN_NT
