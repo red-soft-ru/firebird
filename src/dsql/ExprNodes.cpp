@@ -194,6 +194,15 @@ static void setParameterInfo(dsql_par* parameter, const dsql_ctx* context);
 
 int SortValueItem::compare(const dsc* desc1, const dsc* desc2)
 {
+	if (!desc1 && !desc2)
+		return 0;
+
+	if (!desc1)
+		return -1;
+
+	if (!desc2)
+		return 1;
+
 	return MOV_compare(JRD_get_thread_data(), desc1, desc2);
 }
 
@@ -215,8 +224,8 @@ const SortedValueList* LookupValueList::init(thread_db* tdbb, Request* request) 
 
 		for (const auto value : m_values)
 		{
-			if (const auto valueDesc = EVL_expr(tdbb, request, value))
-				sortedList->add(SortValueItem(value, valueDesc));
+			const auto valueDesc = EVL_expr(tdbb, request, value);
+			sortedList->add(SortValueItem(value, valueDesc));
 		}
 
 		sortedList->sort();
@@ -249,18 +258,16 @@ const SortedValueList* LookupValueList::init(thread_db* tdbb, Request* request) 
 	return createList();
 }
 
-TriState LookupValueList::find(thread_db* tdbb, Request* request, const ValueExprNode* value, const dsc* desc) const
+bool LookupValueList::find(thread_db* tdbb, Request* request, const ValueExprNode* value, const dsc* desc) const
 {
 	const auto sortedList = init(tdbb, request);
-	fb_assert(sortedList);
+	fb_assert(sortedList && sortedList->hasData());
 
-	if (sortedList->isEmpty())
-		return TriState();
+	if (!sortedList->front().desc)
+		request->req_flags |= req_null;
 
-	const auto res = sortedList->exist(SortValueItem(value, desc));
-	return TriState(res);
+	return sortedList->exist(SortValueItem(value, desc));
 }
-
 
 //--------------------
 

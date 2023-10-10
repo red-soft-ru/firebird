@@ -1380,28 +1380,30 @@ bool InListBoolNode::execute(thread_db* tdbb, Request* request) const
 	if (const auto argDesc = EVL_expr(tdbb, request, arg))
 	{
 		if (nodFlags & FLAG_INVARIANT)
-		{
-			const auto res = lookup->find(tdbb, request, arg, argDesc);
+			return lookup->find(tdbb, request, arg, argDesc);
 
-			if (res.isAssigned())
-				return res.value;
-
-			fb_assert(list->items.hasData());
-			request->req_flags |= req_null;
-			return false;
-		}
+		bool anyMatch = false, anyNull = false;
 
 		for (const auto value : list->items)
 		{
 			if (const auto valueDesc = EVL_expr(tdbb, request, value))
 			{
-				if (!MOV_compare(tdbb, argDesc, valueDesc))
-					return true;
+				if (!anyMatch && !MOV_compare(tdbb, argDesc, valueDesc))
+					anyMatch = true;
+			}
+			else
+			{
+				anyNull = true;
 			}
 		}
+
+		if (anyNull)
+			request->req_flags |= req_null;
+
+		return anyMatch;
 	}
 
-	return false;
+	return false; // req_null is already set by EVL_expr()
 }
 
 

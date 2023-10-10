@@ -103,8 +103,8 @@ public:
 
 	const SortedValueList* init(thread_db* tdbb, Request* request) const;
 
-	TriState find(thread_db* tdbb, Request* request,
-				  const ValueExprNode* value, const dsc* desc) const;
+	bool find(thread_db* tdbb, Request* request,
+			  const ValueExprNode* value, const dsc* desc) const;
 
 private:
 	Firebird::HalfStaticArray<ValueExprNode*, 4> m_values;
