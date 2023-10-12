@@ -1379,31 +1379,42 @@ bool InListBoolNode::execute(thread_db* tdbb, Request* request) const
 {
 	if (const auto argDesc = EVL_expr(tdbb, request, arg))
 	{
-		if (nodFlags & FLAG_INVARIANT)
-			return lookup->find(tdbb, request, arg, argDesc);
-
 		bool anyMatch = false, anyNull = false;
 
-		for (const auto value : list->items)
+		if (nodFlags & FLAG_INVARIANT)
 		{
-			if (const auto valueDesc = EVL_expr(tdbb, request, value))
+			anyMatch = lookup->find(tdbb, request, arg, argDesc);
+			anyNull = (request->req_flags & req_null);
+		}
+		else
+		{
+			for (const auto value : list->items)
 			{
-				if (!anyMatch && !MOV_compare(tdbb, argDesc, valueDesc))
-					anyMatch = true;
-			}
-			else
-			{
-				anyNull = true;
+				if (const auto valueDesc = EVL_expr(tdbb, request, value))
+				{
+					if (!MOV_compare(tdbb, argDesc, valueDesc))
+					{
+						anyMatch = true;
+						break;
+					}
+				}
+				else
+				{
+					anyNull = true;
+				}
 			}
 		}
 
+		request->req_flags &= ~req_null;
+
+		if (anyMatch)
+			return true;
+
 		if (anyNull)
 			request->req_flags |= req_null;
-
-		return anyMatch;
 	}
 
-	return false; // req_null is already set by EVL_expr()
+	return false; // for argDesc == nullptr, req_null is already set by EVL_expr()
 }
 
 
@@ -1553,9 +1564,7 @@ BoolExprNode* NotBoolNode::copy(thread_db* tdbb, NodeCopier& copier) const
 
 BoolExprNode* NotBoolNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
-	RseBoolNode* rseBoolean = nodeAs<RseBoolNode>(arg);
-
-	if (rseBoolean)
+	if (const auto rseBoolean = nodeAs<RseBoolNode>(arg))
 	{
 		if (rseBoolean->blrOp == blr_ansi_any)
 			rseBoolean->nodFlags |= FLAG_DEOPTIMIZE | FLAG_ANSI_NOT;

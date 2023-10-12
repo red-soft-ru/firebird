@@ -265,6 +265,8 @@ bool LookupValueList::find(thread_db* tdbb, Request* request, const ValueExprNod
 
 	if (!sortedList->front().desc)
 		request->req_flags |= req_null;
+	else
+		request->req_flags &= ~req_null;
 
 	return sortedList->exist(SortValueItem(value, desc));
 }
