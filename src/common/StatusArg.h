@@ -226,6 +226,11 @@ public:
 	{
 		return !(*this == arg);
 	}
+
+private:
+	// copying is prohibited
+	StatusVector(const StatusVector&);
+	void operator=(const StatusVector&);
 };
 
 
