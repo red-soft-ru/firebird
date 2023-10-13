@@ -1401,6 +1401,9 @@ bool InListBoolNode::execute(thread_db* tdbb, Request* request) const
 				else
 				{
 					anyNull = true;
+
+					if (nodFlags & FLAG_ANSI_NOT)
+						break;
 				}
 			}
 		}
@@ -1564,14 +1567,16 @@ BoolExprNode* NotBoolNode::copy(thread_db* tdbb, NodeCopier& copier) const
 
 BoolExprNode* NotBoolNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
-	RseBoolNode* rseBoolean = nodeAs<RseBoolNode>(arg);
-
-	if (rseBoolean)
+	if (const auto rseBoolean = nodeAs<RseBoolNode>(arg))
 	{
 		if (rseBoolean->blrOp == blr_ansi_any)
 			rseBoolean->nodFlags |= FLAG_DEOPTIMIZE | FLAG_ANSI_NOT;
 		else if (rseBoolean->blrOp == blr_ansi_all)
 			rseBoolean->nodFlags |= FLAG_ANSI_NOT;
+	}
+	else if (const auto listNode = nodeAs<InListBoolNode>(arg))
+	{
+		listNode->nodFlags |= FLAG_ANSI_NOT;
 	}
 
 	return BoolExprNode::pass1(tdbb, csb);
