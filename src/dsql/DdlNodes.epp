@@ -1695,7 +1695,7 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		returnType->type->resolve(dsqlScratch);
 
 	// check SQL SECURITY is not set if function declared in package
-	if (package.hasData() && ssDefiner.isAssigned())
+	if (package.hasData() && ssDefiner.has_value())
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 				  Arg::Gds(isc_invalid_clause) << Arg::Str("SQL SECURITY for functions is prohibit in packages"));
@@ -1905,13 +1905,13 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 					attachment->storeMetaDataBlob(tdbb, transaction, &FUN.RDB$FUNCTION_SOURCE, source);
 
 				FUN.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
-				FUN.RDB$DETERMINISTIC_FLAG = deterministic ? TRUE : FALSE;
+				FUN.RDB$DETERMINISTIC_FLAG = deterministic.asBool() ? TRUE : FALSE;
 				FUN.RDB$RETURN_ARGUMENT = 0;
 
-				if (ssDefiner.isAssigned())
+				if (ssDefiner.has_value())
 				{
 					FUN.RDB$SQL_SECURITY.NULL = FALSE;
-					FUN.RDB$SQL_SECURITY = ssDefiner.asBool() ? FB_TRUE : FB_FALSE;
+					FUN.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
 				}
 				else
 					FUN.RDB$SQL_SECURITY.NULL = TRUE;
@@ -2101,8 +2101,21 @@ bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, 
 		}
 
 		MODIFY FUN
-			FUN.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
-			FUN.RDB$DETERMINISTIC_FLAG = deterministic ? TRUE : FALSE;
+			if(deterministic.isAssigned())
+			{
+				FUN.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
+				FUN.RDB$DETERMINISTIC_FLAG = deterministic.asBool() ? TRUE : FALSE;
+			}
+			if (ssDefiner.has_value())
+			{
+				if(ssDefiner.value() != SqlSecurity::SS_DROP)
+				{
+					FUN.RDB$SQL_SECURITY.NULL = FALSE;
+					FUN.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
+				}
+				else
+					FUN.RDB$SQL_SECURITY.NULL = TRUE;
+			}
 
 			modifed = true;
 		END_MODIFY
@@ -3516,10 +3529,10 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 			if (ssDefiner.has_value())
 			{
-				if (ssDefiner.value() != SS_DROP)
+				if (ssDefiner.value() != SqlSecurity::SS_DROP)
 				{
 					TRG.RDB$SQL_SECURITY.NULL = FALSE;
-					TRG.RDB$SQL_SECURITY = ssDefiner.value() == SS_DEFINER ? FB_TRUE : FB_FALSE;
+					TRG.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
 				}
 				else
 					TRG.RDB$SQL_SECURITY.NULL = TRUE;
@@ -3573,7 +3586,7 @@ DdlNode* CreateAlterTriggerNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		}
 	}
 
-	if (create && ssDefiner.has_value() && ssDefiner.value() == TriggerDefinition::SS_DROP)
+	if (create && ssDefiner.has_value() && ssDefiner.value() == SqlSecurity::SS_DROP)
 		status_exception::raise(Arg::Gds(isc_dsql_command_err) << Arg::Gds(isc_dsql_invalid_drop_ss_clause));
 
 	return DdlNode::dsqlPass(dsqlScratch);

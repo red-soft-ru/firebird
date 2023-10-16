@@ -736,7 +736,7 @@ using namespace Firebird;
 
 	std::optional<int> nullableIntVal;
 	TriState triState;
-	std::optional<Jrd::TriggerDefinition::SqlSecurity> nullableSqlSecurityVal;
+	std::optional<Jrd::SqlSecurity> nullableSqlSecurityVal;
 	std::optional<Jrd::OverrideClause> nullableOverrideClause;
 	struct { bool first; bool second; } boolPair;
 	bool boolVal;
@@ -2833,12 +2833,11 @@ function_clause
 
 %type <createAlterFunctionNode> change_opt_function_clause
 change_opt_function_clause
-	: change_deterministic_opt_function_clause
 	;
 
 %type <createAlterFunctionNode> psql_function_clause
 psql_function_clause
-	: function_clause_start sql_security_clause_opt AS local_declarations_opt full_proc_block
+	: function_clause_start optional_sql_security_full_alter_clause AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
 			$$->ssDefiner = $2;
@@ -2872,17 +2871,27 @@ function_clause_start
 			}
 	;
 
-%type <createAlterFunctionNode> change_deterministic_opt_function_clause
-change_deterministic_opt_function_clause
+%type <createAlterFunctionNode> change_opt_function_clause
+change_opt_function_clause
 	: symbol_UDF_name
 			{ $$ = newNode<CreateAlterFunctionNode>(*$1); }
-		deterministic_clause
-			{
-				$$ = $2;
-				$$->deterministic = $3;
-			}
+		alter_individual_ops($2)
+			{ $$ = $2; }
 	;
 
+%type alter_individual_ops(<createAlterFunctionNode>)
+alter_individual_ops($createAlterFunctionNode)
+	: alter_individual_op($createAlterFunctionNode)
+	| alter_individual_ops alter_individual_op($createAlterFunctionNode)
+	;
+
+%type alter_individual_op(<createAlterFunctionNode>)
+alter_individual_op($createAlterFunctionNode)
+	: deterministic_clause
+		{ setClause($createAlterFunctionNode->deterministic, "DETERMINISTIC", $1); }
+	| optional_sql_security_partial_alter_clause
+		{ setClause($createAlterFunctionNode->ssDefiner, "SQL SECURITY", $1); }
+	;
 
 %type <boolVal> deterministic_clause
 deterministic_clause
@@ -4672,16 +4681,38 @@ trigger_type_opt	// we do not allow alter database triggers, hence we do not use
 		{ $$ = std::nullopt; }
 	;
 
+%type <nullableSqlSecurityVal> optional_sql_security_clause
+optional_sql_security_clause
+	: SQL SECURITY DEFINER
+		{ $$ = SS_DEFINER; }
+	| SQL SECURITY INVOKER
+		{ $$ = SS_INVOKER; }
+	;
+
+%type <nullableSqlSecurityVal> optional_sql_security_full_alter_clause
+optional_sql_security_full_alter_clause
+	: optional_sql_security_clause
+		{ $$ = $1; }
+	| // nothing
+		{ $$ = std::nullopt; }
+	;
+
+%type <nullableSqlSecurityVal> optional_sql_security_partial_alter_clause
+optional_sql_security_partial_alter_clause
+	: optional_sql_security_clause
+		{ $$ = $1; }
+	| DROP SQL SECURITY
+		{ $$ = SS_DROP; }
+	;
+
 %type <nullableSqlSecurityVal> trg_sql_security_clause
 trg_sql_security_clause
 	: // nothing
 		{ $$ = std::nullopt; }
-	| SQL SECURITY DEFINER
-		{ $$ = TriggerDefinition::SS_DEFINER; }
-	| SQL SECURITY INVOKER
-		{ $$ = TriggerDefinition::SS_INVOKER; }
+	| optional_sql_security_clause
+		{ $$ = $1; }
 	| DROP SQL SECURITY
-		{ $$ = TriggerDefinition::SS_DROP; }
+		{ $$ = SS_DROP; }
 	;
 
 // DROP metadata operations
