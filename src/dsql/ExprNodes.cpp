@@ -108,6 +108,10 @@ namespace
 					return castCoalesceNode->sameAs(coalesceNode, ignoreStreams);
 				}
 			}
+			else if (const auto castValueIfNode = nodeAs<ValueIfNode>(castNode->source))
+			{
+				return sameNodes(castValueIfNode, coalesceNode, ignoreStreams);
+			}
 		}
 
 		return false;
