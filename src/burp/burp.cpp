@@ -570,8 +570,6 @@ int gbak(Firebird::UtilSvc* uSvc)
 	if (switches.exists(IN_SW_BURP_SE, argv.begin(), 1, argc))
 		return svc_api_gbak(uSvc, switches);
 
-	uSvc->started();
-
 	if (argc <= 1)
 	{
 		burp_usage(switches);
@@ -1375,12 +1373,11 @@ int gbak(Firebird::UtilSvc* uSvc)
 	tdgbl->action->act_action = ACT_unknown;
 
 	action = open_files(file1, &file2, sw_replace, dpb);
-
 	MVOL_init(tdgbl->io_buffer_size);
+	uSvc->started();
 
 	int result;
 
-	tdgbl->uSvc->started();
 	switch (action)
 	{
 	case RESTORE:
