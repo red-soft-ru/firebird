@@ -624,7 +624,7 @@ public:
 		reqStat->bumpValue(index, delta);
 		traStat->bumpValue(index, delta);
 		attStat->bumpValue(index, delta);
-		dbbStat->bumpValue(index, delta);
+		// dbbStat adjusted from attStat, see Attachment::mergeAsyncStats()
 	}
 
 	void bumpRelStats(const RuntimeStatistics::StatType index, SLONG relation_id, SINT64 delta = 1)

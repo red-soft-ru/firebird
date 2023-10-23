@@ -830,6 +830,9 @@ AttachmentHolder::~AttachmentHolder()
 {
 	Jrd::Attachment* attachment = sAtt->getHandle();
 
+	if (attachment)
+		attachment->mergeStats(true);
+
 	if (attachment && !async)
 	{
 		attachment->att_use_count--;
