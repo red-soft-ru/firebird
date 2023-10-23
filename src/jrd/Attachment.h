@@ -736,7 +736,7 @@ public:
 	void signalCancel();
 	void signalShutdown(ISC_STATUS code);
 
-	void mergeStats();
+	void mergeStats(bool pageStatsOnly = false);
 	bool hasActiveRequests() const;
 
 	bool backupStateWriteLock(thread_db* tdbb, SSHORT wait);
