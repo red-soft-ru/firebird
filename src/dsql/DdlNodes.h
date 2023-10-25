@@ -600,6 +600,9 @@ private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		bool secondPass, bool runTriggers);
+	bool executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
+		bool secondPass, bool runTriggers);
+
 	void storeParameter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		USHORT parameterType, unsigned pos, ParameterClause* parameter,
 		const CollectedParameter* collectedParameter);
@@ -622,7 +625,7 @@ public:
 	MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
-	TriState ssDefiner;
+	std::optional<SqlSecurity> ssDefiner;
 };
 
 

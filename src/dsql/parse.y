@@ -2707,9 +2707,13 @@ procedure_clause
 	| external_procedure_clause
 	;
 
+%type <createAlterProcedureNode> change_opt_procedure_clause
+change_opt_procedure_clause
+	;
+
 %type <createAlterProcedureNode> psql_procedure_clause
 psql_procedure_clause
-	: procedure_clause_start sql_security_clause_opt AS local_declarations_opt full_proc_block
+	: procedure_clause_start optional_sql_security_full_alter_clause AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
 			$$->ssDefiner = $2;
@@ -2738,9 +2742,26 @@ procedure_clause_start
 			{ $$ = $2; }
 	;
 
+%type <createAlterProcedureNode> change_opt_procedure_clause
+change_opt_procedure_clause
+	: symbol_procedure_name
+			{ $$ = newNode<CreateAlterProcedureNode>(*$1); }
+		optional_sql_security_partial_alter_clause
+			{
+				$$ = $2;
+				$$->ssDefiner = $3;
+			}
+	;
+
 %type <createAlterProcedureNode> alter_procedure_clause
 alter_procedure_clause
 	: procedure_clause
+		{
+			$$ = $1;
+			$$->alter = true;
+			$$->create = false;
+		}
+	| change_opt_procedure_clause
 		{
 			$$ = $1;
 			$$->alter = true;

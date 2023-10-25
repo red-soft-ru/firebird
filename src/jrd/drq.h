@@ -182,6 +182,7 @@ enum drq_type_t
 	drq_s_prms4,
 	drq_s_prm_src2,
 	drq_m_prcs2,
+	drq_m_prm_prcs2,		// modify individual procedure parameters (CreateAlterProcedureNode)
 	drq_e_prms2,
 	drq_m_trigger2,
 	drq_e_prcs2,

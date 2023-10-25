@@ -608,3 +608,8 @@ If not specified in the CREATE TABLE statement, the database-level default behav
 (Alexander Zhdanov)
 
 ALTER FUNCTION <name> [ {DETERMINISTIC | NOT DETERMINISTIC} ] [ SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY ]
+
+25) Added the ability to change sql security option without specifying the entire body of the procedure
+(Alexander Zhdanov)
+
+ALTER PROCEDURE <name> SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY
