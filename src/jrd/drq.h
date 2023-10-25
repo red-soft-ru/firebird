@@ -200,6 +200,7 @@ enum drq_type_t
 	drq_m_pkg_prc,			// drop package body
 	drq_m_pkg_fun,			// drop package body
 	drq_m_pkg,				// alter package
+	drq_m_prm_pkg,			// modify individual package parameters
 	drq_l_pkg_funcs,		// lookup packaged functions
 	drq_l_pkg_func_args,	// lookup packaged function arguments
 	drq_l_pkg_procs,		// lookup packaged procedures

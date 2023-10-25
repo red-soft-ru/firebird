@@ -2977,12 +2977,22 @@ replace_function_clause
 
 %type <createAlterPackageNode> package_clause
 package_clause
-	: symbol_package_name sql_security_clause_opt AS BEGIN package_items_opt END
+	: symbol_package_name optional_sql_security_full_alter_clause AS BEGIN package_items_opt END
 		{
 			CreateAlterPackageNode* node = newNode<CreateAlterPackageNode>(*$1);
 			node->ssDefiner = $2;
 			node->source = makeParseStr(YYPOSNARG(4), YYPOSNARG(6));
 			node->items = $5;
+			$$ = node;
+		}
+	;
+
+%type <createAlterPackageNode> change_opt_package_clause
+change_opt_package_clause
+	: symbol_package_name optional_sql_security_partial_alter_clause
+		{
+			CreateAlterPackageNode* node = newNode<CreateAlterPackageNode>(*$1);
+			node->ssDefiner = $2;
 			$$ = node;
 		}
 	;
@@ -3019,6 +3029,12 @@ package_item
 %type <createAlterPackageNode> alter_package_clause
 alter_package_clause
 	: package_clause
+		{
+			$$ = $1;
+			$$->alter = true;
+			$$->create = false;
+		}
+	| change_opt_package_clause
 		{
 			$$ = $1;
 			$$->alter = true;

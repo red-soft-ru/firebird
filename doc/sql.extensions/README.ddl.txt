@@ -613,3 +613,8 @@ ALTER FUNCTION <name> [ {DETERMINISTIC | NOT DETERMINISTIC} ] [ SQL SECURITY {DE
 (Alexander Zhdanov)
 
 ALTER PROCEDURE <name> SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY
+
+26) Added the ability to change sql security option without specifying the entire body of the package
+(Alexander Zhdanov)
+
+ALTER PACKAGE <name> SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY
