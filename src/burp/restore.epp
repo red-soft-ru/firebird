@@ -10966,6 +10966,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 	// Collect system fields
 	{
 		Firebird::IRequest* req_handle = nullptr;
+		tdgbl->systemFields.setSortMode(Firebird::FB_ARRAY_SORT_MANUAL);
 
 		FOR(REQUEST_HANDLE req_handle)
 			X IN RDB$FIELDS WITH
@@ -10981,6 +10982,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 		END_ERROR;
 
 		MISC_release_request_silent(req_handle);
+		tdgbl->systemFields.sort();
 	}
 
 	while (get_attribute(&attribute, tdgbl) != att_end)
