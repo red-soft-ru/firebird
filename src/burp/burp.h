@@ -257,6 +257,8 @@ enum att_type {
 	att_database_sql_security_deprecated,	// can be removed later
 	att_replica_mode,		// replica mode
 	att_database_sql_security,	// default sql security value
+	att_default_pub_active, // default publication status
+	att_default_pub_auto_enable,
 
 	// Relation attributes
 
@@ -1065,6 +1067,8 @@ public:
 	UCHAR*		gbl_crypt_buffer;
 	ULONG		gbl_crypt_left;
 	UCHAR*      gbl_decompress;
+	bool		gbl_default_pub_active = false;
+	bool		gbl_default_pub_auto_enable = false;
 
 	burp_rel*	relations;
 	burp_pkg*	packages;
