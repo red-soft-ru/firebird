@@ -8079,8 +8079,6 @@ bool get_publication(BurpGlobals* tdgbl)
  *
  **************************************/
 	att_type attribute;
-	TEXT temp[GDS_NAME_LEN];
-	SSHORT len;
 	scan_attr_t scan_next_attr;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
@@ -8178,8 +8176,6 @@ bool get_pub_table(BurpGlobals* tdgbl)
  *
  **************************************/
 	att_type attribute;
-	TEXT temp[GDS_NAME_LEN];
-	SSHORT len;
 	scan_attr_t scan_next_attr;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
