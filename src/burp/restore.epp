@@ -195,7 +195,7 @@ static inline UCHAR get(BurpGlobals* tdgbl)
 	return tdgbl->get();
 }
 
-static inline FB_BOOLEAN get_boolean(BurpGlobals* tdgbl, bool deprecated)
+static inline FB_BOOLEAN get_boolean(BurpGlobals* tdgbl, bool deprecated = false)
 {
 	if (!deprecated)
 	{
@@ -523,6 +523,40 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 		ON_ERROR
 			MISC_release_request_silent(req_handle1);
 			general_on_error ();
+		END_ERROR;
+
+		MISC_release_request_silent(req_handle1);
+	}
+
+	// If the default publication was backed up with non-default values,
+	// update the table accorgingly.
+	// NOTE: This change should be performed in the last transaction
+	// of the restore process, to avoid generating a replication stream
+	// before the database is restored successfully.
+
+	if ((tdgbl->gbl_default_pub_active || tdgbl->gbl_default_pub_auto_enable) &&
+		tdgbl->runtimeODS >= DB_VERSION_DDL12)
+	{
+		FOR (REQUEST_HANDLE req_handle1)
+			PUB IN RDB$PUBLICATIONS
+			WITH PUB.RDB$PUBLICATION_NAME EQ DEFAULT_PUBLICATION
+		{
+			fb_assert(PUB.RDB$SYSTEM_FLAG != 0);
+
+			MODIFY PUB USING
+				PUB.RDB$ACTIVE_FLAG.NULL = FALSE;
+				PUB.RDB$ACTIVE_FLAG = tdgbl->gbl_default_pub_active ? 1 : 0;
+
+				PUB.RDB$AUTO_ENABLE.NULL = FALSE;
+				PUB.RDB$AUTO_ENABLE = tdgbl->gbl_default_pub_auto_enable ? 1 : 0;
+			END_MODIFY;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
+		}
+		END_FOR;
+		ON_ERROR
+			general_on_error();
 		END_ERROR;
 
 		MISC_release_request_silent(req_handle1);
@@ -11083,6 +11117,28 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 				else
 					get_boolean(tdgbl, attribute == att_database_sql_security_deprecated);
 			}
+			else
+			{
+				// Functions that use scan_next_attr initialize it to NO_SKIP using skip_init().
+				// Here we don't use that logic, hence the first param to bad_attribute is hardcoded.
+				bad_attribute(NO_SKIP, attribute, 352);
+			}
+			break;
+
+		case att_default_pub_active:
+			if (tdgbl->RESTORE_format >= 11)
+				tdgbl->gbl_default_pub_active = get_boolean(tdgbl);
+			else
+			{
+				// Functions that use scan_next_attr initialize it to NO_SKIP using skip_init().
+				// Here we don't use that logic, hence the first param to bad_attribute is hardcoded.
+				bad_attribute(NO_SKIP, attribute, 352);
+			}
+			break;
+
+		case att_default_pub_auto_enable:
+			if (tdgbl->RESTORE_format >= 11)
+				tdgbl->gbl_default_pub_auto_enable = get_boolean(tdgbl);
 			else
 			{
 				// Functions that use scan_next_attr initialize it to NO_SKIP using skip_init().
