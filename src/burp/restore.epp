@@ -10394,8 +10394,8 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 			X.RDB$SYSTEM_FLAG EQ 1
 
 			const auto len = MISC_symbol_length(X.RDB$FIELD_NAME, sizeof(X.RDB$FIELD_NAME));
-		Firebird::MetaString name(X.RDB$FIELD_NAME, len);
-		tdgbl->systemFields.add(name);
+			MetaString name(X.RDB$FIELD_NAME, len);
+			tdgbl->systemFields.add(name);
 
 		END_FOR;
 		ON_ERROR
