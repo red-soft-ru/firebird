@@ -532,7 +532,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 	}
 
 	// If the default publication was backed up with non-default values,
-	// update the table accorgingly.
+	// update the table accordingly.
 	// NOTE: This change should be performed in the last transaction
 	// of the restore process, to avoid generating a replication stream
 	// before the database is restored successfully.
