@@ -2755,9 +2755,7 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 	else if (alter)
 	{
 		if (executeAlter(tdbb, dsqlScratch, transaction, false, true))
-		{
 			altered = true;
-		}
 		else
 		{
 			if (create)	// create or alter

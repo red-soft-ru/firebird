@@ -2707,10 +2707,6 @@ procedure_clause
 	| external_procedure_clause
 	;
 
-%type <createAlterProcedureNode> change_opt_procedure_clause
-change_opt_procedure_clause
-	;
-
 %type <createAlterProcedureNode> psql_procedure_clause
 psql_procedure_clause
 	: procedure_clause_start optional_sql_security_full_alter_clause AS local_declarations_opt full_proc_block
@@ -2742,8 +2738,8 @@ procedure_clause_start
 			{ $$ = $2; }
 	;
 
-%type <createAlterProcedureNode> change_opt_procedure_clause
-change_opt_procedure_clause
+%type <createAlterProcedureNode> partial_alter_procedure_clause
+partial_alter_procedure_clause
 	: symbol_procedure_name
 			{ $$ = newNode<CreateAlterProcedureNode>(*$1); }
 		optional_sql_security_partial_alter_clause
@@ -2761,7 +2757,7 @@ alter_procedure_clause
 			$$->alter = true;
 			$$->create = false;
 		}
-	| change_opt_procedure_clause
+	| partial_alter_procedure_clause
 		{
 			$$ = $1;
 			$$->alter = true;
@@ -2852,9 +2848,6 @@ function_clause
 	: psql_function_clause
 	| external_function_clause;
 
-%type <createAlterFunctionNode> change_opt_function_clause
-change_opt_function_clause
-	;
 
 %type <createAlterFunctionNode> psql_function_clause
 psql_function_clause
@@ -2892,8 +2885,8 @@ function_clause_start
 			}
 	;
 
-%type <createAlterFunctionNode> change_opt_function_clause
-change_opt_function_clause
+%type <createAlterFunctionNode> partial_alter_function_clause
+partial_alter_function_clause
 	: symbol_UDF_name
 			{ $$ = newNode<CreateAlterFunctionNode>(*$1); }
 		alter_individual_ops($2)
@@ -2955,7 +2948,7 @@ alter_function_clause
 			$$->alter = true;
 			$$->create = false;
 		}
-	| change_opt_function_clause
+	| partial_alter_function_clause
 		{
 			$$ = $1;
 			$$->alter = true;
@@ -2987,8 +2980,8 @@ package_clause
 		}
 	;
 
-%type <createAlterPackageNode> change_opt_package_clause
-change_opt_package_clause
+%type <createAlterPackageNode> partial_alter_package_clause
+partial_alter_package_clause
 	: symbol_package_name optional_sql_security_partial_alter_clause
 		{
 			CreateAlterPackageNode* node = newNode<CreateAlterPackageNode>(*$1);
@@ -3034,7 +3027,7 @@ alter_package_clause
 			$$->alter = true;
 			$$->create = false;
 		}
-	| change_opt_package_clause
+	| partial_alter_package_clause
 		{
 			$$ = $1;
 			$$->alter = true;
