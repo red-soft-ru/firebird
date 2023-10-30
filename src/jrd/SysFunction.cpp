@@ -4670,7 +4670,7 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 			if (attachment->att_client_version.isEmpty())
 				return NULL;
 
-			resultStr = attachment->att_client_version.ToString();
+			resultStr = attachment->att_client_version;
 		}
 		else if (nameStr == CURRENT_USER_NAME)
 		{
