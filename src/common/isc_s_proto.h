@@ -178,7 +178,7 @@ public:
 #define USE_FCNTL
 #endif
 
-class CountedFd;
+class SharedFileInfo;
 
 class FileLock
 {
@@ -186,8 +186,8 @@ public:
 	enum LockMode {FLM_EXCLUSIVE, FLM_TRY_EXCLUSIVE, FLM_SHARED, FLM_TRY_SHARED};
 
 	typedef void InitFunction(int fd);
-	explicit FileLock(const char* fileName, InitFunction* init = NULL);		// main ctor
-	FileLock(const FileLock* main, int s);	// creates additional lock for existing file
+
+	explicit FileLock(const char* fileName, InitFunction* init = NULL);
 	~FileLock();
 
 	// Main function to lock file
@@ -196,24 +196,18 @@ public:
 	// Alternative locker is using status vector to report errors
 	bool setlock(Firebird::CheckStatusWrapper* status, const LockMode mode);
 
-	// unlocking can only put error into log file - we can't throw in dtors
+	// Unlocking can only put error into log file - we can't throw in dtors
 	void unlock();
 
+	// Obvious access to file descriptor
 	int getFd();
 
-private:
 	enum LockLevel {LCK_NONE, LCK_SHARED, LCK_EXCL};
 
+private:
+	Firebird::RefPtr<SharedFileInfo> file;
+	InitFunction* initFunction;
 	LockLevel level;
-	CountedFd* oFile;
-#ifdef USE_FCNTL
-	int lStart;
-#endif
-	class CountedRWLock* rwcl;		// Due to order of init in ctor rwcl must go after fd & start
-
-	Firebird::string getLockId();
-	class CountedRWLock* getRw();
-	void rwUnlock();
 };
 
 #endif // UNIX
