@@ -65,16 +65,10 @@
 #include "../common/StatusArg.h"
 #include "../common/ThreadData.h"
 #include "../common/ThreadStart.h"
-
-#ifdef PER_THREAD_RWLOCK
-#include "../common/classes/SyncObject.h"
-#else
-#include "../common/classes/rwlock.h"
-#endif // PER_THREAD_RWLOCK
-
 #include "../common/classes/GenericMap.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/classes/array.h"
+#include "../common/classes/condition.h"
 #include "../common/StatusHolder.h"
 
 #ifdef WIN_NT
@@ -144,204 +138,27 @@ static bool		event_blocked(const event_t* event, const SLONG value);
 
 #ifdef UNIX
 
-static GlobalPtr<Mutex> openFdInit;
+#ifdef FILELOCK_DEBUG
 
-class DevNode
+#include <stdarg.h>
+
+void DEB_FLOCK(const char* format, ...)
 {
-public:
-	DevNode()
-		: f_dev(0), f_ino(0)
-	{ }
+	va_list params;
+	va_start(params, format);
+	::vfprintf(stderr, format, params);
+	va_end(params);
+}
 
-	DevNode(dev_t d, ino_t i)
-		: f_dev(d), f_ino(i)
-	{ }
-
-	DevNode(const DevNode& v)
-		: f_dev(v.f_dev), f_ino(v.f_ino)
-	{ }
-
-	dev_t	f_dev;
-	ino_t	f_ino;
-
-	bool operator==(const DevNode& v) const
-	{
-		return f_dev == v.f_dev && f_ino == v.f_ino;
-	}
-
-	bool operator>(const DevNode& v) const
-	{
-		return f_dev > v.f_dev ? true :
-			   f_dev < v.f_dev ? false :
-			   f_ino > v.f_ino;
-	}
-
-	const DevNode& operator=(const DevNode& v)
-	{
-		f_dev = v.f_dev;
-		f_ino = v.f_ino;
-		return *this;
-	}
-};
-
-namespace Firebird {
-
-class CountedRWLock
-{
-public:
-	CountedRWLock() :
-#ifdef PER_THREAD_RWLOCK
-		sync(&syncObject, FB_FUNCTION),
-#endif
-		sharedAccessCounter(0)
-	{ }
-
-	~CountedRWLock()
-	{
-		fb_assert(cnt == 0);
-	}
-
-	int release()
-	{
-		return --cnt;
-	}
-
-	void addRef()
-	{
-		++cnt;
-	}
-
-#ifdef PER_THREAD_RWLOCK
-	bool setlock(const FileLock::LockMode mode)
-	{
-		bool rc = true;
-
-		switch (mode)
-		{
-		case FileLock::FLM_TRY_EXCLUSIVE:
-			rc = sync.lockConditional(SYNC_EXCLUSIVE);
-			break;
-		case FileLock::FLM_EXCLUSIVE:
-			sync.lock(SYNC_EXCLUSIVE);
-			break;
-		case FileLock::FLM_SHARED:
-			fb_assert(sharedAccessMutex.locked());
-			if (sharedAccessCounter == 0)
-				sync.lock(SYNC_SHARED);
-			break;
-		}
-
-		return rc;
-	}
-
-	void unlock(bool shared)
-	{
-		if (shared)
-		{
-			fb_assert(sharedAccessMutex.locked());
-			if (sharedAccessCounter > 0)
-				return;
-		}
-		sync.unlock();
-	}
 #else
-	bool setlock(const FileLock::LockMode mode)
-	{
-		bool rc = true;
 
-		switch (mode)
-		{
-		case FileLock::FLM_TRY_EXCLUSIVE:
-			rc = rwlock.tryBeginWrite(FB_FUNCTION);
-			break;
-		case FileLock::FLM_EXCLUSIVE:
-			rwlock.beginWrite(FB_FUNCTION);
-			break;
-		case FileLock::FLM_SHARED:
-			rwlock.beginRead(FB_FUNCTION);
-			break;
-		}
+void DEB_FLOCK(const char* format, ...) { }
 
-		return rc;
-	}
 
-	void unlock(bool shared)
-	{
-		if (shared)
-			rwlock.endRead();
-		else
-			rwlock.endWrite();
-	}
-#endif // PER_THREAD_RWLOCK
-	class EnsureUnlock : private MutexEnsureUnlock
-	{
-	public:
-		EnsureUnlock(CountedRWLock* rw, bool shared)
-			: MutexEnsureUnlock(rw->sharedAccessMutex, FB_FUNCTION)
-		{
-			if (shared)
-				enter();
-		}
-	};
-
-	bool sharedAdd()
-	{
-		fb_assert(sharedAccessMutex.locked());
-		fb_assert(sharedAccessCounter >= 0);
-
-		return sharedAccessCounter++ > 0;
-	}
-
-	bool sharedSub()
-	{
-		fb_assert(sharedAccessMutex.locked());
-		fb_assert(sharedAccessCounter > 0);
-
-		return --sharedAccessCounter > 0;
-	}
-
-private:
-	CountedRWLock(const CountedRWLock&);
-	const CountedRWLock& operator=(const CountedRWLock&);
-
-#ifdef PER_THREAD_RWLOCK
-	SyncObject syncObject;
-	Sync sync;
-#else
-	RWLock rwlock;
-#endif
-	AtomicCounter cnt;
-	Mutex sharedAccessMutex;
-	int sharedAccessCounter;
-};
-
-class CountedFd
-{
-public:
-	explicit CountedFd(int f)
-		: fd(f), useCount(0)
-	{ }
-
-	~CountedFd()
-	{
-		fb_assert(useCount == 0);
-	}
-
-	int fd;
-	int useCount;
-
-private:
-	CountedFd(const CountedFd&);
-	const CountedFd& operator=(const CountedFd&);
-};
-
-} // namespace Firebird
+#endif //FILELOCK_DEBUG
 
 namespace {
 
-	typedef GenericMap<Pair<Left<string, Firebird::CountedRWLock*> > > RWLocks;
-	GlobalPtr<RWLocks> rwlocks;
-	GlobalPtr<Mutex> rwlocksMutex;
 #ifdef USE_FCNTL
 	const char* NAME = "fcntl";
 #else
@@ -372,6 +189,44 @@ namespace {
 		FileLock* lock;
 	};
 
+	class DevNode
+	{
+	public:
+		DevNode()
+			: f_dev(0), f_ino(0)
+		{ }
+
+		DevNode(dev_t d, ino_t i)
+			: f_dev(d), f_ino(i)
+		{ }
+
+		DevNode(const DevNode& v)
+			: f_dev(v.f_dev), f_ino(v.f_ino)
+		{ }
+
+		dev_t	f_dev;
+		ino_t	f_ino;
+
+		bool operator==(const DevNode& v) const
+		{
+			return f_dev == v.f_dev && f_ino == v.f_ino;
+		}
+
+		bool operator>(const DevNode& v) const
+		{
+			return f_dev > v.f_dev ? true :
+				   f_dev < v.f_dev ? false :
+				   f_ino > v.f_ino;
+		}
+
+		const DevNode& operator=(const DevNode& v)
+		{
+			f_dev = v.f_dev;
+			f_ino = v.f_ino;
+			return *this;
+		}
+	};
+
 	DevNode getNode(const char* name)
 	{
 		struct STAT statistics;
@@ -398,80 +253,231 @@ namespace {
 		return DevNode(statistics.st_dev, statistics.st_ino);
 	}
 
+	GlobalPtr<Mutex> openFdInit;
+
 } // anonymous namespace
 
 
-typedef GenericMap<Pair<NonPooled<DevNode, Firebird::CountedFd*> > > FdNodes;
-static GlobalPtr<Mutex> fdNodesMutex;
-static GlobalPtr<FdNodes> fdNodes;
+namespace Firebird {
+
+class SharedFileInfo : public RefCounted
+{
+	SharedFileInfo(int f, const DevNode& id)
+		: counter(0), threadId(0), fd(f), devNode(id)
+	{ }
+
+	~SharedFileInfo()
+	{
+		fb_assert(sharedFilesMutex->locked());
+		fb_assert(counter == 0);
+
+		DEB_FLOCK("~ %p\n", this);
+		sharedFiles->remove(devNode);
+		close(fd);
+	}
+
+public:
+	static SharedFileInfo* get(const char* fileName)
+	{
+		DevNode id(getNode(fileName));
+
+		MutexLockGuard g(sharedFilesMutex, FB_FUNCTION);
+
+		SharedFileInfo* file = nullptr;
+		if (id.f_ino)
+		{
+			SharedFileInfo** got = sharedFiles->get(id);
+			if (got)
+			{
+				file = *got;
+				DEB_FLOCK("'%s': in map %p\n", fileName, file);
+				file->assertNonZero();
+			}
+		}
+
+		if (!file)
+		{
+			int fd = os_utils::openCreateSharedFile(fileName, 0);
+			id = getNode(fd);
+			file = FB_NEW_POOL(*getDefaultMemoryPool()) SharedFileInfo(fd, id);
+			SharedFileInfo** put = sharedFiles->put(id);
+			fb_assert(put);
+			*put = file;
+			DEB_FLOCK("'%s': new %p\n", fileName, file);
+		}
+
+		file->addRef();
+		return file;
+	}
+
+	int release() const override
+	{
+		// Release should be executed under mutex protection
+		// in order to modify reference counter & map atomically
+		MutexLockGuard guard(sharedFilesMutex, FB_FUNCTION);
+
+		return RefCounted::release();
+	}
+
+	int lock(bool shared, bool wait, FileLock::InitFunction* init)
+	{
+		MutexEnsureUnlock guard(mutex, FB_FUNCTION);
+		if (wait)
+			guard.enter();
+		else if (!guard.tryEnter())
+			return -1;
+
+		DEB_FLOCK("%d lock %p %c%c\n", Thread::getId(), this, shared ? 's' : 'X', wait ? 'W' : 't');
+
+		while (counter != 0)	// file lock belongs to our process
+		{
+			// check for compatible locks
+			if (shared && counter > 0)
+			{
+				// one more shared lock
+				++counter;
+				DEB_FLOCK("%d fast %p c=%d\n", Thread::getId(), this, counter);
+				return 0;
+			}
+			if ((!shared) && counter < 0 && threadId == Thread::getId())
+			{
+				// recursive excl lock
+				--counter;
+				DEB_FLOCK("%d fast %p c=%d\n", Thread::getId(), this, counter);
+				return 0;
+			}
+
+			// non compatible lock needed
+			// wait for another thread to release a lock
+			if (!wait)
+			{
+				DEB_FLOCK("%d failed internally %p c=%d rc -1\n", Thread::getId(), this, counter);
+				return -1;
+			}
+
+			DEB_FLOCK("%d wait %p c=%d\n", Thread::getId(), this, counter);
+			waitOn.wait(mutex);
+		}
+
+		// Take lock on a file
+		fb_assert(counter == 0);
+#ifdef USE_FCNTL
+		struct FLOCK lock;
+		lock.l_type = shared ? F_RDLCK : F_WRLCK;
+		lock.l_whence = SEEK_SET;
+		lock.l_start = 0;
+		lock.l_len = 1;
+		if (fcntl(fd, wait ? F_SETLKW : F_SETLK, &lock) == -1)
+		{
+			int rc = errno;
+			if (!wait && (rc == EACCES || rc == EAGAIN))
+				rc = -1;
+#else
+		if (flock(fd, (shared ? LOCK_SH : LOCK_EX) | (wait ? 0 : LOCK_NB)))
+		{
+			int rc = errno;
+			if (!wait && (rc == EWOULDBLOCK))
+				rc = -1;
+#endif
+			DEB_FLOCK("%d failed on file %p c=%d rc %d\n", Thread::getId(), this, counter, rc);
+			return rc;
+		}
+
+		if (!shared)
+		{
+			threadId = Thread::getId();
+
+			// call init() when needed
+			if (init && !shared)
+				init(fd);
+		}
+
+		// mark lock as taken
+		counter = shared ? 1 : -1;
+		DEB_FLOCK("%d filelock %p c=%d\n", Thread::getId(), this, counter);
+		return 0;
+	}
+
+	void unlock()
+	{
+		fb_assert(counter != 0);
+
+		MutexEnsureUnlock guard(mutex, FB_FUNCTION);
+		guard.enter();
+
+		DEB_FLOCK("%d UNlock %p c=%d\n", Thread::getId(), this, counter);
+
+		if (counter < 0)
+			++counter;
+		else
+			--counter;
+
+		if (counter != 0)
+		{
+			DEB_FLOCK("%d done %p c=%d\n", Thread::getId(), this, counter);
+			return;
+		}
+
+		// release file lock
+#ifdef USE_FCNTL
+		struct FLOCK lock;
+		lock.l_type = F_UNLCK;
+		lock.l_whence = SEEK_SET;
+		lock.l_start = 0;
+		lock.l_len = 1;
+
+		if (fcntl(fd, F_SETLK, &lock) != 0)
+		{
+#else
+		if (flock(fd, LOCK_UN) != 0)
+		{
+#endif
+			LocalStatus ls;
+			CheckStatusWrapper local(&ls);
+			error(&local, NAME, errno);
+			iscLogStatus("Unlock error", &local);
+		}
+
+		DEB_FLOCK("%d file-done %p\n", Thread::getId(), this);
+		waitOn.notifyAll();
+	}
+
+	int getFd()
+	{
+		return fd;
+	}
+
+private:
+	typedef GenericMap<Pair<NonPooled<DevNode, SharedFileInfo*> > > SharedFiles;
+	static GlobalPtr<SharedFiles> sharedFiles;
+	static GlobalPtr<Mutex> sharedFilesMutex;
+
+	Condition waitOn;
+	Mutex mutex;
+	int counter;
+	ThreadId threadId;
+	int fd;
+	DevNode devNode;
+};
+
+GlobalPtr<SharedFileInfo::SharedFiles> SharedFileInfo::sharedFiles;
+GlobalPtr<Mutex> SharedFileInfo::sharedFilesMutex;
+
+} // namespace Firebird
+
 
 FileLock::FileLock(const char* fileName, InitFunction* init)
-	: level(LCK_NONE), oFile(NULL),
-#ifdef USE_FCNTL
-	  lStart(0),
-#endif
-	  rwcl(NULL)
-{
-	MutexLockGuard g(fdNodesMutex, FB_FUNCTION);
-
-	DevNode id(getNode(fileName));
-
-	if (id.f_ino)
-	{
-		CountedFd** got = fdNodes->get(id);
-		if (got)
-		{
-			oFile = *got;
-		}
-	}
-
-	if (!oFile)
-	{
-		int fd = os_utils::openCreateSharedFile(fileName, 0);
-		oFile = FB_NEW_POOL(*getDefaultMemoryPool()) CountedFd(fd);
-		CountedFd** put = fdNodes->put(getNode(fd));
-		fb_assert(put);
-		*put = oFile;
-
-		if (init)
-		{
-			init(fd);
-		}
-	}
-
-	rwcl = getRw();
-	++(oFile->useCount);
-}
-
+	: file(REF_NO_INCR, SharedFileInfo::get(fileName)), initFunction(init), level(LCK_NONE)
+{ }
 
 FileLock::~FileLock()
 {
 	unlock();
-
-	{ // guard scope
-		MutexLockGuard g(rwlocksMutex, FB_FUNCTION);
-
-		if (rwcl->release() == 0)
-		{
-			rwlocks->remove(getLockId());
-			delete rwcl;
-		}
-	}
-	{ // guard scope
-		MutexLockGuard g(fdNodesMutex, FB_FUNCTION);
-
-		if (--(oFile->useCount) == 0)
-		{
-			fdNodes->remove(getNode(oFile->fd));
-			close(oFile->fd);
-			delete oFile;
-		}
-	}
 }
 
 int FileLock::getFd()
 {
-	return oFile->fd;
+	return file->getFd();
 }
 
 int FileLock::setlock(const LockMode mode)
@@ -499,69 +505,11 @@ int FileLock::setlock(const LockMode mode)
 		return wait ? EBUSY : -1;
 	}
 
-	// Lock shared mutex if needed
-	CountedRWLock::EnsureUnlock guard(rwcl, shared);
+	int rc = file->lock(shared, wait, initFunction);
+	if (rc == 0)	// lock taken
+		level = newLevel;
 
-	// first take appropriate rwlock to avoid conflicts with other threads in our process
-	bool rc = true;
-	try
-	{
-		if (!rwcl->setlock(mode))
-			return -1;
-	}
-	catch (const system_call_failed& fail)
-	{
-		return fail.getErrorCode();
-	}
-
-	// For shared lock we must take into an account reenterability
-	if (shared && rwcl->sharedAdd())
-	{
-		// we already have file lock
-		level = LCK_SHARED;
-		return 0;
-	}
-
-#ifdef USE_FCNTL
-	// Take lock on a file
-	struct FLOCK lock;
-	lock.l_type = shared ? F_RDLCK : F_WRLCK;
-	lock.l_whence = SEEK_SET;
-	lock.l_start = lStart;
-	lock.l_len = 1;
-	if (fcntl(oFile->fd, wait ? F_SETLKW : F_SETLK, &lock) == -1)
-	{
-		int rc = errno;
-		if (!wait && (rc == EACCES || rc == EAGAIN))
-		{
-			rc = -1;
-		}
-#else
-	if (flock(oFile->fd, (shared ? LOCK_SH : LOCK_EX) | (wait ? 0 : LOCK_NB)))
-	{
-		int rc = errno;
-		if (!wait && (rc == EWOULDBLOCK))
-		{
-			rc = -1;
-		}
-#endif
-
-		try
-		{
-			if (shared)
-			{
-				rwcl->sharedSub();
-			}
-			rwcl->unlock(shared);
-		}
-		catch (const Exception&)
-		{ }
-
-		return rc;
-	}
-
-	level = newLevel;
-	return 0;
+	return rc;
 }
 
 bool FileLock::setlock(CheckStatusWrapper* status, const LockMode mode)
@@ -578,22 +526,6 @@ bool FileLock::setlock(CheckStatusWrapper* status, const LockMode mode)
 	return true;
 }
 
-void FileLock::rwUnlock()
-{
-	fb_assert(level != LCK_NONE);
-
-	try
-	{
-		rwcl->unlock(level == LCK_SHARED);
-	}
-	catch (const Exception& ex)
-	{
-		iscLogException("rwlock end-operation error", ex);
-	}
-
-	level = LCK_NONE;
-}
-
 void FileLock::unlock()
 {
 	if (level == LCK_NONE)
@@ -601,91 +533,8 @@ void FileLock::unlock()
 		return;
 	}
 
-	// For shared lock we must take into an account reenterability
-	CountedRWLock::EnsureUnlock guard(rwcl, level == LCK_SHARED);
-	if (level == LCK_SHARED && rwcl->sharedSub())
-	{
-		// counter is non-zero - we must keep file lock
-		rwUnlock();
-		return;
-	}
-
-#ifdef USE_FCNTL
-	struct FLOCK lock;
-	lock.l_type = F_UNLCK;
-	lock.l_whence = SEEK_SET;
-	lock.l_start = lStart;
-	lock.l_len = 1;
-
-	if (fcntl(oFile->fd, F_SETLK, &lock) != 0)
-	{
-#else
-	if (flock(oFile->fd, LOCK_UN) != 0)
-	{
-#endif
-		LocalStatus ls;
-		CheckStatusWrapper local(&ls);
-		error(&local, NAME, errno);
-		iscLogStatus("Unlock error", &local);
-	}
-
-	rwUnlock();
-}
-
-string FileLock::getLockId()
-{
-	fb_assert(oFile);
-
-	DevNode id(getNode(oFile->fd));
-
-	const size_t len1 = sizeof(id.f_dev);
-	const size_t len2 = sizeof(id.f_ino);
-#ifdef USE_FCNTL
-	const size_t len3 = sizeof(int);
-#endif
-
-	string rc(len1 + len2
-#ifdef USE_FCNTL
-						  + len3
-#endif
-								, ' ');
-	char* p = rc.begin();
-
-	memcpy(p, &id.f_dev, len1);
-	p += len1;
-	memcpy(p, &id.f_ino, len2);
-#ifdef USE_FCNTL
-	p += len2;
-	memcpy(p, &lStart, len3);
-#endif
-
-	return rc;
-}
-
-CountedRWLock* FileLock::getRw()
-{
-	string id = getLockId();
-	CountedRWLock* rc = NULL;
-
-	MutexLockGuard g(rwlocksMutex, FB_FUNCTION);
-
-	CountedRWLock** got = rwlocks->get(id);
-	if (got)
-	{
-		rc = *got;
-	}
-
-	if (!rc)
-	{
-		rc = FB_NEW_POOL(*getDefaultMemoryPool()) CountedRWLock;
-		CountedRWLock** put = rwlocks->put(id);
-		fb_assert(put);
-		*put = rc;
-	}
-
-	rc->addRef();
-
-	return rc;
+	file->unlock();
+	level = LCK_NONE;
 }
 
 #endif // UNIX
