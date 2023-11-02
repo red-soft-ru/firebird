@@ -20,8 +20,8 @@ Root=`dirname $Root`
 
 if [ "$SPECIAL_BUILD_SUFFIX" = "" ]; then
 # Normal builds
-SuffixKind="Release Candidate"
-SuffixVer="1"
+SuffixKind="RC"
+SuffixVer="2"
 BuildSuffix="Firebird $MajorVer.$MinorVer"
 [ "$SuffixKind" = "" ] || BuildSuffix="$BuildSuffix $SuffixKind"
 [ "$SuffixVer" = "" ] || BuildSuffix="$BuildSuffix $SuffixVer"
