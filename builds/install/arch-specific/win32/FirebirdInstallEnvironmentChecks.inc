@@ -1200,13 +1200,20 @@ end;
 
 function ConfigureAuthentication: boolean;
 begin
-	if IsNotServerInstall then
-		Result := false
-	else
-		if FileExists(WizardDirValue + '\security4.fdb') then
-			Result := false
-		else
-			Result := true;
+  // if it is the first time we are called test for existence of the security db
+  if init_secdb = UNDEFINED then begin
+    if FileExists(WizardDirValue + '\security4.fdb') then
+      Result := false
+    else
+      Result := true
+    end
+  else
+    // else the result is the current setting of init_secdb
+    Result := Boolean(init_secdb);
+
+  // Whatever the result, cast it to an integer and update init_secdb
+  init_secdb := Integer(Result);
+
 end;
 
 
