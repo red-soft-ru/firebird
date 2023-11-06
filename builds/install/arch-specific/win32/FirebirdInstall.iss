@@ -875,7 +875,8 @@ begin
     SaveToFile( Tempdir +'\temp.sql' );
   end;
   Result := Exec( CmdStr , ' -m -m2 -user SYSDBA -i ' + TempDir + '\temp.sql -o ' + TempDir + '\temp.sql.txt employee ' , TempDir, SW_HIDE, ewWaitUntilTerminated, ResultCode );
-  DeleteFile( TempDir + +'\temp.sql ');
+  DeleteFile( TempDir + '\temp.sql');
+  DeleteFile( TempDir + '\temp.sql.txt');
 end;
 
 
