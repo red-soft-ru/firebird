@@ -736,7 +736,7 @@ using namespace Firebird;
 	{}
 
 	std::optional<int> nullableIntVal;
-	TriState triState;
+	Firebird::TriState triState;
 	std::optional<Jrd::TriggerDefinition::SqlSecurity> nullableSqlSecurityVal;
 	std::optional<Jrd::OverrideClause> nullableOverrideClause;
 	struct { bool first; bool second; } boolPair;

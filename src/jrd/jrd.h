@@ -148,7 +148,7 @@ public:
 	Firebird::string	entryPoint;			// External trigger entrypoint
 	Firebird::string	extBody;			// External trigger body
 	ExtEngineManager::Trigger* extTrigger;	// External trigger
-	TriState ssDefiner;
+	Firebird::TriState ssDefiner;
 	MetaName	owner;				// Owner for SQL SECURITY
 
 	bool isActive() const;
