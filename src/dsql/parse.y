@@ -5996,7 +5996,7 @@ query_spec
 			rse->dsqlFirst = $2 ? $2->items[1] : NULL;
 			rse->dsqlSkip = $2 ? $2->items[0] : NULL;
 			rse->dsqlDistinct = $3;
-			rse->dsqlSelectList = $4;
+			rse->dsqlSelectList = $4->items.hasData() ? $4 : nullptr;
 			rse->dsqlFrom = $5;
 			rse->dsqlWhere = $6;
 			rse->dsqlGroup = $7;
@@ -6031,14 +6031,14 @@ skip_clause
 
 %type <valueListNode> distinct_clause
 distinct_clause
-	: DISTINCT		{ $$ = newNode<ValueListNode>(0); }
+	: DISTINCT		{ $$ = newNode<ValueListNode>(0u); }
 	| all_noise		{ $$ = NULL; }
 	;
 
 %type <valueListNode> select_list
 select_list
 	: select_items	{ $$ = $1; }
-	| '*'			{ $$ = NULL; }
+	| '*'			{ $$ = newNode<ValueListNode>(0u); }
 	;
 
 %type <valueListNode> select_items

@@ -10260,7 +10260,7 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 
 	auto inputFirst = input->first;
 
-	if (!inputFirst)
+	if (inputFirst->items.isEmpty())
 	{
 		// Process RETURNING *
 		inputFirst = FB_NEW_POOL(pool) ValueListNode(pool, 0u);
