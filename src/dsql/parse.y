@@ -700,6 +700,7 @@ using namespace Firebird;
 
 %token <metaNamePtr> ANY_VALUE
 %token <metaNamePtr> CALL
+%token <metaNamePtr> FORMAT
 %token <metaNamePtr> NAMED_ARG_ASSIGN
 
 // precedence declarations for expression evaluation
@@ -735,7 +736,7 @@ using namespace Firebird;
 	{}
 
 	std::optional<int> nullableIntVal;
-	TriState triState;
+	Firebird::TriState triState;
 	std::optional<Jrd::SqlSecurity> nullableSqlSecurityVal;
 	std::optional<Jrd::OverrideClause> nullableOverrideClause;
 	struct { bool first; bool second; } boolPair;
@@ -4916,6 +4917,7 @@ non_charset_simple_type
 	| numeric_type
 	| float_type
 	| decfloat_type
+	| date_time_type
 	| BIGINT
 		{
 			$$ = newNode<dsql_fld>();
@@ -4957,60 +4959,6 @@ non_charset_simple_type
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_short;
 			$$->length = sizeof(SSHORT);
-			$$->flags |= FLD_has_prec;
-		}
-	| DATE
-		{
-			$$ = newNode<dsql_fld>();
-			stmt_ambiguous = true;
-
-			if (client_dialect <= SQL_DIALECT_V5)
-			{
-				// Post warning saying that DATE is equivalent to TIMESTAMP
-				ERRD_post_warning(Arg::Warning(isc_sqlwarn) << Arg::Num(301) <<
-								  Arg::Warning(isc_dtype_renamed));
-				$$->dtype = dtype_timestamp;
-				$$->length = sizeof(GDS_TIMESTAMP);
-			}
-			else if (client_dialect == SQL_DIALECT_V6_TRANSITION)
-				yyabandon(YYPOSNARG(1), -104, isc_transitional_date);
-			else
-			{
-				$$->dtype = dtype_sql_date;
-				$$->length = sizeof(ULONG);
-			}
-			$$->flags |= FLD_has_prec;
-		}
-	| TIME without_time_zone_opt
-		{
-			$$ = newNode<dsql_fld>();
-
-			checkTimeDialect();
-			$$->dtype = dtype_sql_time;
-			$$->length = sizeof(SLONG);
-			$$->flags |= FLD_has_prec;
-		}
-	| TIME WITH TIME ZONE
-		{
-			$$ = newNode<dsql_fld>();
-
-			checkTimeDialect();
-			$$->dtype = dtype_sql_time_tz;
-			$$->length = sizeof(ISC_TIME_TZ);
-			$$->flags |= FLD_has_prec;
-		}
-	| TIMESTAMP without_time_zone_opt
-		{
-			$$ = newNode<dsql_fld>();
-			$$->dtype = dtype_timestamp;
-			$$->length = sizeof(GDS_TIMESTAMP);
-			$$->flags |= FLD_has_prec;
-		}
-	| TIMESTAMP WITH TIME ZONE
-		{
-			$$ = newNode<dsql_fld>();
-			$$->dtype = dtype_timestamp_tz;
-			$$->length = sizeof(ISC_TIMESTAMP_TZ);
 			$$->flags |= FLD_has_prec;
 		}
 	| BOOLEAN
@@ -6155,7 +6103,7 @@ query_spec
 			rse->dsqlFirst = $2 ? $2->items[1] : NULL;
 			rse->dsqlSkip = $2 ? $2->items[0] : NULL;
 			rse->dsqlDistinct = $3;
-			rse->dsqlSelectList = $4;
+			rse->dsqlSelectList = $4->items.hasData() ? $4 : nullptr;
 			rse->dsqlFrom = $5;
 			rse->dsqlWhere = $6;
 			rse->dsqlGroup = $7;
@@ -6190,14 +6138,14 @@ skip_clause
 
 %type <valueListNode> distinct_clause
 distinct_clause
-	: DISTINCT		{ $$ = newNode<ValueListNode>(0); }
+	: DISTINCT		{ $$ = newNode<ValueListNode>(0u); }
 	| all_noise		{ $$ = NULL; }
 	;
 
 %type <valueListNode> select_list
 select_list
 	: select_items	{ $$ = $1; }
-	| '*'			{ $$ = NULL; }
+	| '*'			{ $$ = newNode<ValueListNode>(0u); }
 	;
 
 %type <valueListNode> select_items
@@ -8781,6 +8729,77 @@ named_argument
 cast_specification
 	: CAST '(' value AS data_type_descriptor ')'
 		{ $$ = newNode<CastNode>($3, $5); }
+	| CAST '(' value AS cast_format_type cast_format_clause utf_string ')'
+		{ $$ = newNode<CastNode>($3, $5, *$7); }
+	;
+
+%type <metaNamePtr> cast_format_clause
+cast_format_clause
+	: FORMAT
+	;
+
+%type <legacyField> date_time_type
+date_time_type
+	: DATE
+		{
+			$$ = newNode<dsql_fld>();
+			stmt_ambiguous = true;
+
+			if (client_dialect <= SQL_DIALECT_V5)
+			{
+				// Post warning saying that DATE is equivalent to TIMESTAMP
+				ERRD_post_warning(Arg::Warning(isc_sqlwarn) << Arg::Num(301) <<
+								  Arg::Warning(isc_dtype_renamed));
+				$$->dtype = dtype_timestamp;
+				$$->length = sizeof(GDS_TIMESTAMP);
+			}
+			else if (client_dialect == SQL_DIALECT_V6_TRANSITION)
+				yyabandon(YYPOSNARG(1), -104, isc_transitional_date);
+			else
+			{
+				$$->dtype = dtype_sql_date;
+				$$->length = sizeof(ULONG);
+			}
+			$$->flags |= FLD_has_prec;
+		}
+	| TIME without_time_zone_opt
+		{
+			$$ = newNode<dsql_fld>();
+
+			checkTimeDialect();
+			$$->dtype = dtype_sql_time;
+			$$->length = sizeof(SLONG);
+			$$->flags |= FLD_has_prec;
+		}
+	| TIME WITH TIME ZONE
+		{
+			$$ = newNode<dsql_fld>();
+
+			checkTimeDialect();
+			$$->dtype = dtype_sql_time_tz;
+			$$->length = sizeof(ISC_TIME_TZ);
+			$$->flags |= FLD_has_prec;
+		}
+	| TIMESTAMP without_time_zone_opt
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_timestamp;
+			$$->length = sizeof(GDS_TIMESTAMP);
+			$$->flags |= FLD_has_prec;
+		}
+	| TIMESTAMP WITH TIME ZONE
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_timestamp_tz;
+			$$->length = sizeof(ISC_TIMESTAMP_TZ);
+			$$->flags |= FLD_has_prec;
+		}
+	;
+
+%type <legacyField> cast_format_type
+cast_format_type
+	: character_type
+	| date_time_type
 	;
 
 // case expressions
@@ -9444,6 +9463,7 @@ non_reserved_word
 	| UNICODE_VAL
 	// added in FB 6.0
 	| ANY_VALUE
+	| FORMAT
 	;
 
 %%

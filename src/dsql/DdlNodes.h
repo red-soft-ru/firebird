@@ -703,7 +703,7 @@ public:
 	MetaName name;
 	MetaName relationName;
 	std::optional<FB_UINT64> type;
-	TriState active;
+	Firebird::TriState active;
 	std::optional<int> position;
 	NestConst<ExternalClause> external;
 	Firebird::string source;
@@ -993,7 +993,7 @@ public:
 	NestConst<ValueSourceClause> setDefault;
 	MetaName renameTo;
 	Firebird::AutoPtr<dsql_fld> type;
-	TriState notNullFlag;	// true = NOT NULL / false = NULL
+	Firebird::TriState notNullFlag;	// true = NOT NULL / false = NULL
 };
 
 
@@ -1217,7 +1217,7 @@ public:
 		MetaName identitySequence;
 		std::optional<IdentityType> identityType;
 		std::optional<USHORT> collationId;
-		TriState notNullFlag;	// true = NOT NULL / false = NULL
+		Firebird::TriState notNullFlag;	// true = NOT NULL / false = NULL
 		std::optional<USHORT> position;
 		Firebird::string defaultSource;
 		Firebird::ByteChunk defaultValue;
@@ -1556,8 +1556,8 @@ public:
 	NestConst<RelationSourceNode> dsqlNode;
 	MetaName name;
 	Firebird::Array<NestConst<Clause> > clauses;
-	TriState ssDefiner;
-	TriState replicationState;
+	Firebird::TriState ssDefiner;
+	Firebird::TriState replicationState;
 };
 
 
@@ -1729,9 +1729,9 @@ public:
 
 		MetaName relation;
 		Firebird::ObjectsArray<MetaName> columns;
-		TriState unique;
-		TriState descending;
-		TriState inactive;
+		Firebird::TriState unique;
+		Firebird::TriState descending;
+		Firebird::TriState inactive;
 		SSHORT type;
 		bid expressionBlr;
 		bid expressionSource;
@@ -2222,8 +2222,8 @@ public:
 	Firebird::string* lastName;
 	MetaName* plugin;
 	Firebird::string* comment;
-	TriState adminRole;
-	TriState active;
+	Firebird::TriState adminRole;
+	Firebird::TriState active;
 	Mode mode;
 
 	void addProperty(MetaName* pr, Firebird::string* val = NULL)
@@ -2464,7 +2464,7 @@ public:
 	Firebird::Array<NestConst<DbFileClause> > files;
 	MetaName cryptPlugin;
 	MetaName keyName;
-	TriState ssDefiner;
+	Firebird::TriState ssDefiner;
 	Firebird::Array<MetaName> pubTables;
 };
 
