@@ -40,6 +40,13 @@
 
 namespace Jrd {
 
+enum SqlSecurity
+{
+	SS_INVOKER,
+	SS_DEFINER,
+	SS_DROP
+};
+
 class LocalDeclarationsNode;
 class RelationSourceNode;
 class ValueListNode;
@@ -414,7 +421,6 @@ public:
 		  create(true),
 		  alter(false),
 		  external(NULL),
-		  deterministic(false),
 		  parameters(pool),
 		  returnType(NULL),
 		  localDeclList(NULL),
@@ -469,7 +475,7 @@ public:
 	bool create;
 	bool alter;
 	NestConst<ExternalClause> external;
-	bool deterministic;
+	Firebird::TriState deterministic;
 	Firebird::Array<NestConst<ParameterClause> > parameters;
 	NestConst<ParameterClause> returnType;
 	NestConst<LocalDeclarationsNode> localDeclList;
@@ -482,7 +488,7 @@ public:
 	bool privateScope;
 	bool preserveDefaults;
 	SLONG udfReturnPos;
-	Firebird::TriState ssDefiner;
+	std::optional<SqlSecurity> ssDefiner;
 };
 
 
@@ -594,6 +600,9 @@ private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		bool secondPass, bool runTriggers);
+	bool executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
+		bool secondPass, bool runTriggers);
+
 	void storeParameter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		USHORT parameterType, unsigned pos, ParameterClause* parameter,
 		const CollectedParameter* collectedParameter);
@@ -616,7 +625,7 @@ public:
 	MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
-	Firebird::TriState ssDefiner;
+	std::optional<SqlSecurity> ssDefiner;
 };
 
 
@@ -661,12 +670,6 @@ typedef RecreateNode<CreateAlterProcedureNode, DropProcedureNode, isc_dsql_recre
 class TriggerDefinition
 {
 public:
-	enum SqlSecurity
-	{
-		SS_INVOKER,
-		SS_DEFINER,
-		SS_DROP
-	};
 
 	explicit TriggerDefinition(MemoryPool& p)
 		: name(p),

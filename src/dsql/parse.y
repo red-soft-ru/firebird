@@ -737,7 +737,7 @@ using namespace Firebird;
 
 	std::optional<int> nullableIntVal;
 	Firebird::TriState triState;
-	std::optional<Jrd::TriggerDefinition::SqlSecurity> nullableSqlSecurityVal;
+	std::optional<Jrd::SqlSecurity> nullableSqlSecurityVal;
 	std::optional<Jrd::OverrideClause> nullableOverrideClause;
 	struct { bool first; bool second; } boolPair;
 	bool boolVal;
@@ -2710,7 +2710,7 @@ procedure_clause
 
 %type <createAlterProcedureNode> psql_procedure_clause
 psql_procedure_clause
-	: procedure_clause_start sql_security_clause_opt AS local_declarations_opt full_proc_block
+	: procedure_clause_start optional_sql_security_full_alter_clause AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
 			$$->ssDefiner = $2;
@@ -2739,9 +2739,26 @@ procedure_clause_start
 			{ $$ = $2; }
 	;
 
+%type <createAlterProcedureNode> partial_alter_procedure_clause
+partial_alter_procedure_clause
+	: symbol_procedure_name
+			{ $$ = newNode<CreateAlterProcedureNode>(*$1); }
+		optional_sql_security_partial_alter_clause
+			{
+				$$ = $2;
+				$$->ssDefiner = $3;
+			}
+	;
+
 %type <createAlterProcedureNode> alter_procedure_clause
 alter_procedure_clause
 	: procedure_clause
+		{
+			$$ = $1;
+			$$->alter = true;
+			$$->create = false;
+		}
+	| partial_alter_procedure_clause
 		{
 			$$ = $1;
 			$$->alter = true;
@@ -2832,14 +2849,10 @@ function_clause
 	: psql_function_clause
 	| external_function_clause;
 
-%type <createAlterFunctionNode> change_opt_function_clause
-change_opt_function_clause
-	: change_deterministic_opt_function_clause
-	;
 
 %type <createAlterFunctionNode> psql_function_clause
 psql_function_clause
-	: function_clause_start sql_security_clause_opt AS local_declarations_opt full_proc_block
+	: function_clause_start optional_sql_security_full_alter_clause AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
 			$$->ssDefiner = $2;
@@ -2873,17 +2886,27 @@ function_clause_start
 			}
 	;
 
-%type <createAlterFunctionNode> change_deterministic_opt_function_clause
-change_deterministic_opt_function_clause
+%type <createAlterFunctionNode> partial_alter_function_clause
+partial_alter_function_clause
 	: symbol_UDF_name
 			{ $$ = newNode<CreateAlterFunctionNode>(*$1); }
-		deterministic_clause
-			{
-				$$ = $2;
-				$$->deterministic = $3;
-			}
+		alter_individual_ops($2)
+			{ $$ = $2; }
 	;
 
+%type alter_individual_ops(<createAlterFunctionNode>)
+alter_individual_ops($createAlterFunctionNode)
+	: alter_individual_op($createAlterFunctionNode)
+	| alter_individual_ops alter_individual_op($createAlterFunctionNode)
+	;
+
+%type alter_individual_op(<createAlterFunctionNode>)
+alter_individual_op($createAlterFunctionNode)
+	: deterministic_clause
+		{ setClause($createAlterFunctionNode->deterministic, "DETERMINISTIC", $1); }
+	| optional_sql_security_partial_alter_clause
+		{ setClause($createAlterFunctionNode->ssDefiner, "SQL SECURITY", $1); }
+	;
 
 %type <boolVal> deterministic_clause
 deterministic_clause
@@ -2926,7 +2949,7 @@ alter_function_clause
 			$$->alter = true;
 			$$->create = false;
 		}
-	| change_opt_function_clause
+	| partial_alter_function_clause
 		{
 			$$ = $1;
 			$$->alter = true;
@@ -2948,12 +2971,22 @@ replace_function_clause
 
 %type <createAlterPackageNode> package_clause
 package_clause
-	: symbol_package_name sql_security_clause_opt AS BEGIN package_items_opt END
+	: symbol_package_name optional_sql_security_full_alter_clause AS BEGIN package_items_opt END
 		{
 			CreateAlterPackageNode* node = newNode<CreateAlterPackageNode>(*$1);
 			node->ssDefiner = $2;
 			node->source = makeParseStr(YYPOSNARG(4), YYPOSNARG(6));
 			node->items = $5;
+			$$ = node;
+		}
+	;
+
+%type <createAlterPackageNode> partial_alter_package_clause
+partial_alter_package_clause
+	: symbol_package_name optional_sql_security_partial_alter_clause
+		{
+			CreateAlterPackageNode* node = newNode<CreateAlterPackageNode>(*$1);
+			node->ssDefiner = $2;
 			$$ = node;
 		}
 	;
@@ -2990,6 +3023,12 @@ package_item
 %type <createAlterPackageNode> alter_package_clause
 alter_package_clause
 	: package_clause
+		{
+			$$ = $1;
+			$$->alter = true;
+			$$->create = false;
+		}
+	| partial_alter_package_clause
 		{
 			$$ = $1;
 			$$->alter = true;
@@ -4673,16 +4712,38 @@ trigger_type_opt	// we do not allow alter database triggers, hence we do not use
 		{ $$ = std::nullopt; }
 	;
 
+%type <nullableSqlSecurityVal> optional_sql_security_clause
+optional_sql_security_clause
+	: SQL SECURITY DEFINER
+		{ $$ = SS_DEFINER; }
+	| SQL SECURITY INVOKER
+		{ $$ = SS_INVOKER; }
+	;
+
+%type <nullableSqlSecurityVal> optional_sql_security_full_alter_clause
+optional_sql_security_full_alter_clause
+	: optional_sql_security_clause
+		{ $$ = $1; }
+	| // nothing
+		{ $$ = std::nullopt; }
+	;
+
+%type <nullableSqlSecurityVal> optional_sql_security_partial_alter_clause
+optional_sql_security_partial_alter_clause
+	: optional_sql_security_clause
+		{ $$ = $1; }
+	| DROP SQL SECURITY
+		{ $$ = SS_DROP; }
+	;
+
 %type <nullableSqlSecurityVal> trg_sql_security_clause
 trg_sql_security_clause
 	: // nothing
 		{ $$ = std::nullopt; }
-	| SQL SECURITY DEFINER
-		{ $$ = TriggerDefinition::SS_DEFINER; }
-	| SQL SECURITY INVOKER
-		{ $$ = TriggerDefinition::SS_INVOKER; }
+	| optional_sql_security_clause
+		{ $$ = $1; }
 	| DROP SQL SECURITY
-		{ $$ = TriggerDefinition::SS_DROP; }
+		{ $$ = SS_DROP; }
 	;
 
 // DROP metadata operations
