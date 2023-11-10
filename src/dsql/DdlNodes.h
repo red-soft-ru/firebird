@@ -475,7 +475,7 @@ public:
 	bool create;
 	bool alter;
 	NestConst<ExternalClause> external;
-	TriState deterministic;
+	Firebird::TriState deterministic;
 	Firebird::Array<NestConst<ParameterClause> > parameters;
 	NestConst<ParameterClause> returnType;
 	NestConst<LocalDeclarationsNode> localDeclList;
