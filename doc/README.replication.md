@@ -117,7 +117,7 @@ Any physical copying method can be used on the primary host:
 
 If _nbackup_ was used, restore or fixup operation should be performed to complete the replica creation. Note that if you're recreating a priorly working replica, then `-seq[uence]` option of _nbackup_ must be used to preserve the replication sequence counter inside the database, so that replication could continue from the moment when the primary database was copied:
 
-* nbackup -f &lt;databasw&gt; -seq
+* nbackup -f &lt;database&gt; -seq
 
 Then the replica mode must be activated for the database copy. Two options are possible:
 
