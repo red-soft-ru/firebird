@@ -532,9 +532,9 @@ void EXE_execute_db_triggers(thread_db* tdbb, jrd_tra* transaction, TriggerActio
  *	Execute database triggers
  *
  **************************************/
-	Jrd::Attachment* attachment = tdbb->getAttachment();
+	const auto attachment = tdbb->getAttachment();
 
- 	// Do nothing if user doesn't want database triggers.
+	// Do nothing if user doesn't want database triggers
 	if (attachment->att_flags & ATT_no_db_triggers)
 		return;
 
@@ -569,20 +569,13 @@ void EXE_execute_db_triggers(thread_db* tdbb, jrd_tra* transaction, TriggerActio
 
 	if (attachment->att_triggers[type])
 	{
-		jrd_tra* old_transaction = tdbb->getTransaction();
-		tdbb->setTransaction(transaction);
+		AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
+			&thread_db::getTransaction,
+			&thread_db::setTransaction,
+			transaction);
 
-		try
-		{
-			EXE_execute_triggers(tdbb, &attachment->att_triggers[type],
-				NULL, NULL, trigger_action, StmtNode::ALL_TRIGS);
-			tdbb->setTransaction(old_transaction);
-		}
-		catch (const Exception&)
-		{
-			tdbb->setTransaction(old_transaction);
-			throw;
-		}
+		EXE_execute_triggers(tdbb, &attachment->att_triggers[type],
+			NULL, NULL, trigger_action, StmtNode::ALL_TRIGS);
 	}
 }
 
