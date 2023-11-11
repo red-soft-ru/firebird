@@ -1681,16 +1681,17 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 
 	try
 	{
-		trg->extTrigger = FB_NEW_POOL(pool) Trigger(tdbb, pool, csb, this, attInfo->engine,
+		const auto extTrigger = FB_NEW_POOL(pool) Trigger(tdbb, pool, csb, this, attInfo->engine,
 			metadata.release(), externalTrigger, trg);
+
+		trg->extTrigger.reset(extTrigger);
 
 		MemoryPool& csbPool = csb->csb_pool;
 
 		CompoundStmtNode* mainNode = FB_NEW_POOL(csbPool) CompoundStmtNode(csbPool);
-		mainNode->statements.append(trg->extTrigger->computedStatements);
+		mainNode->statements.append(extTrigger->computedStatements);
 
-		ExtTriggerNode* extTriggerNode = FB_NEW_POOL(csbPool) ExtTriggerNode(csbPool,
-			trg->extTrigger);
+		const auto extTriggerNode = FB_NEW_POOL(csbPool) ExtTriggerNode(csbPool, extTrigger);
 		mainNode->statements.add(extTriggerNode);
 
 		PAR_preparsed_node(tdbb, trg->relation, mainNode, NULL, &csb, &trg->statement, true, 0);
