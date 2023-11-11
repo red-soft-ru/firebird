@@ -2101,14 +2101,14 @@ bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, 
 		}
 
 		MODIFY FUN
-			if(deterministic.isAssigned())
+			if (deterministic.isAssigned())
 			{
 				FUN.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
 				FUN.RDB$DETERMINISTIC_FLAG = deterministic.asBool() ? TRUE : FALSE;
 			}
 			if (ssDefiner.has_value())
 			{
-				if(ssDefiner.value() != SqlSecurity::SS_DROP)
+				if (ssDefiner.value() != SqlSecurity::SS_DROP)
 				{
 					FUN.RDB$SQL_SECURITY.NULL = FALSE;
 					FUN.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
@@ -3066,7 +3066,7 @@ bool CreateAlterProcedureNode::executeAlterIndividualParameters(thread_db* tdbb,
 		MODIFY P
 			if (ssDefiner.has_value())
 			{
-				if(ssDefiner.value() != SqlSecurity::SS_DROP)
+				if (ssDefiner.value() != SqlSecurity::SS_DROP)
 				{
 					P.RDB$SQL_SECURITY.NULL = FALSE;
 					P.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
