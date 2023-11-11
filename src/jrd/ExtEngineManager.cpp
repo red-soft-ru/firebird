@@ -938,10 +938,7 @@ void ExtEngineManager::Trigger::execute(thread_db* tdbb, Request* request, unsig
 	record_param* oldRpb, record_param* newRpb) const
 {
 	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
-	const TriState& ssDefiner = trg->ssDefiner.isAssigned() ? trg->ssDefiner :
-		(trg->relation && trg->relation->rel_ss_definer.isAssigned() ? trg->relation->rel_ss_definer : TriState());
-	const MetaString& userName = ssDefiner.asBool() ?
-		trg->relation->rel_owner_name.c_str() : "";
+	const MetaString& userName = trg->ssDefiner.asBool() ? trg->owner.c_str() : "";
 	ContextManager<IExternalTrigger> ctxManager(tdbb, attInfo, trigger,
 		CallerName(obj_trigger, trg->name, userName));
 
