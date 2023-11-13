@@ -1726,7 +1726,7 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 	AutoSavePoint savePoint(tdbb, transaction);
 	bool altered = false;
 
-	const bool alterIndividualParameters = (alter && !returnType && !(body || external));
+	const bool alterIndividualParameters = (!create && alter && !returnType && !(body || external));
 
 	// first pass
 	if (alterIndividualParameters)
@@ -2742,7 +2742,7 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 	AutoSavePoint savePoint(tdbb, transaction);
 	bool altered = false;
 
-	const bool alterIndividualParameters = (alter && !(body || external));
+	const bool alterIndividualParameters = (!create && alter && !(body || external));
 
 	// first pass
 	if (alterIndividualParameters)
