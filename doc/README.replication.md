@@ -115,6 +115,10 @@ In the Beta 1 release, any physical copying method can be used:
 * nbackup -l + file-level copy + nbackup -n
 * nbackup -b 0
 
+If _nbackup_ was used, restore or fixup operation should be performed to complete the replica creation. Note that if you're recreating a priorly working replica, then `-seq[uence]` option of _nbackup_ must be used during restore/fixup to preserve the replication sequence counter inside the database, so that replication could continue from the moment when the primary database was copied:
+
+* nbackup -f &lt;database&gt; -seq
+
 Then the replica mode must be activated for the database copy. Two options are possible:
 
 * gfix -replica read\_only &lt;database&gt; -- set up database as read-only replica
