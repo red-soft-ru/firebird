@@ -787,6 +787,7 @@ bool ComparativeBoolNode::execute(thread_db* tdbb, Request* request) const
 			}
 			else
 				comparison = -1;
+			break;
 	}
 
 	// If we are checking equality of record_version
