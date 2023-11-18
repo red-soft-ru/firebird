@@ -94,6 +94,17 @@ bool FilteredStream::internalGetRecord(thread_db* tdbb) const
 	if (!(impure->irsb_flags & irsb_open))
 		return false;
 
+	if (m_invariant)
+	{
+		if (!m_next->getRecord(tdbb))
+		{
+			invalidateRecords(request);
+			return false;
+		}
+
+		return true;
+	}
+
 	if (!evaluateBoolean(tdbb))
 	{
 		invalidateRecords(request);
