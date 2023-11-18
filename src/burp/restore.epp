@@ -1857,6 +1857,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 			case blr_long:
 			case blr_quad:
 			case blr_int64:
+			case blr_int128:
 				add_byte(blr, field->fld_type);
 				add_byte(blr, field->fld_scale);
 				break;
@@ -2091,6 +2092,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 		case blr_long:
 		case blr_quad:
 		case blr_int64:
+		case blr_int128:
 			add_byte(blr, field->fld_type);
 			add_byte(blr, field->fld_scale);
 			break;
