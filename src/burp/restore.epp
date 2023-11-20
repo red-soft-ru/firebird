@@ -4788,7 +4788,10 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 				break;
 
 			case att_functionarg_field_precision:
-				get_int32(tdgbl);
+				if (tdgbl->RESTORE_format >= 6)
+					get_int32(tdgbl);
+				else
+					bad_attribute(scan_next_attr, attribute, 90);
 				break;
 
 			case att_functionarg_package_name:
