@@ -695,6 +695,7 @@ using namespace Firebird;
 %token <metaNamePtr> TIMEZONE_NAME
 %token <metaNamePtr> UNICODE_CHAR
 %token <metaNamePtr> UNICODE_VAL
+%token <metaNamePtr> OWNER
 
 // tokens added for Firebird 6.0
 
@@ -2155,6 +2156,8 @@ db_initial_option($alterDatabaseNode)
 	: PAGE_SIZE equals NUMBER32BIT
 	| USER symbol_user_name
 	| USER utf_string
+	| OWNER symbol_user_name
+	| OWNER utf_string
 	| ROLE valid_symbol_name
 	| ROLE utf_string
 	| PASSWORD utf_string
@@ -9464,6 +9467,7 @@ non_reserved_word
 	// added in FB 6.0
 	| ANY_VALUE
 	| FORMAT
+	| OWNER
 	;
 
 %%

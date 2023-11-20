@@ -618,3 +618,9 @@ ALTER PROCEDURE <name> SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY
 (Alexander Zhdanov)
 
 ALTER PACKAGE <name> SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY
+
+27) Added OWNER clause to CREATE DATABASE statement.
+(Dmitry Sibiryakov)
+
+<db_initial_option> list is expanded by "OWNER username" clause which allows to set an owner user name for the created database.
+Only users with administrator rights can use this option.
