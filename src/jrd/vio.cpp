@@ -2056,6 +2056,12 @@ static void delete_version_chain(thread_db* tdbb, record_param* rpb, bool delete
 
 	ULONG prior_page = 0;
 
+	// Seems like it's possible to get rpb->rpb_page == 0 and
+	// delete_head == true from VIO_intermediate_gc. So set
+	// delete_head to false to avoid an error on DPM_fetch below.
+	if (!rpb->rpb_page)
+		delete_head = false;
+
 	// Note that the page number of the oldest version in the chain should
 	// be stored in rpb->rpb_page before exiting this function because
 	// VIO_intermediate_gc will use it as a prior page number.
