@@ -149,6 +149,13 @@ public:
 		  cachePtr(aCachePtr)
 	{}
 
+	IcuCalendarWrapper(IcuCalendarWrapper&& o)
+		: wrapped(o.wrapped),
+		  cachePtr(o.cachePtr)
+	{
+		o.wrapped = nullptr;
+	}
+
 	~IcuCalendarWrapper()
 	{
 		if (wrapped)
