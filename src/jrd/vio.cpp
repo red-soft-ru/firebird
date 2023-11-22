@@ -2496,6 +2496,13 @@ static void delete_version_chain(thread_db* tdbb, record_param* rpb, bool delete
 		rpb->rpb_f_page, rpb->rpb_f_line);
 #endif
 
+	// It's possible to get rpb_page == 0 from VIO_intermediate_gc via
+	// staying_chain_rpb. This case happens there when the staying record
+	// stack has 1 item at the moment this rpb is created. So return to
+	// avoid an error on DPM_fetch below.
+	if (!rpb->rpb_page)
+		return;
+
 	ULONG prior_page = 0;
 
 	// Note that the page number of the oldest version in the chain should
