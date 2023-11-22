@@ -1,3 +1,79 @@
+# v4.0.4
+
+## Improvements
+
+* [#7818](https://github.com/FirebirdSQL/firebird/issues/7818): Extend `RDB$GET_CONTEXT('SYSTEM', '***')` with other info from `MON$ATTACHMENTS`  
+  Contributor(s): Vlad Khorsun
+
+* [#7755](https://github.com/FirebirdSQL/firebird/issues/7755): Update Windows distribution with new _zlib_ version 1.3 (released 2023-08-18)  
+  Contributor(s): Vlad Khorsun
+
+## Bugfixes
+
+* [#7817](https://github.com/FirebirdSQL/firebird/issues/7817): Memory leak is possible for UDF array arguments  
+  Contributor(s): Dmitry Yemanov
+
+* [#7812](https://github.com/FirebirdSQL/firebird/issues/7812): Service backup does not work in multiple engines configuration  
+  Contributor(s): Alexander Peshkov
+
+* [#7779](https://github.com/FirebirdSQL/firebird/issues/7779): Firebird 4.0.3 is constantly crashing with the same symptoms (fbclient.dll) 
+  Contributor(s): Vlad Khorsun
+
+* [#7772](https://github.com/FirebirdSQL/firebird/issues/7772): Blob corruption in FB4.0.3 (embedded)  
+  Contributor(s): Vlad Khorsun
+
+* [#7770](https://github.com/FirebirdSQL/firebird/issues/7770): Restore takes 25% more time vs 4.0.0  
+  Contributor(s): Vlad Khorsun
+
+* [#7766](https://github.com/FirebirdSQL/firebird/issues/7766): Firebird 4 Windows Installer omits DLLs during custom installation mode  
+  Contributor(s): Paul Reeves
+
+* [#7762](https://github.com/FirebirdSQL/firebird/issues/7762): Crash on "Operating system call pthread_mutex_destroy failed. Error code 16" in log  
+  Contributor(s): Alexander Peshkov
+
+* [#7761](https://github.com/FirebirdSQL/firebird/issues/7761): Regression when displaying line number of errors in _ISQL_ scripts  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7759](https://github.com/FirebirdSQL/firebird/issues/7759): Routine calling overhead increased by factor 6 vs Firebird 4.0.0  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7747](https://github.com/FirebirdSQL/firebird/pull/7747): Fix an issue where the garbage collection in indexes and blobs is not performed in _VIO_backout_  
+  Contributor(s): Ilya Eremin
+
+* [#7745](https://github.com/FirebirdSQL/firebird/issues/7745): Error restoring database which has system domains in user table with BLOBs using embedded connection  
+  Contributor(s): Alexander Peshkov
+
+* [#7738](https://github.com/FirebirdSQL/firebird/issues/7738): Crash on multiple connections/disconnections  
+  Contributor(s): Alexander Peshkov
+
+* [#7737](https://github.com/FirebirdSQL/firebird/pull/7737): Fix cases where the precedence relationship between a record page and a blob page is not set  
+  Contributor(s): Ilya Eremin
+
+* [#7731](https://github.com/FirebirdSQL/firebird/issues/7731): Display length of `TIMESTAMP WITH TIME ZONE` is wrong in dialect 1  
+  Contributor(s): Alexander Peshkov
+
+* [#7730](https://github.com/FirebirdSQL/firebird/issues/7730): Server ignores the size of `VARCHAR` when performing `SET BIND ... TO VARCHAR(N)`  
+  Contributor(s): Alexander Peshkov
+
+* [#7729](https://github.com/FirebirdSQL/firebird/issues/7729): `SET BIND OF TS WITH TZ TO VARCHAR(128)` uses the date format of dialect 1  
+  Contributor(s): Alexander Peshkov
+
+* [#7727](https://github.com/FirebirdSQL/firebird/issues/7727): Index for integer column cannot be used when `INT128/DECFLOAT` value is being searched  
+  Contributor(s): Dmitry Yemanov
+
+* [#7723](https://github.com/FirebirdSQL/firebird/issues/7723): Wrong error message on login if the user doesn't exist and _WireCrypt_ is disabled  
+  Contributor(s): Alexander Peshkov
+
+* [#7713](https://github.com/FirebirdSQL/firebird/issues/7713): `FOR SELECT` statement can not see any changes made inside the `DO` block  
+  Contributor(s): Vlad Khorsun
+
+* [#7691](https://github.com/FirebirdSQL/firebird/issues/7691): `WITH CALLER PRIVILEGES` has no effect in triggers   
+  Contributor(s): Alexander Peshkov
+
+* [#7480](https://github.com/FirebirdSQL/firebird/issues/7480): Firebird server stops accepting new connections after some time  
+  Contributor(s): Alexander Peshkov
+
+
 # v4.0.3
 
 ## Improvements

@@ -733,8 +733,7 @@ enum fld_flags_vals {
 	FLD_update_missing		= 8,
 	FLD_null_flag			= 16,
 	FLD_charset_flag		= 32,	// column has global charset
-	FLD_collate_flag		= 64,	// local column has specific collation
-	FLD_system_domain		= 128	// field uses a system domain (on restore)
+	FLD_collate_flag		= 64	// local column has specific collation
 };
 
 // relation definition - holds useful relation type stuff
@@ -957,6 +956,7 @@ public:
 		: ThreadData(ThreadData::tddGBL),
 		  GblPool(us->isService()),
 		  defaultCollations(getPool()),
+		  systemFields(getPool()),
 		  uSvc(us),
 		  verboseInterval(10000),
 		  flag_on_line(true),
@@ -1184,6 +1184,7 @@ public:
 
 	Firebird::Array<Firebird::Pair<Firebird::NonPooled<Firebird::MetaString, Firebird::MetaString> > >
 		defaultCollations;
+	Firebird::SortedArray<Firebird::MetaString> systemFields;
 	Firebird::UtilSvc* uSvc;
 	ULONG verboseInterval;	// How many records should be backed up or restored before we show this message
 	bool flag_on_line;		// indicates whether we will bring the database on-line
