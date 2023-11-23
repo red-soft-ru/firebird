@@ -2273,9 +2273,9 @@ const StmtNode* DeclareVariableNode::execute(thread_db* tdbb, Request* request, 
 //--------------------
 
 
-static RegisterNode<EraseNode> regEraseNode({blr_erase});
+static RegisterNode<EraseNode> regEraseNode({blr_erase, blr_erase2});
 
-DmlNode* EraseNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
+DmlNode* EraseNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
 	const USHORT n = csb->csb_blr_reader.getByte();
 
@@ -2287,6 +2287,9 @@ DmlNode* EraseNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch
 
 	if (csb->csb_blr_reader.peekByte() == blr_marks)
 		node->marks |= PAR_marks(csb);
+
+	if (blrOp == blr_erase2)
+		node->returningStatement = PAR_parse_stmt(tdbb, csb);
 
 	return node;
 }
@@ -2385,6 +2388,7 @@ string EraseNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, dsqlSkipLocked);
 	NODE_PRINT(printer, statement);
 	NODE_PRINT(printer, subStatement);
+	NODE_PRINT(printer, returningStatement);
 	NODE_PRINT(printer, stream);
 	NODE_PRINT(printer, marks);
 
@@ -2397,11 +2401,14 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	std::optional<USHORT> tableNumber;
 
+	const bool skipLocked = dsqlRse && dsqlRse->hasSkipLocked();
+
 	if (dsqlReturning && !dsqlScratch->isPsql())
 	{
 		if (dsqlCursorName.isEmpty())
 		{
-			dsqlScratch->appendUChar(blr_begin);
+			if (!skipLocked)
+				dsqlScratch->appendUChar(blr_begin);
 
 			tableNumber = dsqlScratch->localTableNumber++;
 			dsqlGenReturningLocalTableDecl(dsqlScratch, tableNumber.value());
@@ -2422,12 +2429,13 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	const auto* context = dsqlContext ? dsqlContext : dsqlRelation->dsqlContext;
 
-	if (dsqlReturning)
+	if (dsqlReturning && !skipLocked)
 	{
 		dsqlScratch->appendUChar(blr_begin);
+		dsqlGenReturning(dsqlScratch, dsqlReturning, tableNumber);
 	}
 
-	dsqlScratch->appendUChar(blr_erase);
+	dsqlScratch->appendUChar(dsqlReturning && skipLocked ? blr_erase2 : blr_erase);
 	GEN_stuff_context(dsqlScratch, context);
 
 	if (marks)
@@ -2435,15 +2443,17 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (dsqlReturning)
 	{
-		dsqlGenReturning(dsqlScratch, dsqlReturning, tableNumber);
-
-		dsqlScratch->appendUChar(blr_end);
+		if (!skipLocked)
+			dsqlScratch->appendUChar(blr_end);
+		else
+			dsqlGenReturning(dsqlScratch, dsqlReturning, tableNumber);
 
 		if (!dsqlScratch->isPsql() && dsqlCursorName.isEmpty())
 		{
 			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, tableNumber.value());
 
-			dsqlScratch->appendUChar(blr_end);
+			if (!skipLocked)
+				dsqlScratch->appendUChar(blr_end);
 		}
 	}
 }
@@ -2454,6 +2464,9 @@ EraseNode* EraseNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	doPass1(tdbb, csb, statement.getAddress());
 	doPass1(tdbb, csb, subStatement.getAddress());
+
+	AutoSetRestore<bool> autoReturningExpr(&csb->csb_returning_expr, true);
+	doPass1(tdbb, csb, returningStatement.getAddress());
 
 	return this;
 }
@@ -2571,6 +2584,7 @@ void EraseNode::pass1Erase(thread_db* tdbb, CompilerScratch* csb, EraseNode* nod
 EraseNode* EraseNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	doPass2(tdbb, csb, statement.getAddress(), this);
+	doPass2(tdbb, csb, returningStatement.getAddress(), this);
 	doPass2(tdbb, csb, subStatement.getAddress(), this);
 
 	const jrd_rel* const relation = csb->csb_rpt[stream].csb_relation;
@@ -2649,6 +2663,8 @@ const StmtNode* EraseNode::execute(thread_db* tdbb, Request* request, ExeState* 
 // Perform erase operation.
 const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger whichTrig) const
 {
+	impure_state* impure = request->getImpure<impure_state>(impureOffset);
+
 	jrd_tra* transaction = request->req_transaction;
 	record_param* rpb = &request->req_rpb[stream];
 	jrd_rel* relation = rpb->rpb_relation;
@@ -2674,6 +2690,12 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 		}
 
 		case Request::req_return:
+			if (impure->sta_state == 1)
+			{
+				impure->sta_state = 0;
+				rpb->rpb_number.setValid(false);
+				return parentStmt;
+			}
 			break;
 
 		default:
@@ -2735,9 +2757,9 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 
 		if (!VIO_erase(tdbb, rpb, transaction))
 		{
-			// Record was not deleted, flow control should be passed to the
-			// parent ForNode. Note, If RETURNING clause was specified, then
-			// parent node is CompoundStmtNode, not ForNode. If\when this
+			// Record was not deleted, flow control should be passed to the parent
+			// ForNode. Note, If RETURNING clause was specified and SKIP LOCKED was
+			// not, then parent node is CompoundStmtNode, not ForNode. If\when this
 			// will be changed, the code below should be changed accordingly.
 
 			if (skipLocked)
@@ -2787,6 +2809,13 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 			request->req_records_deleted++;
 			request->req_records_affected.bumpModified(true);
 		}
+	}
+
+	if (returningStatement)
+	{
+		impure->sta_state = 1;
+		request->req_operation = Request::req_evaluate;
+		return returningStatement;
 	}
 
 	rpb->rpb_number.setValid(false);
@@ -7774,7 +7803,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 				SavepointChangeMarker scMarker(transaction);
 
-				// Prepare to undo changed by PRE-triggers if record is locked by another
+				// Prepare to undo changes by PRE-triggers if record is locked by another
 				// transaction and update should be skipped.
 				const bool skipLocked = orgRpb->rpb_stream_flags & RPB_s_skipLocked;
 				CondSavepointAndMarker spPreTriggers(tdbb, transaction,
