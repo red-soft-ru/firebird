@@ -38,6 +38,9 @@ static std::string trim(std::string_view str)
 	while (start != finish && isspace(*start))
 		++start;
 
+	if (start == finish)
+		return {};
+
 	--finish;
 
 	while (finish > start && isspace(*finish))
@@ -112,7 +115,7 @@ std::variant<FrontendLexer::SingleStatement, FrontendLexer::IncompleteTokenError
 
 			const auto savePos = pos;
 
-			if (pos + 1 < end && *pos == '?')
+			if (end - pos > 1 && *pos == '?')
 			{
 				if (*++pos == '\r')
 					++pos;
