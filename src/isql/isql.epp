@@ -6484,6 +6484,7 @@ static processing_state help(const TEXT* what)
 		HLP_SETCOM,				//Set commands:
 		HLP_SET,				//	SET						-- display current SET options
 		HLP_SETAUTO,			//	SET AUTOddl				-- toggle autocommit of DDL statements
+		HLP_SETAUTOTERM,		//	SET AUTOTERM			-- toggle auto statement terminator with semicolon
 		HLP_SETBAIL,			//	SET BAIL				-- toggle bailing out on errors in non-interactive mode
 		HLP_SETBLOB,			//	SET BLOB [ALL|<n>]		-- display BLOBS of subtype <n> or ALL
 		HLP_SETBLOB2,			//	SET BLOB				-- turn off BLOB display

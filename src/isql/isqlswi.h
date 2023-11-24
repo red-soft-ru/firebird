@@ -71,7 +71,7 @@ enum IsqlOptionType { iqoArgNone, iqoArgInteger, iqoArgString };
 static const Switches::in_sw_tab_t isql_in_sw_table[] =
 {
 	{IN_SW_ISQL_EXTRACTALL	, 0, "ALL"				, 0, 0, 0, false, false, 11		, 1, NULL, iqoArgNone},
-	{IN_SW_ISQL_AUTOTERM	, 0, "AUTOTERM"			, 0, 0, 0, false, false, 205	, 5, NULL, iqoArgNone},
+	{IN_SW_ISQL_AUTOTERM	, 0, "AUTOTERM"			, 0, 0, 0, false, false, 206	, 5, NULL, iqoArgNone},
 	{IN_SW_ISQL_BAIL 		, 0, "BAIL"				, 0, 0, 0, false, false, 104	, 1, NULL, iqoArgNone},
 	{IN_SW_ISQL_CACHE		, 0, "CACHE"			, 0, 0, 0, false, false, 111	, 1, NULL, iqoArgInteger},
 	{IN_SW_ISQL_CHARSET		, 0, "CHARSET"			, 0, 0, 0, false, false, 122	, 2, NULL, iqoArgString},
