@@ -40,7 +40,7 @@ BOOST_AUTO_TEST_CASE(StripCommentsTest)
 		"/* comment */ select 1 from rdb$database /* comment */") == "select 1 from rdb$database");
 
 	BOOST_TEST(FrontendLexer::stripComments(
-		"-- comment\nselect '123' /* comment */ from rdb$database -- comment") == "select '123' from rdb$database");
+		"-- comment\nselect '123' /* comment */ from rdb$database -- comment\n") == "select '123' from rdb$database");
 }
 
 BOOST_AUTO_TEST_CASE(GetSingleStatementTest)
@@ -82,6 +82,20 @@ BOOST_AUTO_TEST_CASE(GetSingleStatementTest)
 		BOOST_TEST(std::get<FrontendLexer::SingleStatement>(lexer.getSingleStatement(";")).withSemicolon == s7);
 	}
 
+	{	// scope
+		const std::string s1 = "-- comment;;";
+		const std::string s2 = "select 1 from rdb$database;";
+
+		FrontendLexer lexer(s1);
+
+		BOOST_TEST(std::get<FrontendLexer::IncompleteTokenError>(lexer.getSingleStatement(";")).insideComment);
+
+		lexer.appendBuffer("\n" + s2);
+
+		BOOST_TEST(std::get<FrontendLexer::SingleStatement>(lexer.getSingleStatement(";")).withSemicolon ==
+			s1 + "\n" + s2);
+	}
+
 	BOOST_TEST(!std::get<FrontendLexer::IncompleteTokenError>(FrontendLexer(
 		"select 1 from rdb$database").getSingleStatement(";")).insideComment);
 	BOOST_TEST(std::get<FrontendLexer::IncompleteTokenError>(FrontendLexer(
@@ -95,7 +109,7 @@ BOOST_AUTO_TEST_CASE(SkipSingleLineCommentsTest)
 		"set -- comment 1\n"
 		"stats -- comment 2\r\n"
 		"- -- comment 3\n"
-		"-- comment 4"
+		"-- comment 4\n"
 	);
 
 	BOOST_TEST(lexer.getToken().processedText == "SET");

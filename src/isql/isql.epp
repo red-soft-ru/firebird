@@ -5922,6 +5922,7 @@ std::pair<FrontendLexer::SingleStatement, processing_state> StatementGetter::get
 				continue;
 			}
 
+			buffer += '\n';
 			lexer.appendBuffer(buffer);
 			buffer.clear();
 

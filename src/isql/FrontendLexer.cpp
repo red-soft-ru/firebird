@@ -52,27 +52,34 @@ static std::string trim(std::string_view str)
 
 std::string FrontendLexer::stripComments(std::string_view statement)
 {
-	FrontendLexer lexer(statement);
-	std::string processedStatement;
-
-	while (lexer.pos < lexer.end)
+	try
 	{
-		auto oldPos = lexer.pos;
+		FrontendLexer lexer(statement);
+		std::string processedStatement;
 
-		lexer.skipSpacesAndComments();
+		while (lexer.pos < lexer.end)
+		{
+			auto oldPos = lexer.pos;
 
-		if (lexer.pos > oldPos)
-			processedStatement += ' ';
+			lexer.skipSpacesAndComments();
 
-		oldPos = lexer.pos;
+			if (lexer.pos > oldPos)
+				processedStatement += ' ';
 
-		if (!lexer.getStringToken().has_value() && lexer.pos < lexer.end)
-			++lexer.pos;
+			oldPos = lexer.pos;
 
-		processedStatement += std::string(oldPos, lexer.pos);
+			if (!lexer.getStringToken().has_value() && lexer.pos < lexer.end)
+				++lexer.pos;
+
+			processedStatement += std::string(oldPos, lexer.pos);
+		}
+
+		return trim(processedStatement);
 	}
-
-	return trim(processedStatement);
+	catch (const IncompleteTokenError& error)
+	{
+		return trim(statement);
+	}
 }
 
 bool FrontendLexer::isBufferEmpty() const
@@ -334,8 +341,11 @@ void FrontendLexer::skipSpacesAndComments()
 
 		if (*pos == '-')
 		{
+			const auto start = pos;
+
 			if (pos + 1 != end && pos[1] == '-')
 			{
+				bool finished = false;
 				pos += 2;
 
 				while (pos != end)
@@ -346,10 +356,21 @@ void FrontendLexer::skipSpacesAndComments()
 					{
 						if (pos != end && *pos == '\n')
 							++pos;
+
+						finished = true;
 						break;
 					}
 					else if (c == '\n')
+					{
+						finished = true;
 						break;
+					}
+				}
+
+				if (!finished)
+				{
+					pos = start;
+					throw IncompleteTokenError{true};
 				}
 			}
 			else
