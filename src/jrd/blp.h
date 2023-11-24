@@ -199,7 +199,7 @@ static const struct
 	{"agg_list", two}, // 170
 	{"agg_list_distinct", two},
 	{"modify2", modify2},
-	{NULL, NULL},
+	{"erase2", erase2},
 	// New BLR in FB1
 	{"current_role", zero},
 	{"skip", one},

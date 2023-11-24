@@ -552,6 +552,7 @@ public:
 	dsql_ctx* dsqlContext = nullptr;
 	NestConst<StmtNode> statement;
 	NestConst<StmtNode> subStatement;
+	NestConst<StmtNode> returningStatement;
 	NestConst<ForNode> forNode;			// parent implicit cursor, if present
 	StreamType stream = 0;
 	unsigned marks = 0;					// see StmtNode::IUD_MARK_xxx
