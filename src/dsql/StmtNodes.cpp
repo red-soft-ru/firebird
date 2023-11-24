@@ -178,11 +178,11 @@ namespace
 			m_savepoint.rollback();
 		}
 
-	private:
 		// Prohibit unwanted creation/copying
 		CondSavepointAndMarker(const CondSavepointAndMarker&) = delete;
 		CondSavepointAndMarker& operator=(const CondSavepointAndMarker&) = delete;
 
+	private:
 		AutoSavePoint m_savepoint;
 		Savepoint::ChangeMarker m_marker;
 	};
