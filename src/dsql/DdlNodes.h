@@ -171,7 +171,7 @@ public:
 class ParameterClause : public Printable
 {
 public:
-	ParameterClause(MemoryPool& pool, dsql_fld* field, const MetaName& aCollate,
+	ParameterClause(MemoryPool& pool, dsql_fld* field,
 		ValueSourceClause* aDefaultClause = NULL, ValueExprNode* aParameterExpr = NULL);
 
 public:

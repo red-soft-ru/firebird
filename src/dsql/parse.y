@@ -1457,7 +1457,7 @@ arg_desc_list($parameters)
 arg_desc($parameters)
 	: udf_data_type param_mechanism
 		{
-			$parameters->add(newNode<ParameterClause>($1, MetaName()));
+			$parameters->add(newNode<ParameterClause>($1));
 			$parameters->back()->udfMechanism = $2;
 		}
 	;
@@ -1480,7 +1480,7 @@ return_value1($function)
 return_value($function)
 	: udf_data_type return_mechanism
 		{
-			$function->returnType = newNode<ParameterClause>($1, MetaName());
+			$function->returnType = newNode<ParameterClause>($1);
 			$function->returnType->udfMechanism = $2;
 		}
 	| PARAMETER pos_short_integer
@@ -1748,13 +1748,12 @@ domain_clause
 			{
 				$3->fld_name = *$1;
 				$<createDomainNode>$ = newNode<CreateDomainNode>(
-					newNode<ParameterClause>($3, MetaName(), $4));
+					newNode<ParameterClause>($3, $4));
 			}
 		domain_constraints_opt($5) collate_clause
 			{
 				$$ = $5;
-				if ($7)
-					$$->nameType->type->collate = *$7;
+				setCollate($3, $7);
 			}
 	;
 
@@ -2356,8 +2355,7 @@ column_def($relationNode)
 			}
 		column_constraint_clause(NOTRIAL($<addColumnClause>4)) collate_clause
 			{
-				if ($6)
-					$<addColumnClause>4->collate = *$6;
+				setCollate($2, $6);
 			}
 	| symbol_column_name data_type_or_domain identity_clause
 			{
@@ -2370,8 +2368,7 @@ column_def($relationNode)
 			}
 		column_constraint_clause(NOTRIAL($<addColumnClause>4)) collate_clause
 			{
-				if ($6)
-					$<addColumnClause>4->collate = *$6;
+				setCollate($2, $6);
 			}
 	| symbol_column_name non_array_type def_computed
 		{
@@ -2807,7 +2804,10 @@ input_proc_parameters($parameters)
 %type input_proc_parameter(<parametersClause>)
 input_proc_parameter($parameters)
 	: column_domain_or_non_array_type collate_clause default_par_opt
-		{ $parameters->add(newNode<ParameterClause>($1, optName($2), $3)); }
+		{
+			setCollate($1, $2);
+			$parameters->add(newNode<ParameterClause>($1, $3));
+		}
 	;
 
 %type output_proc_parameters(<parametersClause>)
@@ -2819,7 +2819,10 @@ output_proc_parameters($parameters)
 %type output_proc_parameter(<parametersClause>)
 output_proc_parameter($parameters)
 	: column_domain_or_non_array_type collate_clause
-		{ $parameters->add(newNode<ParameterClause>($1, optName($2))); }
+		{
+			setCollate($1, $2);
+			$parameters->add(newNode<ParameterClause>($1));
+		}
 	;
 
 %type <legacyField> column_domain_or_non_array_type
@@ -2891,7 +2894,8 @@ function_clause_start
 		RETURNS domain_or_non_array_type collate_clause deterministic_clause_opt
 			{
 				$$ = $2;
-				$$->returnType = newNode<ParameterClause>($5, optName($6));
+				$$->returnType = newNode<ParameterClause>($5);
+				setCollate($5, $6);
 				$$->deterministic = $7;
 			}
 	;
@@ -3230,7 +3234,8 @@ local_declaration_subfunc_start
 		RETURNS domain_or_non_array_type collate_clause deterministic_clause_opt
 			{
 				$$ = $4;
-				$$->dsqlBlock->returns.add(newNode<ParameterClause>($<legacyField>7, optName($8)));
+				setCollate($7, $8);
+				$$->dsqlBlock->returns.add(newNode<ParameterClause>($<legacyField>7));
 				$$->dsqlDeterministic = $9;
 			}
 	;
@@ -3245,8 +3250,10 @@ local_declaration_item
 var_declaration_item
 	: column_domain_or_non_array_type collate_clause var_declaration_initializer
 		{
+			// Set collate before node allocation to prevent memory leak on throw
+			setCollate($1, $2);
 			DeclareVariableNode* node = newNode<DeclareVariableNode>();
-			node->dsqlDef = newNode<ParameterClause>($1, optName($2), $3);
+			node->dsqlDef = newNode<ParameterClause>($1, $3);
 			$$ = node;
 		}
 	;
@@ -3926,7 +3933,10 @@ block_parameters($parameters)
 %type block_parameter(<parametersClause>)
 block_parameter($parameters)
 	: column_domain_or_non_array_type collate_clause '=' parameter
-		{ $parameters->add(newNode<ParameterClause>($1, optName($2), (ValueSourceClause*) NULL, $4)); }
+		{
+			setCollate($1, $2);
+			$parameters->add(newNode<ParameterClause>($1, (ValueSourceClause*) NULL, $4));
+		}
 	;
 
 // CREATE VIEW
@@ -4909,7 +4919,7 @@ array_range
 %type <legacyField> simple_type
 simple_type
 	: non_charset_simple_type
-	| character_type charset_clause
+	| character_type charset_clause collate_clause
 		{
 			$$ = $1;
 			if ($2)
@@ -4917,12 +4927,19 @@ simple_type
 				$$->charSet = *$2;
 				$$->flags |= FLD_has_chset;
 			}
+			if ($3)
+				$$->collate = *$3;
 		}
 	;
 
 %type <legacyField> non_charset_simple_type
 non_charset_simple_type
-	: national_character_type
+	: national_character_type collate_clause
+		{
+			$$ = $1;
+			if ($2)
+				$$->collate = *$2;
+		}
 	| binary_character_type
 	| numeric_type
 	| float_type

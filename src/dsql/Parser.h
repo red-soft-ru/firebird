@@ -340,6 +340,11 @@ private:
 		return clause.hasData();
 	}
 
+	void setCollate(TypeClause* fld, MetaName* name)
+	{
+		if (name)
+			setClause(fld->collate, "COLLATE", *name);
+	}
 	void checkTimeDialect();
 
 // start - defined in btyacc_fb.ske

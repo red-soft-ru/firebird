@@ -624,3 +624,8 @@ ALTER PACKAGE <name> SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY
 
 <db_initial_option> list is expanded by "OWNER username" clause which allows to set an owner user name for the created database.
 Only users with administrator rights can use this option.
+
+28) COLLATE clause can be used as a part of character data type as per SQL standard.
+(Dmitry Sibiryakov)
+
+If is used twice, an error is returned.
