@@ -41,6 +41,9 @@ BOOST_AUTO_TEST_CASE(StripCommentsTest)
 
 	BOOST_TEST(FrontendLexer::stripComments(
 		"-- comment\nselect '123' /* comment */ from rdb$database -- comment\n") == "select '123' from rdb$database");
+
+	BOOST_TEST(FrontendLexer::stripComments(
+		" select 1 from rdb$database -- comment") == "select 1 from rdb$database");
 }
 
 BOOST_AUTO_TEST_CASE(GetSingleStatementTest)

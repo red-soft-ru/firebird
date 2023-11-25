@@ -54,7 +54,9 @@ std::string FrontendLexer::stripComments(std::string_view statement)
 {
 	try
 	{
-		FrontendLexer lexer(statement);
+		// Statement may end with a line comment without a newline.
+		// Add it here so it may be skipped correctly.
+		FrontendLexer lexer(std::string(statement) + "\n");
 		std::string processedStatement;
 
 		while (lexer.pos < lexer.end)

@@ -4564,8 +4564,16 @@ static void do_isql()
 
 		auto [statement, ret] = statementGetter.getStatement();
 
-		if (!statement.withoutSemicolon.empty())
-			ret = frontend(FrontendLexer::stripComments(statement.withoutSemicolon).c_str());
+		if (ret == CONT)
+		{
+			const auto statementWithoutSemicolonWithoutComments =
+				FrontendLexer::stripComments(statement.withoutSemicolon);
+
+			if (statementWithoutSemicolonWithoutComments.empty())
+				ret = SKIP;
+			else
+				ret = frontend(FrontendLexer::stripComments(statementWithoutSemicolonWithoutComments).c_str());
+		}
 
 		// If there is no database yet, remind us of the need to connect
 
