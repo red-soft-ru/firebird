@@ -115,9 +115,9 @@ bool FirstRowsStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-WriteLockResult FirstRowsStream::lockRecord(thread_db* tdbb, bool skipLocked) const
+WriteLockResult FirstRowsStream::lockRecord(thread_db* tdbb) const
 {
-	return m_next->lockRecord(tdbb, skipLocked);
+	return m_next->lockRecord(tdbb);
 }
 
 void FirstRowsStream::getChildren(Array<const RecordSource*>& children) const

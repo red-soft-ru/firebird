@@ -309,9 +309,9 @@ bool BufferedStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-WriteLockResult BufferedStream::lockRecord(thread_db* tdbb, bool skipLocked) const
+WriteLockResult BufferedStream::lockRecord(thread_db* tdbb) const
 {
-	return m_next->lockRecord(tdbb, skipLocked);
+	return m_next->lockRecord(tdbb);
 }
 
 void BufferedStream::getChildren(Array<const RecordSource*>& children) const

@@ -411,6 +411,7 @@ static const UCHAR
 	store3[] = { op_line, op_byte, op_line, op_verb, op_verb, op_verb, 0},
 	marks[] = { op_byte, op_literal, op_line, op_verb, 0},
 	erase[] = { op_erase, 0},
+	erase2[] = { op_erase, op_verb, 0},
 	local_table[] = { op_word, op_byte, op_literal, op_byte, op_line, 0},
 	outer_map[] = { op_outer_map, 0 },
 	in_list[] = { op_line, op_verb, op_indent, op_word, op_line, op_args, 0};
