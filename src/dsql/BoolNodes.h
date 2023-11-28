@@ -165,7 +165,7 @@ public:
 	bool ignoreNulls(const StreamList& streams) const override
 	{
 		// <arg> IN (<list>) is logically the same as <arg> = <list>[0] OR <arg> = <list>[1] OR ..
-		// See above (BinaryBoolNode) the rule for the OR predicate: all its aruments should have
+		// See above (BinaryBoolNode) the rule for the OR predicate: all its arguments should have
 		// ignoreNulls == true to make the final result also true. Follow the same logic here.
 
 		if (arg->ignoreNulls(streams))
