@@ -209,7 +209,10 @@ void Manager::shutdown()
 	// Clear the processing queue
 
 	for (auto buffer : m_queue)
-		releaseBuffer(buffer);
+	{
+		if (buffer)
+			releaseBuffer(buffer);
+	}
 
 	m_queue.clear();
 
