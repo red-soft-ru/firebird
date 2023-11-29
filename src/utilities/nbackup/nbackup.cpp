@@ -1874,8 +1874,11 @@ int NBACKUP_main(UtilSvc* uSvc)
 
  		StaticStatusVector status;
  		e.stuffException(status);
- 		uSvc->initStatus();
- 		uSvc->setServiceStatus(status.begin());
+
+		UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+ 		sa.setServiceStatus(status.begin());
+
 		exit_code = FB_FAILURE;
 	}
 	catch (const Exception& e)
@@ -1885,8 +1888,11 @@ int NBACKUP_main(UtilSvc* uSvc)
 
  		StaticStatusVector status;
  		e.stuffException(status);
- 		uSvc->initStatus();
- 		uSvc->setServiceStatus(status.begin());
+
+		UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+ 		sa.setServiceStatus(status.begin());
+
 		exit_code = FB_FAILURE;
 	}
 

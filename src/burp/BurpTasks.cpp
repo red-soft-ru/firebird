@@ -493,10 +493,7 @@ void BackupRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 			item.m_att = provider->attachDatabase(&status, tdgbl->gbl_database_file_name,
 							dpbLength, dpbBuffer);
 			if (status->getState() & IStatus::STATE_ERRORS)
-			{
-				BURP_print_status(true, &status);
-				BURP_abort();
-			}
+				BURP_abort(&status);
 
 			ClumpletWriter tpb(ClumpletReader::Tpb, 128, isc_tpb_version3);
 			tpb.insertTag(isc_tpb_concurrency);
@@ -511,10 +508,7 @@ void BackupRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 							tpb.getBufferLength(), tpb.getBuffer());
 
 			if (status->getState() & IStatus::STATE_ERRORS)
-			{
-				BURP_print_status(true, &status);
-				BURP_abort();
-			}
+				BURP_abort(&status);
 		}
 
 		tdgbl->db_handle = item.m_att;
@@ -895,10 +889,7 @@ void RestoreRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 				dpbLength, dpbBuffer);
 
 			if (status->getState() & IStatus::STATE_ERRORS)
-			{
-				BURP_print_status(true, &status);
-				BURP_abort();
-			}
+				BURP_abort(&status);
 
 			// SET TRANSACTION NO_AUTO_UNDO, see at the end of get_data()
 
@@ -909,10 +900,7 @@ void RestoreRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 			item.m_tra = item.m_att->startTransaction(&status, tpb.getBufferLength(), tpb.getBuffer());
 
 			if (status->getState() & IStatus::STATE_ERRORS)
-			{
-				BURP_print_status(true, &status);
-				BURP_abort();
-			}
+				BURP_abort(&status);
 		}
 
 		tdgbl->db_handle = item.m_att;
