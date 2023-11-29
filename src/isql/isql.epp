@@ -5934,20 +5934,20 @@ std::pair<FrontendLexer::SingleStatement, processing_state> StatementGetter::get
 			lexer.appendBuffer(buffer);
 			buffer.clear();
 
-			// If there was something valuable before EOF - error
-			if (!lexer.isBufferEmpty())
-			{
-				bool isEmpty = false;
+			bool isBufferEmpty = lexer.isBufferEmpty();
 
+			// If there was something valuable before EOF - error
+			if (!isBufferEmpty)
+			{
 				try
 				{
-					isEmpty = FrontendLexer::stripComments(lexer.getBuffer()).empty();
+					isBufferEmpty = FrontendLexer::stripComments(lexer.getBuffer()).empty();
 				}
 				catch (const FrontendLexer::IncompleteTokenError&)
 				{
 				}
 
-				if (!isEmpty)
+				if (!isBufferEmpty)
 				{
 					TEXT errbuf[MSG_LENGTH];
 					IUTILS_msg_get(UNEXPECTED_EOF, errbuf);
@@ -5983,7 +5983,7 @@ std::pair<FrontendLexer::SingleStatement, processing_state> StatementGetter::get
 			// This should fix the INPUT bug introduced with editline.
 			getColumn = -1;
 
-			if (!lexer.isBufferEmpty())
+			if (!isBufferEmpty)
 			{
 				lexer.reset();
 				Exit_value = FINI_ERROR;
