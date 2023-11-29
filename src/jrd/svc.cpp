@@ -522,6 +522,7 @@ void Service::setServiceStatus(const ISC_STATUS* status_vector)
 	}
 
 	Arg::StatusVector passed(status_vector);
+	MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 	ERR_post_nothrow(passed, &svc_status);
 }
 
@@ -546,6 +547,7 @@ void Service::setServiceStatus(const USHORT facility, const USHORT errcode,
 		put_status_arg(status, args.getCell(loop));
 	}
 
+	MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 	ERR_post_nothrow(status, &svc_status);
 }
 
@@ -581,14 +583,9 @@ void Service::hidePasswd(ArgvType&, int)
 	// no action
 }
 
-const FbStatusVector* Service::getStatus()
+Service::StatusAccessor Service::getStatusAccessor()
 {
-	return &svc_status;
-}
-
-void Service::initStatus()
-{
-	svc_status->init();
+	return StatusAccessor(svc_status_mutex, &svc_status, this);
 }
 
 void Service::checkService()
@@ -703,7 +700,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	, svc_debug(false)
 #endif
 {
-	initStatus();
+	svc_status->init();
 
 	{	// scope
 		// Account service block in global array
@@ -1525,6 +1522,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 		throw;
 	}
 
+	// no need locking svc_status_mutex - check single element of status vector
 	return svc_status[1];
 }
 
@@ -2083,7 +2081,10 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 	parseSwitches();
 
 	// The service block can be reused hence init a status vector.
-	initStatus();
+	{
+		MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
+		svc_status->init();
+	}
 
 	if (serv->serv_thd)
 	{
@@ -2168,7 +2169,10 @@ void Service::readFbLog()
 	{
 		if (file != NULL)
 		{
-			initStatus();
+			{
+				MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
+				svc_status->init();
+			}
 			started();
 			svc_started = true;
 			TEXT buffer[100];
@@ -2187,6 +2191,7 @@ void Service::readFbLog()
 
 		if (!file || (file && ferror(file)))
 		{
+			MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 			(Arg::Gds(isc_sys_request) << Arg::Str(file ? "fgets" : "fopen") <<
 										  SYS_ERR(errno)).copyTo(&svc_status);
 			if (!svc_started)
@@ -2198,6 +2203,8 @@ void Service::readFbLog()
 	catch (const Firebird::Exception& e)
 	{
 		setDataMode(false);
+
+		MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 		e.stuffException(&svc_status);
 	}
 

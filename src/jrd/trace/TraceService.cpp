@@ -401,8 +401,10 @@ int TRACE_main(UtilSvc* arg)
 	{
 		StaticStatusVector status;
 		e.stuffException(status);
-		svc->initStatus();
-		svc->setServiceStatus(status.begin());
+
+		UtilSvc::StatusAccessor sa = svc->getStatusAccessor();
+		sa.init();
+		sa.setServiceStatus(status.begin());
 		exit_code = FB_FAILURE;
 	}
 

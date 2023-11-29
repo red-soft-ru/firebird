@@ -359,8 +359,11 @@ int main_gstat(Firebird::UtilSvc* uSvc)
 	{
 		Firebird::StaticStatusVector status;
 		e.stuffException(status);
-		uSvc->initStatus();
-		uSvc->setServiceStatus(status.begin());
+
+		Firebird::UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+		sa.setServiceStatus(status.begin());
+
 		exit_code = FB_FAILURE;
 	}
 
@@ -1155,7 +1158,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 	if (status_vector[1])
 	{
-		tddba->uSvc->setServiceStatus(status_vector);
+		tddba->uSvc->getStatusAccessor().setServiceStatus(status_vector);
 		if (!tddba->uSvc->isService())
 		{
 			const ISC_STATUS* vector = status_vector;
@@ -1216,8 +1219,9 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 	if ((exit_code != FINI_OK) && uSvc->isService() && tddba->dba_status[1])
 	{
-		uSvc->initStatus();
-		uSvc->setServiceStatus(tddba->dba_status);
+		Firebird::UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+		sa.setServiceStatus(tddba->dba_status);
 	}
 
 	return exit_code;
@@ -1892,7 +1896,7 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 
 	if (fil->fil_desc  == INVALID_HANDLE_VALUE)
 	{
-		tddba->uSvc->setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name);
+		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name);
 		// msg 29: Can't open database file %s
 		db_error(GetLastError());
 	}
@@ -1956,7 +1960,7 @@ static const pag* db_read( SLONG page_number, bool ok_enc)
 		int lastError = GetLastError();
 		if (lastError != NO_ERROR)
 		{
-			tddba->uSvc->setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
+			tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
 			// msg 30: Can't read a database page
 			db_error(lastError);
 		}
@@ -1969,7 +1973,7 @@ static const pag* db_read( SLONG page_number, bool ok_enc)
 					reinterpret_cast<LPDWORD>(&actual_length),
 					NULL))
 	{
-		tddba->uSvc->setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
+		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
 		// msg 30: Can't read a database page
 		db_error(GetLastError());
 	}
@@ -2077,7 +2081,7 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 
 	if ((fil->fil_desc = os_utils::open(file_name, O_RDONLY)) == -1)
 	{
-		tddba->uSvc->setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name);
+		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name);
 		// msg 29: Can't open database file %s
 		db_error(errno);
 	}
@@ -2132,7 +2136,7 @@ static const pag* db_read( SLONG page_number, bool ok_enc)
 	const FB_UINT64 offset = ((FB_UINT64) page_number) * ((FB_UINT64) tddba->page_size);
 	if (os_utils::lseek (fil->fil_desc, offset, 0) == -1)
 	{
-		tddba->uSvc->setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
+		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
 		// msg 30: Can't read a database page
 		db_error(errno);
 	}
@@ -2143,7 +2147,7 @@ static const pag* db_read( SLONG page_number, bool ok_enc)
 		const int l = read(fil->fil_desc, p, length);
 		if (l < 0)
 		{
-			tddba->uSvc->setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
+			tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
 			// msg 30: Can't read a database page
 			db_error(errno);
 		}
@@ -2185,7 +2189,7 @@ static void dba_error(USHORT errcode, const SafeArg& arg)
 	tdba* tddba = tdba::getSpecific();
 	tddba->page_number = -1;
 
-	tddba->uSvc->setServiceStatus(GSTAT_MSG_FAC, errcode, arg);
+	tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, errcode, arg);
 	if (!tddba->uSvc->isService())
 	{
 		dba_print(true, errcode, arg);

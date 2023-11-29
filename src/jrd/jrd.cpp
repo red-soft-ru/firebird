@@ -4365,12 +4365,12 @@ void JService::query(CheckStatusWrapper* user_status,
 					    receiveItems, bufferLength, buffer);
 
 			// If there is a status vector from a service thread, copy it into the thread status
-			const FbStatusVector* from = svc->getStatus();
-			if (from->getState())
+			Service::StatusAccessor status = svc->getStatusAccessor();
+			if (status->getState())
 			{
-				fb_utils::copyStatus(user_status, from);
+				fb_utils::copyStatus(user_status, status);
 				// Empty out the service status vector
-				svc->initStatus();
+				status.init();
 				return;
 			}
 		}
@@ -4432,9 +4432,10 @@ void JService::start(CheckStatusWrapper* user_status, unsigned int spbLength, co
 
 		svc->start(spbLength, spb);
 
-		if (svc->getStatus()->getState() & IStatus::STATE_ERRORS)
+		UtilSvc::StatusAccessor status = svc->getStatusAccessor();
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
-			fb_utils::copyStatus(user_status, svc->getStatus());
+			fb_utils::copyStatus(user_status, status);
 			return;
 		}
 	}

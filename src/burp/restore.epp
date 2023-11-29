@@ -1442,9 +1442,7 @@ void general_on_error()
 		newVector.append(oldVector);
 		newVector.copyTo(isc_status);
 	}
-	BURP_print_status (true, isc_status);
-
-	BURP_abort ();
+	BURP_abort (isc_status);
 }
 
 bool get_acl(BurpGlobals* tdgbl, const TEXT* owner_nm, ISC_QUAD* blob_id, ISC_QUAD* new_blob_id)
@@ -12201,3 +12199,4 @@ void fix_system_generators(BurpGlobals* tdgbl)
 }
 
 } // namespace
+

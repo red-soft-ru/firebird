@@ -167,7 +167,6 @@ namespace
 	 **************************************/
 		BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
-		BURP_print_status(true, isc_status);
-		BURP_abort();
+		BURP_abort(isc_status);
 	}
 }
