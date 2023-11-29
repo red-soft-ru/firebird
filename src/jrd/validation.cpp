@@ -740,7 +740,7 @@ static int validate(Firebird::UtilSvc* svc)
 
 	if (status->getState() & IStatus::STATE_ERRORS)
 	{
-		svc->setServiceStatus(status->getErrors());
+		svc->getStatusAccessor().setServiceStatus(status->getErrors());
 		return FB_FAILURE;
 	}
 
@@ -770,7 +770,7 @@ static int validate(Firebird::UtilSvc* svc)
 	{
 		att->att_use_count--;
 		ex.stuffException(&status);
-		svc->setServiceStatus(status->getErrors());
+		svc->getStatusAccessor().setServiceStatus(status->getErrors());
 		ret_code = FB_FAILURE;
 	}
 
@@ -782,7 +782,7 @@ static int validate(Firebird::UtilSvc* svc)
 
 int VAL_service(Firebird::UtilSvc* svc)
 {
-	svc->initStatus();
+	svc->getStatusAccessor().init();
 
 	int exit_code = FB_SUCCESS;
 
@@ -794,7 +794,7 @@ int VAL_service(Firebird::UtilSvc* svc)
 	{
 		FbLocalStatus status;
 		ex.stuffException(&status);
-		svc->setServiceStatus(status->getErrors());
+		svc->getStatusAccessor().setServiceStatus(status->getErrors());
 		exit_code = FB_FAILURE;
 	}
 

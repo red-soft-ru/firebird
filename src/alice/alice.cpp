@@ -113,7 +113,7 @@ int ALICE_main(Firebird::UtilSvc* uSvc)
 	{
 		Firebird::StaticStatusVector status;
 		e.stuffException(status);
-		uSvc->setServiceStatus(status.begin());
+		uSvc->getStatusAccessor().setServiceStatus(status.begin());
 		uSvc->started();
 		exit_code = FB_FAILURE;
 	}
@@ -506,7 +506,7 @@ int alice(Firebird::UtilSvc* uSvc)
 	{
 		if (uSvc->isService())
 		{
-			uSvc->setServiceStatus(ALICE_MSG_FAC, 20, MsgFormat::SafeArg());
+			uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, 20, MsgFormat::SafeArg());
 		}
 		else
 		{
@@ -607,8 +607,9 @@ int alice(Firebird::UtilSvc* uSvc)
 	if ((exit_code != FINI_OK) && uSvc->isService() &&
 		(tdgbl->status[0] == 1) && (tdgbl->status[1] != 0))
 	{
-		uSvc->initStatus();
-		uSvc->setServiceStatus(tdgbl->status);
+		Firebird::UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+		uSvc->getStatusAccessor().setServiceStatus(tdgbl->status);
 	}
 	tdgbl->uSvc->started();
 
@@ -641,7 +642,7 @@ void ALICE_print(USHORT	number, const SafeArg& arg)
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	if (tdgbl->uSvc->isService())
 	{
-		tdgbl->uSvc->setServiceStatus(ALICE_MSG_FAC, number, arg);
+		tdgbl->uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, number, arg);
 		tdgbl->uSvc->started();
 		return;
 	}
@@ -664,7 +665,7 @@ void ALICE_print_status(bool error, const ISC_STATUS* status_vector)
 	{
 		const ISC_STATUS* vector = status_vector;
 		AliceGlobals* tdgbl = AliceGlobals::getSpecific();
-		tdgbl->uSvc->setServiceStatus(status_vector);
+		tdgbl->uSvc->getStatusAccessor().setServiceStatus(status_vector);
 
 		if (error && tdgbl->uSvc->isService())
 		{
@@ -696,7 +697,7 @@ void ALICE_error(USHORT	number, const SafeArg& arg)
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	TEXT buffer[256];
 
-	tdgbl->uSvc->setServiceStatus(ALICE_MSG_FAC, number, arg);
+	tdgbl->uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, number, arg);
 	if (!tdgbl->uSvc->isService())
 	{
 		fb_msg_format(0, ALICE_MSG_FAC, number, sizeof(buffer), buffer, arg);
