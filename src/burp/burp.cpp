@@ -1782,7 +1782,7 @@ void BURP_print_status(bool err, Firebird::IStatus* status_vector, USHORT second
 
 		if (secondNumber)
 		{
-			BURP_msg_partial(err, 256);	// msg 256: gbak: ERROR:
+			BURP_msg_partial(err, 169);	// msg 169: gbak:
 			BURP_msg_put(true, secondNumber, SafeArg());
 		}
 	}
