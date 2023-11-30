@@ -71,6 +71,7 @@ public:
 		{
 			sa.mutex = nullptr;
 			sa.uSvc = nullptr;
+			sa.status = nullptr;
 		}
 
 		operator const Firebird::CheckStatusWrapper*() const
@@ -107,10 +108,10 @@ public:
 				mutex->leave();
 		}
 
-	private:
-		StatusAccessor(const StatusAccessor&);
-		StatusAccessor& operator=(const StatusAccessor&);
+		StatusAccessor(const StatusAccessor&) = delete;
+		StatusAccessor& operator=(const StatusAccessor&) = delete;
 
+	private:
 		Mutex* mutex;
 		Firebird::CheckStatusWrapper* status;
 		UtilSvc* uSvc;
