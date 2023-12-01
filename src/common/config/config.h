@@ -184,7 +184,6 @@ enum ConfigKey
 	KEY_SNAPSHOTS_MEM_SIZE,
 	KEY_TIP_CACHE_BLOCK_SIZE,
 	KEY_READ_CONSISTENCY,
-	KEY_CLEAR_GTT_RETAINING,
 	KEY_DATA_TYPE_COMPATIBILITY,
 	KEY_USE_FILESYSTEM_CACHE,
 	KEY_INLINE_SORT_THRESHOLD,
@@ -304,7 +303,6 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,	"SnapshotsMemSize",			false,	65536},		// bytes
 	{TYPE_INTEGER,	"TipCacheBlockSize",		false,	4194304},	// bytes
 	{TYPE_BOOLEAN,	"ReadConsistency",			false,	true},
-	{TYPE_BOOLEAN,	"ClearGTTAtRetaining",		false,	false},
 	{TYPE_STRING,	"DataTypeCompatibility",	false,	nullptr},
 	{TYPE_BOOLEAN,	"UseFileSystemCache",		false,	true},
 	{TYPE_INTEGER,	"InlineSortThreshold",		false,	1000},		// bytes
@@ -624,8 +622,6 @@ public:
 	CONFIG_GET_PER_DB_KEY(ULONG, getTipCacheBlockSize, KEY_TIP_CACHE_BLOCK_SIZE, getInt);
 
 	CONFIG_GET_PER_DB_BOOL(getReadConsistency, KEY_READ_CONSISTENCY);
-
-	CONFIG_GET_PER_DB_BOOL(getClearGTTAtRetaining, KEY_CLEAR_GTT_RETAINING);
 
 	CONFIG_GET_PER_DB_STR(getDataTypeCompatibility, KEY_DATA_TYPE_COMPATIBILITY);
 
