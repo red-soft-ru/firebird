@@ -2668,10 +2668,8 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 		// Set the state on the inventory page
 		TRA_set_state(tdbb, transaction, old_number, state);
 	}
-	if (dbb->dbb_config->getClearGTTAtRetaining())
-		release_temp_tables(tdbb, transaction);
-	else
-		retain_temp_tables(tdbb, transaction, new_number);
+
+	retain_temp_tables(tdbb, transaction, new_number);
 
 	transaction->tra_number = new_number;
 
