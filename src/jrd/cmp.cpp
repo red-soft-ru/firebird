@@ -524,7 +524,7 @@ bool CMP_procedure_arguments(
 			if (argCount > fields.getCount())
 				mismatchStatus << Arg::Gds(isc_wronumarg);
 
-			for (auto pos = 0; pos < positionalArgCount; ++pos)
+			for (auto pos = 0u; pos < positionalArgCount; ++pos)
 			{
 				if (pos < fields.getCount())
 				{
