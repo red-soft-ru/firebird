@@ -397,12 +397,6 @@ void Config::checkValues()
 
 	checkIntForLoBound(KEY_FILESYSTEM_CACHE_THRESHOLD, 0, true);
 
-	checkIntForLoBound(KEY_MAX_IDENTIFIER_BYTE_LENGTH, 1, true);
-	checkIntForHiBound(KEY_MAX_IDENTIFIER_BYTE_LENGTH, MAX_SQL_IDENTIFIER_LEN, true);
-
-	checkIntForLoBound(KEY_MAX_IDENTIFIER_CHAR_LENGTH, 1, true);
-	checkIntForHiBound(KEY_MAX_IDENTIFIER_CHAR_LENGTH, METADATA_IDENTIFIER_CHAR_LEN, true);
-
 	checkIntForLoBound(KEY_SNAPSHOTS_MEM_SIZE, 1, true);
 	checkIntForHiBound(KEY_SNAPSHOTS_MEM_SIZE, MAX_ULONG, true);
 

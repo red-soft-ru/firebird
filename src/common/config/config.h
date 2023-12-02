@@ -171,8 +171,6 @@ enum ConfigKey
 	KEY_REMOTE_ACCESS,
 	KEY_IPV6_V6ONLY,
 	KEY_WIRE_COMPRESSION,
-	KEY_MAX_IDENTIFIER_BYTE_LENGTH,
-	KEY_MAX_IDENTIFIER_CHAR_LENGTH,
 	KEY_ENCRYPT_SECURITY_DATABASE,
 	KEY_STMT_TIMEOUT,
 	KEY_CONN_IDLE_TIMEOUT,
@@ -282,8 +280,6 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_BOOLEAN,	"RemoteAccess",				false,	true},
 	{TYPE_BOOLEAN,	"IPv6V6Only",				false,	false},
 	{TYPE_BOOLEAN,	"WireCompression",			false,	false},
-	{TYPE_INTEGER,	"MaxIdentifierByteLength",	false,	(int)MAX_SQL_IDENTIFIER_LEN},
-	{TYPE_INTEGER,	"MaxIdentifierCharLength",	false,	(int)METADATA_IDENTIFIER_CHAR_LEN},
 	{TYPE_BOOLEAN,	"AllowEncryptedSecurityDatabase",	false,	false},
 	{TYPE_INTEGER,	"StatementTimeout",			false,	0},
 	{TYPE_INTEGER,	"ConnectionIdleTimeout",	false,	0},
@@ -593,10 +589,6 @@ public:
 	CONFIG_GET_PER_DB_BOOL(getRemoteAccess, KEY_REMOTE_ACCESS);
 
 	CONFIG_GET_PER_DB_BOOL(getWireCompression, KEY_WIRE_COMPRESSION);
-
-	CONFIG_GET_PER_DB_INT(getMaxIdentifierByteLength, KEY_MAX_IDENTIFIER_BYTE_LENGTH);
-
-	CONFIG_GET_PER_DB_INT(getMaxIdentifierCharLength, KEY_MAX_IDENTIFIER_CHAR_LENGTH);
 
 	CONFIG_GET_PER_DB_BOOL(getCryptSecurityDatabase, KEY_ENCRYPT_SECURITY_DATABASE);
 
