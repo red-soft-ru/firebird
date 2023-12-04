@@ -904,7 +904,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 				}
 
 				if (!found) {
-					sprintf(s, "unknown ISC error %ld", code);	// TXNN
+					sprintf(s, "unknown ISC error %ld", (SLONG) code);	// TXNN
 				}
 			}
 		}
@@ -929,11 +929,11 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 		break;
 
 	case isc_arg_dos:
-		sprintf(s, "unknown dos error %ld", code);	// TXNN
+		sprintf(s, "unknown dos error %ld", (SLONG) code);	// TXNN
 		break;
 
 	case isc_arg_next_mach:
-		sprintf(s, "next/mach error %ld", code);	// AP
+		sprintf(s, "next/mach error %ld", (SLONG) code);	// AP
 		break;
 
 	case isc_arg_win32:
@@ -945,7 +945,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 						   s, bufsize, NULL))
 #endif
 		{
-			sprintf(s, "unknown Win32 error %ld", code);	// TXNN
+			sprintf(s, "unknown Win32 error %ld", (SLONG) code);	// TXNN
 		}
 		break;
 
@@ -1013,30 +1013,100 @@ const int SECS_PER_HOUR	= 60 * 60;
 const int SECS_PER_DAY	= SECS_PER_HOUR * 24;
 
 #ifdef WIN_NT
-class CleanupTraceHandles
+
+namespace {
+
+class LogFileHandles
 {
 public:
-	~CleanupTraceHandles()
+	LogFileHandles(Firebird::MemoryPool&)
 	{
-		CloseHandle(trace_mutex_handle);
-		trace_mutex_handle = INVALID_HANDLE_VALUE;
-
-		if (trace_file_handle != INVALID_HANDLE_VALUE)
-			CloseHandle(trace_file_handle);
-
-		trace_file_handle = INVALID_HANDLE_VALUE;
+		mutex_handle = CreateMutex(ISC_get_security_desc(), FALSE, "firebird_trace_mutex");
 	}
 
+	~LogFileHandles()
+	{
+		if (mutex_handle != INVALID_HANDLE_VALUE)
+			CloseHandle(mutex_handle);
+
+		mutex_handle = INVALID_HANDLE_VALUE;
+
+		if (file_handle != INVALID_HANDLE_VALUE)
+			CloseHandle(file_handle);
+
+		file_handle = INVALID_HANDLE_VALUE;
+	}
+
+	void trace_raw(const char* text, unsigned int length);
+
+private:
 	// This is machine-global. Can be made instance-global.
 	// For as long you don't trace two instances in parallel this shouldn't matter.
-	static HANDLE trace_mutex_handle;
-	static HANDLE trace_file_handle;
+	static HANDLE mutex_handle;
+	static HANDLE file_handle;
+
+	friend class LogGuard;
 };
 
-HANDLE CleanupTraceHandles::trace_mutex_handle = CreateMutex(NULL, FALSE, "firebird_trace_mutex");
-HANDLE CleanupTraceHandles::trace_file_handle = INVALID_HANDLE_VALUE;
+void LogFileHandles::trace_raw(const char* text, unsigned int length)
+{
+	// Nickolay Samofatov, 12 Sept 2003. Windows opens files extremely slowly.
+	// Slowly enough to make such trace useless. Thus we cache file handle !
 
-CleanupTraceHandles cleanupHandles;
+	while (true)
+	{
+		if (file_handle == INVALID_HANDLE_VALUE)
+		{
+			Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
+
+			// We do not care to close this file.
+			// It will be closed automatically when our process terminates.
+			file_handle = CreateFile(name.c_str(), GENERIC_WRITE,
+				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+				NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+			if (file_handle == INVALID_HANDLE_VALUE)
+				break;
+		}
+
+		SetFilePointer(file_handle, 0, NULL, FILE_END);
+
+		DWORD bytesWritten;
+		WriteFile(file_handle, text, length, &bytesWritten, NULL);
+
+		if (bytesWritten != length)
+		{
+			// Handle the case when file was deleted by another process on Win9x
+			// On WinNT we are not going to notice that fact :(
+			CloseHandle(file_handle);
+			file_handle = INVALID_HANDLE_VALUE;
+			continue;
+		}
+		break;
+	}
+}
+
+Firebird::InitInstance<LogFileHandles> logFileHandles;
+
+HANDLE LogFileHandles::mutex_handle = INVALID_HANDLE_VALUE;
+HANDLE LogFileHandles::file_handle = INVALID_HANDLE_VALUE;
+
+
+class LogGuard
+{
+public:
+	LogGuard()
+	{
+		WaitForSingleObject(logFileHandles().mutex_handle, INFINITE);
+	}
+
+	~LogGuard()
+	{
+		ReleaseMutex(logFileHandles().mutex_handle);
+	}
+};
+
+} // namespace
 
 #endif
 
@@ -1057,36 +1127,8 @@ void API_ROUTINE gds__trace_raw(const char* text, unsigned int length)
 #ifdef WIN_NT
 	// Note: thread-safe code
 
-	// Nickolay Samofatov, 12 Sept 2003. Windows opens files extremely slowly.
-	// Slowly enough to make such trace useless. Thus we cache file handle !
-	WaitForSingleObject(CleanupTraceHandles::trace_mutex_handle, INFINITE);
-	while (true)
-	{
-		if (CleanupTraceHandles::trace_file_handle == INVALID_HANDLE_VALUE)
-		{
-			Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
-			// We do not care to close this file.
-			// It will be closed automatically when our process terminates.
-			CleanupTraceHandles::trace_file_handle = CreateFile(name.c_str(), GENERIC_WRITE,
-				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-				NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-			if (CleanupTraceHandles::trace_file_handle == INVALID_HANDLE_VALUE)
-				break;
-		}
-		DWORD bytesWritten;
-		SetFilePointer(CleanupTraceHandles::trace_file_handle, 0, NULL, FILE_END);
-		WriteFile(CleanupTraceHandles::trace_file_handle, text, length, &bytesWritten, NULL);
-		if (bytesWritten != length)
-		{
-			// Handle the case when file was deleted by another process on Win9x
-			// On WinNT we are not going to notice that fact :(
-			CloseHandle(CleanupTraceHandles::trace_file_handle);
-			CleanupTraceHandles::trace_file_handle = INVALID_HANDLE_VALUE;
-			continue;
-		}
-		break;
-	}
-	ReleaseMutex(CleanupTraceHandles::trace_mutex_handle);
+	LogGuard guard;
+	logFileHandles().trace_raw(text, length);
 #else
 	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
 	int file = os_utils::open(name.c_str(), O_CREAT | O_APPEND | O_WRONLY, 0660);
@@ -1220,7 +1262,7 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
 
 #ifdef WIN_NT
-	WaitForSingleObject(CleanupTraceHandles::trace_mutex_handle, INFINITE);
+	LogGuard guard;
 #endif
 	FILE* file = os_utils::fopen(name.c_str(), "a");
 	if (file != NULL)
@@ -1252,8 +1294,11 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 		// This will release file lock set in posix case
 		fclose(file);
 	}
-#ifdef WIN_NT
-	ReleaseMutex(CleanupTraceHandles::trace_mutex_handle);
+
+#ifdef ANDROID
+	va_start(ptr, text);
+	__android_log_vprint(ANDROID_LOG_INFO, "FIREBIRD", text, ptr);
+	va_end(ptr);
 #endif
 }
 
@@ -1286,7 +1331,7 @@ void gds__print_pool(MemoryPool* pool, const TEXT* text, ...)
 
 	const int oldmask = umask(0111);
 #ifdef WIN_NT
-	WaitForSingleObject(CleanupTraceHandles::trace_mutex_handle, INFINITE);
+	LogGuard guard;
 #endif
 	FILE* file = os_utils::fopen(name.c_str(), "a");
 	if (file != NULL)
@@ -1301,9 +1346,6 @@ void gds__print_pool(MemoryPool* pool, const TEXT* text, ...)
 		fprintf(file, "\n");
 		fclose(file);
 	}
-#ifdef WIN_NT
-	ReleaseMutex(CleanupTraceHandles::trace_mutex_handle);
-#endif
 
 	umask(oldmask);
 

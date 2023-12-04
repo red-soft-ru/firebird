@@ -163,7 +163,7 @@ namespace
 #ifdef WIN_NT
 			string name;
 			name.printf("firebird_replctl_%s", guidStr);
-			m_mutex = CreateMutex(NULL, FALSE, name.c_str());
+			m_mutex = CreateMutex(ISC_get_security_desc(), FALSE, name.c_str());
 			if (WaitForSingleObject(m_mutex, INFINITE) != WAIT_OBJECT_0)
 #else // POSIX
 #ifdef HAVE_FLOCK
