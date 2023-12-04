@@ -426,15 +426,16 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 			oldest = cache->m_tpcHeader->getHeader()->oldest_transaction.load(std::memory_order_relaxed);
 		else
 		{
-#ifdef SUPERSERVER_V2
 			Database* dbb = tdbb->getDatabase();
-			oldest = dbb->dbb_oldest_transaction;
-#else
-			WIN window(HEADER_PAGE_NUMBER);
-			const Ods::header_page* header_page = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
-			oldest = Ods::getOIT(header_page);
-			CCH_RELEASE(tdbb, &window);
-#endif
+			if (dbb->dbb_flags & DBB_shared)
+				oldest = dbb->dbb_oldest_transaction;
+			else
+			{
+				WIN window(HEADER_PAGE_NUMBER);
+				const Ods::header_page* header_page = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+				oldest = Ods::getOIT(header_page);
+				CCH_RELEASE(tdbb, &window);
+			}
 		}
 
 		if (blockNumber < oldest / cache->m_transactionsPerBlock &&			// old block => send AST
