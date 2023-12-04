@@ -432,8 +432,23 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 		// wait for all initializing processes (PR)
 		acceptAst = false;
 
-		TraNumber oldest =
-			cache->m_tpcHeader->getHeader()->oldest_transaction.load(std::memory_order_relaxed);
+		TraNumber oldest;
+		if (cache->m_tpcHeader)
+			oldest = cache->m_tpcHeader->getHeader()->oldest_transaction.load(std::memory_order_relaxed);
+		else
+		{
+			Database* dbb = tdbb->getDatabase();
+			if (dbb->dbb_flags & DBB_shared)
+				oldest = dbb->dbb_oldest_transaction;
+			else
+			{
+				WIN window(HEADER_PAGE_NUMBER);
+				const Ods::header_page* header_page = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+				oldest = Ods::getOIT(header_page);
+				CCH_RELEASE(tdbb, &window);
+			}
+		}
+
 		if (blockNumber < oldest / cache->m_transactionsPerBlock &&			// old block => send AST
 			!LCK_convert(tdbb, &existenceLock, LCK_SW, LCK_WAIT))
 		{
