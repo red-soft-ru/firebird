@@ -1,3 +1,103 @@
+# v5.0 Release Candidate 2
+
+## Improvements
+
+* [#7854](https://github.com/FirebirdSQL/firebird/issues/7854): Performance issue with time zones  
+  Contributor(s): Adriano dos Santos Fernandes, Vlad Khorsun
+
+* [#7819](https://github.com/FirebirdSQL/firebird/issues/7819): Difficulty returning the product version with the legacy connection  
+  Contributor(s): Vlad Khorsun
+
+* [#7818](https://github.com/FirebirdSQL/firebird/issues/7818): Extend rdb$get_context('SYSTEM', '***') with other info from MON$ATTACHMENT  
+  Contributor(s): Vlad Khorsun
+
+* [#7814](https://github.com/FirebirdSQL/firebird/issues/7814): Don't update database-level statistics on every page cache operation  
+  Contributor(s): Vlad Khorsun
+
+* [#7810](https://github.com/FirebirdSQL/firebird/issues/7810): Improve SKIP LOCKED implementation  
+  Contributor(s): Vlad Khorsun
+
+* [#7755](https://github.com/FirebirdSQL/firebird/issues/7755): Update Windows distribution with new zlib version 1.3 (released 2023-08-18)  
+  Contributor(s): Vlad Khorsun
+
+## Bugfixes
+
+* [#7903](https://github.com/FirebirdSQL/firebird/issues/7903): Unexpected Results when Using CASE-WHEN with LEFT JOIN  
+  Contributor(s): Dmitry Yemanov
+
+* [#7885](https://github.com/FirebirdSQL/firebird/issues/7885): Unstable error messages in services due to races related with service status vector  
+  Contributor(s): Alexander Peshkov
+
+* [#7879](https://github.com/FirebirdSQL/firebird/issues/7879): Unexpected Results when Using Natural Right Join  
+  Contributor(s): Dmitry Yemanov
+
+* [#7867](https://github.com/FirebirdSQL/firebird/issues/7867): Error "wrong page type" during garbage collection on v4.0.4  
+  Contributor(s): Ilya Eremin
+
+* [#7860](https://github.com/FirebirdSQL/firebird/issues/7860): Crash potentially caused by BETWEEN Operator  
+  Contributor(s): Vlad Khorsun
+
+* [#7851](https://github.com/FirebirdSQL/firebird/issues/7851): [FB1+, GBAK, Restore] The skip of att_functionarg_field_precision does not check RESTORE_format  
+  Contributor(s): Dmitry Kovalenko
+
+* [#7846](https://github.com/FirebirdSQL/firebird/issues/7846): FB4 can't backup/restore int128-array  
+  Contributor(s): Dmitry Kovalenko
+
+* [#7844](https://github.com/FirebirdSQL/firebird/issues/7844): Removing first column with SET WIDTH crashes ISQL  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7839](https://github.com/FirebirdSQL/firebird/issues/7839): Potential bug in BETWEEN Operator  
+  Contributor(s): Vlad Khorsun
+
+* [#7832](https://github.com/FirebirdSQL/firebird/issues/7832): Firebird 5 and 6 crash on "... RETURNING * " without INTO in PSQL  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7831](https://github.com/FirebirdSQL/firebird/issues/7831): Incorrect type of UDF-argument with array  
+  Contributor(s): Dmitry Kovalenko
+
+* [#7827](https://github.com/FirebirdSQL/firebird/issues/7827): Problem using python firebird-driver with either intel or m1 Mac buiilds with version 4.0.3 or 5.0+  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7817](https://github.com/FirebirdSQL/firebird/issues/7817): Memory leak is possible for UDF array arguments  
+  Contributor(s): Dmitry Yemanov
+
+* [#7812](https://github.com/FirebirdSQL/firebird/issues/7812): Service backup does not work in multiple engines configuration  
+  Contributor(s): Alexander Peshkov
+
+* [#7800](https://github.com/FirebirdSQL/firebird/issues/7800): Default publication status is not preserved after backup/restore  
+  Contributor(s): Dmitry Yemanov
+
+* [#7795](https://github.com/FirebirdSQL/firebird/issues/7795): NOT IN <list> returns incorrect result if NULLs are present inside the value list  
+  Contributor(s): Dmitry Yemanov
+
+* [#7779](https://github.com/FirebirdSQL/firebird/issues/7779): Firebird 4.0.3 is constantly crashing with the same symptoms (fbclient.dll) (incl. DMP File Analysis)  
+  Contributor(s): Vlad Khorsun
+
+* [#7772](https://github.com/FirebirdSQL/firebird/issues/7772): Blob corruption in FB 4.0.3 (embedded)  
+  Contributor(s): Vlad Khorsun
+
+* [#7770](https://github.com/FirebirdSQL/firebird/issues/7770): restore takes 25% more time vs 4.0.0  
+  Contributor(s): Vlad Khorsun
+
+* [#7767](https://github.com/FirebirdSQL/firebird/issues/7767): Slow drop trigger command execution under FB5.0  
+  Contributor(s): Dmitry Yemanov
+
+* [#7762](https://github.com/FirebirdSQL/firebird/issues/7762): Crash on "Operating system call pthread_mutex_destroy failed. Error code 16" in log  
+  Contributor(s): Alexander Peshkov
+
+* [#7761](https://github.com/FirebirdSQL/firebird/issues/7761): Regression when displaying line number of errors in ISQL scripts  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7760](https://github.com/FirebirdSQL/firebird/issues/7760): Parameters inside the IN list may cause a string truncation error  
+  Contributor(s): Dmitry Yemanov
+
+* [#7759](https://github.com/FirebirdSQL/firebird/issues/7759): Routine calling overhead increased by factor 6 vs Firebird 4.0.0  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7461](https://github.com/FirebirdSQL/firebird/issues/7461): Differencies in field metadata descriptions between Firebird 2.5 and Firebird 4  
+  Contributor(s): Dmitry Yemanov
+
+
 # v5.0 Release Candidate 1
 
 ## New features
