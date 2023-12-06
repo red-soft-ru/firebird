@@ -207,7 +207,10 @@ void InnerJoin::estimateCost(unsigned position,
 	const auto loopCost = currentCost * cardinality;
 	cost = loopCost;
 
-	if (position)
+	// Consider whether the current stream can be hash-joined to the prior ones.
+	// Beware conditional retrievals, this is impossible for them.
+
+	if (position && !candidate->condition)
 	{
 		// Calculate the hashing cost. It consists of the following parts:
 		//  - hashed stream retrieval
