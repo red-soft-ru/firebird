@@ -8612,6 +8612,10 @@ static void unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* u
 			fb_assert(!dbb->locked());
 			ThreadStatusGuard temp_status(tdbb);
 
+			// In case when sweep attachment failed try to release appropriate lock
+			if (options.dpb_sweep)
+				dbb->clearSweepStarting();
+
 			const auto attachment = tdbb->getAttachment();
 
 			if (attachment)
