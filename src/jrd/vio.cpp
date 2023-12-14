@@ -1600,7 +1600,6 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_pages:
 		case rel_formats:
 		case rel_trans:
-		case rel_rcon:
 		case rel_refc:
 		case rel_ccon:
 		case rel_msgs:
@@ -1865,6 +1864,22 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			EVL_field(0, rpb->rpb_record, f_prv_o_type, &desc2);
 			id = MOV_get_long(tdbb, &desc2, 0);
 			DFW_post_work(transaction, dfw_grant, &desc, id);
+			break;
+
+		case rel_rcon:
+			protect_system_table_delupd(tdbb, relation, "DELETE");
+
+			// ensure relation partners is known
+			EVL_field(0, rpb->rpb_record, f_rcon_rname, &desc);
+			{
+				MetaName relation_name;
+				MOV_get_metaname(tdbb, &desc, relation_name);
+				r2 = MET_lookup_relation(tdbb, relation_name);
+				fb_assert(r2);
+
+				if (r2)
+					MET_scan_partners(tdbb, r2);
+			}
 			break;
 
 		case rel_backup_history:
