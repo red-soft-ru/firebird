@@ -788,19 +788,21 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	for (const auto rseStream : rseStreams)
 		csb->csb_rpt[rseStream].deactivate();
 
-	// Find and collect booleans that are invariant in this context
-	// (i.e. independent from streams in the RseNode). We can do that
-	// easily because these streams are inactive at this point and
-	// any node that references them will be not computable.
+	// Find and collect booleans that are both deterministic and invariant
+	// in this context (i.e. independent from streams in the current RseNode).
+	// We can check that easily because these streams are inactive at this point
+	// and any node that references them will be not computable.
 	// Note that we cannot do that for outer joins, as in this case boolean
 	// represents a join condition which does not filter out the rows.
 
 	BoolExprNode* invariantBoolean = nullptr;
+
 	if (isInnerJoin())
 	{
 		for (auto iter = getConjuncts(); iter.hasData(); ++iter)
 		{
 			if (!(iter & CONJUNCT_USED) &&
+				iter->deterministic() &&
 				iter->computable(csb, INVALID_STREAM, false))
 			{
 				compose(getPool(), &invariantBoolean, iter);
