@@ -356,55 +356,79 @@ public:
 
 	static double getSelectivity(const BoolExprNode* node)
 	{
-		if (const auto listNode = nodeAs<InListBoolNode>(node))
+		auto factor = REDUCE_SELECTIVITY_FACTOR_OTHER;
+
+		if (const auto binaryNode = nodeAs<BinaryBoolNode>(node))
 		{
-			const auto selectivity = REDUCE_SELECTIVITY_FACTOR_EQUALITY *
-				listNode->list->items.getCount();
-			return MIN(selectivity, MAXIMUM_SELECTIVITY);
+			if (binaryNode->blrOp == blr_and)
+				factor = getSelectivity(binaryNode->arg1) * getSelectivity(binaryNode->arg2);
+			else if (binaryNode->blrOp == blr_or)
+				factor = getSelectivity(binaryNode->arg1) + getSelectivity(binaryNode->arg2);
+			else
+				fb_assert(false);
 		}
-
-		if (nodeIs<MissingBoolNode>(node))
-			return REDUCE_SELECTIVITY_FACTOR_EQUALITY;
-
-		if (const auto cmpNode = nodeAs<ComparativeBoolNode>(node))
+		else if (const auto listNode = nodeAs<InListBoolNode>(node))
+		{
+			factor = REDUCE_SELECTIVITY_FACTOR_EQUALITY * listNode->list->items.getCount();
+		}
+		else if (nodeIs<MissingBoolNode>(node))
+		{
+			factor = REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+		}
+		else if (const auto cmpNode = nodeAs<ComparativeBoolNode>(node))
 		{
 			switch (cmpNode->blrOp)
 			{
 			case blr_eql:
 			case blr_equiv:
-				return REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+				factor = REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+				break;
 
 			case blr_gtr:
 			case blr_geq:
-				return REDUCE_SELECTIVITY_FACTOR_GREATER;
+				factor = REDUCE_SELECTIVITY_FACTOR_GREATER;
+				break;
 
 			case blr_lss:
 			case blr_leq:
-				return REDUCE_SELECTIVITY_FACTOR_LESS;
+				factor = REDUCE_SELECTIVITY_FACTOR_LESS;
+				break;
 
 			case blr_between:
-				return REDUCE_SELECTIVITY_FACTOR_BETWEEN;
+				factor = REDUCE_SELECTIVITY_FACTOR_BETWEEN;
+				break;
 
 			case blr_starting:
-				return REDUCE_SELECTIVITY_FACTOR_STARTING;
+				factor = REDUCE_SELECTIVITY_FACTOR_STARTING;
+				break;
 
 			default:
 				break;
 			}
 		}
 
-		return REDUCE_SELECTIVITY_FACTOR_OTHER;
+		// dimitr:
+		//
+		// Adjust to values similar to those used when the index selectivity is missing.
+		// The final value will be in the range [0.1 .. 0.5] that also matches the v3/v4 logic.
+		// This estimation is quite pessimistic but it seems to work better in practice,
+		// especially when multiple unmatchable booleans are used.
+
+		const auto adjustment = DEFAULT_SELECTIVITY / REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+		const auto selectivity = factor * adjustment;
+
+		return MIN(selectivity, MAXIMUM_SELECTIVITY / 2);
 	}
 
 	static void adjustSelectivity(double& selectivity, double factor, double cardinality)
 	{
-		if (cardinality)
-		{
-			const auto minSelectivity = 1 / cardinality;
-			const auto diffSelectivity = selectivity > minSelectivity ?
-				selectivity - minSelectivity : 0;
-			selectivity = minSelectivity + diffSelectivity * factor;
-		}
+		if (!cardinality)
+			cardinality = DEFAULT_CARDINALITY;
+
+		const auto minSelectivity = MAXIMUM_SELECTIVITY / cardinality;
+		const auto diffSelectivity = selectivity > minSelectivity ?
+			selectivity - minSelectivity : 0;
+		selectivity = minSelectivity + diffSelectivity * factor;
 	}
 
 	static RecordSource* compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse)
