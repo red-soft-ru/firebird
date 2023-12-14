@@ -614,9 +614,9 @@ River* InnerJoin::formRiver()
 void InnerJoin::getIndexedRelationships(StreamInfo* testStream)
 {
 #ifdef OPT_DEBUG_RETRIEVAL
-	const auto name = optimizer->getStreamName(testStream->stream);
+	const auto name = optimizer->getStreamName(testStream->number);
 	optimizer->printf("Dependencies for stream %u (%s):\n",
-					  testStream->stream, name.c_str());
+					  testStream->number, name.c_str());
 #endif
 
 	const auto tail = &csb->csb_rpt[testStream->number];
