@@ -2,6 +2,9 @@
 
 ## Improvements
 
+* [#7918](https://github.com/FirebirdSQL/firebird/issues/7918): Allow to configure Firebird in posix using relative directories with options --with-fb*  
+  Contributor(s): Adriano dos Santos Fernandes
+
 * [#7854](https://github.com/FirebirdSQL/firebird/issues/7854): Performance issue with time zones  
   Contributor(s): Adriano dos Santos Fernandes, Vlad Khorsun
 
@@ -22,6 +25,15 @@
 
 ## Bugfixes
 
+* [#7917](https://github.com/FirebirdSQL/firebird/issues/7917): Hang in a case of error when the sweep thread is attaching the database  
+  Contributor(s): Alexander Peshkov
+
+* [#7905](https://github.com/FirebirdSQL/firebird/issues/7905): Segfault during TIP cache initialization  
+  Contributor(s): Alexander Peshkov
+
+* [#7904](https://github.com/FirebirdSQL/firebird/issues/7904): FB5 bad plan for query  
+  Contributor(s): Dmitry Yemanov
+
 * [#7903](https://github.com/FirebirdSQL/firebird/issues/7903): Unexpected Results when Using CASE-WHEN with LEFT JOIN  
   Contributor(s): Dmitry Yemanov
 
@@ -36,6 +48,9 @@
 
 * [#7860](https://github.com/FirebirdSQL/firebird/issues/7860): Crash potentially caused by BETWEEN Operator  
   Contributor(s): Vlad Khorsun
+
+* [#7853](https://github.com/FirebirdSQL/firebird/issues/7853): Do not consider non-deterministic expressions as invariants in pre-filters  
+  Contributor(s): Dmitry Yemanov
 
 * [#7851](https://github.com/FirebirdSQL/firebird/issues/7851): [FB1+, GBAK, Restore] The skip of att_functionarg_field_precision does not check RESTORE_format  
   Contributor(s): Dmitry Kovalenko
