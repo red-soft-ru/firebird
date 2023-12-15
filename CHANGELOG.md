@@ -5,6 +5,9 @@
 * [#7918](https://github.com/FirebirdSQL/firebird/issues/7918): Allow to configure Firebird in posix using relative directories with options --with-fb*  
   Contributor(s): Adriano dos Santos Fernandes
 
+* [#7910](https://github.com/FirebirdSQL/firebird/issues/7910): Add backward compatibility option that disables joins transformation  
+  Contributor(s): Dmitry Yemanov
+
 * [#7854](https://github.com/FirebirdSQL/firebird/issues/7854): Performance issue with time zones  
   Contributor(s): Adriano dos Santos Fernandes, Vlad Khorsun
 
