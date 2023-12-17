@@ -658,7 +658,7 @@ bool Retrieval::betterInversion(const InversionCandidate* inv1,
 
 	if (inv1->unique && !inv2->unique)
 	{
-		// A unique full equal match is better than anything else.
+		// A unique full equal match is better than anything else
 		return true;
 	}
 
@@ -688,7 +688,7 @@ bool Retrieval::betterInversion(const InversionCandidate* inv1,
 			if (!cost1 && !cost2)
 			{
 				// Two zero costs should be handled as being the same
-				// (other comparison criteria should be applied, see below).
+				// (other comparison criteria should be applied, see below)
 				diffCost = 1;
 			}
 			else if (cost1)
@@ -714,6 +714,15 @@ bool Retrieval::betterInversion(const InversionCandidate* inv1,
 						// For the same number of matched segments
 						// compare ones that aren't full matched
 						diff = (inv1->nonFullMatchedSegments - inv2->nonFullMatchedSegments);
+					}
+
+					if (diff == 0)
+					{
+						// For inversions with nearly the same cost but without other preferences found,
+						// return the actually cheaper inversion (based on cost only)
+
+						if (cost1 < cost2)
+							return true;
 					}
 				}
 
