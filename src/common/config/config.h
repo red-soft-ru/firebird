@@ -320,8 +320,14 @@ private:
 	static ConfigValue specialProcessing(ConfigKey key, ConfigValue val);
 
 	void loadValues(const ConfigFile& file, const char* srcName);
-	void setupDefaultConfig();
 	void checkValues();
+
+	// set default ServerMode and default values that didn't depends on ServerMode
+	void setupDefaultConfig();
+
+	// set default values that depends on ServerMode and actual values that was
+	// not set in config file
+	void fixDefaults();
 
 	// helper check-value functions
 	void checkIntForLoBound(ConfigKey key, SINT64 loBound, bool setDefault);
