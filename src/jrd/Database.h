@@ -313,6 +313,9 @@ class Database : public pool_alloc<type_dbb>
 			return m_replConfig.get();
 		}
 
+		bool incTempCacheUsage(FB_SIZE_T size);
+		void decTempCacheUsage(FB_SIZE_T size);
+
 	private:
 		const Firebird::string m_id;
 		const Firebird::RefPtr<const Firebird::Config> m_config;
@@ -321,12 +324,16 @@ class Database : public pool_alloc<type_dbb>
 		Firebird::AutoPtr<EventManager> m_eventMgr;
 		Firebird::AutoPtr<Replication::Manager> m_replMgr;
 		Firebird::Mutex m_mutex;
+		std::atomic<FB_UINT64> m_tempCacheUsage;		// total size of in-memory temp space chunks (see TempSpace class)
+		const FB_UINT64 m_tempCacheLimit;
 
 		explicit GlobalObjectHolder(const Firebird::string& id,
 									const Firebird::PathName& filename,
 									Firebird::RefPtr<const Firebird::Config> config)
 			: m_id(getPool(), id), m_config(config),
-			  m_replConfig(Replication::Config::get(filename))
+			  m_replConfig(Replication::Config::get(filename)),
+			  m_tempCacheUsage(0),
+			  m_tempCacheLimit(m_config->getTempCacheLimit())
 		{}
 	};
 
@@ -489,9 +496,6 @@ public:
 
 	Firebird::SyncObject			dbb_sortbuf_sync;
 	Firebird::Array<UCHAR*>			dbb_sort_buffers;	// sort buffers ready for reuse
-
-	Firebird::Mutex dbb_temp_cache_mutex;
-	FB_UINT64 dbb_temp_cache_size;		// total size of in-memory temp space chunks (see TempSpace class)
 
 	TraNumber dbb_oldest_active;		// Cached "oldest active" transaction
 	TraNumber dbb_oldest_transaction;	// Cached "oldest interesting" transaction
@@ -684,6 +688,16 @@ public:
 	const Replication::Config* replConfig()
 	{
 		return dbb_gblobj_holder->getReplConfig();
+	}
+
+	bool incTempCacheUsage(FB_SIZE_T size)
+	{
+		return dbb_gblobj_holder->incTempCacheUsage(size);
+	}
+
+	void decTempCacheUsage(FB_SIZE_T size)
+	{
+		dbb_gblobj_holder->decTempCacheUsage(size);
 	}
 
 private:
