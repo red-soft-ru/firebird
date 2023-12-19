@@ -74,14 +74,6 @@ if "%FB2_SNAPSHOT%"=="1" (
 @echo     o Checking for unix2dos...
 (cmd /c "unix2dos.exe --version 2>&1 > nul" ) || ( call :ERROR Could not locate unix2dos && @goto :EOF )
 
-@for /f "usebackq tokens=*" %%c in (`where /f touch 2^>nul`) do set TOUCH_COMMAND=%%c
-if defined TOUCH_COMMAND (
-  @%TOUCH_COMMAND% --version <nul >nul 2>nul
-  if not ERRORLEVEL 1 (
-    @echo     o POSIX touch utility found at %TOUCH_COMMAND%
-  ) else ( @set TOUCH_COMMAND= )
-)
-
 @for /f "usebackq tokens=*" %%c in (`where /f md5sum 2^>nul`) do set MD5_COMMAND=%%c
 if defined MD5_COMMAND (
   @echo     o POSIX md5sum utility found at %MD5_COMMAND%
@@ -496,34 +488,6 @@ endlocal
 @goto :EOF
 
 
-:TOUCH_ALL
-::========
-::Set file timestamp to something meaningful.
-::While building and testing this feature might be annoying, so we don't do it.
-::==========================================================
-setlocal
-
-if /I not "%FBBUILD_BUILDTYPE%"=="release" goto :EOF
-if not defined TOUCH_COMMAND echo   POSIX touch utility not found && exit /b 1
-
-set TIMESTRING=0%FB_MAJOR_VER%:0%FB_MINOR_VER%:0%FB_REV_NO%
-
-:: Perhaps here we should touch directories as well
-:: Here and there XXX_COMMAND is "call"-ed in case if it is a batch file
-
-@echo   Touching release build files with %TIMESTRING% timestamp
-
-@for /R %FB_OUTPUT_DIR% %%F in ( * ) do (
-  call %TOUCH_COMMAND% -c -d %TIMESTRING% %%F || exit /b 1
-)
-
-endlocal
-
-::End of TOUCH_ALL
-::----------------
-@goto :EOF
-
-
 :ISX_PACK
 ::=======
 :: Now let's go and build the installable .exe
@@ -714,13 +678,6 @@ if defined WIX (
 
 @echo   Fix up line endings...
 @(@call :SET_CRLF ) || (@echo Error calling SET_CRLF && @goto :EOF)
-@echo.
-
-::@echo Creating .local files for libraries
-::@(@call :TOUCH_LOCAL ) || (@echo Error calling TOUCH_LOCAL & @goto :END)
-::@echo.
-
-@(@call :TOUCH_ALL ) || (@echo Error calling TOUCH_ALL && @goto :END)
 @echo.
 
 if %FBBUILD_ZIP_PACK% EQU 1 (
