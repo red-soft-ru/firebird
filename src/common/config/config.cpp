@@ -152,7 +152,7 @@ Config::Config(const ConfigFile& file)
 	: valuesSource(*getDefaultMemoryPool()),
 	notifyDatabase(*getDefaultMemoryPool()),
 	serverMode(-1),
-	defaultConfig(false)
+	defaultConfig(true)
 {
 	memset(sourceIdx, 0, sizeof(sourceIdx));
 	valuesSource.add(NULL);
@@ -180,6 +180,7 @@ Config::Config(const ConfigFile& file)
 	}
 
 	loadValues(file, CONFIG_FILE);
+	fixDefaults();
 }
 
 Config::Config(const ConfigFile& file, const char* srcName, const Config& base, const PathName& notify)
@@ -294,7 +295,7 @@ static const char* txtServerModes[6] =
 
 void Config::setupDefaultConfig()
 {
-	defaultConfig = true;
+	fb_assert(defaultConfig);
 
 	for (unsigned i = 0; i < MAX_CONFIG_KEY; i++)
 		defaults[i] = entries[i].default_value;
@@ -305,26 +306,45 @@ void Config::setupDefaultConfig()
 	serverMode = bootBuild ? MODE_CLASSIC : MODE_SUPER;
 	pDefault->strVal = txtServerModes[2 * serverMode];
 
-	pDefault = &defaults[KEY_TEMP_CACHE_LIMIT];
-	if (pDefault->intVal < 0)
-		pDefault->intVal = (serverMode != MODE_SUPER) ? 8388608 : 67108864;	// bytes
-
 	defaults[KEY_REMOTE_FILE_OPEN_ABILITY].boolVal = bootBuild;
-
-	pDefault = &defaults[KEY_DEFAULT_DB_CACHE_PAGES];
-	if (pDefault->intVal < 0)
-		pDefault->intVal = (serverMode != MODE_SUPER) ? 256 : 2048;	// pages
-
-	pDefault = &defaults[KEY_GC_POLICY];
-	if (!pDefault->strVal)
-	{
-		pDefault->strVal = (serverMode == MODE_SUPER) ? GCPolicyCombined : GCPolicyCooperative;
-	}
 
 	//pDefault = &entries[KEY_WIRE_CRYPT].default_value;
 //	if (!*pDefault)
 //		*pDefault == (ConfigValue) (xxx == WC_CLIENT) ? WIRE_CRYPT_ENABLED : WIRE_CRYPT_REQUIRED;
 
+}
+
+void Config::fixDefaults()
+{
+	fb_assert(defaultConfig);
+
+	ConfigValue* pDefault = &defaults[KEY_TEMP_CACHE_LIMIT];
+	ConfigValue* pValue = &values[KEY_TEMP_CACHE_LIMIT];
+	if (pDefault->intVal < 0)
+		pDefault->intVal = (serverMode != MODE_SUPER) ? 8388608 : 67108864;	// bytes
+
+	if (pValue->intVal < 0)
+		pValue->intVal = pDefault->intVal;
+
+
+	pDefault = &defaults[KEY_DEFAULT_DB_CACHE_PAGES];
+	pValue = &values[KEY_DEFAULT_DB_CACHE_PAGES];
+	if (pDefault->intVal < 0)
+		pDefault->intVal = (serverMode != MODE_SUPER) ? 256 : 2048;	// pages
+
+	if (pValue->intVal < 0)
+		pValue->intVal = pDefault->intVal;
+
+
+	pDefault = &defaults[KEY_GC_POLICY];
+	pValue = &values[KEY_GC_POLICY];
+	if (!pDefault->strVal)
+	{
+		pDefault->strVal = (serverMode == MODE_SUPER) ? GCPolicyCombined : GCPolicyCooperative;
+	}
+
+	if (!pValue->strVal)
+		pValue->strVal = pDefault->strVal;
 }
 
 void Config::checkIntForLoBound(ConfigKey key, SINT64 loBound, bool setDefault)
