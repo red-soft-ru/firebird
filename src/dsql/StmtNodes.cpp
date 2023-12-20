@@ -4950,6 +4950,7 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		statement->setType(DsqlStatement::TYPE_EXEC_BLOCK);
 
 	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_BLOCK;
+	dsqlScratch->reserveInitialVarNumbers(parameters.getCount() + returns.getCount());
 
 	ExecBlockNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ExecBlockNode(dsqlScratch->getPool());
 
@@ -6128,7 +6129,6 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	// Sub routine doesn't need ports and should generate BLR as declared in its metadata.
 	const bool isSubRoutine = dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE;
 	const auto& variables = isSubRoutine ? dsqlScratch->outputVariables : dsqlScratch->variables;
-	USHORT locals = variables.getCount();
 
 	Array<dsql_var*> declaredVariables;
 
@@ -6160,7 +6160,7 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			}
 
 			const auto variable = dsqlScratch->makeVariable(field, field->fld_name.c_str(),
-				dsql_var::TYPE_LOCAL, 0, 0, locals);
+				dsql_var::TYPE_LOCAL, 0, 0);
 			declaredVariables.add(variable);
 
 			dsqlScratch->putLocalVariableDecl(variable, varNode, varNode->dsqlDef->type->collate);
@@ -6168,8 +6168,6 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			// Some field attributes are calculated inside putLocalVariable(), so we reinitialize
 			// the descriptor.
 			DsqlDescMaker::fromField(&variable->desc, field);
-
-			++locals;
 		}
 		else if (nodeIs<DeclareCursorNode>(parameter) ||
 			nodeIs<DeclareSubProcNode>(parameter) ||
@@ -10982,8 +10980,7 @@ static VariableNode* dsqlPassHiddenVariable(DsqlCompilerScratch* dsqlScratch, Va
 	}
 
 	VariableNode* varNode = FB_NEW_POOL(*tdbb->getDefaultPool()) VariableNode(*tdbb->getDefaultPool());
-	varNode->dsqlVar = dsqlScratch->makeVariable(NULL, "", dsql_var::TYPE_HIDDEN,
-		0, 0, dsqlScratch->hiddenVarsNumber++);
+	varNode->dsqlVar = dsqlScratch->makeVariable(nullptr, "", dsql_var::TYPE_HIDDEN, 0, 0);
 
 	DsqlDescMaker::fromNode(dsqlScratch, &varNode->dsqlVar->desc, expr);
 	varNode->setDsqlDesc(varNode->dsqlVar->desc);

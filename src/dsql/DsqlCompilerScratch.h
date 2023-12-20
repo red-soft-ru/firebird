@@ -30,6 +30,7 @@
 #include "../jrd/MetaName.h"
 #include "../common/classes/stack.h"
 #include "../common/classes/alloc.h"
+#include <optional>
 
 namespace Jrd
 {
@@ -164,7 +165,7 @@ public:
 
 	void putOuterMaps();
 	dsql_var* makeVariable(dsql_fld*, const char*, const dsql_var::Type type, USHORT,
-		USHORT, USHORT);
+		USHORT, std::optional<USHORT> = std::nullopt);
 	dsql_var* resolveVariable(const MetaName& varName);
 	void genReturn(bool eosFlag = false);
 
@@ -178,8 +179,7 @@ public:
 		context->clear();
 		contextNumber = 0;
 		derivedContextNumber = 0;
-
-		hiddenVarsNumber = 0;
+		nextVarNumber = 0;
 		hiddenVariables.clear();
 	}
 
@@ -232,6 +232,17 @@ public:
 
 			curr = *(currCteAlias);
 		}
+	}
+
+	USHORT reserveVarNumber()
+	{
+		return nextVarNumber++;
+	}
+
+	void reserveInitialVarNumbers(USHORT count)
+	{
+		fb_assert(nextVarNumber == 0);
+		nextVarNumber = count;
 	}
 
 	bool isPsql() const { return psql; }
@@ -298,7 +309,6 @@ public:
 	bool processingWindow = false;			// processing window functions
 	bool checkConstraintTrigger = false;	// compiling a check constraint trigger
 	dsc domainValue;						// VALUE in the context of domain's check constraint
-	USHORT hiddenVarsNumber = 0;			// next hidden variable number
 	Firebird::Array<dsql_var*> hiddenVariables;	// hidden variables
 	Firebird::Array<dsql_var*> variables;
 	Firebird::Array<dsql_var*> outputVariables;
@@ -311,6 +321,7 @@ public:
 private:
 	Firebird::HalfStaticArray<SelectExprNode*, 4> ctes; // common table expressions
 	Firebird::HalfStaticArray<const Firebird::string*, 4> cteAliases; // CTE aliases in recursive members
+	USHORT nextVarNumber = 0;				// Next available variable number
 	bool psql = false;
 	Firebird::LeftPooledMap<MetaName, DeclareSubFuncNode*> subFunctions;
 	Firebird::LeftPooledMap<MetaName, DeclareSubProcNode*> subProcedures;

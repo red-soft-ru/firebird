@@ -1661,6 +1661,7 @@ string CreateAlterFunctionNode::internalPrint(NodePrinter& printer) const
 DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->flags |= (DsqlCompilerScratch::FLAG_BLOCK | DsqlCompilerScratch::FLAG_FUNCTION);
+	dsqlScratch->reserveInitialVarNumbers(1);
 
 	LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, &parameters, nullptr);
 
@@ -2677,6 +2678,7 @@ string CreateAlterProcedureNode::internalPrint(NodePrinter& printer) const
 DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->flags |= (DsqlCompilerScratch::FLAG_BLOCK | DsqlCompilerScratch::FLAG_PROCEDURE);
+	dsqlScratch->reserveInitialVarNumbers(returns.getCount());
 
 	LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, &parameters, &returns);
 

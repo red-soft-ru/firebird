@@ -13991,7 +13991,7 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			else
 			{
 				if (!dsqlScratch->outerVarsMap.exist(node->dsqlVar->number))
-					dsqlScratch->outerVarsMap.put(node->dsqlVar->number, dsqlScratch->hiddenVarsNumber++);
+					dsqlScratch->outerVarsMap.put(node->dsqlVar->number, dsqlScratch->reserveVarNumber());
 			}
 		}
 	}
