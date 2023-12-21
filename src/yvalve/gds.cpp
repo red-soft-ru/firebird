@@ -1294,12 +1294,6 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 		// This will release file lock set in posix case
 		fclose(file);
 	}
-
-#ifdef ANDROID
-	va_start(ptr, text);
-	__android_log_vprint(ANDROID_LOG_INFO, "FIREBIRD", text, ptr);
-	va_end(ptr);
-#endif
 }
 
 #ifdef NOT_USED_OR_REPLACED
