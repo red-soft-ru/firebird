@@ -37,7 +37,7 @@ jobs:
         run: |
           export FBQA_INSTALLER=$(echo ./firebird-installer/*.tar.gz)
           export FBQA_OUT=out
-          ./firebird-qa/run-docker.sh
+          ./firebird-qa/run-docker.sh --timeout 250 ./tests/ | tee out/out.txt
 
       - name: Update summary
         if: always()
