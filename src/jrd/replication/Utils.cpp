@@ -142,9 +142,9 @@ namespace
 				(WaitForSingleObject(m_mutex, INFINITE) == WAIT_OBJECT_0);
 #else
 #ifdef HAVE_FLOCK
-				flock(fileno(file), LOCK_EX);
+				flock(fileno(file), LOCK_EX) == 0;
 #else
-				os_utils::lockf(fileno(file), F_LOCK, 0);
+				os_utils::lockf(fileno(file), F_LOCK, 0) == 0;
 #endif
 #endif
 
