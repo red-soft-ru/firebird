@@ -6235,11 +6235,21 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 // triggers and the RI enforcement for dropping foreign key column is
 // done by code and system triggers. See the functional description of
 // deleteKeyConstraint function for detail.
-void RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
-	const MetaName& relationName, const MetaName& fieldName, bool silent)
+bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
+	const MetaName& relationName, const MetaName& fieldName, bool silent, std::function<void()> preChangeHandler)
 {
+	bool preChangeHandlerWasExecuted = false;
+
+	const auto executePreChangeHandler = [&]()
+	{
+		if (!preChangeHandlerWasExecuted)
+		{
+			preChangeHandlerWasExecuted = true;
+			preChangeHandler();
+		}
+	};
+
 	AutoCacheRequest request(tdbb, drq_l_dep_flds, DYN_REQUESTS);
-	bool found = false;
 
 	// Make sure that column is not referenced in any views.
 
@@ -6255,6 +6265,8 @@ void RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 			 X.RDB$RELATION_NAME EQ Z.RDB$RELATION_NAME AND
 			 Y.RDB$VIEW_CONTEXT EQ Z.RDB$VIEW_CONTEXT
 	{
+		executePreChangeHandler();
+
 		// msg 52: "field %s from relation %s is referenced in view %s"
 		status_exception::raise(
 			Arg::PrivateDyn(52) << fieldName << relationName << Y.RDB$RELATION_NAME);
@@ -6279,6 +6291,8 @@ void RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 			 IDX.RDB$INDEX_NAME EQ REL_CONST.RDB$INDEX_NAME AND
 			 REL_CONST.RDB$CONSTRAINT_TYPE EQ FOREIGN_KEY
 	{
+		executePreChangeHandler();
+
 		if (IDX.RDB$SEGMENT_COUNT == 1)
 		{
 			deleteKeyConstraint(tdbb, transaction, relationName,
@@ -6311,6 +6325,8 @@ void RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 				WITH REL_CONST.RDB$RELATION_NAME EQ IDX.RDB$RELATION_NAME AND
 					 REL_CONST.RDB$INDEX_NAME EQ IDX.RDB$INDEX_NAME
 	{
+		executePreChangeHandler();
+
 		// msg 187: "field %s from relation %s is referenced in index %s"
 		status_exception::raise(
 			Arg::PrivateDyn(187) <<
@@ -6323,12 +6339,15 @@ void RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 
 	request.reset(tdbb, drq_e_lfield, DYN_REQUESTS);
 
-	found = false;
+	bool found = false;
+
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		RFR IN RDB$RELATION_FIELDS
 		WITH RFR.RDB$FIELD_NAME EQ fieldName.c_str() AND
 			 RFR.RDB$RELATION_NAME EQ relationName.c_str()
 	{
+		executePreChangeHandler();
+
 		if (!RFR.RDB$GENERATOR_NAME.NULL)
 			DropSequenceNode::deleteIdentity(tdbb, transaction, RFR.RDB$GENERATOR_NAME);
 
@@ -6354,6 +6373,8 @@ void RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		     PRIV.RDB$OBJECT_TYPE = obj_relation AND
 		     PRIV.RDB$GRANTOR NOT MISSING
 	{
+		executePreChangeHandler();
+
 		ERASE PRIV;
 	}
 	END_FOR
@@ -6363,6 +6384,8 @@ void RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		// msg 176: "column %s does not exist in table/view %s"
 		status_exception::raise(Arg::PrivateDyn(176) << fieldName << relationName);
 	}
+
+	return found;
 }
 
 void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -7640,15 +7663,23 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			Arg::Gds(isc_random) << linecol***/);
 	}
 
+	bool beforeTriggerWasExecuted = false;
+
+	const auto executeBeforeTrigger = [&]()
+	{
+		if (!beforeTriggerWasExecuted)
+		{
+			beforeTriggerWasExecuted = true;
+			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_TABLE, name, nullptr);
+		}
+	};
+
 	// If there is an error, get rid of the cached data.
 
 	try
 	{
 		// run all statements under savepoint control
 		AutoSavePoint savePoint(tdbb, transaction);
-
-		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_TABLE,
-			name, NULL);
 
 		ObjectsArray<CreateDropConstraint> constraints;
 
@@ -7657,17 +7688,20 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			switch ((*i)->type)
 			{
 				case Clause::TYPE_ADD_COLUMN:
+					executeBeforeTrigger();
 					defineField(tdbb, dsqlScratch, transaction,
 						static_cast<AddColumnClause*>(i->getObject()), -1, NULL);
 					break;
 
 				case Clause::TYPE_ALTER_COL_TYPE:
-					modifyField(tdbb, dsqlScratch, transaction,
-						static_cast<AlterColTypeClause*>(i->getObject()));
+					executeBeforeTrigger();
+					modifyField(tdbb, dsqlScratch, transaction, static_cast<AlterColTypeClause*>(i->getObject()));
 					break;
 
 				case Clause::TYPE_ALTER_COL_NAME:
 				{
+					executeBeforeTrigger();
+
 					const AlterColNameClause* clause =
 						static_cast<const AlterColNameClause*>(i->getObject());
 					AutoRequest request;
@@ -7728,6 +7762,8 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 				case Clause::TYPE_ALTER_COL_NULL:
 				{
+					executeBeforeTrigger();
+
 					const AlterColNullClause* clause =
 						static_cast<const AlterColNullClause*>(i->getObject());
 
@@ -7797,6 +7833,8 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 				case Clause::TYPE_ALTER_COL_POS:
 				{
+					executeBeforeTrigger();
+
 					const AlterColPosClause* clause =
 						static_cast<const AlterColPosClause*>(i->getObject());
 					// CVC: Since now the parser accepts pos=1..N, let's subtract one here.
@@ -7828,11 +7866,12 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 							Arg::Gds(isc_dsql_construct_err));
 					}
 
-					deleteLocalField(tdbb, transaction, name, clause->name, clause->silent);
+					deleteLocalField(tdbb, transaction, name, clause->name, clause->silent, executeBeforeTrigger);
 					break;
 				}
 
 				case Clause::TYPE_ADD_CONSTRAINT:
+					executeBeforeTrigger();
 					makeConstraint(tdbb, dsqlScratch, transaction,
 						static_cast<AddConstraintClause*>(i->getObject()), constraints);
 					break;
@@ -7847,6 +7886,8 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 				case Clause::TYPE_ALTER_SQL_SECURITY:
 				{
+					executeBeforeTrigger();
+
 					AutoRequest request;
 
 					FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -7873,6 +7914,8 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 				case Clause::TYPE_ALTER_PUBLICATION:
 				{
 					fb_assert(replicationState.isAssigned());
+
+					executeBeforeTrigger();
 
 					if (replicationState.asBool())
 					{
@@ -7929,9 +7972,13 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						 RC.RDB$RELATION_NAME EQ name.c_str()
 				{
 					found = true;
+					executeBeforeTrigger();
 					ERASE RC;
 				}
 				END_FOR
+
+				if (!constraint->silent && !found)
+					executeBeforeTrigger();
 
 				if (!found && !constraint->silent)
 				{
@@ -7941,8 +7988,8 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			}
 		}
 
-		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_TABLE,
-			name, NULL);
+		if (beforeTriggerWasExecuted)
+			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_TABLE, name, nullptr);
 
 		savePoint.release();	// everything is ok
 

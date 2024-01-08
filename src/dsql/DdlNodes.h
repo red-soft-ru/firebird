@@ -23,6 +23,7 @@
 #ifndef DSQL_DDL_NODES_H
 #define DSQL_DDL_NODES_H
 
+#include <functional>
 #include <optional>
 #include "firebird/impl/blr.h"
 #include "../jrd/dyn.h"
@@ -1510,8 +1511,9 @@ public:
 
 	RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode);
 
-	static void deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& relationName, const MetaName& fieldName, bool silent);
+	static bool deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
+		const MetaName& relationName, const MetaName& fieldName, bool silent,
+		std::function<void()> preChangeHandler = {});
 
 	static void addToPublication(thread_db* tdbb, jrd_tra* transaction,
 		const MetaName& tableName, const MetaName& pubTame);

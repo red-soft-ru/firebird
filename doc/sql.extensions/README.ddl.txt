@@ -636,7 +636,15 @@ DDL enhancements in Firebird v6.
 
 1) DROP [IF EXISTS]
 
-Using subclause IF EXISTS, it's now possible to try to drop objects and do not get errors when they di not exists.
+Using subclause IF EXISTS, it's now possible to try to drop objects and do not get errors when they did not exist.
+
+For ALTER TABLE ... DROP subclause, DDL triggers are not fired if there are only DROP IF EXISTS subclauses and all
+of them are related to non existing columns or constraints.
+
+For others commands where IF EXISTS is part of the main command, DDL triggers are not fired when the object
+did not exist.
+
+The following statements are supported:
 
 DROP EXCEPTION [IF EXISTS] <exception>
 DROP INDEX [IF EXISTS] <index>
