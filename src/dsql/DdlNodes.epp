@@ -10694,6 +10694,8 @@ void MappingNode::runInSecurityDb(SecDbContext* secDbContext)
 		break;
 	case MAP_DROP:
 		ddl = "DROP MAPPING ";
+		if (silentDrop)
+			ddl += "IF EXISTS ";
 		break;
 	case MAP_RPL:
 		ddl = "CREATE OR ALTER MAPPING ";
