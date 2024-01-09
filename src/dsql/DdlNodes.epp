@@ -90,7 +90,7 @@ static bool isItSqlRole(thread_db* tdbb, jrd_tra* transaction, const MetaName& i
 static int getGrantorOption(thread_db* tdbb, jrd_tra* transaction, const MetaName& grantor,
 	int grantorType, const MetaName& roleName);
 static MetaName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
-	const MetaName& indexName, bool& systemIndex);
+	const MetaName& indexName, bool& systemIndex, bool silent = false);
 static const char* getRelationScopeName(const rel_t type);
 static void makeRelationScopeName(string& to, const MetaName& name, const rel_t type);
 static void checkRelationType(const rel_t type, const MetaName& name);
@@ -576,7 +576,7 @@ static void makeRelationScopeName(string& to, const MetaName& name, const rel_t 
 
 // Get relation name of an index.
 static MetaName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
-	const MetaName& indexName, bool& systemIndex)
+	const MetaName& indexName, bool& systemIndex, bool silent)
 {
 	systemIndex = false;
 
@@ -591,9 +591,13 @@ static MetaName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
 	}
 	END_FOR
 
-	// msg 48: "Index not found"
-	status_exception::raise(Arg::PrivateDyn(48));
-	return "";	// silence warning
+	if (!silent)
+	{
+		// msg 48: "Index not found"
+		status_exception::raise(Arg::PrivateDyn(48));
+	}
+
+	return {};
 }
 
 // Get relation name of an trigger.
@@ -10161,12 +10165,15 @@ string DropIndexNode::internalPrint(NodePrinter& printer) const
 void DropIndexNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
 	bool systemIndex;
-	MetaName relationName = getIndexRelationName(tdbb, transaction, name, systemIndex);
+	MetaName relationName = getIndexRelationName(tdbb, transaction, name, systemIndex, silent);
 
-	dsc dscName;
-	dscName.makeText(relationName.length(), CS_METADATA, (UCHAR*) relationName.c_str());
+	if (relationName.hasData())
+	{
+		dsc dscName;
+		dscName.makeText(relationName.length(), CS_METADATA, (UCHAR*) relationName.c_str());
 
-	SCL_check_relation(tdbb, &dscName, SCL_alter, systemIndex);
+		SCL_check_relation(tdbb, &dscName, SCL_alter, systemIndex);
+	}
 }
 
 void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
