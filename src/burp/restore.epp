@@ -156,7 +156,7 @@ bool	get_sql_roles(BurpGlobals* tdgbl);
 bool	get_mapping(BurpGlobals* tdgbl);
 bool	get_db_creator(BurpGlobals* tdgbl);
 bool	get_security_class(BurpGlobals* tdgbl);
-void	get_source_blob(BurpGlobals* tdgbl, ISC_QUAD&, bool, void (*postProcess) (BlobBuffer& segment) = nullptr);
+void	get_source_blob(BurpGlobals* tdgbl, ISC_QUAD&, bool);
 USHORT	get_text(BurpGlobals* tdgbl, TEXT*, ULONG);
 USHORT	get_text2(BurpGlobals* tdgbl, TEXT* text, ULONG length);
 bool	get_trigger(BurpGlobals* tdgbl);
@@ -2719,11 +2719,6 @@ bool get_chk_constraint(BurpGlobals* tdgbl)
 	END_ERROR;
 
 	return true;
-}
-
-void clearAttributes(BlobBuffer& attr)
-{
-	
 }
 
 bool get_collation(BurpGlobals* tdgbl)
@@ -8836,7 +8831,7 @@ bool get_security_class(BurpGlobals* tdgbl)
 	return true;
 }
 
-void get_source_blob(BurpGlobals* tdgbl, ISC_QUAD& blob_id, bool glb_trans, void (*postProcess) (BlobBuffer& segment))
+void get_source_blob(BurpGlobals* tdgbl, ISC_QUAD& blob_id, bool glb_trans)
 {
 /**************************************
  *
@@ -8900,7 +8895,7 @@ void get_source_blob(BurpGlobals* tdgbl, ISC_QUAD& blob_id, bool glb_trans, void
 
 	// Allocate blob buffer if static buffer is too short
 	BlobBuffer static_buffer;
-	UCHAR* buffer = static_buffer.getBuffer(length);
+	UCHAR* const buffer = static_buffer.getBuffer(length);
 
 	while (length > 0)
 	{
@@ -8910,12 +8905,6 @@ void get_source_blob(BurpGlobals* tdgbl, ISC_QUAD& blob_id, bool glb_trans, void
 		--p;
 		--length; // -- or ++ ??? p is decremented, will have to test.
 		const USHORT seg_len = p - buffer;
-
-		if (postProcess)
-		{
-			postProcess(static_buffer);
-			buffer = static_buffer.begin();
-		}
 
 		if (!blob.putSegment(seg_len, buffer))
 		{
