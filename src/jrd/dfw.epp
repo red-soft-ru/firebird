@@ -4044,7 +4044,7 @@ static string remove_icu_info_from_attributes(const string& charsetName, const s
 	{
 		DbgRebuildIntl::out("Remove_icu_info_from_attributes for charset '%s'\n", charsetName.c_str());
 
-		AutoPtr<Jrd::CharSet> charSet(Jrd::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs));
+		AutoPtr<Firebird::CharSet> charSet(Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs));
 		IntlUtil::SpecificAttributesMap map;
 		if (IntlUtil::parseSpecificAttributes(charSet, specificAttributes.length(),
 			(const UCHAR*) specificAttributes.begin(), &map))

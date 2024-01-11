@@ -284,7 +284,7 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 
 }
 
-namespace Jrd {
+namespace Firebird {
 
 // encapsulate ICU collations libraries
 struct UnicodeUtil::ICU : public BaseICU
@@ -519,7 +519,7 @@ static void getVersions(const string& configInfo, ObjectsArray<string>& versions
 	charset cs;
 	IntlUtil::initAsciiCharset(&cs);
 
-	AutoPtr<CharSet> ascii(Jrd::CharSet::createInstance(*getDefaultMemoryPool(), 0, &cs));
+	AutoPtr<CharSet> ascii(Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, &cs));
 
 	IntlUtil::SpecificAttributesMap config;
 	IntlUtil::parseSpecificAttributes(ascii, configInfo.length(),
@@ -2111,4 +2111,4 @@ void UnicodeUtil::Utf16Collation::normalize(ULONG* strLen, const USHORT** str, b
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird

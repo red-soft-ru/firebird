@@ -99,6 +99,10 @@ namespace EDS {
 	class Connection;
 }
 
+namespace Firebird {
+	class TextType;
+}
+
 namespace Jrd {
 
 const unsigned MAX_CALLBACKS	= 50;
@@ -121,7 +125,6 @@ class IndexLock;
 class ArrayField;
 struct sort_context;
 class vcl;
-class TextType;
 class Parameter;
 class jrd_fld;
 class dsql_dbb;

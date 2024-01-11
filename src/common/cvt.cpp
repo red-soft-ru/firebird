@@ -2932,7 +2932,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				if (to->dsc_dtype == dtype_varying)
 					ptr += sizeof(USHORT);
 
-				Jrd::CharSet* charSet = cb->getToCharset(to->getCharSet());
+				CharSet* charSet = cb->getToCharset(to->getCharSet());
 				UCHAR maxBytesPerChar = charSet ? charSet->maxBytesPerChar() : 1;
 
 				if (len / maxBytesPerChar < from->dsc_length)
@@ -3009,7 +3009,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				} // end scope
 
 				const USHORT to_size = TEXT_LEN(to);
-				Jrd::CharSet* toCharset = cb->getToCharset(charset2);
+				CharSet* toCharset = cb->getToCharset(charset2);
 
 				cb->validateData(toCharset, length, q);
 				ULONG toLength = cb->validateLength(toCharset, charset2, length, q, to_size);
@@ -4801,9 +4801,9 @@ namespace
 	public:
 		virtual bool transliterate(const dsc* from, dsc* to, CHARSET_ID&);
 		virtual CHARSET_ID getChid(const dsc* d);
-		virtual Jrd::CharSet* getToCharset(CHARSET_ID charset2);
-		virtual void validateData(Jrd::CharSet* toCharset, SLONG length, const UCHAR* q);
-		virtual ULONG validateLength(Jrd::CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+		virtual CharSet* getToCharset(CHARSET_ID charset2);
+		virtual void validateData(CharSet* toCharset, SLONG length, const UCHAR* q);
+		virtual ULONG validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
 			const USHORT size);
 		virtual SLONG getLocalDate();
 		virtual ISC_TIMESTAMP getCurrentGmtTimeStamp();
@@ -4817,16 +4817,16 @@ namespace
 		return false;
 	}
 
-	Jrd::CharSet* CommonCallbacks::getToCharset(CHARSET_ID)
+	CharSet* CommonCallbacks::getToCharset(CHARSET_ID)
 	{
 		return NULL;
 	}
 
-	void CommonCallbacks::validateData(Jrd::CharSet*, SLONG, const UCHAR*)
+	void CommonCallbacks::validateData(CharSet*, SLONG, const UCHAR*)
 	{
 	}
 
-	ULONG CommonCallbacks::validateLength(Jrd::CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+	ULONG CommonCallbacks::validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
 		const USHORT size)
 	{
 		if (length > size)

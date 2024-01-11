@@ -166,7 +166,7 @@ public:
 
 			if (newCached)
 			{
-				auto& icuLib = Jrd::UnicodeUtil::getConversionICU();
+				auto& icuLib = UnicodeUtil::getConversionICU();
 				icuLib.ucalClose(newCached);
 			}
 		}
@@ -212,7 +212,7 @@ public:
 
 private:
 	const USHORT id;
-	Jrd::UnicodeUtil::ConversionICU& icuLib;
+	UnicodeUtil::ConversionICU& icuLib;
 	SINT64 startTicks;
 	SINT64 toTicks;
 	IcuCalendarWrapper icuCalendar;

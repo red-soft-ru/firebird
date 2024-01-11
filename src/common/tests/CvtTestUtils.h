@@ -93,9 +93,9 @@ public:
 public:
 	bool transliterate(const dsc* from, dsc* to, CHARSET_ID&) override { return true; }
 	CHARSET_ID getChid(const dsc* d) override { return 0; }
-	Jrd::CharSet* getToCharset(CHARSET_ID charset2) override { return nullptr; }
-	void validateData(Jrd::CharSet* toCharset, SLONG length, const UCHAR* q) override { }
-	ULONG validateLength(Jrd::CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+	Firebird::CharSet* getToCharset(CHARSET_ID charset2) override { return nullptr; }
+	void validateData(Firebird::CharSet* toCharset, SLONG length, const UCHAR* q) override { }
+	ULONG validateLength(Firebird::CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
 		const USHORT size) override { return 0; }
 	SLONG getLocalDate() override { return 0; }
 	ISC_TIMESTAMP getCurrentGmtTimeStamp() override { ISC_TIMESTAMP ts; return ts; }

@@ -39,14 +39,14 @@
 #include "gen/parse.h"
 
 namespace Firebird {
+class CharSet;
+
 namespace Arg {
 	class StatusVector;
 } // namespace
 } // namespace
 
 namespace Jrd {
-
-class CharSet;
 
 class Parser : public Firebird::PermanentStorage
 {
@@ -371,9 +371,9 @@ private:
 	USHORT db_dialect;
 	const bool requireSemicolon;
 	USHORT parser_version;
-	CharSet* charSet;
+	Firebird::CharSet* charSet;
 
-	CharSet* metadataCharSet;
+	Firebird::CharSet* metadataCharSet;
 	Firebird::string transformedString;
 	Firebird::GenericMap<Firebird::NonPooled<IntlString*, StrMark> > strMarks;
 	bool stmt_ambiguous;
