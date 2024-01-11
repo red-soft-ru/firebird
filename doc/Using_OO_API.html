@@ -2308,7 +2308,7 @@ interface – main interface from which start all operations with
 firebird API.</font></p>
 <ol>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IStatus*
-	getStatus() - get instance if <a href="#Status">Status</a>
+	getStatus() - get instance of <a href="#Status">Status</a>
 	interface.</font></p>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IProvider*
 	getDispatcher() - get instance of <a href="#Provider">Provider</a>
@@ -3615,6 +3615,20 @@ plugin or key holder plugin.</font></p>
 	is passed in both directions. The source of a key receives
 	dataLength bytes of data and may send up to bufferLength bytes into
 	buffer returning actual number of bytes placed into buffer.</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">
+	void dispose() - invoked when interface is not needed any more. Helps
+	to avoid memory leaks in statefull inrefaces.
+	</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">
+	unsigned afterAttach(StatusType* status, const char* dbName, const IStatus* attStatus) -
+	invoked after attach on client system. NULL in attStatus means attach was successful
+	but afterAttach() is anyway invoked in order to let plugin perform required cleanup.
+	The following values may be returned by this function:
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">NO_RETRY -
+	do not repeat attempts to attach to database.</font></p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">DO_RETRY -
+	retry attach (ignored when function was called without attStatus).</font></p>
+	</font></p>
 </ol>
 <p style="margin-bottom: 0cm"><br/>
 
