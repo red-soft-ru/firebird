@@ -3891,7 +3891,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_ICRYPT_KEY_CALLBACK_VERSION 2u
+#define FIREBIRD_ICRYPT_KEY_CALLBACK_VERSION 3u
 
 	class ICryptKeyCallback : public IVersioned
 	{
@@ -3899,6 +3899,8 @@ namespace Firebird
 		struct VTable : public IVersioned::VTable
 		{
 			unsigned (CLOOP_CARG *callback)(ICryptKeyCallback* self, unsigned dataLength, const void* data, unsigned bufferLength, void* buffer) CLOOP_NOEXCEPT;
+			unsigned (CLOOP_CARG *afterAttach)(ICryptKeyCallback* self, IStatus* status, const char* dbName, const IStatus* attStatus) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *dispose)(ICryptKeyCallback* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -3914,10 +3916,36 @@ namespace Firebird
 	public:
 		static CLOOP_CONSTEXPR unsigned VERSION = FIREBIRD_ICRYPT_KEY_CALLBACK_VERSION;
 
+		static CLOOP_CONSTEXPR unsigned NO_RETRY = 0;
+		static CLOOP_CONSTEXPR unsigned DO_RETRY = 1;
+
 		unsigned callback(unsigned dataLength, const void* data, unsigned bufferLength, void* buffer)
 		{
 			unsigned ret = static_cast<VTable*>(this->cloopVTable)->callback(this, dataLength, data, bufferLength, buffer);
 			return ret;
+		}
+
+		template <typename StatusType> unsigned afterAttach(StatusType* status, const char* dbName, const IStatus* attStatus)
+		{
+			if (cloopVTable->version < 3)
+			{
+				StatusType::setVersionError(status, "ICryptKeyCallback", cloopVTable->version, 3);
+				StatusType::checkException(status);
+				return 0;
+			}
+			StatusType::clearException(status);
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->afterAttach(this, status, dbName, attStatus);
+			StatusType::checkException(status);
+			return ret;
+		}
+
+		void dispose()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return;
+			}
+			static_cast<VTable*>(this->cloopVTable)->dispose(this);
 		}
 	};
 
@@ -14395,6 +14423,8 @@ namespace Firebird
 				{
 					this->version = Base::VERSION;
 					this->callback = &Name::cloopcallbackDispatcher;
+					this->afterAttach = &Name::cloopafterAttachDispatcher;
+					this->dispose = &Name::cloopdisposeDispatcher;
 				}
 			} vTable;
 
@@ -14413,6 +14443,33 @@ namespace Firebird
 				return static_cast<unsigned>(0);
 			}
 		}
+
+		static unsigned CLOOP_CARG cloopafterAttachDispatcher(ICryptKeyCallback* self, IStatus* status, const char* dbName, const IStatus* attStatus) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::afterAttach(&status2, dbName, attStatus);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<unsigned>(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopdisposeDispatcher(ICryptKeyCallback* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				static_cast<Name*>(self)->Name::dispose();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ICryptKeyCallback> > >
@@ -14429,6 +14486,13 @@ namespace Firebird
 		}
 
 		virtual unsigned callback(unsigned dataLength, const void* data, unsigned bufferLength, void* buffer) = 0;
+		virtual unsigned afterAttach(StatusType* status, const char* dbName, const IStatus* attStatus)
+		{
+			return 0;
+		}
+		virtual void dispose()
+		{
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base>

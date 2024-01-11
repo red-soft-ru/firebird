@@ -941,6 +941,21 @@ interface CryptKeyCallback : Versioned
 	// any further details.
 	uint callback(uint dataLength, const void* data,
 		uint bufferLength, void* buffer);
+
+version:		// 6.0
+	// Result returned by afterAttach()
+	const uint NO_RETRY		= 0;	// Returned by old plugins & stub
+	const uint DO_RETRY		= 1;
+
+	// NULL in attStatus means attach was successful.
+	// DO_RETRY return will be ignored in this case, but plugin has a chance
+	// to reflect internally success.
+	[stub defaultAction]
+	uint afterAttach(Status status, const string dbName, const Status attStatus);
+
+	// interface not needed any more
+	[stub defaultAction]
+	void dispose();
 }
 
 
