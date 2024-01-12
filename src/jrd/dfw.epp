@@ -4011,12 +4011,7 @@ static string remove_icu_info_from_attributes(const string& charsetName, const s
 		if (IntlUtil::parseSpecificAttributes(charSet, specificAttributes.length(),
 			(const UCHAR*) specificAttributes.begin(), &map))
 		{
-			if (!map.get("ICU-VERSION"))
-				abort();
 			map.remove("ICU-VERSION");
-			if (map.get("ICU-VERSION"))
-				abort();
-
 			map.remove("COLL-VERSION");
 			return IntlUtil::generateSpecificAttributes(charSet, map);
 		}
