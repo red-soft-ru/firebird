@@ -1654,6 +1654,9 @@ gen/make.platform.solaris.examples:${MAKE_SRC_DIR}/make.platform.solaris.example
 ;;
 esac
 
+# Fix problem with autoconf 2.72 inserting -std in CXX.
+CXX=`echo "$CXX" | sed -e 's/\(-std=c++11\)//g' -e 's/\(-std=gnu++11\)//g'`
+
 AC_OUTPUT
 
 dnl Print out the build configuration (the most interesting thing)
