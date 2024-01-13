@@ -560,12 +560,17 @@ bool CMP_procedure_arguments(
 				argsByName.remove(parameter->prm_name);
 			}
 
-			if (isInput && (!argValue || !*argValue))
+			if (!argValue || !*argValue)
 			{
-				if (parameter->prm_default_value)
-					*sourceArgIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+				if (isInput)
+				{
+					if (parameter->prm_default_value)
+						*sourceArgIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+					else
+						mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+				}
 				else
-					mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+					continue;
 			}
 
 			++sourceArgIt;
