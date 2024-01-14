@@ -6249,7 +6249,8 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		if (!preChangeHandlerWasExecuted)
 		{
 			preChangeHandlerWasExecuted = true;
-			preChangeHandler();
+			if (preChangeHandler)
+				preChangeHandler();
 		}
 	};
 
