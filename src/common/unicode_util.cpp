@@ -1425,7 +1425,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 		++attributeCount;
 
 	string collVersion;
-	if (specificAttributes.get(IntlUtil::convertAsciiToUtf16("COLL-VERSION"), collVersion))
+	if (specificAttributes.get(IntlUtil::convertAsciiToUtf16(ATTR_COLL_VERSION), collVersion))
 	{
 		++attributeCount;
 
@@ -1486,7 +1486,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 	tt->texttype_pad_option = (attributes & TEXTTYPE_ATTR_PAD_SPACE) ? true : false;
 
 	string icuVersion;
-	if (specificAttributes.get(IntlUtil::convertAsciiToUtf16("ICU-VERSION"), icuVersion))
+	if (specificAttributes.get(IntlUtil::convertAsciiToUtf16(ATTR_ICU_VERSION), icuVersion))
 		icuVersion = IntlUtil::convertUtf16ToAscii(icuVersion, &error);
 
 	const auto icu = loadICU(icuVersion, collVersion, locale, configInfo);

@@ -4049,8 +4049,8 @@ static string remove_icu_info_from_attributes(const string& charsetName, const s
 		if (IntlUtil::parseSpecificAttributes(charSet, specificAttributes.length(),
 			(const UCHAR*) specificAttributes.begin(), &map))
 		{
-			map.remove("ICU-VERSION");
-			map.remove("COLL-VERSION");
+			map.remove(ATTR_ICU_VERSION);
+			map.remove(ATTR_COLL_VERSION);
 			return IntlUtil::generateSpecificAttributes(charSet, map);
 		}
 	}

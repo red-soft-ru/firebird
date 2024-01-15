@@ -678,7 +678,7 @@ bool IntlUtil::setupIcuAttributes(charset* cs, const string& specificAttributes,
 	}
 
 	string icuVersion;
-	map.get("ICU-VERSION", icuVersion);
+	map.get(ATTR_ICU_VERSION, icuVersion);
 
 	string collVersion;
 	auto icu = UnicodeUtil::getCollVersion(icuVersion, configInfo, collVersion);
@@ -691,13 +691,13 @@ bool IntlUtil::setupIcuAttributes(charset* cs, const string& specificAttributes,
 		int majorVersion, minorVersion;
 		UnicodeUtil::getICUVersion(icu, majorVersion, minorVersion);
 		icuVersion.printf("%d.%d", majorVersion, minorVersion);
-		map.put("ICU-VERSION", icuVersion);
+		map.put(ATTR_ICU_VERSION, icuVersion);
 	}
 
-	map.remove("COLL-VERSION");
+	map.remove(ATTR_COLL_VERSION);
 
 	if (collVersion.hasData())
-		map.put("COLL-VERSION", collVersion);
+		map.put(ATTR_COLL_VERSION, collVersion);
 
 	newSpecificAttributes = IntlUtil::generateSpecificAttributes(charSet, map);
 	return true;

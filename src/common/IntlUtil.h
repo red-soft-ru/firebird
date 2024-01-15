@@ -38,6 +38,9 @@ namespace Firebird
 {
 class CharSet;
 
+static const char* ATTR_ICU_VERSION = "ICU-VERSION";
+static const char* ATTR_COLL_VERSION = "COLL-VERSION";
+
 class IntlUtil
 {
 public:
