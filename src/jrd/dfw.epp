@@ -486,6 +486,7 @@ static bool db_crypt(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool set_linger(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool clear_cache(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool change_repl_state(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static string remove_icu_info_from_attributes(const string&, const string&);
 
 // ----------------------------------------------------------------
 
@@ -510,7 +511,7 @@ static bool validate_text_type (thread_db*, const TemporaryField*);
 
 static void check_partners(thread_db*, const USHORT);
 static string get_string(const dsc* desc);
-static void setupSpecificCollationAttributes(thread_db*, jrd_tra*, const USHORT, const char*);
+static void setupSpecificCollationAttributes(thread_db*, jrd_tra*, const USHORT, const char*, bool);
 
 static ISC_STATUS getErrorCodeByObjectType(int obj_type)
 {
@@ -3860,8 +3861,30 @@ static bool create_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 
 #define DEBUG_REBUILD_INTL(A)
 
+static string remove_icu_info_from_attributes(const string& charsetName, const string& specificAttributes)
+{
+	Firebird::AutoPtr<charset> cs(FB_NEW charset);
+	memset(cs, 0, sizeof(*cs));
+
+	if (IntlManager::lookupCharSet(charsetName, cs))
+	{
+		AutoPtr<Jrd::CharSet> charSet(Jrd::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs));
+		IntlUtil::SpecificAttributesMap map;
+		if (IntlUtil::parseSpecificAttributes(charSet, specificAttributes.length(),
+			(const UCHAR*) specificAttributes.begin(), &map))
+		{
+			map.remove("ICU-VERSION");
+			map.remove("COLL-VERSION");
+			return IntlUtil::generateSpecificAttributes(charSet, map);
+		}
+	}
+
+	return specificAttributes;
+}
+
+
 static void setupSpecificCollationAttributes(thread_db* tdbb, jrd_tra* transaction,
-	const USHORT charSetId, const char* collationName)
+	const USHORT charSetId, const char* collationName, bool dropIcuInfo)
 {
 /**************************************
  *
@@ -3895,6 +3918,9 @@ static void setupSpecificCollationAttributes(thread_db* tdbb, jrd_tra* transacti
 		}
 
 		const string specificAttributes((const char*) buffer.begin(), length);
+		MetaName charsetName(CS.RDB$CHARACTER_SET_NAME);
+		string icuLessAttributes = dropIcuInfo ?
+			remove_icu_info_from_attributes(charsetName.c_str(), specificAttributes) : specificAttributes;
 		string newSpecificAttributes;
 
 		// ASF: If setupCollationAttributes fail we store the original
@@ -3904,11 +3930,9 @@ static void setupSpecificCollationAttributes(thread_db* tdbb, jrd_tra* transacti
 				fb_utils::exact_name(COLL.RDB$BASE_COLLATION_NAME.NULL ?
 					COLL.RDB$COLLATION_NAME : COLL.RDB$BASE_COLLATION_NAME),
 				fb_utils::exact_name(CS.RDB$CHARACTER_SET_NAME),
-				specificAttributes, newSpecificAttributes) &&
+				icuLessAttributes, newSpecificAttributes) &&
 			newSpecificAttributes != specificAttributes) // if nothing changed, we do nothing
 		{
-			DEBUG_REBUILD_INTL(fprintf(stderr, "Recreate collation %s\n", collationName));
-
 			MODIFY COLL USING
 				if (newSpecificAttributes.isEmpty())
 					COLL.RDB$SPECIFIC_ATTRIBUTES.NULL = TRUE;
@@ -3944,7 +3968,12 @@ static bool create_collation(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	{
 	case 1:
 		setupSpecificCollationAttributes(tdbb, transaction, TTYPE_TO_CHARSET(work->dfw_id),
-			work->dfw_name.c_str());
+			work->dfw_name.c_str(), false);
+		if (!INTL_defined_type(tdbb, work->dfw_id))
+		{
+			setupSpecificCollationAttributes(tdbb, transaction, TTYPE_TO_CHARSET(work->dfw_id),
+				work->dfw_name.c_str(), true);
+		}
 		break;
 	}
 
@@ -4048,7 +4077,7 @@ void DFW_reset_icu(thread_db* tdbb)
 				MetaName collName(rs->getMetaName(tdbb, 1));
 				const USHORT charSetId(rs->getSmallInt(tdbb, 2));
 
-				setupSpecificCollationAttributes(tdbb, transaction, charSetId, collName.c_str());
+				setupSpecificCollationAttributes(tdbb, transaction, charSetId, collName.c_str(), true);
 			}
 		}
 
