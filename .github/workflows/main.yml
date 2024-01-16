@@ -270,7 +270,17 @@ jobs:
             builds/install_images/Firebird-*-windows-${{ matrix.platform }}*.zip
 
   build-macos:
-    runs-on: macos-12
+    name: build-macos-${{ matrix.arch }}
+    runs-on: ${{ (matrix.arch == 'arm64' && 'flyci-macos-large-latest-m1') || 'macos-12' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - arm64
+        exclude:
+          - arch: ${{ (github.event.head_commit.message == 'increment build number' || github.ref_type == 'tag') && 'dummy' || 'arm64' }}
 
     steps:
       - name: Checkout
@@ -319,15 +329,15 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@main
         with:
-          name: firebird-macos
+          name: firebird-macos-${{ matrix.arch }}
           path: gen/artifacts
 
       - name: Create release
         uses: ./.github/actions/create-release
         with:
           token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
-          deletePatterns: Firebird-*-macos-x64*.pkg
-          uploadFiles: gen/artifacts/Firebird-*-macos-x64*.pkg
+          deletePatterns: Firebird-*-macos-${{ matrix.arch }}*.pkg
+          uploadFiles: gen/artifacts/Firebird-*-macos-${{ matrix.arch }}*.pkg
 
   build-android-initial:
     name: build-android-${{ matrix.arch }}-initial
