@@ -1522,9 +1522,16 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type, const bool pr
 
 		page_number = page->ppg_page[slot];
 		UCHAR* bits = (UCHAR*) (page->ppg_page + dbb->dbb_dp_per_pp);
+
+		if (slot >= page->ppg_count || !page_number)
+		{
+			CCH_RELEASE(tdbb, window);
+			return false;
+		}
+
 		pp_swept = PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept);
 
-		if (lock_type == LCK_read || !page_number || !pp_swept || preserve_swept_flag ||
+		if (lock_type == LCK_read || !pp_swept || preserve_swept_flag ||
 			PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty | ppg_dp_secondary))
 			break;
 
@@ -1548,28 +1555,25 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type, const bool pr
 		"    record  %" ULONGFORMAT":%d\n", page->ppg_page[slot], line);
 #endif
 
-	if (page_number)
+	const data_page* dpage = (data_page*) CCH_HANDOFF(tdbb, window, page_number, lock_type, pag_data);
+
+	// If PP was modified, make DP to be written after PP
+	if (ppNum.getPageNum())
+		CCH_precedence(tdbb, window, ppNum);
+
+	if (dpage->dpg_count > 0 && !(dpage->dpg_header.pag_flags & dpg_secondary))
 	{
-		const data_page* dpage = (data_page*) CCH_HANDOFF(tdbb, window, page_number, lock_type, pag_data);
-
-		// If PP was modified, make DP to be written after PP
-		if (ppNum.getPageNum())
-			CCH_precedence(tdbb, window, ppNum);
-
-		if (dpage->dpg_count > 0 && !(dpage->dpg_header.pag_flags & dpg_secondary))
+		if (!pp_swept || dpage->dpg_header.pag_flags & dpg_swept)
 		{
-			if (!pp_swept || dpage->dpg_header.pag_flags & dpg_swept)
-			{
-				// Insert the data page into the DP map if it's primary
-				// and the swept flag is in a safe state.
-				relPages->setDPNumber(dpSequence, page_number);
-			}
+			// Insert the data page into the DP map if it's primary
+			// and the swept flag is in a safe state.
+			relPages->setDPNumber(dpSequence, page_number);
+		}
 
-			if (get_header(window, line, rpb) &&
-				!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
-			{
-				return true;
-			}
+		if (get_header(window, line, rpb) &&
+			!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
+		{
+			return true;
 		}
 	}
 
