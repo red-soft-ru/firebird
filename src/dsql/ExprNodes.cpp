@@ -13115,9 +13115,11 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 	for (auto& parameter : node->function->getInputFields())
 	{
 		NestConst<Jrd::ValueExprNode>* argValue;
+		bool argExists = false;
 
 		if (parameter->prm_name.hasData())
 		{
+			argExists = argsByName.exist(parameter->prm_name);
 			argValue = argsByName.get(parameter->prm_name);
 
 			if (argValue)
@@ -13133,6 +13135,28 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 		{
 			if (parameter->prm_default_value)
 				*argIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+			else if (argExists)	// explicit DEFAULT in caller
+			{
+				FieldInfo fieldInfo;
+
+				if (parameter->prm_mechanism != prm_mech_type_of &&
+					!fb_utils::implicit_domain(parameter->prm_field_source.c_str()))
+				{
+					const MetaNamePair namePair(parameter->prm_field_source, "");
+
+					if (!csb->csb_map_field_info.get(namePair, fieldInfo))
+					{
+						dsc dummyDesc;
+						MET_get_domain(tdbb, csb->csb_pool, parameter->prm_field_source, &dummyDesc, &fieldInfo);
+						csb->csb_map_field_info.put(namePair, fieldInfo);
+					}
+				}
+
+				if (fieldInfo.defaultValue)
+					*argIt = CMP_clone_node(tdbb, csb, fieldInfo.defaultValue);
+				else
+					*argIt = NullNode::instance();
+			}
 			else
 				mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
 		}
