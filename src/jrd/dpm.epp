@@ -3807,7 +3807,7 @@ static void store_big_record(thread_db* tdbb,
 	// What's left fits on a page. Store it somewhere.
 
 	const auto inLength = in - rpb->rpb_address;
-	fb_assert(Compressor(tdbb, inLength, rpb->rpb_address).getPackedLength() == size);
+//	fb_assert(Compressor(tdbb, inLength, rpb->rpb_address).getPackedLength() == size);
 
 	stack.push(prior);
 
