@@ -12291,7 +12291,7 @@ bool RestoreRelationTask::fileReader(Item& item)
 
 	BURP_verbose(124, m_relation->rel_name); // msg 124  restoring data for relation %s
 
-	const ULONG length = m_metadata.m_inMsgLen;	// full record length
+	const RCRD_LENGTH length = m_metadata.m_inMsgLen;	// full record length
 
 	IOBuffer* ioBuf = NULL;
 	FB_SSIZE_T space = 0;	// space left in current buffer
@@ -12309,7 +12309,7 @@ bool RestoreRelationTask::fileReader(Item& item)
 		if (get(tdgbl) != att_data_length)
 			BURP_error_redirect(NULL, 39); // msg 39 expected record length
 
-		USHORT len = (USHORT) get_int32(tdgbl);
+		RCRD_LENGTH len = get_int32(tdgbl);
 
 		if (!tdgbl->gbl_sw_transportable && len != length)
 		{
@@ -12323,7 +12323,7 @@ bool RestoreRelationTask::fileReader(Item& item)
 				BURP_error_redirect(NULL, 55);
 				// msg 55 Expected XDR record length
 			else
-				len = (USHORT) get_int32(tdgbl);
+				len = get_int32(tdgbl);
 		}
 
 		if (get(tdgbl) != att_data_data)
