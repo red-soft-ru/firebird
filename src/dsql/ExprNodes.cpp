@@ -5221,11 +5221,8 @@ ValueExprNode* DerivedExprNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	SortedStreamList newStreams;
 
-	for (const auto i : internalStreamList)
-	{
-		markVariant(csb, i);
-		expandViewStreams(csb, i, newStreams);
-	}
+	for (const auto stream : internalStreamList)
+		expandViewStreams(csb, stream, newStreams);
 
 #ifdef CMP_DEBUG
 	for (const auto i : newStreams)
@@ -5233,7 +5230,10 @@ ValueExprNode* DerivedExprNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	csb->dump("\n");
 #endif
 
-	internalStreamList.assign(newStreams.begin(), newStreams.getCount());
+	for (const auto stream : newStreams)
+		markVariant(csb, stream);
+
+	internalStreamList.assign(newStreams);
 
 	return this;
 }
