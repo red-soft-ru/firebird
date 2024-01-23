@@ -676,7 +676,7 @@ public:
 protected:
 	void analyzeNavigation(const InversionCandidateList& inversions);
 	bool betterInversion(const InversionCandidate* inv1, const InversionCandidate* inv2,
-						 bool ignoreUnmatched) const;
+						 bool navigation) const;
 	bool checkIndexCondition(index_desc& idx, MatchedBooleanList& matches) const;
 	bool checkIndexExpression(const index_desc* idx, ValueExprNode* node) const;
 	InversionNode* composeInversion(InversionNode* node1, InversionNode* node2,
