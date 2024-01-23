@@ -652,45 +652,46 @@ int gstat(Firebird::UtilSvc* uSvc)
 	}
 	tddba->page_number = -1;
 
-	// gather continuation files
-
-	ULONG page = HEADER_PAGE;
-	do {
-		if (page != HEADER_PAGE)
-			current = db_open(file_name, static_cast<USHORT>(strlen(file_name)));
-		do {
-			header = (const header_page*) db_read(page);
-			if (current != tddba->files)
-				current->fil_fudge = 1;	// ignore header page once read it
-			*file_name = '\0';
-			const UCHAR* vp = header->hdr_data;
-			for (const UCHAR* const vend = reinterpret_cast<const UCHAR*>(header) + header->hdr_page_size;
-				 vp < vend && *vp != HDR_end; vp += 2 + vp[1])
-			{
-				if (*vp == HDR_file)
-				{
-					memcpy(file_name, vp + 2, vp[1]);
-					*(file_name + vp[1]) = '\0';
-				}
-				if (*vp == HDR_last_page) {
-					memcpy(&current->fil_max_page, vp + 2, sizeof(current->fil_max_page));
-				}
-			}
-		} while (page = header->hdr_next_page);
-		page = current->fil_max_page + 1;	// first page of next file
-	} while (*file_name);
-
 	// Print header page
 
-	page = HEADER_PAGE;
-	do {
-		header = (const header_page*) db_read(page);
-		PPG_print_header(header, page, sw_nocreation, uSvc);
-		page = header->hdr_next_page;
-	} while (page);
+	ULONG page = HEADER_PAGE;
+	header = (const header_page*) db_read(page);
+	PPG_print_header(header, sw_nocreation, uSvc);
 
 	if (sw_header)
 		dba_exit(FINI_OK, tddba);
+
+	// gather continuation files
+
+	while (true)
+	{
+		if (page != HEADER_PAGE)
+		{
+			current = db_open(file_name, static_cast<USHORT>(strlen(file_name)));
+			header = (const header_page*) db_read(page);
+		}
+
+		if (current != tddba->files)
+			current->fil_fudge = 1;	// ignore header page once read it
+
+		PathName nextFileName;
+
+		const UCHAR* vp = header->hdr_data;
+		for (const auto vend = reinterpret_cast<const UCHAR*>(header) + header->hdr_page_size;
+			 vp < vend && *vp != HDR_end; vp += 2 + vp[1])
+		{
+			if (*vp == HDR_file)
+				nextFileName.assign(vp + 2, vp[1]);
+
+			if (*vp == HDR_last_page)
+				memcpy(&current->fil_max_page, vp + 2, sizeof(current->fil_max_page));
+		}
+
+		if (nextFileName.isEmpty())
+			break;
+
+		page = current->fil_max_page + 1;	// first page of next file
+	}
 
 	if (sw_enc)
 	{

@@ -2486,7 +2486,6 @@ bool CCH_write_all_shadows(thread_db* tdbb, Shadow* shadow, BufferDesc* bdb, Ods
 			const UCHAR* q = (UCHAR *) pageSpaceID->file->fil_string;
 			header->hdr_data[0] = HDR_end;
 			header->hdr_end = HDR_SIZE;
-			header->hdr_next_page = 0;
 
 			PAG_add_header_entry(tdbb, header, HDR_root_file_name,
 								 (USHORT) strlen((const char*) q), q);

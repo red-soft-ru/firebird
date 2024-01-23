@@ -197,7 +197,6 @@ int SDW_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start, USHORT sha
 	header->hdr_page_size = dbb->dbb_page_size;
 	header->hdr_data[0] = HDR_end;
 	header->hdr_end = HDR_SIZE;
-	header->hdr_next_page = 0;
 
 	// fool PIO_write into writing the scratch page into the correct place
 	BufferDesc temp_bdb(dbb->dbb_bcb);
@@ -240,7 +239,6 @@ int SDW_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start, USHORT sha
 		--start;
 		header->hdr_data[0] = HDR_end;
 		header->hdr_end = HDR_SIZE;
-		header->hdr_next_page = 0;
 
 		PAG_add_header_entry(tdbb, header, HDR_file, static_cast<USHORT>(strlen(file_name)),
 								reinterpret_cast<const UCHAR*>(file_name));

@@ -40,7 +40,7 @@ namespace Ods {
 
 //void	PAG_add_clump(Jrd::thread_db* tdbb, SLONG, USHORT, USHORT, const UCHAR*, Ods::ClumpOper);
 USHORT	PAG_add_file(Jrd::thread_db* tdbb, const TEXT*, SLONG);
-bool	PAG_add_header_entry(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
+void	PAG_add_header_entry(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
 //void	PAG_attach_temp_pages(Jrd::thread_db*, USHORT pageSpaceID);
 bool	PAG_replace_entry_first(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
 Ods::pag*	PAG_allocate(Jrd::thread_db* tdbb, Jrd::win*);

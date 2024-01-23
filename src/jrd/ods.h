@@ -460,7 +460,7 @@ struct header_page
 	USHORT hdr_page_size;			// Page size of database
 	USHORT hdr_ods_version;			// Version of on-disk structure
 	ULONG hdr_PAGES;				// Page number of PAGES relation
-	ULONG hdr_next_page;			// Page number of next hdr page
+	ULONG hdr_next_page;			// Page number of next hdr page (unused)
 	ULONG hdr_oldest_transaction;	// Oldest interesting transaction
 	ULONG hdr_oldest_active;		// Oldest transaction thought active
 	ULONG hdr_next_transaction;		// Next transaction id

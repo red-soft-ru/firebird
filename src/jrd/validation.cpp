@@ -218,9 +218,9 @@ V. WALK-THROUGH PHASE
       In order to ensure that all pages are fetched during validation, the
       following pages are fetched just for the most basic validation:
 
-      1. The header page (and for 4.0 any overflow header pages).
-      2. Log pages for after-image journalling (4.0 only).
-      3. Page Inventory pages.
+      1. The header page.
+      2. Page Inventory pages.
+      3. System Change Number pages.
       4. Transaction Inventory pages
 
          If the system relation RDB$PAGES could not be read or did not
@@ -1623,7 +1623,6 @@ void Validation::walk_database()
 
 	if (!(vdr_flags & VDR_partial))
 	{
-		walk_header(page->hdr_next_page);
 		walk_pip();
 		walk_scns();
 		walk_tip(next);
@@ -1956,33 +1955,6 @@ void Validation::walk_generators()
 				release_page(&window);
 			}
 		}
-	}
-}
-
-void Validation::walk_header(ULONG page_num)
-{
-/**************************************
- *
- *	w a l k _ h e a d e r
- *
- **************************************
- *
- * Functional description
- *	Walk the overflow header pages
- *
- **************************************/
-
-	while (page_num)
-	{
-#ifdef DEBUG_VAL_VERBOSE
-		if (VAL_debug_level)
-			fprintf(stdout, "walk_header: page %d\n", page_num);
-#endif
-		WIN window(DB_PAGE_SPACE, -1);
-		header_page* page = 0;
-		fetch_page(true, page_num, pag_header, &window, &page);
-		page_num = page->hdr_next_page;
-		release_page(&window);
 	}
 }
 
