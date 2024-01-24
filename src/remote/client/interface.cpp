@@ -8412,27 +8412,27 @@ static bool init(CheckStatusWrapper* status, ClntAuthBlock& cBlock, rem_port* po
 			}
 			catch (const Exception& ex)
 			{
-				FbLocalStatus stAttach;
+				FbLocalStatus stAttach, statusAfterAttach;
 				ex.stuffException(&stAttach);
 
 				const ISC_STATUS* v = stAttach->getErrors();
-
 				if (cb && (fb_utils::containsErrorCode(v, isc_bad_crypt_key) ||
-						   fb_utils::containsErrorCode(v, isc_db_crypt_key)) &&
-					(cb->afterAttach(status, file_name.c_str(), &stAttach) == ICryptKeyCallback::DO_RETRY))
+						   fb_utils::containsErrorCode(v, isc_db_crypt_key)))
 				{
-					continue;
+					auto rc = cb->afterAttach(&statusAfterAttach, file_name.c_str(), &stAttach);
+					if (statusAfterAttach.isSuccess() && rc == ICryptKeyCallback::DO_RETRY)
+						continue;
 				}
 
-				status->init();
 				throw;
 			}
 
 			// response is success
 			if (cb)
 			{
-				cb->afterAttach(status, file_name.c_str(), nullptr);
-				status->init();
+				FbLocalStatus statusAfterAttach;
+				cb->afterAttach(&statusAfterAttach, file_name.c_str(), nullptr);
+				check(&statusAfterAttach);
 			}
 
 			return true;
