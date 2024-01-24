@@ -2789,21 +2789,44 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	if (header->rhd_flags & rhd_incomplete)
 	{
 		p = fragment->rhdf_data;
-		length -= offsetof(rhdf, rhdf_data[0]);
+		length -= RHDF_SIZE;
 	}
 	else if (header->rhd_flags & rhd_long_tranum)
 	{
 		p = ((rhde*) header)->rhde_data;
-		length -= offsetof(rhde, rhde_data[0]);
+		length -= RHDE_SIZE;
 	}
 	else
 	{
 		p = header->rhd_data;
-		length -= offsetof(rhd, rhd_data[0]);
+		length -= RHD_SIZE;
 	}
 
-	ULONG record_length = (header->rhd_flags & rhd_not_packed) ?
-		length : Compressor::getUnpackedLength(length, p);
+	const auto format = MET_format(vdr_tdbb, relation, header->rhd_format);
+	auto remainingLength = format->fmt_length;
+
+	auto calculateLength = [fragment, remainingLength](ULONG length, const UCHAR* data)
+	{
+		if (fragment->rhdf_flags & rhd_not_packed)
+		{
+			if (length > remainingLength)
+			{
+				// Short records may be zero-padded up to the fragmented header size.
+				// Find out how many zero bytes present inside the tail and adjust
+				// the calculated record length accordingly.
+
+				auto tail = data + remainingLength;
+				for (const auto end = data + length; tail < end && !*tail; tail++)
+					length--;
+			}
+
+			return length;
+		}
+
+		return Compressor::getUnpackedLength(length, data);
+	};
+
+	remainingLength -= calculateLength(length, p);
 
 	// Next, chase down fragments, if any
 
@@ -2842,21 +2865,20 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		if (fragment->rhdf_flags & rhd_incomplete)
 		{
 			p = fragment->rhdf_data;
-			length -= offsetof(rhdf, rhdf_data[0]);
+			length -= RHDF_SIZE;
 		}
 		else if (fragment->rhdf_flags & rhd_long_tranum)
 		{
 			p = ((rhde*) fragment)->rhde_data;
-			length -= offsetof(rhde, rhde_data[0]);
+			length -= RHDE_SIZE;
 		}
 		else
 		{
 			p = ((rhd*) fragment)->rhd_data;
-			length -= offsetof(rhd, rhd_data[0]);
+			length -= RHD_SIZE;
 		}
 
-		record_length += (fragment->rhdf_flags & rhd_not_packed) ?
-			length : Compressor::getUnpackedLength(length, p);
+		remainingLength -= calculateLength(length, p);
 
 		page_number = fragment->rhdf_f_page;
 		line_number = fragment->rhdf_f_line;
@@ -2864,11 +2886,9 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		release_page(&window);
 	}
 
-	// Check out record length and format
+	// Validate unpacked record length
 
-	const Format* format = MET_format(vdr_tdbb, relation, header->rhd_format);
-
-	if (!delta_flag && record_length != format->fmt_length)
+	if (!delta_flag && remainingLength != 0)
 		return corrupt(VAL_REC_WRONG_LENGTH, relation, number.getValue());
 
 	return rtn_ok;
