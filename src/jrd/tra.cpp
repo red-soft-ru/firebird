@@ -2854,7 +2854,7 @@ static void start_sweeper(thread_db* tdbb)
 		}
 
 		AutoPtr<SweepSync> sweepSync(FB_NEW SweepSync(*getDefaultMemoryPool(), SweepParameter::runSweep));
-		SweepParameter* swPar = FB_NEW_POOL(*dbb->dbb_permanent) SweepParameter(dbb);
+		SweepParameter* swPar = FB_NEW SweepParameter(dbb);
 		sweepSync->run(swPar);
 		started = true;
 		sweepThreads().add(sweepSync.release());
