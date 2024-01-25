@@ -8432,7 +8432,8 @@ static bool init(CheckStatusWrapper* status, ClntAuthBlock& cBlock, rem_port* po
 			{
 				FbLocalStatus statusAfterAttach;
 				cb->afterAttach(&statusAfterAttach, file_name.c_str(), nullptr);
-				check(&statusAfterAttach);
+				if (!fb_utils::containsErrorCode(statusAfterAttach->getErrors(), isc_interface_version_too_old))
+					check(&statusAfterAttach);
 			}
 
 			return true;
