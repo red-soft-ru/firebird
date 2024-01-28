@@ -523,8 +523,6 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
 	{
 		try
 		{
-			tdbb->checkCancelState();
-
 			bool found = false;
 			for (Jrd::Attachment* other_attachment = attachment->att_next; other_attachment;
 				 other_attachment = other_attachment->att_next)
@@ -575,6 +573,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
 			if (remaining >= CCH_EXCLUSIVE_RETRY_INTERVAL)
 			{
 				SyncUnlockGuard unlock(exLock ? (*exGuard) : dsGuard);
+				tdbb->reschedule();
 				Thread::sleep(CCH_EXCLUSIVE_RETRY_INTERVAL * 1000);
 			}
 
