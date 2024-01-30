@@ -2696,11 +2696,6 @@ namespace {
 			: dbb(d)
 		{ }
 
-		void waitForStartup()
-		{
-			sem.enter();
-		}
-
 		static void runSweep(SweepParameter* par)
 		{
 			FbLocalStatus status;
@@ -2709,7 +2704,6 @@ namespace {
 			// reference is needed to guarantee that provider exists
 			// between semaphore release and attach database
 			AutoPlugin<JProvider> prov(JProvider::getInstance());
-			par->sem.release();
 
 			AutoDispose<IXpbBuilder> dpb(UtilInterfacePtr()->getXpbBuilder(&status, IXpbBuilder::DPB, NULL, 0));
 			status.check();
@@ -2733,14 +2727,26 @@ namespace {
 			ex.stuffException(&st);
 			if (st->getErrors()[1] != isc_att_shutdown)
 				iscLogException("Automatic sweep error", ex);
+
+			if (dbb)
+			{
+				dbb->clearSweepStarting();
+				SPTHR_DEBUG(fprintf(stderr, "called clearSweepStarting() dbb=%p par=%p\n", dbb, this));
+				dbb = NULL;
+			}
+		}
+
+		static void cleanup(SweepParameter* par)
+		{
+			SPTHR_DEBUG(fprintf(stderr, "Cleanup dbb=%p par=%p\n", par->dbb, par));
+			delete par;
 		}
 
 	private:
-		Semaphore sem;
 		Database* dbb;
 	};
 
-	typedef ThreadFinishSync<SweepParameter*> SweepSync;
+	typedef ThreadFinishSync<SweepParameter*, SweepParameter> SweepSync;
 	typedef HalfStaticArray<SweepSync*, 16> SweepThreads;
 	InitInstance<SweepThreads> sweepThreads;
 	GlobalPtr<Mutex> swThrMutex;
@@ -2813,10 +2819,9 @@ static void start_sweeper(thread_db* tdbb)
 		}
 
 		AutoPtr<SweepSync> sweepSync(FB_NEW SweepSync(*getDefaultMemoryPool(), SweepParameter::runSweep));
-		SweepParameter swPar(dbb);
-		sweepSync->run(&swPar);
+		SweepParameter* swPar = FB_NEW SweepParameter(dbb);
+		sweepSync->run(swPar);
 		started = true;
-		swPar.waitForStartup();
 		sweepThreads().add(sweepSync.release());
 	}
 	catch (const Exception&)

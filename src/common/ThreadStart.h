@@ -112,7 +112,16 @@ inline ThreadId getThreadId()
 #define USE_FINI_SEM
 #endif
 
-template <typename TA>
+template <typename A>
+class EmptyThreadSyncCleanup
+{
+public:
+	static void cleanup(A)
+	{
+	}
+};
+
+template <typename TA, class Cleanup = EmptyThreadSyncCleanup<TA> >
 class ThreadFinishSync
 {
 public:
@@ -203,6 +212,8 @@ private:
 			threadArg->exceptionHandler(ex, threadRoutine);
 		}
 #endif
+
+		Cleanup::cleanup(threadArg);
 		closing = true;
 	}
 };
