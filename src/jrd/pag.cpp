@@ -95,129 +95,273 @@
 #include "../common/classes/DbImplementation.h"
 #include "../jrd/CryptoManager.h"
 
-namespace Ods
-{
-	enum ClumpOper { CLUMP_ADD, CLUMP_REPLACE, CLUMP_REPLACE_ONLY };
-}
-
 using namespace Jrd;
 using namespace Ods;
 using namespace Firebird;
 
-static void add_clump(thread_db* tdbb, USHORT type, USHORT len, const UCHAR* entry, ClumpOper mode);
-static ULONG ensureDiskSpace(thread_db* tdbb, WIN* pip_window, const PageNumber pageNum, ULONG pipUsed);
-static void find_clump_space(thread_db* tdbb, WIN*, pag**, USHORT, USHORT, const UCHAR*);
-static bool find_type(thread_db* tdbb, WIN*, pag**, USHORT, USHORT, UCHAR**, const UCHAR**);
-
-inline void err_post_if_database_is_readonly(const Database* dbb)
+namespace
 {
-	if (dbb->readOnly())
-		ERR_post(Arg::Gds(isc_read_only_database));
-}
+	const char* const SCRATCH = "fb_table_";
+	const int MIN_EXTEND_BYTES = 128 * 1024;	// 128KB
 
-static const char* const SCRATCH = "fb_table_";
-
-static const int MIN_EXTEND_BYTES = 128 * 1024;	// 128KB
-
-// CVC: Since nobody checks the result from this function (strange!), I changed
-// bool to void as the return type but left the result returned as comment.
-static void add_clump(thread_db* tdbb, USHORT type, USHORT len, const UCHAR* entry, ClumpOper mode)
-{
-/***********************************************
- *
- *	a d d _ c l u m p
- *
- ***********************************************
- *
- * Functional description
- *	Adds a clump to log/header page.
- *	mode
- *		0 - add			CLUMP_ADD
- *		1 - replace		CLUMP_REPLACE
- *		2 - replace only!	CLUMP_REPLACE_ONLY
- *	returns
- *		true - modified page
- *		false - nothing done => nobody checks this function's result.
- *
- **************************************/
-	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
-
-	err_post_if_database_is_readonly(dbb);
-
-	WIN window(DB_PAGE_SPACE, HEADER_PAGE);
-	pag* page = CCH_FETCH(tdbb, &window, LCK_write, pag_header);
-	header_page* header = (header_page*) page;
-	USHORT* end_addr = &header->hdr_end;
-
-	UCHAR* entry_p;
-	const UCHAR* clump_end;
-	if (mode != CLUMP_ADD)
+	inline void ensureDbWritable(thread_db* tdbb)
 	{
-		const bool found = find_type(tdbb, &window, &page, LCK_write, type, &entry_p, &clump_end);
+		const auto dbb = tdbb->getDatabase();
 
-		// If we did'nt find it and it is REPLACE_ONLY, return
+		if (dbb->readOnly())
+			ERR_post(Arg::Gds(isc_read_only_database));
+	}
 
-		if (!found && mode == CLUMP_REPLACE_ONLY)
+	class HeaderClumplet
+	{
+	public:
+		HeaderClumplet(header_page* header, USHORT type)
+			: m_header(header), m_type(type)
+		{}
+
+		UCHAR* find(const UCHAR** clump_end = nullptr) const
 		{
-			CCH_RELEASE(tdbb, &window);
-			return; //false;
+			UCHAR* p = m_header->hdr_data;
+			UCHAR* q = nullptr;
+
+			for (; *p != HDR_end; p += 2 + p[1])
+			{
+				if (*p == m_type)
+					q = p;
+			}
+
+			if (clump_end)
+				*clump_end = p;
+
+			return q;
 		}
 
-		// If not found, just go and add the entry
-
-		if (found)
+		bool checkSpace(USHORT length) const
 		{
+			const auto freeSpace = m_header->hdr_page_size - m_header->hdr_end;
+			if (freeSpace > 2 + length)
+				return true;
 
-			// if same size, overwrite it
-			const USHORT oldLen = entry_p[1] + 2u;
+			fb_assert(false);
+			return false;
+		}
 
-			if (oldLen - 2u == len)
+		void add(USHORT length, const UCHAR* entry, bool first = false) const
+		{
+			UCHAR* p = (UCHAR*) m_header + m_header->hdr_end;
+			fb_assert(*p == HDR_end);
+
+			if (first)
+			{
+				p = m_header->hdr_data;
+				memmove(p + length + 2, p, m_header->hdr_end - HDR_SIZE + 1);
+			}
+
+			fb_assert(m_type <= MAX_UCHAR);
+			*p++ = static_cast<UCHAR>(m_type);
+
+			fb_assert(length <= MAX_UCHAR);
+			*p++ = static_cast<UCHAR>(length);
+
+			if (length)
+			{
+				if (entry)
+					memcpy(p, entry, length);
+				else
+					memset(p, 0, length);
+
+				p += length;
+			}
+
+			if (!first)
+				*p = HDR_end;
+
+			m_header->hdr_end += length + 2;
+		}
+
+		void remove(UCHAR* entry, const UCHAR* end) const
+		{
+			fb_assert(*entry == m_type);
+
+			const USHORT orgLen = entry[1] + 2;
+			const UCHAR* const tail = entry + orgLen;
+			const USHORT shift = end - tail + 1; // to preserve HDR_end
+			memmove(entry, tail, shift);
+
+			m_header->hdr_end -= orgLen;
+		}
+
+		bool remove() const
+		{
+			const UCHAR* clump_end;
+			if (const auto entry_p = find(&clump_end))
+			{
+				remove(entry_p, clump_end);
+				return true;
+			}
+
+			return false;
+		}
+
+	private:
+		header_page* const m_header;
+		const USHORT m_type;
+	};
+
+	//
+	// Store a clump to header page (replace if it already exists)
+	//
+
+	void storeClump(thread_db* tdbb, USHORT type, USHORT len, const UCHAR* entry)
+	{
+		ensureDbWritable(tdbb);
+
+		WIN window(HEADER_PAGE_NUMBER);
+		pag* page = CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+		header_page* header = (header_page*) page;
+
+		const HeaderClumplet clump(header, type);
+
+		const UCHAR* clump_end;
+		if (auto entry_p = clump.find(&clump_end))
+		{
+			// If the same size, overwrite it
+
+			const USHORT orgLen = entry_p[1] + 2;
+
+			if (orgLen - 2 == len)
 			{
 				entry_p += 2;
+
 				if (len)
 				{
 					CCH_MARK_MUST_WRITE(tdbb, &window);
 					memcpy(entry_p, entry, len);
 				}
+
 				CCH_RELEASE(tdbb, &window);
-				return; // true;
+				return;
 			}
 
-			// delete the entry
+			// Delete the entry
 
 			// Page is marked must write because of precedence problems.  Later
 			// on we may allocate a new page and set up a precedence relationship.
 			// This may be the lower precedence page and so it cannot be dirty
 
 			CCH_MARK_MUST_WRITE(tdbb, &window);
-
-			*end_addr -= oldLen;
-
-			const UCHAR* r = entry_p + oldLen;
-			USHORT shift = clump_end - r + 1;
-			if (shift)
-				memmove(entry_p, r, shift);
-
-			CCH_RELEASE(tdbb, &window);
-
-			// refetch the page
-
-			window.win_page = HEADER_PAGE;
-			page = CCH_FETCH(tdbb, &window, LCK_write, pag_header);
-			header = (header_page*) page;
-			end_addr = &header->hdr_end;
+			clump.remove(entry_p, clump_end);
 		}
+
+		// Add the entry at the end of clumplet list
+
+		if (!clump.checkSpace(len))
+		{
+			CCH_RELEASE(tdbb, &window);
+			Arg::Gds(isc_hdr_overflow).raise();
+		}
+
+		CCH_MARK_MUST_WRITE(tdbb, &window);
+		clump.add(len, entry);
+		CCH_RELEASE(tdbb, &window);
 	}
 
-	// Add the entry
+	ULONG ensureDiskSpace(thread_db* tdbb, WIN* pip_window, const PageNumber pageNum, ULONG pipUsed)
+	{
+		const auto dbb = tdbb->getDatabase();
+		PageManager& pageMgr = dbb->dbb_page_manager;
+		PageSpace* const pageSpace = pageMgr.findPageSpace(pageNum.getPageSpaceID());
 
-	find_clump_space(tdbb, &window, &page, type, len, entry);
+		ULONG newUsed = pipUsed;
+		const ULONG sequence = pageNum.getPageNum() / pageMgr.pagesPerPIP;
+		const ULONG relative_bit = pageNum.getPageNum() - sequence * pageMgr.pagesPerPIP;
 
-	CCH_RELEASE(tdbb, &window);
-	return; // true;
-}
+		BackupManager::StateReadGuard stateGuard(tdbb);
+		const bool nbak_stalled = dbb->dbb_backup_manager->getState() == Ods::hdr_nbak_stalled;
+
+		USHORT next_init_pages = 1;
+		// ensure there are space on disk for faked page
+		if (relative_bit + 1 > pipUsed)
+		{
+			fb_assert(relative_bit >= pipUsed);
+
+			USHORT init_pages = 0;
+			if (!nbak_stalled)
+			{
+				init_pages = 1;
+				if (!(dbb->dbb_flags & DBB_no_reserve))
+				{
+					const int minExtendPages = MIN_EXTEND_BYTES / dbb->dbb_page_size;
+
+					init_pages = sequence ? 64 : MIN(pipUsed / 16, 64);
+
+					// don't touch pages belongs to the next PIP
+					init_pages = MIN(init_pages, pageMgr.pagesPerPIP - pipUsed);
+
+					if (init_pages < minExtendPages)
+						init_pages = 1;
+				}
+
+				if (init_pages < relative_bit + 1 - pipUsed)
+					init_pages = relative_bit + 1 - pipUsed;
+
+				//init_pages = FB_ALIGN(init_pages, PAGES_IN_EXTENT);
+
+				next_init_pages = init_pages;
+
+				FbLocalStatus status;
+				const ULONG start = sequence * pageMgr.pagesPerPIP + pipUsed;
+
+				init_pages = PIO_init_data(tdbb, pageSpace->file, &status, start, init_pages);
+			}
+
+			if (init_pages)
+			{
+				newUsed += init_pages;
+			}
+			else
+			{
+				// PIO_init_data returns zero - perhaps it is not supported,
+				// no space left on disk or IO error occurred. Try to write
+				// one page and handle IO errors if any.
+				WIN window(pageNum);
+				CCH_fake(tdbb, &window, 1);
+				CCH_must_write(tdbb, &window);
+				try
+				{
+					CCH_RELEASE(tdbb, &window);
+				}
+				catch (const status_exception&)
+				{
+					// forget about this page as if we never tried to fake it
+					CCH_forget_page(tdbb, &window);
+
+					// normally all page buffers now released by CCH_unwind
+					// only exception is when TDBB_no_cache_unwind flag is set
+					if (tdbb->tdbb_flags & TDBB_no_cache_unwind)
+						CCH_RELEASE(tdbb, pip_window);
+
+					throw;
+				}
+
+				newUsed = relative_bit + 1;
+			}
+		}
+
+		if (!(dbb->dbb_flags & DBB_no_reserve) && !nbak_stalled)
+		{
+			const ULONG initialized = sequence * pageMgr.pagesPerPIP + pipUsed;
+
+			// At this point we ensure database has at least "initialized" pages
+			// allocated. To avoid file growth by few pages when all this space
+			// will be used, extend file up to initialized + next_init_pages now
+			pageSpace->extend(tdbb, initialized + next_init_pages, false);
+		}
+
+		return newUsed;
+	}
+
+} // namespace
 
 
 USHORT PAG_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start)
@@ -233,10 +377,9 @@ USHORT PAG_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
+	ensureDbWritable(tdbb);
 
-	err_post_if_database_is_readonly(dbb);
+	const auto dbb = tdbb->getDatabase();
 
 	// Find current last file
 
@@ -266,9 +409,7 @@ USHORT PAG_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start)
 	jrd_file* next = file->fil_next;
 
 	if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
-	{
 		PIO_force_write(next, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
-	}
 
 	WIN window(DB_PAGE_SPACE, next->fil_min_page);
 	header_page* header = (header_page*) CCH_fake(tdbb, &window, 1);
@@ -319,9 +460,9 @@ USHORT PAG_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start)
 	}
 	else
 	{
-		add_clump(tdbb, HDR_file, static_cast<USHORT>(strlen(file_name)),
-					  reinterpret_cast<const UCHAR*>(file_name), CLUMP_REPLACE);
-		add_clump(tdbb, HDR_last_page, sizeof(SLONG), (UCHAR*) &start, CLUMP_REPLACE);
+		storeClump(tdbb, HDR_file, static_cast<USHORT>(strlen(file_name)),
+				   reinterpret_cast<const UCHAR*>(file_name));
+		storeClump(tdbb, HDR_last_page, sizeof(SLONG), (UCHAR*) &start);
 	}
 
 	header->hdr_header.pag_pageno = window.win_page.getPageNum();
@@ -335,8 +476,8 @@ USHORT PAG_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start)
 }
 
 
-bool PAG_add_header_entry(thread_db* tdbb, header_page* header,
-						 USHORT type, USHORT len, const UCHAR* entry)
+void PAG_add_header_entry(thread_db* tdbb, header_page* header,
+						  USHORT type, USHORT len, const UCHAR* entry)
 {
 /***********************************************
  *
@@ -348,58 +489,20 @@ bool PAG_add_header_entry(thread_db* tdbb, header_page* header,
  *	Add an entry to header page.
  *	This will be used mainly for the shadow header page and adding
  *	secondary files.
- *	Will not follow to hdr_next_page
- *	Will not journal changes made to page. => obsolete
- *	RETURNS
- *		true - modified page
- *		false - nothing done
- * CVC: Nobody checks the result of this function!
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
+	ensureDbWritable(tdbb);
 
-	err_post_if_database_is_readonly(dbb);
+	const HeaderClumplet clump(header, type);
 
-	UCHAR* p = header->hdr_data;
-	while (*p != HDR_end && *p != type)
-		p += 2u + p[1];
-
-	if (*p != HDR_end)
-		return false;
-
-	// We are at HDR_end, add the entry
-
-	const int free_space = dbb->dbb_page_size - header->hdr_end;
-
-	if (free_space > (2 + len))
+	if (!clump.find())
 	{
-		fb_assert(type <= MAX_UCHAR);
-		fb_assert(len <= MAX_UCHAR);
-		*p++ = static_cast<UCHAR>(type);
-		*p++ = static_cast<UCHAR>(len);
+		if (!clump.checkSpace(len))
+			BUGCHECK(251);
 
-		if (len)
-		{
-			if (entry) {
-				memcpy(p, entry, len);
-			}
-			else {
-				memset(p, 0, len);
-			}
-			p += len;
-		}
-
-		*p = HDR_end;
-
-		header->hdr_end = p - (UCHAR*) header;
-
-		return true;
+		clump.add(len, entry);
 	}
-
-	BUGCHECK(251);
-	return false;				// Added to remove compiler warning
 }
 
 
@@ -416,66 +519,29 @@ bool PAG_replace_entry_first(thread_db* tdbb, header_page* header,
  *	Replace an entry in the header page so it will become first entry
  *	This will be used mainly for the clumplets used for backup purposes
  *  because they are needed to be read without page lock
- *	Will not follow to hdr_next_page
- *	Will not journal changes made to page. => obsolete
  *	RETURNS
  *		true - modified page
  *		false - nothing done
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
+	ensureDbWritable(tdbb);
 
-	err_post_if_database_is_readonly(dbb);
+	const HeaderClumplet clump(header, type);
 
-	UCHAR* p = header->hdr_data;
-	while (*p != HDR_end && *p != type) {
-		p += 2u + p[1];
-	}
-
-	// Remove item if found it somewhere
-	if (*p != HDR_end)
+	if (clump.remove())
 	{
-		const USHORT shift = p[1] + 2u;
-		memmove(p, p + shift, header->hdr_end - (p - (UCHAR*) header) - shift + 1); // to preserve HDR_end
-		header->hdr_end -= shift;
+		// If we were asked just to remove item, we finished
+
+		if (!entry)
+			return false;
 	}
 
-	if (!entry) {
-		return false; // We were asked just to remove item. We finished.
-	}
-
-	// Check if we got enough space
-	if (dbb->dbb_page_size - header->hdr_end <= len + 2) {
+	if (!clump.checkSpace(len))
 		BUGCHECK(251);
-	}
 
-	// Actually add the item
-	fb_assert(len <= MAX_UCHAR);
-	memmove(header->hdr_data + len + 2, header->hdr_data, header->hdr_end - HDR_SIZE + 1);
-	header->hdr_data[0] = type;
-	header->hdr_data[1] = len;
-	memcpy(header->hdr_data + 2, entry, len);
-	header->hdr_end += len + 2;
-
+	clump.add(len, entry, true);
 	return true;
-}
-
-PAG PAG_allocate(thread_db* tdbb, WIN* window)
-{
-/**************************************
- *
- *	P A G _ a l l o c a t e
- *
- **************************************
- *
- * Functional description
- *	Allocate a page and fake a read with a write lock.  This is
- *	the universal sequence when allocating pages.
- *
- **************************************/
-	return PAG_allocate_pages(tdbb, window, 1, false);
 }
 
 
@@ -495,11 +561,10 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, unsigned cntAlloc, bool ali
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
+	const auto dbb = tdbb->getDatabase();
 
 	PageManager& pageMgr = dbb->dbb_page_manager;
-	PageSpace* pageSpace = pageMgr.findPageSpace(window->win_page.getPageSpaceID());
+	PageSpace* const pageSpace = pageMgr.findPageSpace(window->win_page.getPageSpaceID());
 	fb_assert(pageSpace);
 
 	PAG new_page = NULL;
@@ -741,102 +806,6 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, unsigned cntAlloc, bool ali
 }
 
 
-static ULONG ensureDiskSpace(thread_db* tdbb, WIN* pip_window, const PageNumber pageNum, ULONG pipUsed)
-{
-	Database* dbb = tdbb->getDatabase();
-	PageManager& pageMgr = dbb->dbb_page_manager;
-	PageSpace* pageSpace = pageMgr.findPageSpace(pageNum.getPageSpaceID());
-
-	ULONG newUsed = pipUsed;
-	const ULONG sequence = pageNum.getPageNum() / pageMgr.pagesPerPIP;
-	const ULONG relative_bit = pageNum.getPageNum() - sequence * pageMgr.pagesPerPIP;
-
-	BackupManager::StateReadGuard stateGuard(tdbb);
-	const bool nbak_stalled = dbb->dbb_backup_manager->getState() == Ods::hdr_nbak_stalled;
-
-	USHORT next_init_pages = 1;
-	// ensure there are space on disk for faked page
-	if (relative_bit + 1 > pipUsed)
-	{
-		fb_assert(relative_bit >= pipUsed);
-
-		USHORT init_pages = 0;
-		if (!nbak_stalled)
-		{
-			init_pages = 1;
-			if (!(dbb->dbb_flags & DBB_no_reserve))
-			{
-				const int minExtendPages = MIN_EXTEND_BYTES / dbb->dbb_page_size;
-
-				init_pages = sequence ? 64 : MIN(pipUsed / 16, 64);
-
-				// don't touch pages belongs to the next PIP
-				init_pages = MIN(init_pages, pageMgr.pagesPerPIP - pipUsed);
-
-				if (init_pages < minExtendPages)
-					init_pages = 1;
-			}
-
-			if (init_pages < relative_bit + 1 - pipUsed)
-				init_pages = relative_bit + 1 - pipUsed;
-
-			//init_pages = FB_ALIGN(init_pages, PAGES_IN_EXTENT);
-
-			next_init_pages = init_pages;
-
-			FbLocalStatus status;
-			const ULONG start = sequence * pageMgr.pagesPerPIP + pipUsed;
-
-			init_pages = PIO_init_data(tdbb, pageSpace->file, &status, start, init_pages);
-		}
-
-		if (init_pages)
-		{
-			newUsed += init_pages;
-		}
-		else
-		{
-			// PIO_init_data returns zero - perhaps it is not supported,
-			// no space left on disk or IO error occurred. Try to write
-			// one page and handle IO errors if any.
-			WIN window(pageNum);
-			CCH_fake(tdbb, &window, 1);
-			CCH_must_write(tdbb, &window);
-			try
-			{
-				CCH_RELEASE(tdbb, &window);
-			}
-			catch (const status_exception&)
-			{
-				// forget about this page as if we never tried to fake it
-				CCH_forget_page(tdbb, &window);
-
-				// normally all page buffers now released by CCH_unwind
-				// only exception is when TDBB_no_cache_unwind flag is set
-				if (tdbb->tdbb_flags & TDBB_no_cache_unwind)
-					CCH_RELEASE(tdbb, pip_window);
-
-				throw;
-			}
-
-			newUsed = relative_bit + 1;
-		}
-	}
-
-	if (!(dbb->dbb_flags & DBB_no_reserve) && !nbak_stalled)
-	{
-		const ULONG initialized = sequence * pageMgr.pagesPerPIP + pipUsed;
-
-		// At this point we ensure database has at least "initialized" pages
-		// allocated. To avoid file growth by few pages when all this space
-		// will be used, extend file up to initialized + next_init_pages now
-		pageSpace->extend(tdbb, initialized + next_init_pages, false);
-	}
-
-	return newUsed;
-}
-
-
 AttNumber PAG_attachment_id(thread_db* tdbb)
 {
 /******************************************
@@ -851,10 +820,8 @@ AttNumber PAG_attachment_id(thread_db* tdbb)
  *
  ******************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-
-	Jrd::Attachment* attachment = tdbb->getAttachment();
-	WIN window(DB_PAGE_SPACE, -1);
+	const auto dbb = tdbb->getDatabase();
+	const auto attachment = tdbb->getAttachment();
 
 	// If we've been here before just return the id
 
@@ -867,8 +834,9 @@ AttNumber PAG_attachment_id(thread_db* tdbb)
 		attachment->att_attachment_id = dbb->generateAttachmentId();
 	else
 	{
-		window.win_page = HEADER_PAGE_NUMBER;
+		WIN window(HEADER_PAGE_NUMBER);
 		header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+
 		CCH_MARK(tdbb, &window);
 
 		const AttNumber att_id = Ods::getAttID(header) + 1;
@@ -898,37 +866,26 @@ bool PAG_delete_clump_entry(thread_db* tdbb, USHORT type)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
+	ensureDbWritable(tdbb);
 
-	err_post_if_database_is_readonly(dbb);
-
-	WIN window(DB_PAGE_SPACE, HEADER_PAGE);
-
+	WIN window(HEADER_PAGE_NUMBER);
 	pag* page = CCH_FETCH(tdbb, &window, LCK_write, pag_header);
-
-	UCHAR* entry_p;
-	const UCHAR* clump_end;
-	if (!find_type(tdbb, &window, &page, LCK_write, type, &entry_p, &clump_end))
-	{
-		CCH_RELEASE(tdbb, &window);
-		return false;
-	}
-	CCH_MARK(tdbb, &window);
-
 	header_page* header = (header_page*) page;
-	USHORT* end_addr = &header->hdr_end;
 
-	*end_addr -= (2u + entry_p[1]);
+	const HeaderClumplet clump(header, type);
 
-	const UCHAR* r = entry_p + 2 + entry_p[1];
-	USHORT shift = clump_end - r + 1;
-	if (shift)
-		memmove(entry_p, r, shift);
+	const UCHAR* clump_end;
+	if (const auto entry_p = clump.find(&clump_end))
+	{
+		CCH_MARK(tdbb, &window);
+		clump.remove(entry_p, clump_end);
+		CCH_RELEASE(tdbb, &window);
+
+		return true;
+	}
 
 	CCH_RELEASE(tdbb, &window);
-
-	return true;
+	return false;
 }
 
 
@@ -945,8 +902,7 @@ void PAG_format_header(thread_db* tdbb)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* const dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
+	const auto dbb = tdbb->getDatabase();
 
 	// Initialize header page
 
@@ -990,8 +946,7 @@ void PAG_format_pip(thread_db* tdbb, PageSpace& pageSpace)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
+	const auto dbb = tdbb->getDatabase();
 
 	// Initialize first SCN's Page
 	pageSpace.scnFirst = 0;
@@ -1050,33 +1005,33 @@ bool PAG_get_clump(thread_db* tdbb, USHORT type, USHORT* inout_len, UCHAR* entry
  **************************************/
 	SET_TDBB(tdbb);
 
-	WIN window(DB_PAGE_SPACE, HEADER_PAGE);
+	WIN window(HEADER_PAGE_NUMBER);
 	pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+	header_page* header = (header_page*) page;
 
-	UCHAR* entry_p;
-	const UCHAR* dummy;
-	if (!find_type(tdbb, &window, &page, LCK_read, type, &entry_p, &dummy))
+	const HeaderClumplet clump(header, type);
+
+	if (auto entry_p = clump.find())
 	{
+		USHORT old_len = *inout_len;
+		*inout_len = entry_p[1];
+		entry_p += 2;
+
+		if (*inout_len)
+		{
+			// Avoid the B.O. but inform the caller the buffer is bigger
+			if (*inout_len < old_len)
+				old_len = *inout_len;
+			memcpy(entry, entry_p, old_len);
+		}
+
 		CCH_RELEASE(tdbb, &window);
-		*inout_len = 0;
-		return false;
-	}
-
-	USHORT old_len = *inout_len;
-	*inout_len = entry_p[1];
-	entry_p += 2;
-
-	if (*inout_len)
-	{
-		// Avoid the B.O. but inform the caller the buffer is bigger.
-		if (*inout_len < old_len)
-			old_len = *inout_len;
-		memcpy(entry, entry_p, old_len);
+		return true;
 	}
 
 	CCH_RELEASE(tdbb, &window);
-
-	return true;
+	*inout_len = 0;
+	return false;
 }
 
 
@@ -1096,7 +1051,7 @@ void PAG_header(thread_db* tdbb, bool info)
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
 
-	Jrd::Attachment* attachment = tdbb->getAttachment();
+	const auto attachment = tdbb->getAttachment();
 	fb_assert(attachment);
 
 	WIN window(HEADER_PAGE_NUMBER);
@@ -1176,7 +1131,7 @@ void PAG_header(thread_db* tdbb, bool info)
 		dbb->dbb_flags |= (forceWrite ? DBB_force_write : 0) |
 						  (useFSCache ? 0 : DBB_no_fs_cache);
 
-		PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		for (jrd_file* file = pageSpace->file; file; file = file->fil_next)
 		{
 			PIO_force_write(file, forceWrite && !readOnly, !useFSCache);
@@ -1237,9 +1192,9 @@ void PAG_header_init(thread_db* tdbb)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
-	Jrd::Attachment* const attachment = tdbb->getAttachment();
+	const auto attachment = tdbb->getAttachment();
 	fb_assert(attachment);
 
 	// Allocate a spare buffer which is large enough,
@@ -1315,11 +1270,10 @@ void PAG_init(thread_db* tdbb)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* const dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
+	const auto dbb = tdbb->getDatabase();
 
 	PageManager& pageMgr = dbb->dbb_page_manager;
-	PageSpace* pageSpace = pageMgr.findPageSpace(DB_PAGE_SPACE);
+	PageSpace* const pageSpace = pageMgr.findPageSpace(DB_PAGE_SPACE);
 	fb_assert(pageSpace);
 
 	pageMgr.bytesBitPIP = Ods::bytesBitPIP(dbb->dbb_page_size);
@@ -1362,7 +1316,8 @@ void PAG_init2(thread_db* tdbb, USHORT shadow_number)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
+
 	FbStatusVector* status = tdbb->tdbb_status_vector;
 
 	// allocate a spare buffer which is large enough,
@@ -1372,7 +1327,7 @@ void PAG_init2(thread_db* tdbb, USHORT shadow_number)
 	Array<UCHAR> temp;
 	UCHAR* const temp_page = temp.getAlignedBuffer(dbb->dbb_page_size, dbb->getIOBlockSize());
 
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	jrd_file* file = pageSpace->file;
 	if (shadow_number)
 	{
@@ -1392,104 +1347,88 @@ void PAG_init2(thread_db* tdbb, USHORT shadow_number)
 	USHORT sequence = 1;
 	WIN window(DB_PAGE_SPACE, -1);
 
-	TEXT buf[MAXPATHLEN + 1];
-
 	// Loop thru files and header pages until everything is open
 
-	for (;;)
+	while (true)
 	{
-		TEXT* file_name = NULL;
 		window.win_page = file->fil_min_page;
-		USHORT file_length = 0;
 		ULONG last_page = 0;
 		BufferDesc temp_bdb(dbb->dbb_bcb);
-		SLONG next_page = 0;
-		do {
-			// note that we do not have to get a read lock on
-			// the header page (except for header page 0) because
-			// the only time it will be modified is when adding a file,
-			// which must be done with an exclusive lock on the database --
-			// if this changes, this policy will have to be reevaluated;
-			// at any rate there is a problem with getting a read lock
-			// because the corresponding page in the main database file may not exist
 
-			if (!file->fil_min_page)
-				CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+		// note that we do not have to get a read lock on
+		// the header page (except for header page 0) because
+		// the only time it will be modified is when adding a file,
+		// which must be done with an exclusive lock on the database --
+		// if this changes, this policy will have to be reevaluated;
+		// at any rate there is a problem with getting a read lock
+		// because the corresponding page in the main database file may not exist
 
-			header_page* header = (header_page*) temp_page;
-			temp_bdb.bdb_buffer = (pag*) header;
-			temp_bdb.bdb_page = window.win_page;
+		if (!file->fil_min_page)
+			CCH_FETCH(tdbb, &window, LCK_read, pag_header);
 
-			// Read the required page into the local buffer
-			// It's header, never encrypted
-			PIO_read(tdbb, file, &temp_bdb, (PAG) header, status);
+		header_page* header = (header_page*) temp_page;
+		temp_bdb.bdb_buffer = (pag*) header;
+		temp_bdb.bdb_page = window.win_page;
 
-			if (shadow_number && !file->fil_min_page)
-				CCH_RELEASE(tdbb, &window);
+		// Read the required page into the local buffer
+		// It's header, never encrypted
+		PIO_read(tdbb, file, &temp_bdb, (PAG) header, status);
 
-			for (const UCHAR* p = header->hdr_data; *p != HDR_end; p += 2u + p[1])
+		if (shadow_number && !file->fil_min_page)
+			CCH_RELEASE(tdbb, &window);
+
+		PathName nextFileName;
+
+		for (const UCHAR* p = header->hdr_data; *p != HDR_end; p += 2 + p[1])
+		{
+			switch (*p)
 			{
-				switch (*p)
-				{
-				case HDR_file:
-					file_length = p[1];
-					file_name = buf;
-					memcpy(buf, p + 2, file_length);
-					break;
+			case HDR_file:
+				nextFileName.assign(p + 2, p[1]);
+				break;
 
-				case HDR_last_page:
-					memcpy(&last_page, p + 2, sizeof(last_page));
-					break;
+			case HDR_last_page:
+				memcpy(&last_page, p + 2, sizeof(last_page));
+				break;
 
-				case HDR_sweep_interval:
-					memcpy(&dbb->dbb_sweep_interval, p + 2, sizeof(SLONG));
-					break;
+			case HDR_sweep_interval:
+				memcpy(&dbb->dbb_sweep_interval, p + 2, sizeof(SLONG));
+				break;
 
-				case HDR_db_guid:
-					memcpy(&dbb->dbb_guid, p + 2, sizeof(Guid));
-					break;
+			case HDR_db_guid:
+				memcpy(&dbb->dbb_guid, p + 2, sizeof(Guid));
+				break;
 
-				case HDR_repl_seq:
-					memcpy(&dbb->dbb_repl_sequence, p + 2, sizeof(FB_UINT64));
-					break;
-				}
+			case HDR_repl_seq:
+				memcpy(&dbb->dbb_repl_sequence, p + 2, sizeof(FB_UINT64));
+				break;
 			}
+		}
 
-			next_page = header->hdr_next_page;
-
-			if (!shadow_number && !file->fil_min_page)
-				CCH_RELEASE(tdbb, &window);
-
-			window.win_page = next_page;
-
-			// Make sure the header page and all the overflow header
-			// pages are traversed.  For V4.0, only the header page for
-			// the primary database page will have overflow pages.
-
-		} while (next_page);
+		if (!shadow_number && !file->fil_min_page)
+			CCH_RELEASE(tdbb, &window);
 
 		if (file->fil_min_page)
 			file->fil_fudge = 1;
-		if (!file_name)
+
+		if (nextFileName.isEmpty())
 			break;
 
 		// Verify database file path against DatabaseAccess entry of firebird.conf
-		file_name[file_length] = 0;
-		if (!JRD_verify_database_access(file_name))
+		if (!JRD_verify_database_access(nextFileName))
 		{
-			string fileName(file_name);
-			ISC_systemToUtf8(fileName);
+			ISC_systemToUtf8(nextFileName);
 			ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("additional database file") <<
-														 Arg::Str(fileName));
+														 Arg::Str(nextFileName));
 		}
 
-		file->fil_next = PIO_open(tdbb, file_name, file_name);
+		file->fil_next = PIO_open(tdbb, nextFileName, nextFileName);
 		file->fil_max_page = last_page;
 		file = file->fil_next;
+
 		if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
-		{
 			PIO_force_write(file, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
-		}
+
 		file->fil_min_page = last_page + 1;
 		file->fil_sequence = sequence++;
 	}
@@ -1509,10 +1448,8 @@ SLONG PAG_last_page(thread_db* tdbb)
  *	shadow stuff to dump a database.
  *
  **************************************/
-
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
+	const auto dbb = tdbb->getDatabase();
 
 	return PageSpace::lastUsedPage(dbb);
 }
@@ -1552,13 +1489,11 @@ void PAG_release_pages(thread_db* tdbb, USHORT pageSpaceID, int cntRelease,
  *	Release a few pages to the free page page.
  *
  **************************************/
-
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
+	const auto dbb = tdbb->getDatabase();
 
 	PageManager& pageMgr = dbb->dbb_page_manager;
-	PageSpace* pageSpace = pageMgr.findPageSpace(pageSpaceID);
+	PageSpace* const pageSpace = pageMgr.findPageSpace(pageSpaceID);
 	fb_assert(pageSpace);
 
 	WIN pip_window(pageSpaceID, -1);
@@ -1643,9 +1578,8 @@ void PAG_set_db_guid(thread_db* tdbb, const Guid& guid)
  *	Set sweep interval.
  *
  **************************************/
-
  	SET_TDBB(tdbb);
-	add_clump(tdbb, HDR_db_guid, sizeof(Guid), (UCHAR*) &guid, CLUMP_REPLACE);
+	storeClump(tdbb, HDR_db_guid, sizeof(Guid), (UCHAR*) &guid);
 }
 
 
@@ -1662,13 +1596,13 @@ void PAG_set_force_write(thread_db* tdbb, bool flag)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-
-	err_post_if_database_is_readonly(dbb);
+	ensureDbWritable(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
 	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 	CCH_MARK_MUST_WRITE(tdbb, &window);
+
+	const auto dbb = tdbb->getDatabase();
 
 	if (flag)
 	{
@@ -1683,16 +1617,14 @@ void PAG_set_force_write(thread_db* tdbb, bool flag)
 
 	CCH_RELEASE(tdbb, &window);
 
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-	for (jrd_file* file = pageSpace->file; file; file = file->fil_next) {
+	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+	for (jrd_file* file = pageSpace->file; file; file = file->fil_next)
 		PIO_force_write(file, flag, dbb->dbb_flags & DBB_no_fs_cache);
-	}
 
 	for (Shadow* shadow = dbb->dbb_shadow; shadow; shadow = shadow->sdw_next)
 	{
-		for (jrd_file* file = shadow->sdw_file; file; file = file->fil_next) {
+		for (jrd_file* file = shadow->sdw_file; file; file = file->fil_next)
 			PIO_force_write(file, flag, dbb->dbb_flags & DBB_no_fs_cache);
-		}
 	}
 }
 
@@ -1710,13 +1642,13 @@ void PAG_set_no_reserve(thread_db* tdbb, bool flag)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-
-	err_post_if_database_is_readonly(dbb);
+	ensureDbWritable(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
 	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 	CCH_MARK_MUST_WRITE(tdbb, &window);
+
+	const auto dbb = tdbb->getDatabase();
 
 	if (flag)
 	{
@@ -1746,7 +1678,7 @@ void PAG_set_db_readonly(thread_db* tdbb, bool flag)
  *
  *********************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
 	WIN window(HEADER_PAGE_NUMBER);
 	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
@@ -1801,14 +1733,14 @@ void PAG_set_db_replica(thread_db* tdbb, ReplicaMode mode)
  *
  *********************************************/
 	SET_TDBB(tdbb);
-	const auto dbb = tdbb->getDatabase();
-
-	err_post_if_database_is_readonly(dbb);
+	ensureDbWritable(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
 	const auto header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
 	CCH_MARK_MUST_WRITE(tdbb, &window);
+
+	const auto dbb = tdbb->getDatabase();
 
 	header->hdr_flags &= ~(hdr_replica_read_only | hdr_replica_read_write);
 	fb_assert((header->hdr_flags & hdr_replica_mask) == hdr_replica_none);
@@ -1849,12 +1781,12 @@ void PAG_set_db_SQL_dialect(thread_db* tdbb, SSHORT flag)
  *
  *********************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-
-	err_post_if_database_is_readonly(dbb);
+	ensureDbWritable(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
 	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+
+	const auto dbb = tdbb->getDatabase();
 
 	if (flag)
 	{
@@ -1905,10 +1837,7 @@ void PAG_set_page_buffers(thread_db* tdbb, ULONG buffers)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
-
-	err_post_if_database_is_readonly(dbb);
+	ensureDbWritable(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
 	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
@@ -1930,9 +1859,8 @@ void PAG_set_repl_sequence(thread_db* tdbb, FB_UINT64 sequence)
  *	Set replication sequence.
  *
  **************************************/
-
  	SET_TDBB(tdbb);
-	add_clump(tdbb, HDR_repl_seq, sizeof(FB_UINT64), (UCHAR*) &sequence, CLUMP_REPLACE);
+	storeClump(tdbb, HDR_repl_seq, sizeof(FB_UINT64), (UCHAR*) &sequence);
 }
 
 
@@ -1948,164 +1876,8 @@ void PAG_set_sweep_interval(thread_db* tdbb, SLONG interval)
  *	Set sweep interval.
  *
  **************************************/
-
  	SET_TDBB(tdbb);
-	add_clump(tdbb, HDR_sweep_interval, sizeof(SLONG), (UCHAR*) &interval, CLUMP_REPLACE);
-}
-
-
-static void find_clump_space(thread_db* tdbb,
-							 WIN* window,
-							 PAG* ppage,
-							 USHORT type,
-							 USHORT len,
-							 const UCHAR* entry) //USHORT must_write
-{
-/***********************************************
- *
- *	f i n d _ c l u m p _ s p a c e
- *
- ***********************************************
- *
- * Functional description
- *	Find space for the new clump.
- *	Add the entry at the end of clumplet list.
- *	Allocate a new page if required.
- *
- **************************************/
-	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
-
-	pag* page = *ppage;
-	header_page* header = 0; // used after the loop
-
-	while (true)
-	{
-		header = (header_page*) page;
-		const SLONG next_page = header->hdr_next_page;
-		const SLONG free_space = dbb->dbb_page_size - header->hdr_end;
-		USHORT* const end_addr = &header->hdr_end;
-		UCHAR* p = (UCHAR*) header + header->hdr_end;
-
-		if (free_space > (2 + len))
-		{
-			CCH_MARK_MUST_WRITE(tdbb, window);
-
-			fb_assert(type <= MAX_UCHAR);
-			fb_assert(len <= MAX_UCHAR);
-			*p++ = static_cast<UCHAR>(type);
-			*p++ = static_cast<UCHAR>(len);
-
-			if (len)
-			{
-				memcpy(p, entry, len);
-				p += len;
-			}
-
-			*p = HDR_end;
-
-			*end_addr = (USHORT) (p - (UCHAR*) page);
-			return;
-		}
-
-		if (!next_page)
-			break;
-
-		// Follow chain of header pages
-
-		*ppage = page = CCH_HANDOFF(tdbb, window, next_page, LCK_write, pag_header);
-	}
-
-	WIN new_window(DB_PAGE_SPACE, -1);
-	pag* new_page = (PAG) DPM_allocate(tdbb, &new_window);
-
-	CCH_MARK_MUST_WRITE(tdbb, &new_window);
-
-	header_page* const new_header = (header_page*) new_page;
-	new_header->hdr_header.pag_type = pag_header;
-	new_header->hdr_end = HDR_SIZE;
-	new_header->hdr_page_size = dbb->dbb_page_size;
-	new_header->hdr_data[0] = HDR_end;
-	const SLONG next_page = new_window.win_page.getPageNum();
-	USHORT* const end_addr = &new_header->hdr_end;
-	UCHAR* p = new_header->hdr_data;
-
-	fb_assert(type <= MAX_UCHAR);
-	fb_assert(len <= MAX_UCHAR);
-	*p++ = static_cast<UCHAR>(type);
-	*p++ = static_cast<UCHAR>(len);
-
-	if (len)
-	{
-		memcpy(p, entry, len);
-		p += len;
-	}
-
-	*p = HDR_end;
-	*end_addr = (USHORT) (p - (UCHAR*) new_page);
-
-	CCH_RELEASE(tdbb, &new_window);
-
-	CCH_precedence(tdbb, window, next_page);
-
-	CCH_MARK(tdbb, window);
-
-	header->hdr_next_page = next_page;
-}
-
-
-static bool find_type(thread_db* tdbb,
-					  WIN* window,
-					  PAG* ppage,
-					  USHORT lock,
-					  USHORT type,
-					  UCHAR** entry_p,
-					  const UCHAR** clump_end)
-{
-/***********************************************
- *
- *	f i n d _ t y p e
- *
- ***********************************************
- *
- * Functional description
- *	Find the requested type in a page.
- *	RETURNS
- *		pointer to type, pointer to end of page, header.
- *		true  - Found it
- *		false - Not present
- *
- **************************************/
-	SET_TDBB(tdbb);
-
-	while (true)
-	{
-		header_page* header = (header_page*) (*ppage);
-		UCHAR* p = header->hdr_data;
-		const SLONG next_page = header->hdr_next_page;
-
-		UCHAR* q = 0;
-		for (; (*p != HDR_end); p += 2u + p[1])
-		{
-			if (*p == type)
-				q = p;
-		}
-
-		if (q)
-		{
-			*entry_p = q;
-			*clump_end = p;
-			return true;
-		}
-
-		// Follow chain of pages
-
-		if (next_page)
-			*ppage = CCH_HANDOFF(tdbb, window, next_page, lock, pag_header);
-		else
-			return false;
-	}
+	storeClump(tdbb, HDR_sweep_interval, sizeof(SLONG), (UCHAR*) &interval);
 }
 
 
@@ -2597,7 +2369,7 @@ ULONG PAG_page_count(thread_db* tdbb)
 	page_inv_page* pip = reinterpret_cast<Ods::page_inv_page*>
 		(temp.getAlignedBuffer(dbb->dbb_page_size, dbb->getIOBlockSize()));
 
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	fb_assert(pageSpace);
 
 	ULONG pageNo = pageSpace->pipFirst;
@@ -2639,7 +2411,7 @@ void PAG_set_page_scn(thread_db* tdbb, win* window)
 	fb_assert(dbb->dbb_ods_version >= ODS_VERSION12);
 
 	PageManager& pageMgr = dbb->dbb_page_manager;
-	PageSpace* pageSpace = pageMgr.findPageSpace(window->win_page.getPageSpaceID());
+	PageSpace* const pageSpace = pageMgr.findPageSpace(window->win_page.getPageSpaceID());
 
 	if (pageSpace->isTemporary())
 		return;

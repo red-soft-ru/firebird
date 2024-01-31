@@ -460,7 +460,7 @@ struct header_page
 	USHORT hdr_page_size;			// Page size of database
 	USHORT hdr_ods_version;			// Version of on-disk structure
 	ULONG hdr_PAGES;				// Page number of PAGES relation
-	ULONG hdr_next_page;			// Page number of next hdr page
+	ULONG hdr_unused;				// Unused (was: Page number of next hdr page)
 	ULONG hdr_oldest_transaction;	// Oldest interesting transaction
 	ULONG hdr_oldest_active;		// Oldest transaction thought active
 	ULONG hdr_next_transaction;		// Next transaction id
@@ -490,7 +490,7 @@ static_assert(offsetof(struct header_page, hdr_header) == 0, "hdr_header offset 
 static_assert(offsetof(struct header_page, hdr_page_size) == 16, "hdr_page_size offset mismatch");
 static_assert(offsetof(struct header_page, hdr_ods_version) == 18, "hdr_ods_version offset mismatch");
 static_assert(offsetof(struct header_page, hdr_PAGES) == 20, "hdr_PAGES offset mismatch");
-static_assert(offsetof(struct header_page, hdr_next_page) == 24, "hdr_next_page offset mismatch");
+static_assert(offsetof(struct header_page, hdr_unused) == 24, "hdr_unused offset mismatch");
 static_assert(offsetof(struct header_page, hdr_oldest_transaction) == 28, "hdr_oldest_transaction offset mismatch");
 static_assert(offsetof(struct header_page, hdr_oldest_active) == 32, "hdr_oldest_active offset mismatch");
 static_assert(offsetof(struct header_page, hdr_next_transaction) == 36, "hdr_next_transaction offset mismatch");
