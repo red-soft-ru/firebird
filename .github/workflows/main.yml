@@ -271,7 +271,7 @@ jobs:
 
   build-macos:
     name: build-macos-${{ matrix.arch }}
-    runs-on: ${{ (matrix.arch == 'arm64' && 'flyci-macos-large-latest-m1') || 'macos-12' }}
+    runs-on: ${{ (matrix.arch == 'arm64' && 'macos-14') || 'macos-12' }}
 
     strategy:
       fail-fast: false
@@ -279,8 +279,6 @@ jobs:
         arch:
           - x64
           - arm64
-        exclude:
-          - arch: ${{ (github.event.head_commit.message == 'increment build number' || github.ref_type == 'tag') && 'dummy' || 'arm64' }}
 
     steps:
       - name: Checkout
