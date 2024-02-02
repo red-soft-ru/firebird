@@ -390,7 +390,7 @@ jobs:
   build-android-final:
     name: build-android-${{ matrix.arch }}-final
     needs: build-android-initial
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     env:
       ARCH: ${{ matrix.arch }}
 
@@ -409,6 +409,12 @@ jobs:
         with:
           fetch-depth: 10
 
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Download initial build
         uses: actions/download-artifact@v3
         with:
@@ -422,7 +428,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-v3
+          key: avd-v7
 
       - name: Create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -449,10 +455,9 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -noaudio -no-boot-anim -camera-back none -port 5554
           emulator-boot-timeout: 900
           script: |
-            sleep 20
             adb wait-for-device
             adb root
-            NDK=/Users/runner/Library/Android/sdk/ndk/25.1.8937393 builds/install/arch-specific/android/BuildFinalPackage.sh $ARCH
+            NDK=/usr/local/lib/android/sdk/ndk/25.1.8937393 builds/install/arch-specific/android/BuildFinalPackage.sh $ARCH
 
       - name: Upload installer
         uses: actions/upload-artifact@v3
