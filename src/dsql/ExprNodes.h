@@ -955,6 +955,12 @@ public:
 	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual dsc* execute(thread_db* tdbb, Request* request) const;
 
+	bool getBoolean() const
+	{
+		fb_assert(litDesc.dsc_dtype == dtype_boolean);
+		return *litDesc.dsc_address != '\0';
+	}
+
 	SLONG getSlong() const
 	{
 		fb_assert(litDesc.dsc_dtype == dtype_long);
