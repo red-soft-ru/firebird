@@ -12341,9 +12341,13 @@ bool RestoreRelationTask::fileReader(Item& item)
 			BURP_error_redirect(NULL, 41); // msg 41 expected data attribute
 
 		// check if record fits into current buffer and get a new one if needed
+		// note, non-compressible record takes 1 additional byte per every 127 bytes
+		// due to compression overhead
 
 		const FB_SSIZE_T attLen = 1 + (tdgbl->gbl_sw_transportable ? 12 : 6);
-		if (len + attLen > space)
+		const FB_SSIZE_T overhead = tdgbl->gbl_sw_compress ? (len / 127 + 1) : 0;
+
+		if (len + attLen + overhead > space)
 		{
 			if (ioBuf)
 			{
