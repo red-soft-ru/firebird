@@ -408,9 +408,6 @@ USHORT PAG_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start)
 
 	jrd_file* next = file->fil_next;
 
-	if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
-		PIO_force_write(next, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
-
 	WIN window(DB_PAGE_SPACE, next->fil_min_page);
 	header_page* header = (header_page*) CCH_fake(tdbb, &window, 1);
 	header->hdr_header.pag_type = pag_header;
@@ -924,6 +921,9 @@ void PAG_format_header(thread_db* tdbb)
 	if (dbb->dbb_flags & DBB_DB_SQL_dialect_3)
 		header->hdr_flags |= hdr_SQL_dialect_3;
 
+	if (dbb->dbb_flags & DBB_force_write)
+		header->hdr_flags |= hdr_force_write;
+
 	dbb->dbb_ods_version = header->hdr_ods_version & ~ODS_FIREBIRD_FLAG;
 	dbb->dbb_minor_version = header->hdr_ods_minor;
 
@@ -1035,7 +1035,7 @@ bool PAG_get_clump(thread_db* tdbb, USHORT type, USHORT* inout_len, UCHAR* entry
 }
 
 
-void PAG_header(thread_db* tdbb, bool info)
+void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 {
 /**************************************
  *
@@ -1122,24 +1122,24 @@ void PAG_header(thread_db* tdbb, bool info)
 										  Arg::Str(attachment->att_filename));
 	}
 
+	// Determine the actual FW mode to be used. Use the setting stored on the header page
+	// unless something different is explicitly specified in DPB.
+	const bool currentForceWrite = (header->hdr_flags & hdr_force_write) != 0;
+	const bool forceWrite = newForceWrite.valueOr(currentForceWrite);
 
-	const bool useFSCache = dbb->dbb_config->getUseFileSystemCache();
-	const bool forceWrite = header->hdr_flags & hdr_force_write;
+	// Adjust the flag inside the database block
+	if (forceWrite)
+		dbb->dbb_flags |= DBB_force_write;
+	else
+		dbb->dbb_flags &= ~DBB_force_write;
 
-	if (forceWrite || !useFSCache)
-	{
-		dbb->dbb_flags |= (forceWrite ? DBB_force_write : 0) |
-						  (useFSCache ? 0 : DBB_no_fs_cache);
+	// Ensure the file-level FW mode matches the actual FW mode in the database
+	const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+	for (jrd_file* file = pageSpace->file; file; file = file->fil_next)
+		PIO_force_write(file, forceWrite && !readOnly);
 
-		PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-		for (jrd_file* file = pageSpace->file; file; file = file->fil_next)
-		{
-			PIO_force_write(file, forceWrite && !readOnly, !useFSCache);
-		}
-
-		if (dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
-			dbb->dbb_backup_manager->setForcedWrites(forceWrite, !useFSCache);
-	}
+	if (dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
+		dbb->dbb_backup_manager->setForcedWrites(forceWrite);
 
 	if (header->hdr_flags & hdr_no_reserve)
 		dbb->dbb_flags |= DBB_no_reserve;
@@ -1426,9 +1426,6 @@ void PAG_init2(thread_db* tdbb, USHORT shadow_number)
 		file->fil_max_page = last_page;
 		file = file->fil_next;
 
-		if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
-			PIO_force_write(file, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
-
 		file->fil_min_page = last_page + 1;
 		file->fil_sequence = sequence++;
 	}
@@ -1619,13 +1616,16 @@ void PAG_set_force_write(thread_db* tdbb, bool flag)
 
 	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	for (jrd_file* file = pageSpace->file; file; file = file->fil_next)
-		PIO_force_write(file, flag, dbb->dbb_flags & DBB_no_fs_cache);
+		PIO_force_write(file, flag);
 
 	for (Shadow* shadow = dbb->dbb_shadow; shadow; shadow = shadow->sdw_next)
 	{
 		for (jrd_file* file = shadow->sdw_file; file; file = file->fil_next)
-			PIO_force_write(file, flag, dbb->dbb_flags & DBB_no_fs_cache);
+			PIO_force_write(file, flag);
 	}
+
+	if (dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
+		dbb->dbb_backup_manager->setForcedWrites(flag);
 }
 
 

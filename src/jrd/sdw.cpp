@@ -92,12 +92,6 @@ void SDW_add(thread_db* tdbb, const TEXT* file_name, USHORT shadow_number, USHOR
 
 	jrd_file* shadow_file = PIO_create(tdbb, file_name, false, false);
 
-	if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
-	{
-		PIO_force_write(shadow_file, dbb->dbb_flags & DBB_force_write,
-			dbb->dbb_flags & DBB_no_fs_cache);
-	}
-
 	SyncLockGuard guard(&dbb->dbb_shadow_sync, SYNC_EXCLUSIVE, "SDW_add");
 
 	Shadow* shadow = allocate_shadow(shadow_file, shadow_number, file_flags);
@@ -173,11 +167,6 @@ int SDW_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start, USHORT sha
 		return 0;
 
 	jrd_file* next = file->fil_next;
-
-	if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
-	{
-		PIO_force_write(next, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
-	}
 
 	// Always write the header page, even for a conditional
 	// shadow that hasn't been activated.
@@ -994,12 +983,6 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 	try {
 
 	shadow_file = PIO_open(tdbb, expanded_name, file_name);
-
-	if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
-	{
-		PIO_force_write(shadow_file, dbb->dbb_flags & DBB_force_write,
-			dbb->dbb_flags & DBB_no_fs_cache);
-	}
 
 	if (!(file_flags & FILE_conditional))
 	{
