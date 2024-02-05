@@ -586,6 +586,11 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
+	virtual bool possiblyUnknown() const
+	{
+		return true;
+	}
+
 	virtual bool ignoreNulls(const StreamList& /*streams*/) const
 	{
 		return false;
