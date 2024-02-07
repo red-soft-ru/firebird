@@ -771,6 +771,9 @@ bool Retrieval::checkIndexCondition(index_desc& idx, MatchedBooleanList& matches
 
 		for (iter.rewind(); iter.hasData(); ++iter)
 		{
+			if (!iter->containsStream(stream))
+				continue;
+
 			if (matchSubset(boolean, *iter))
 			{
 				matches.add(*iter);
@@ -788,6 +791,9 @@ bool Retrieval::checkIndexCondition(index_desc& idx, MatchedBooleanList& matches
 		{
 			for (iter.rewind(); iter.hasData(); ++iter)
 			{
+				if (!iter->containsStream(stream))
+					continue;
+
 				const auto cmpNode = nodeAs<ComparativeBoolNode>(*iter);
 				if (cmpNode && cmpNode->blrOp != blr_equiv)
 				{
