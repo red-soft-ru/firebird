@@ -1590,7 +1590,6 @@ bool isRunningCheck(const UCHAR* items, unsigned int length)
 		case isc_info_data_not_ready:
 		case isc_info_length:
 		case isc_info_flag_end:
-		case isc_info_svc_auth_block:
 		case isc_info_svc_running:
 			break;
 

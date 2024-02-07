@@ -4190,7 +4190,6 @@ const
 	isc_info_svc_limbo_trans = byte(66);
 	isc_info_svc_running = byte(67);
 	isc_info_svc_get_users = byte(68);
-	isc_info_svc_auth_block = byte(69);
 	isc_info_svc_stdin = byte(78);
 	isc_spb_sec_userid = byte(5);
 	isc_spb_sec_groupid = byte(6);
