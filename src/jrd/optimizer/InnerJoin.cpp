@@ -232,6 +232,13 @@ void InnerJoin::estimateCost(unsigned position,
 			// Scan the matches for possible equi-join conditions
 			for (const auto match : candidate->matches)
 			{
+				if (!match->containsStream(stream->number))
+				{
+					// This should never happen but be prepared for the worst
+					fb_assert(false);
+					continue;
+				}
+
 				// Check whether we have an equivalence operation
 				if (!optimizer->checkEquiJoin(match))
 					continue;
