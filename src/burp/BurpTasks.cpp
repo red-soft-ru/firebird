@@ -564,7 +564,7 @@ bool BackupRelationTask::fileWriter(Item& item)
 	BURP_verbose(142, m_relation->rel_name);
 	// msg 142  writing data for relation %s
 
-	IOBuffer* buf = NULL;
+	IOBuffer*& buf = item.m_buffer = NULL;
 	FB_SIZE_T records = 0;
 	FB_SIZE_T verbRecs = -1;
 	FB_SIZE_T verb = 0;
