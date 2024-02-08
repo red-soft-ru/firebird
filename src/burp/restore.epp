@@ -12303,7 +12303,7 @@ bool RestoreRelationTask::fileReader(Item& item)
 
 	const RCRD_LENGTH length = m_metadata.m_inMsgLen;	// full record length
 
-	IOBuffer* ioBuf = NULL;
+	IOBuffer*& ioBuf = item.m_buffer = NULL;
 	FB_SSIZE_T space = 0;	// space left in current buffer
 	UCHAR* buf = NULL;		// pointer at the current buffer
 
