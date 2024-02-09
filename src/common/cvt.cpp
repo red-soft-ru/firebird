@@ -2502,7 +2502,8 @@ static void hex_to_value(const char*& string, const char* end, RetPtr* retValue)
 static SSHORT cvt_decompose(const char*	string,
 							USHORT		length,
 							RetPtr*		return_value,
-							ErrorFunction err)
+							ErrorFunction err,
+							int*		overflow = nullptr)
 {
 /**************************************
  *
@@ -2600,15 +2601,23 @@ static SSHORT cvt_decompose(const char*	string,
 					if (p >= end)
 						continue;
 				}
-				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+				if (overflow)
+					*overflow = 1;
+				else
+					err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 				return 0;
+
 			case RetPtr::RETVAL_POSSIBLE_OVERFLOW:
 				if ((*p > '8' && sign == -1) || (*p > '7' && sign != -1))
 				{
-					err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+					if (overflow)
+						*overflow = 1;
+					else
+						err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 					return 0;
 				}
 				break;
+
 			default:
 				break;
 			}
@@ -2758,9 +2767,9 @@ public:
 
 	lb10 compareLimitBy10()
 	{
-		if (value > Traits::UPPER_LIMIT_BY_10)
+		if (static_cast<typename Traits::UnsignedType>(value) > Traits::UPPER_LIMIT_BY_10)
 			return RETVAL_OVERFLOW;
-		if (value == Traits::UPPER_LIMIT_BY_10)
+		if (static_cast<typename Traits::UnsignedType>(value) == Traits::UPPER_LIMIT_BY_10)
 			return RETVAL_POSSIBLE_OVERFLOW;
 		return RETVAL_NO_OVERFLOW;
 	}
@@ -2791,7 +2800,8 @@ class SSHORTTraits
 {
 public:
 	typedef SSHORT ValueType;
-	static const SSHORT UPPER_LIMIT_BY_10 = MAX_SSHORT / 10;
+	typedef USHORT UnsignedType;
+	static const USHORT UPPER_LIMIT_BY_10 = MAX_SSHORT / 10;
 	static const SSHORT LOWER_LIMIT = MIN_SSHORT;
 };
 
@@ -2818,7 +2828,8 @@ class SLONGTraits
 {
 public:
 	typedef SLONG ValueType;
-	static const SLONG UPPER_LIMIT_BY_10 = MAX_SLONG / 10;
+	typedef ULONG UnsignedType;
+	static const ULONG UPPER_LIMIT_BY_10 = MAX_SLONG / 10;
 	static const SLONG LOWER_LIMIT = MIN_SLONG;
 };
 
@@ -2845,11 +2856,12 @@ class SINT64Traits
 {
 public:
 	typedef SINT64 ValueType;
-	static const SINT64 UPPER_LIMIT_BY_10 = MAX_SINT64 / 10;
+	typedef FB_UINT64 UnsignedType;
+	static const FB_UINT64 UPPER_LIMIT_BY_10 = MAX_SINT64 / 10;
 	static const SINT64 LOWER_LIMIT = MIN_SINT64;
 };
 
-SSHORT CVT_decompose(const char* str, USHORT len, SINT64* val, ErrorFunction err)
+SSHORT CVT_decompose(const char* str, USHORT len, SINT64* val, ErrorFunction err, int* overflow)
 {
 /**************************************
  *
@@ -2864,7 +2876,7 @@ SSHORT CVT_decompose(const char* str, USHORT len, SINT64* val, ErrorFunction err
  **************************************/
 
 	RetValue<SINT64Traits> value(val);
-	return cvt_decompose(str, len, &value, err);
+	return cvt_decompose(str, len, &value, err, overflow);
 }
 
 
@@ -2872,6 +2884,7 @@ class I128Traits
 {
 public:
 	typedef Int128 ValueType;
+	typedef Int128 UnsignedType;			// To be fixed when adding int256
 	static const CInt128 UPPER_LIMIT_BY_10;
 	static const CInt128 LOWER_LIMIT;
 };
@@ -3457,7 +3470,7 @@ SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 }
 
 
-SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
+SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err, int* overflow)
 {
 /**************************************
  *
@@ -3559,7 +3572,7 @@ SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFu
 		{
 			USHORT length =
 				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
-			scale -= CVT_decompose(p, length, &value, err);
+			scale -= CVT_decompose(p, length, &value, err, overflow);
 		}
 		break;
 
