@@ -422,6 +422,30 @@ bool IndexCondition::evaluate(Record* record) const
 	return result;
 }
 
+TriState IndexCondition::check(Record* record, idx_e* errCode)
+{
+	TriState result;
+
+	try
+	{
+		result = evaluate(record);
+
+		if (errCode)
+			*errCode = idx_e_ok;
+	}
+	catch (const Exception& ex)
+	{
+		if (errCode)
+		{
+			*errCode = idx_e_conversion;
+			ex.stuffException(m_tdbb->tdbb_status_vector);
+		}
+	}
+
+	return result;
+}
+
+
 // IndexExpression class
 
 IndexExpression::IndexExpression(thread_db* tdbb, index_desc* idx)
@@ -1011,12 +1035,6 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 	}
 
 	return true;
-}
-
-
-bool BTR_check_condition(thread_db* tdbb, index_desc* idx, Record* record)
-{
-	return IndexCondition(tdbb, idx).evaluate(record);
 }
 
 

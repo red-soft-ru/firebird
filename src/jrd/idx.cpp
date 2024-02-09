@@ -628,32 +628,39 @@ bool IndexCreateTask::handler(WorkItem& _item)
 		while (!m_stop && stack.hasData())
 		{
 			Record* record = stack.pop();
+			idx_e result = idx_e_ok;
 
-			if (!condition.evaluate(record))
-				continue;
-
-			auto result = key.compose(record);
+			const auto checkResult = condition.check(record, &result);
 
 			if (result == idx_e_ok)
 			{
-				if (isPrimary && key->key_nulls != 0)
+				fb_assert(checkResult.isAssigned());
+				if (!checkResult.value)
+					continue;
+
+				result = key.compose(record);
+
+				if (result == idx_e_ok)
 				{
-					const auto key_null_segment = key.getNullSegment();
-					fb_assert(key_null_segment < idx->idx_count);
-					const auto bad_id = idx->idx_rpt[key_null_segment].idx_field;
-					const jrd_fld *bad_fld = MET_get_field(relation, bad_id);
+					if (isPrimary && key->key_nulls != 0)
+					{
+						const auto key_null_segment = key.getNullSegment();
+						fb_assert(key_null_segment < idx->idx_count);
+						const auto bad_id = idx->idx_rpt[key_null_segment].idx_field;
+						const jrd_fld *bad_fld = MET_get_field(relation, bad_id);
 
-					ERR_post(Arg::Gds(isc_not_valid) << Arg::Str(bad_fld->fld_name) <<
-														Arg::Str(NULL_STRING_MARK));
-				}
+						ERR_post(Arg::Gds(isc_not_valid) << Arg::Str(bad_fld->fld_name) <<
+															Arg::Str(NULL_STRING_MARK));
+					}
 
-				// If foreign key index is being defined, make sure foreign
-				// key definition will not be violated
+					// If foreign key index is being defined, make sure foreign
+					// key definition will not be violated
 
-				if (isForeign && key->key_nulls == 0)
-				{
-					result = check_partner_index(tdbb, relation, record, transaction, idx,
-												 partner_relation, partner_index_id);
+					if (isForeign && key->key_nulls == 0)
+					{
+						result = check_partner_index(tdbb, relation, record, transaction, idx,
+													 partner_relation, partner_index_id);
+					}
 				}
 			}
 
@@ -1167,7 +1174,7 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 			{
 				Record* const rec1 = stack1.object();
 
-				if (!condition.evaluate(rec1))
+				if (!condition.check(rec1).orElse(false))
 					continue;
 
 				if (const auto result = key1.compose(rec1))
@@ -1275,11 +1282,21 @@ void IDX_modify(thread_db* tdbb,
 
 	while (BTR_next_index(tdbb, org_rpb->rpb_relation, transaction, &idx, &window))
 	{
-		if (!BTR_check_condition(tdbb, &idx, new_rpb->rpb_record))
-			continue;
-
 		IndexErrorContext context(new_rpb->rpb_relation, &idx);
-		idx_e error_code;
+		idx_e error_code = idx_e_ok;
+
+		IndexCondition condition(tdbb, &idx);
+		const auto checkResult = condition.check(new_rpb->rpb_record, &error_code);
+
+		if (error_code)
+		{
+			CCH_RELEASE(tdbb, &window);
+			context.raise(tdbb, error_code, new_rpb->rpb_record);
+		}
+
+		fb_assert(checkResult.isAssigned());
+		if (!checkResult.value)
+			continue;
 
 		AutoIndexExpression expression;
 		IndexKey newKey(tdbb, new_rpb->rpb_relation, &idx, expression), orgKey(newKey);
@@ -1504,11 +1521,21 @@ void IDX_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	while (BTR_next_index(tdbb, rpb->rpb_relation, transaction, &idx, &window))
 	{
-		if (!BTR_check_condition(tdbb, &idx, rpb->rpb_record))
-			continue;
-
 		IndexErrorContext context(rpb->rpb_relation, &idx);
-		idx_e error_code;
+		idx_e error_code = idx_e_ok;
+
+		IndexCondition condition(tdbb, &idx);
+		const auto checkResult = condition.check(rpb->rpb_record, &error_code);
+
+		if (error_code)
+		{
+			CCH_RELEASE(tdbb, &window);
+			context.raise(tdbb, error_code, rpb->rpb_record);
+		}
+
+		fb_assert(checkResult.isAssigned());
+		if (!checkResult.value)
+			continue;
 
 		AutoIndexExpression expression;
 		IndexKey key(tdbb, rpb->rpb_relation, &idx, expression);

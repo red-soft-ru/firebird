@@ -343,12 +343,14 @@ public:
 
 	~IndexCondition();
 
-	bool evaluate(Record* record) const;
+	TriState check(Record* record, idx_e* errCode = nullptr);
 
 private:
 	thread_db* const m_tdbb;
 	BoolExprNode* m_condition = nullptr;
 	Request* m_request = nullptr;
+
+	bool evaluate(Record* record) const;
 };
 
 class IndexExpression
