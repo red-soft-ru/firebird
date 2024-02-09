@@ -1903,7 +1903,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 						if (!getInfo.m_condition)
 							getInfo.m_condition = FB_NEW_POOL(*pool) IndexCondition(vdr_tdbb, &getInfo.m_desc);
 
-						if (getInfo.m_condition->evaluate(rpb.rpb_record))
+						if (getInfo.m_condition->check(rpb.rpb_record).asBool())
 							RBM_SET(pool, &getInfo.m_recs, recno);
 					}
 				}
