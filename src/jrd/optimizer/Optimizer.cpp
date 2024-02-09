@@ -785,8 +785,8 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	StreamList rseStreams;
 	rse->computeRseStreams(rseStreams);
 
-	for (StreamList::iterator i = rseStreams.begin(); i != rseStreams.end(); ++i)
-		csb->csb_rpt[*i].deactivate();
+	for (const auto rseStream : rseStreams)
+		csb->csb_rpt[rseStream].deactivate();
 
 	// Find and collect booleans that are invariant in this context
 	// (i.e. independent from streams in the RseNode). We can do that
@@ -902,7 +902,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 
 	// Outer joins are processed their own way
 	if (!isInnerJoin())
-		rsb = generateOuterJoin(rivers, &sort);
+		rsb = OuterJoin(tdbb, this, rse, rivers, &sort).generate();
 	else
 	{
 		// AB: If previous rsb's are already on the stack we can't use
@@ -979,7 +979,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		rsb = CrossJoin(csb, rivers).getRecordSource();
 
 		// Pick up any residual boolean that may have fallen thru the cracks
-		rsb = generateResidualBoolean(rsb);
+		rsb = applyResidualBoolean(rsb);
 	}
 
 	// Assign the sort node back if it wasn't used by the index navigation
@@ -2500,169 +2500,6 @@ void Optimizer::generateInnerJoin(StreamList& streams,
 
 
 //
-// Generate a top level outer join. The "outer" and "inner" sub-streams must be
-// handled differently from each other. The inner is like other streams.
-// The outer one isn't because conjuncts may not eliminate records from the stream.
-// They only determine if a join with an inner stream record is to be attempted.
-//
-
-RecordSource* Optimizer::generateOuterJoin(RiverList& rivers,
-										   SortNode** sortClause)
-{
-	struct {
-		RecordSource* stream_rsb;
-		StreamType stream_num;
-	} stream_o, stream_i, *stream_ptr[2];
-
-	// Determine which stream should be outer and which is inner.
-	// In the case of a left join, the syntactically left stream is the
-	// outer, and the right stream is the inner.  For all others, swap
-	// the sense of inner and outer, though for a full join it doesn't
-	// matter and we should probably try both orders to see which is
-	// more efficient.
-	if (rse->rse_jointype != blr_left)
-	{
-		stream_ptr[1] = &stream_o;
-		stream_ptr[0] = &stream_i;
-	}
-	else
-	{
-		stream_ptr[0] = &stream_o;
-		stream_ptr[1] = &stream_i;
-	}
-
-	// Loop through the outer join sub-streams in
-	// reverse order because rivers may have been PUSHed
-	for (int i = 1; i >= 0; i--)
-	{
-		const auto node = rse->rse_relations[i];
-
-		if (nodeIs<RelationSourceNode>(node) || nodeIs<LocalTableSourceNode>(node))
-		{
-			stream_ptr[i]->stream_rsb = nullptr;
-			stream_ptr[i]->stream_num = node->getStream();
-		}
-		else
-		{
-			River* const river = rivers.pop();
-			stream_ptr[i]->stream_rsb = river->getRecordSource();
-		}
-	}
-
-	if (!isFullJoin())
-	{
-		// Generate rsbs for the sub-streams.
-		// For the left sub-stream we also will get a boolean back.
-		BoolExprNode* boolean = nullptr;
-
-		if (!stream_o.stream_rsb)
-		{
-			stream_o.stream_rsb =
-				generateRetrieval(stream_o.stream_num, sortClause, true, false, &boolean);
-		}
-
-		if (!stream_i.stream_rsb)
-		{
-			// AB: the sort clause for the inner stream of an OUTER JOIN
-			//	   should never be used for the index retrieval
-			stream_i.stream_rsb =
-				generateRetrieval(stream_i.stream_num, nullptr, false, true);
-		}
-
-		// generate a parent boolean rsb for any remaining booleans that
-		// were not satisfied via an index lookup
-		stream_i.stream_rsb = generateResidualBoolean(stream_i.stream_rsb);
-
-		// Allocate and fill in the rsb
-		return FB_NEW_POOL(getPool())
-			NestedLoopJoin(csb, stream_o.stream_rsb, stream_i.stream_rsb,
-						   boolean, OUTER_JOIN);
-	}
-
-	bool hasOuterRsb = true, hasInnerRsb = true;
-	BoolExprNode* boolean = nullptr;
-
-	if (!stream_o.stream_rsb)
-	{
-		hasOuterRsb = false;
-		stream_o.stream_rsb =
-			generateRetrieval(stream_o.stream_num, nullptr, true, false, &boolean);
-	}
-
-	if (!stream_i.stream_rsb)
-	{
-		hasInnerRsb = false;
-		stream_i.stream_rsb =
-			generateRetrieval(stream_i.stream_num, nullptr, false, true);
-	}
-
-	const auto innerRsb = generateResidualBoolean(stream_i.stream_rsb);
-
-	const auto rsb1 = FB_NEW_POOL(getPool())
-		NestedLoopJoin(csb, stream_o.stream_rsb, innerRsb, boolean, OUTER_JOIN);
-
-	for (auto iter = getConjuncts(); iter.hasData(); ++iter)
-	{
-		if (iter & CONJUNCT_USED)
-			iter.reset(CMP_clone_node_opt(tdbb, csb, iter));
-	}
-
-	if (!hasInnerRsb)
-		csb->csb_rpt[stream_i.stream_num].deactivate();
-
-	if (!hasOuterRsb)
-		csb->csb_rpt[stream_o.stream_num].deactivate();
-
-	boolean = nullptr;
-
-	if (!hasInnerRsb)
-	{
-		stream_i.stream_rsb =
-			generateRetrieval(stream_i.stream_num, nullptr, true, false, &boolean);
-	}
-
-	if (!hasOuterRsb)
-	{
-		stream_o.stream_rsb =
-			generateRetrieval(stream_o.stream_num, nullptr, false, false);
-	}
-
-	const auto outerRsb = generateResidualBoolean(stream_o.stream_rsb);
-
-	const auto rsb2 = FB_NEW_POOL(getPool())
-		NestedLoopJoin(csb, stream_i.stream_rsb, outerRsb, boolean, ANTI_JOIN);
-
-	return FB_NEW_POOL(getPool()) FullOuterJoin(csb, rsb1, rsb2);
-}
-
-
-//
-// Pick up any residual boolean remaining, meaning those that have not been used
-// as part of some join. These booleans must still be applied to the result stream.
-//
-
-RecordSource* Optimizer::generateResidualBoolean(RecordSource* rsb)
-{
-	BoolExprNode* boolean = nullptr;
-	double selectivity = MAXIMUM_SELECTIVITY;
-
-	for (auto iter = getBaseConjuncts(); iter.hasData(); ++iter)
-	{
-		if (!(iter & CONJUNCT_USED))
-		{
-			compose(getPool(), &boolean, iter);
-			iter |= CONJUNCT_USED;
-
-			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
-				selectivity *= getSelectivity(*iter);
-		}
-	}
-
-	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity) : rsb;
-}
-
-
-//
 // Compile a record retrieval source
 //
 
@@ -2774,22 +2611,11 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 
 	if (outerFlag)
 	{
-		fb_assert(returnBoolean);
-		*returnBoolean = nullptr;
-
 		// Now make another pass thru the outer conjuncts only, finding unused,
 		// computable booleans. When one is found, roll it into a final
 		// boolean and mark it used.
-		for (auto iter = getBaseConjuncts(); iter.hasData(); ++iter)
-		{
-			if (!(iter & CONJUNCT_USED) &&
-				!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
-				iter->computable(csb, INVALID_STREAM, false))
-			{
-				compose(getPool(), returnBoolean, iter);
-				iter |= CONJUNCT_USED;
-			}
-		}
+		fb_assert(returnBoolean);
+		*returnBoolean = composeBoolean();
 	}
 
 	// Now make another pass thru the conjuncts finding unused, computable
@@ -2872,14 +2698,27 @@ RecordSource* Optimizer::applyLocalBoolean(RecordSource* rsb,
 	StreamStateHolder localHolder(csb, streams);
 	localHolder.activate(csb);
 
+	double selectivity = MAXIMUM_SELECTIVITY;
+	if (const auto boolean = composeBoolean(iter, &selectivity))
+		rsb = FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity);
+
+	return rsb;
+}
+
+
+//
+// Pick up any residual boolean remaining, meaning those that have not been used
+// as part of some join. These booleans must still be applied to the result stream.
+//
+
+RecordSource* Optimizer::applyResidualBoolean(RecordSource* rsb)
+{
 	BoolExprNode* boolean = nullptr;
 	double selectivity = MAXIMUM_SELECTIVITY;
 
-	for (iter.rewind(); iter.hasData(); ++iter)
+	for (auto iter = getBaseConjuncts(); iter.hasData(); ++iter)
 	{
-		if (!(iter & CONJUNCT_USED) &&
-			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
-			iter->computable(csb, INVALID_STREAM, false))
+		if (!(iter & CONJUNCT_USED))
 		{
 			compose(getPool(), &boolean, iter);
 			iter |= CONJUNCT_USED;
@@ -2890,6 +2729,28 @@ RecordSource* Optimizer::applyLocalBoolean(RecordSource* rsb,
 	}
 
 	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity) : rsb;
+}
+
+
+BoolExprNode* Optimizer::composeBoolean(ConjunctIterator& iter, double* selectivity)
+{
+	BoolExprNode* boolean = nullptr;
+
+	for (iter.rewind(); iter.hasData(); ++iter)
+	{
+		if (!(iter & CONJUNCT_USED) &&
+			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
+			iter->computable(csb, INVALID_STREAM, false))
+		{
+			compose(getPool(), &boolean, iter);
+			iter |= CONJUNCT_USED;
+
+			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)) && selectivity)
+				*selectivity *= getSelectivity(*iter);
+		}
+	}
+
+	return boolean;
 }
 
 

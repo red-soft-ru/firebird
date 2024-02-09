@@ -40,6 +40,7 @@
 #include "../dsql/ExprNodes.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/exe.h"
+#include "../jrd/recsrc/RecordSource.h"
 
 namespace Jrd {
 
@@ -500,6 +501,17 @@ public:
 	RecordSource* applyLocalBoolean(RecordSource* rsb,
 									const StreamList& streams,
 									ConjunctIterator& iter);
+	RecordSource* applyResidualBoolean(RecordSource* rsb);
+
+	BoolExprNode* composeBoolean(ConjunctIterator& iter,
+								 double* selectivity = nullptr);
+
+	BoolExprNode* composeBoolean(double* selectivity = nullptr)
+	{
+		auto iter = getBaseConjuncts();
+		return composeBoolean(iter, selectivity);
+	}
+
 	bool checkEquiJoin(BoolExprNode* boolean);
 	bool getEquiJoinKeys(BoolExprNode* boolean,
 						 NestConst<ValueExprNode>* node1,
@@ -529,9 +541,6 @@ private:
 						   RiverList& rivers,
 						   SortNode** sortClause,
 						   const PlanNode* planClause);
-	RecordSource* generateOuterJoin(RiverList& rivers,
-								    SortNode** sortClause);
-	RecordSource* generateResidualBoolean(RecordSource* rsb);
 	bool getEquiJoinKeys(NestConst<ValueExprNode>& node1,
 						 NestConst<ValueExprNode>& node2,
 						 bool needCast);
@@ -893,6 +902,31 @@ private:
 	StreamInfoList innerStreams;
 	JoinedStreamList joinedStreams;
 	JoinedStreamList bestStreams;
+};
+
+class OuterJoin : private Firebird::PermanentStorage
+{
+	struct OuterJoinStream
+	{
+		RecordSource* rsb = nullptr;
+		StreamType number = INVALID_STREAM;
+	};
+
+public:
+	OuterJoin(thread_db* tdbb, Optimizer* opt,
+			  const RseNode* rse, RiverList& rivers,
+			  SortNode** sortClause);
+
+	RecordSource* generate();
+
+private:
+	RecordSource* process(const JoinType joinType);
+
+	thread_db* const tdbb;
+	Optimizer* const optimizer;
+	CompilerScratch* const csb;
+	SortNode** sortPtr;
+	OuterJoinStream joinStreams[2];
 };
 
 } // namespace Jrd
