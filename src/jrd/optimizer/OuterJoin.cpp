@@ -156,6 +156,22 @@ RecordSource* OuterJoin::process(const JoinType joinType)
 			optimizer->isFullJoin() ? nullptr : sortPtr,
 			true, false, &boolean);
 	}
+	else
+	{
+		// Ensure the inner streams are inactive
+
+		StreamList streams;
+
+		if (innerStream.rsb)
+			innerStream.rsb->findUsedStreams(streams);
+
+		StreamStateHolder stateHolder(csb, streams);
+		stateHolder.deactivate();
+
+		// Collect booleans computable for the outer sub-stream, it must be active now
+
+		boolean = optimizer->composeBoolean();
+	}
 
 	if (innerStream.number != INVALID_STREAM)
 	{
