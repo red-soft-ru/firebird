@@ -543,8 +543,18 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 				scale = MIN(arg1->dsc_scale, arg2->dsc_scale);
 			else
 				scale = arg1->dsc_scale;
-			const SINT64 temp1 = CVT_get_int64(arg1, scale, decSt, ERR_post);
-			const SINT64 temp2 = CVT_get_int64(arg2, scale, decSt, ERR_post);
+
+			int overflow = 0;
+			const SINT64 temp1 = CVT_get_int64(arg1, scale, decSt, ERR_post, &overflow);
+			const SINT64 temp2 = CVT_get_int64(arg2, scale, decSt, ERR_post, &overflow);
+
+			if (overflow)
+			{
+				const Int128 temp1 = CVT_get_int128(arg1, scale, decSt, ERR_post);
+				const Int128 temp2 = CVT_get_int128(arg2, scale, decSt, ERR_post);
+				return temp1.compare(temp2);
+			}
+
 			if (temp1 == temp2)
 				return 0;
 			if (temp1 > temp2)
