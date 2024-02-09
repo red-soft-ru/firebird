@@ -236,10 +236,10 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 
 			if (!over)
 			{
-				if (value >= NUMERIC_LIMIT)
+				if (static_cast<FB_UINT64>(value) >= NUMERIC_LIMIT)
 				{
 					// possibility of an overflow
-					if ((value > NUMERIC_LIMIT) || (*p > '8' && sign == -1) || (*p > '7' && sign != -1))
+					if ((static_cast<FB_UINT64>(value) > NUMERIC_LIMIT) || (*p > '8' && sign == -1) || (*p > '7' && sign != -1))
 						over = true;
 				}
 
