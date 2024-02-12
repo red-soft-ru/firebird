@@ -2687,22 +2687,25 @@ void write_database( const TEXT* dbb_file)
 			general_on_error();
 		END_ERROR;
 
-		FOR (REQUEST_HANDLE req_handle2)
-			PUB IN RDB$PUBLICATIONS
-			WITH PUB.RDB$PUBLICATION_NAME EQ DEFAULT_PUBLICATION
+		if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
 		{
-			fb_assert(PUB.RDB$SYSTEM_FLAG != 0);
+			FOR (REQUEST_HANDLE req_handle2)
+				PUB IN RDB$PUBLICATIONS
+				WITH PUB.RDB$PUBLICATION_NAME EQ DEFAULT_PUBLICATION
+			{
+				fb_assert(PUB.RDB$SYSTEM_FLAG != 0);
 
-			if (!PUB.RDB$ACTIVE_FLAG.NULL)
-				put_boolean(att_default_pub_active, PUB.RDB$ACTIVE_FLAG);
+				if (!PUB.RDB$ACTIVE_FLAG.NULL)
+					put_boolean(att_default_pub_active, PUB.RDB$ACTIVE_FLAG);
 
-			if (!PUB.RDB$AUTO_ENABLE.NULL)
-				put_boolean(att_default_pub_auto_enable, PUB.RDB$AUTO_ENABLE);
+				if (!PUB.RDB$AUTO_ENABLE.NULL)
+					put_boolean(att_default_pub_auto_enable, PUB.RDB$AUTO_ENABLE);
+			}
+			END_FOR
+			ON_ERROR
+				general_on_error();
+			END_ERROR
 		}
-		END_FOR
-		ON_ERROR
-			general_on_error();
-		END_ERROR
 	}
 	else
 	{
