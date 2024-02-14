@@ -59,7 +59,7 @@ namespace Firebird {
 
 Int128 Int128::set(const char* value)
 {
-// This is simplified method - it does not perform all what's needed for CVT_decompose
+// This is simplified method - it does not perform all what's needed for full conversion
 	for (v = 0; ; ++value)
 	{
 		if (*value < '0' or *value > '9')
@@ -319,7 +319,7 @@ Int128 Int128::set(SINT64 value, int scale)
 
 Int128 Int128::set(const char* value)
 {
-// This is simplified method - it does not perform all what's needed for CVT_decompose
+// This is simplified method - it does not perform all what's needed for full conversion
 	v.FromString(value);
 	return *this;
 }
