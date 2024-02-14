@@ -635,7 +635,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
 				return true;
 			}
 
-			// Our thread needs to sleep for CCH_EXCLUSIVE_RETRY_INTERVAL seconds.
+			// Our thread needs to sleep for CCH_EXCLUSIVE_RETRY_INTERVAL milliseconds.
 
 			if (remaining >= CCH_EXCLUSIVE_RETRY_INTERVAL)
 			{
