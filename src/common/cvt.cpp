@@ -145,6 +145,11 @@ static void localError(const Firebird::Arg::StatusVector&);
 static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err);
 static void make_null_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
 
+namespace {
+	class RetPtr;
+}
+static SSHORT cvt_decompose(const char*, USHORT, RetPtr* return_value, ErrorFunction err);
+
 class DummyException {};
 
 namespace
@@ -276,6 +281,88 @@ static InitInstance<TimeZoneTrie> timeZoneTrie;
 //static const SQUAD quad_max_int = { SLONG_MAX, -1 };
 //#endif
 
+
+namespace {
+
+class RetPtr
+{
+public:
+	virtual ~RetPtr() { }
+
+	enum lb10 {RETVAL_OVERFLOW, RETVAL_POSSIBLE_OVERFLOW, RETVAL_NO_OVERFLOW};
+
+	virtual USHORT maxSize() = 0;
+	virtual void truncate8() = 0;
+	virtual void truncate16() = 0;
+	virtual lb10 compareLimitBy10() = 0;
+	virtual void nextDigit(unsigned digit, unsigned base) = 0;
+	virtual bool isLowerLimit() = 0;
+	virtual void neg() = 0;
+};
+
+template <class Traits>
+class RetValue : public RetPtr
+{
+public:
+	RetValue(typename Traits::ValueType* ptr)
+		: return_value(ptr)
+	{
+		value = 0;
+	}
+
+	~RetValue()
+	{
+		*return_value = value;
+	}
+
+	USHORT maxSize() override
+	{
+		return sizeof(typename Traits::ValueType);
+	}
+
+	void truncate8() override
+	{
+		ULONG mask = 0xFFFFFFFF;
+		value &= mask;
+	}
+
+	void truncate16() override
+	{
+		FB_UINT64 mask = 0xFFFFFFFFFFFFFFFF;
+		value &= mask;
+	}
+
+	lb10 compareLimitBy10() override
+	{
+		if (static_cast<typename Traits::UnsignedType>(value) > Traits::UPPER_LIMIT_BY_10)
+			return RETVAL_OVERFLOW;
+		if (static_cast<typename Traits::UnsignedType>(value) == Traits::UPPER_LIMIT_BY_10)
+			return RETVAL_POSSIBLE_OVERFLOW;
+		return RETVAL_NO_OVERFLOW;
+	}
+
+	void nextDigit(unsigned digit, unsigned base) override
+	{
+		value *= base;
+		value += digit;
+	}
+
+	bool isLowerLimit() override
+	{
+		return value == Traits::LOWER_LIMIT;
+	}
+
+	void neg() override
+	{
+		value = -value;
+	}
+
+protected:
+	typename Traits::ValueType value;
+	typename Traits::ValueType* return_value;
+};
+
+} // anonymous namespace
 
 static const double eps_double = 1e-14;
 static const double eps_float  = 1e-5;
@@ -2207,6 +2294,15 @@ void adjustForScale(V& val, SSHORT scale, const V limit, ErrorFunction err)
 }
 
 
+class SSHORTTraits
+{
+public:
+	typedef SSHORT ValueType;
+	typedef USHORT UnsignedType;
+	static const USHORT UPPER_LIMIT_BY_10 = MAX_SSHORT / 10;
+	static const SSHORT LOWER_LIMIT = MIN_SSHORT;
+};
+
 static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************
@@ -2227,7 +2323,9 @@ static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, 
 		VaryStr<20> buffer;			// long enough to represent largest short in ASCII
 		const char* p;
 		USHORT length = CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
-		scale -= CVT_decompose(p, length, &value, err);
+
+		RetValue<SSHORTTraits> rv(&value);
+		scale -= cvt_decompose(p, length, &rv, err);
 
 		adjustForScale(value, scale, SHORT_LIMIT, err);
 	}
@@ -2240,6 +2338,16 @@ static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, 
 
 	return value;
 }
+
+
+class SLONGTraits
+{
+public:
+	typedef SLONG ValueType;
+	typedef ULONG UnsignedType;
+	static const ULONG UPPER_LIMIT_BY_10 = MAX_SLONG / 10;
+	static const SLONG LOWER_LIMIT = MIN_SLONG;
+};
 
 SLONG CVT_get_long(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
@@ -2354,7 +2462,9 @@ SLONG CVT_get_long(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 		{
 			USHORT length =
 				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
-			scale -= CVT_decompose(p, length, &value, err);
+
+			RetValue<SLONGTraits> rv(&value);
+			scale -= cvt_decompose(p, length, &rv, err);
 		}
 		break;
 
@@ -3623,29 +3733,12 @@ double CVT_power_of_ten(const int scale)
 }
 
 
-class RetPtr
-{
-public:
-	virtual ~RetPtr() { }
-
-	enum lb10 {RETVAL_OVERFLOW, RETVAL_POSSIBLE_OVERFLOW, RETVAL_NO_OVERFLOW};
-
-	virtual USHORT maxSize() = 0;
-	virtual void truncate8() = 0;
-	virtual void truncate16() = 0;
-	virtual lb10 compareLimitBy10() = 0;
-	virtual void nextDigit(unsigned digit, unsigned base) = 0;
-	virtual bool isLowerLimit() = 0;
-	virtual void neg() = 0;
-};
-
 static void hex_to_value(const char*& string, const char* end, RetPtr* retValue);
 
 static SSHORT cvt_decompose(const char*	string,
 							USHORT		length,
 							RetPtr*		return_value,
-							ErrorFunction err,
-							int*		overflow = nullptr)
+							ErrorFunction err)
 {
 /**************************************
  *
@@ -3743,23 +3836,15 @@ static SSHORT cvt_decompose(const char*	string,
 					if (p >= end)
 						continue;
 				}
-				if (overflow)
-					*overflow = 1;
-				else
-					err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 				return 0;
-
 			case RetPtr::RETVAL_POSSIBLE_OVERFLOW:
 				if ((*p > '8' && sign == -1) || (*p > '7' && sign != -1))
 				{
-					if (overflow)
-						*overflow = 1;
-					else
-						err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+					err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 					return 0;
 				}
 				break;
-
 			default:
 				break;
 			}
@@ -3875,153 +3960,6 @@ static SSHORT cvt_decompose(const char*	string,
 }
 
 
-template <class Traits>
-class RetValue : public RetPtr
-{
-public:
-	RetValue(typename Traits::ValueType* ptr)
-		: return_value(ptr)
-	{
-		value = 0;
-	}
-
-	~RetValue()
-	{
-		*return_value = value;
-	}
-
-	USHORT maxSize()
-	{
-		return sizeof(typename Traits::ValueType);
-	}
-
-	void truncate8()
-	{
-		ULONG mask = 0xFFFFFFFF;
-		value &= mask;
-	}
-
-	void truncate16()
-	{
-		FB_UINT64 mask = 0xFFFFFFFFFFFFFFFF;
-		value &= mask;
-	}
-
-	lb10 compareLimitBy10()
-	{
-		if (static_cast<typename Traits::UnsignedType>(value) > Traits::UPPER_LIMIT_BY_10)
-			return RETVAL_OVERFLOW;
-		if (static_cast<typename Traits::UnsignedType>(value) == Traits::UPPER_LIMIT_BY_10)
-			return RETVAL_POSSIBLE_OVERFLOW;
-		return RETVAL_NO_OVERFLOW;
-	}
-
-	void nextDigit(unsigned digit, unsigned base)
-	{
-		value *= base;
-		value += digit;
-	}
-
-	bool isLowerLimit()
-	{
-		return value == Traits::LOWER_LIMIT;
-	}
-
-	void neg()
-	{
-		value = -value;
-	}
-
-private:
-	typename Traits::ValueType value;
-	typename Traits::ValueType* return_value;
-};
-
-
-class SSHORTTraits
-{
-public:
-	typedef SSHORT ValueType;
-	typedef USHORT UnsignedType;
-	static const USHORT UPPER_LIMIT_BY_10 = MAX_SSHORT / 10;
-	static const SSHORT LOWER_LIMIT = MIN_SSHORT;
-};
-
-SSHORT CVT_decompose(const char* str, USHORT len, SSHORT* val, ErrorFunction err)
-{
-/**************************************
- *
- *      d e c o m p o s e
- *
- **************************************
- *
- * Functional description
- *      Decompose a numeric string in mantissa and exponent,
- *      or if it is in hexadecimal notation.
- *
- **************************************/
-
-	RetValue<SSHORTTraits> value(val);
-	return cvt_decompose(str, len, &value, err);
-}
-
-
-class SLONGTraits
-{
-public:
-	typedef SLONG ValueType;
-	typedef ULONG UnsignedType;
-	static const ULONG UPPER_LIMIT_BY_10 = MAX_SLONG / 10;
-	static const SLONG LOWER_LIMIT = MIN_SLONG;
-};
-
-SSHORT CVT_decompose(const char* str, USHORT len, SLONG* val, ErrorFunction err)
-{
-/**************************************
- *
- *      d e c o m p o s e
- *
- **************************************
- *
- * Functional description
- *      Decompose a numeric string in mantissa and exponent,
- *      or if it is in hexadecimal notation.
- *
- **************************************/
-
-	RetValue<SLONGTraits> value(val);
-	return cvt_decompose(str, len, &value, err);
-}
-
-
-class SINT64Traits
-{
-public:
-	typedef SINT64 ValueType;
-	typedef FB_UINT64 UnsignedType;
-	static const FB_UINT64 UPPER_LIMIT_BY_10 = MAX_SINT64 / 10;
-	static const SINT64 LOWER_LIMIT = MIN_SINT64;
-};
-
-SSHORT CVT_decompose(const char* str, USHORT len, SINT64* val, ErrorFunction err, int* overflow)
-{
-/**************************************
- *
- *      d e c o m p o s e
- *
- **************************************
- *
- * Functional description
- *      Decompose a numeric string in mantissa and exponent,
- *      or if it is in hexadecimal notation.
- *
- **************************************/
-
-	RetValue<SINT64Traits> value(val);
-	return cvt_decompose(str, len, &value, err, overflow);
-}
-
-
 class I128Traits
 {
 public:
@@ -4033,6 +3971,25 @@ public:
 
 const CInt128 I128Traits::UPPER_LIMIT_BY_10(CInt128(CInt128::MkMax) / 10);
 const CInt128 I128Traits::LOWER_LIMIT(CInt128::MkMin);
+
+class RetI128 : public RetValue<I128Traits>
+{
+public:
+	RetI128(Int128* v)
+		: RetValue<I128Traits>(v)
+	{ }
+
+	lb10 compareLimitBy10() override
+	{
+		lb10 rc = RetValue<I128Traits>::compareLimitBy10();
+		if (rc != RETVAL_NO_OVERFLOW)
+			return rc;
+
+		if (value.sign() < 0)
+			return RETVAL_OVERFLOW;
+		return RETVAL_NO_OVERFLOW;
+	}
+};
 
 SSHORT CVT_decompose(const char* str, USHORT len, Int128* val, ErrorFunction err)
 {
@@ -4049,7 +4006,7 @@ SSHORT CVT_decompose(const char* str, USHORT len, Int128* val, ErrorFunction err
  **************************************/
 
 
-	RetValue<I128Traits> value(val);
+	RetI128 value(val);
 	return cvt_decompose(str, len, &value, err);
 }
 
@@ -4517,6 +4474,15 @@ const UCHAR* CVT_get_bytes(const dsc* desc, unsigned& size)
 }
 
 
+class SINT64Traits
+{
+public:
+	typedef SINT64 ValueType;
+	typedef FB_UINT64 UnsignedType;
+	static const FB_UINT64 UPPER_LIMIT_BY_10 = MAX_SINT64 / 10;
+	static const SINT64 LOWER_LIMIT = MIN_SINT64;
+};
+
 SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************
@@ -4572,8 +4538,10 @@ SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 		{
 			USHORT length =
 				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
+
 			SINT64 i64;
-			scale -= CVT_decompose(p, length, &i64, err);
+			RetValue<SINT64Traits> rv(&i64);
+			scale -= cvt_decompose(p, length, &rv, err);
 			SINT64_to_SQUAD(i64, value);
 		}
 		break;
@@ -4612,7 +4580,7 @@ SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 }
 
 
-SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err, int* overflow)
+SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************
  *
@@ -4714,7 +4682,9 @@ SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFu
 		{
 			USHORT length =
 				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
-			scale -= CVT_decompose(p, length, &value, err, overflow);
+
+			RetValue<SINT64Traits> rv(&value);
+			scale -= cvt_decompose(p, length, &rv, err);
 		}
 		break;
 
