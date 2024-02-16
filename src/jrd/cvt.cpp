@@ -264,6 +264,8 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 			sign = 1;
 		else if (*p == 'e' || *p == 'E')
 			break;
+		else if (*p == '\0')
+			break;
 		else if (*p != ' ')
 			CVT_conversion_error(&desc, ERR_post);
 	}
@@ -274,7 +276,7 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 	if ((local_scale > MAX_SCHAR) || (local_scale < MIN_SCHAR))
 		over = true;
 
-	if ((!over) && ((p < end) ||		// there is an exponent
+	if ((!over) && (((p < end) && *p) ||		// there is an exponent
 		((value < 0) && (sign != -1)))) // MAX_SINT64+1 wrapped around
 	{
 		// convert to double
