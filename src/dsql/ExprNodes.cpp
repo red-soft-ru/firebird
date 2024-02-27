@@ -12953,7 +12953,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 				case blr_invoke_function_arg_names:
 				{
 					predateCheck(node->function, "blr_invoke_function_type", "blr_invoke_function_arg_names");
-					predateCheck(!node->args, "blr_invoke_function_arg_names", "blr_invoke_function_arg_names");
+					predateCheck(!node->args, "blr_invoke_function_arg_names", "blr_invoke_function_args");
 
 					argNamesPos = blrReader.getPos();
 					USHORT argNamesCount = blrReader.getWord();
