@@ -12941,6 +12941,12 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 					else if (!node->function)
 						node->function = Function::lookup(tdbb, name, false);
 
+					if (!node->function)
+					{
+						blrReader.setPos(startPos);
+						PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString());
+					}
+
 					break;
 				}
 
@@ -13001,6 +13007,12 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 		else if (!node->function)
 			node->function = Function::lookup(tdbb, name, false);
 
+		if (!node->function)
+		{
+			blrReader.setPos(startPos);
+			PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString());
+		}
+
 		argCount = blrReader.getByte();
 		node->args = PAR_args(tdbb, csb, argCount, MAX(argCount, node->function->fun_inputs));
 	}
@@ -13013,11 +13025,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 			"blr_invoke_function_arg_names count cannot be greater than blr_invoke_function_args");
 	}
 
-	if (!node->function)
-	{
-		blrReader.setPos(startPos);
-		PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString());
-	}
+	fb_assert(node->function);
 
 	if (node->function->isImplemented() && !node->function->isDefined())
 	{
