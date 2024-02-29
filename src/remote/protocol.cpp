@@ -100,7 +100,6 @@ enum SQL_STMT_TYPE
 };
 
 static bool alloc_cstring(RemoteXdr*, CSTRING*);
-static void free_cstring(RemoteXdr*, CSTRING*);
 static void reset_statement(RemoteXdr*, SSHORT);
 static bool_t xdr_cstring(RemoteXdr*, CSTRING*);
 static bool_t xdr_response(RemoteXdr*, CSTRING*);
@@ -1242,7 +1241,7 @@ static bool alloc_cstring(RemoteXdr* xdrs, CSTRING* cstring)
 
 	if (cstring->cstr_length > cstring->cstr_allocated && cstring->cstr_allocated)
 	{
-		free_cstring(xdrs, cstring);
+		cstring->free(xdrs);
 	}
 
 	if (!cstring->cstr_address)
@@ -1263,7 +1262,7 @@ static bool alloc_cstring(RemoteXdr* xdrs, CSTRING* cstring)
 }
 
 
-static void free_cstring( RemoteXdr* xdrs, CSTRING* cstring)
+void CSTRING::free(RemoteXdr* xdrs)
 {
 /**************************************
  *
@@ -1276,14 +1275,15 @@ static void free_cstring( RemoteXdr* xdrs, CSTRING* cstring)
  *
  **************************************/
 
-	if (cstring->cstr_allocated)
+	if (cstr_allocated)
 	{
-		delete[] cstring->cstr_address;
-		DEBUG_XDR_FREE(xdrs, cstring, cstring->cstr_address, cstring->cstr_allocated);
+		delete[] cstr_address;
+		if (xdrs)
+			DEBUG_XDR_FREE(xdrs, this, cstr_address, cstr_allocated);
 	}
 
-	cstring->cstr_address = NULL;
-	cstring->cstr_allocated = 0;
+	cstr_address = NULL;
+	cstr_allocated = 0;
 }
 
 
@@ -1388,7 +1388,7 @@ static bool_t xdr_cstring_with_limit( RemoteXdr* xdrs, CSTRING* cstring, ULONG l
 		return TRUE;
 
 	case XDR_FREE:
-		free_cstring(xdrs, cstring);
+		cstring->free(xdrs);
 		return TRUE;
 	}
 
@@ -1497,7 +1497,7 @@ static bool_t xdr_longs( RemoteXdr* xdrs, CSTRING* cstring)
 		break;
 
 	case XDR_FREE:
-		free_cstring(xdrs, cstring);
+		cstring->free(xdrs);
 		return TRUE;
 	}
 
