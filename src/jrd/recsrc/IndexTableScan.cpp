@@ -261,7 +261,7 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 				const auto nextLower = impure->irsb_nav_current_lower;
 				const auto nextUpper = impure->irsb_nav_current_upper;
 
-				if (impure->irsb_iterator && impure->irsb_iterator->getNext(nextLower, nextUpper))
+				if (impure->irsb_iterator && impure->irsb_iterator->getNext(tdbb, nextLower, nextUpper))
 				{
 					if (retrieval->irb_generic & irb_root_list_scan)
 					{

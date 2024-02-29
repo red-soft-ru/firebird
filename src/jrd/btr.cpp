@@ -704,7 +704,7 @@ idx_e IndexKey::compose(Record* record)
 // IndexScanListIterator class
 
 IndexScanListIterator::IndexScanListIterator(thread_db* tdbb, const IndexRetrieval* retrieval)
-	: m_tdbb(tdbb), m_retrieval(retrieval),
+	: m_retrieval(retrieval),
 	  m_listValues(*tdbb->getDefaultPool(), retrieval->irb_list->getCount()),
 	  m_lowerValues(*tdbb->getDefaultPool()), m_upperValues(*tdbb->getDefaultPool()),
 	  m_iterator(m_listValues.begin())
@@ -759,7 +759,7 @@ IndexScanListIterator::IndexScanListIterator(thread_db* tdbb, const IndexRetriev
 	}
 }
 
-void IndexScanListIterator::makeKeys(temporary_key* lower, temporary_key* upper)
+void IndexScanListIterator::makeKeys(thread_db* tdbb, temporary_key* lower, temporary_key* upper)
 {
 	m_lowerValues[m_segno] = *m_iterator;
 	m_upperValues[m_segno] = *m_iterator;
@@ -769,7 +769,7 @@ void IndexScanListIterator::makeKeys(temporary_key* lower, temporary_key* upper)
 
 	// Make the lower bound key
 
-	idx_e errorCode = BTR_make_key(m_tdbb, m_retrieval->irb_lower_count, getLowerValues(),
+	idx_e errorCode = BTR_make_key(tdbb, m_retrieval->irb_lower_count, getLowerValues(),
 		&m_retrieval->irb_desc, lower, keyType);
 
 	if (errorCode == idx_e_ok)
@@ -783,7 +783,7 @@ void IndexScanListIterator::makeKeys(temporary_key* lower, temporary_key* upper)
 		{
 			// Make the upper bound key
 
-			errorCode = BTR_make_key(m_tdbb, m_retrieval->irb_upper_count, getUpperValues(),
+			errorCode = BTR_make_key(tdbb, m_retrieval->irb_upper_count, getUpperValues(),
 				&m_retrieval->irb_desc, upper, keyType);
 		}
 	}
@@ -792,7 +792,7 @@ void IndexScanListIterator::makeKeys(temporary_key* lower, temporary_key* upper)
 	{
 		index_desc temp_idx = m_retrieval->irb_desc;
 		IndexErrorContext context(m_retrieval->irb_relation, &temp_idx);
-		context.raise(m_tdbb, errorCode);
+		context.raise(tdbb, errorCode);
 	}
 }
 
@@ -1271,7 +1271,7 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 		// Switch to the new lookup key and continue scanning
 		// either from the current position or from the root
 
-		if (iterator && iterator->getNext(lower, upper))
+		if (iterator && iterator->getNext(tdbb, lower, upper))
 		{
 			if (!(retrieval->irb_generic & irb_root_list_scan))
 				continue;

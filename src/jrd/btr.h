@@ -484,11 +484,11 @@ public:
 		return m_listValues.isEmpty();
 	}
 
-	bool getNext(temporary_key* lower, temporary_key* upper)
+	bool getNext(thread_db* tdbb, temporary_key* lower, temporary_key* upper)
 	{
 		if (++m_iterator < m_listValues.end())
 		{
-			makeKeys(lower, upper);
+			makeKeys(tdbb, lower, upper);
 			return true;
 		}
 
@@ -507,9 +507,8 @@ public:
 	}
 
 private:
-	void makeKeys(temporary_key* lower, temporary_key* upper);
+	void makeKeys(thread_db* tdbb, temporary_key* lower, temporary_key* upper);
 
-	thread_db* const m_tdbb;
 	const IndexRetrieval* const m_retrieval;
 	Firebird::HalfStaticArray<const ValueExprNode*, 16> m_listValues;
 	Firebird::HalfStaticArray<const ValueExprNode*, 4> m_lowerValues;
