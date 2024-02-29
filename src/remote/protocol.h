@@ -324,11 +324,15 @@ enum P_OP
 
 // Count String Structure
 
+class RemoteXdr;
+
 typedef struct cstring
 {
 	ULONG	cstr_length;
 	ULONG	cstr_allocated;
 	UCHAR*	cstr_address;
+
+	void	free(RemoteXdr* xdrs = nullptr);
 } CSTRING;
 
 // CVC: Only used in p_blob, p_sgmt & p_ddl, to validate constness.
