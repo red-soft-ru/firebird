@@ -149,7 +149,7 @@ class SecurityDatabase : public VSecDb
 public:
 	bool lookup(void* inMsg, void* outMsg);
 
-	bool test() override
+	bool test()
 	{
 		return fb_ping(status, &lookup_db) == FB_SUCCESS;
 	}

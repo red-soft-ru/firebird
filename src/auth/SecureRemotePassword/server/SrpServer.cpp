@@ -120,7 +120,7 @@ public:
 		return false;	// safe default
 	}
 
-	bool test() override
+	bool test()
 	{
 		Jrd::FbLocalStatus status;
 
