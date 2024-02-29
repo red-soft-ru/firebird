@@ -124,10 +124,10 @@ namespace {
 			status_exception::raise(Arg::Gds(isc_imp_exc) << Arg::Gds(isc_blktoobig));
 	}
 
-	class SaveString
+	class UsePreallocatedBuffer
 	{
 	public:
-		SaveString(cstring& toSave, ULONG newLength, UCHAR* newBuffer)
+		UsePreallocatedBuffer(cstring& toSave, ULONG newLength, UCHAR* newBuffer)
 			: ptr(&toSave),
 			  oldValue(*ptr)
 		{
@@ -135,14 +135,28 @@ namespace {
 			ptr->cstr_allocated = newLength;
 		}
 
-		~SaveString()
+		~UsePreallocatedBuffer()
 		{
 			*ptr = oldValue;
 		}
 
-	private:
+	protected:
 		cstring* ptr;
+	private:
 		cstring oldValue;
+	};
+
+	class UseStandardBuffer : public UsePreallocatedBuffer
+	{
+	public:
+		UseStandardBuffer(cstring& toSave)
+			: UsePreallocatedBuffer(toSave,0, nullptr)
+		{ }
+
+		~UseStandardBuffer()
+		{
+			ptr->free();
+		}
 	};
 
 	class ClientPortsCleanup : public PortsCleanup
@@ -4150,7 +4164,7 @@ Statement* Attachment::prepare(CheckStatusWrapper* status, ITransaction* apiTra,
 		}
 
 		P_RESP* response = &packet->p_resp;
-		SaveString temp(response->p_resp_data, buffer.getCount(), buffer.begin());
+		UsePreallocatedBuffer temp(response->p_resp_data, buffer.getCount(), buffer.begin());
 
 		try
 		{
@@ -5303,7 +5317,7 @@ int Blob::getSegment(CheckStatusWrapper* status, unsigned int bufferLength, void
 		PACKET* packet = &rdb->rdb_packet;
 		P_SGMT* segment = &packet->p_sgmt;
 		P_RESP* response = &packet->p_resp;
-		SaveString temp(response->p_resp_data, bufferLength, bufferPtr);
+		UsePreallocatedBuffer temp(response->p_resp_data, bufferLength, bufferPtr);
 
 		// Handle a blob that has been created rather than opened (this should yield an error)
 
@@ -7576,6 +7590,9 @@ static void batch_dsql_fetch(rem_port*	port,
 	// we need to clear the queue.
 	const bool clear_queue = (id != statement->rsr_id || port->port_type == rem_port::XNET);
 
+	// Avoid damaging preallocated buffer for response data
+	UseStandardBuffer guard(packet->p_resp.p_resp_data);
+
 	statement->rsr_flags.set(Rsr::FETCHED);
 	while (true)
 	{
@@ -7736,6 +7753,9 @@ static void batch_gds_receive(rem_port*		port,
 	{
 		clear_queue = true;
 	}
+
+	// Avoid damaging preallocated buffer for response data
+	UseStandardBuffer guard(packet->p_resp.p_resp_data);
 
 	// Receive the whole batch of records, until end-of-batch is seen
 
@@ -8143,7 +8163,7 @@ static void info(CheckStatusWrapper* status,
 	// Set up for the response packet.
 
 	P_RESP* response = &packet->p_resp;
-	SaveString temp(response->p_resp_data, buffer_length, buffer);
+	UsePreallocatedBuffer temp(response->p_resp_data, buffer_length, buffer);
 
 	receive_response(status, rdb, packet);
 }
@@ -9381,13 +9401,8 @@ static void svcstart(CheckStatusWrapper*	status,
 	information->p_info_items.cstr_address = send.getBuffer();
 	information->p_info_buffer_length = (ULONG) send.getBufferLength();
 
+	// send/receive
 	send_packet(rdb->rdb_port, packet);
-
-	// Set up for the response packet.
-	P_RESP* response = &packet->p_resp;
-	SaveString temp(response->p_resp_data, 0, NULL);
-	response->p_resp_data.cstr_length = 0;
-
 	receive_response(status, rdb, packet);
 }
 
