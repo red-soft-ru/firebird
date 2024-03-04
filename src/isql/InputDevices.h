@@ -130,6 +130,9 @@ inline InputDevices::InputDevices(Firebird::MemoryPool& p)
 
 inline InputDevices::~InputDevices()
 {
+	for (unsigned n = 0; n < commands.getCount(); ++n)
+		delete commands[n];
+
 	clear();
 }
 
