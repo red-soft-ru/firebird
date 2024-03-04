@@ -971,6 +971,7 @@ const int HIGH_WORD		= 0;
 #endif
 #endif
 
+
 inline const TEXT FB_SHORT_MONTHS[][4] =
 {
 	"Jan", "Feb", "Mar",
