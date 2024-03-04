@@ -633,6 +633,7 @@ ULONG DPM_data_pages(thread_db* tdbb, jrd_rel* relation)
  *
  **************************************/
 	SET_TDBB(tdbb);
+	const Database* const dbb = tdbb->getDatabase();
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_TRACE_ALL,
@@ -654,12 +655,15 @@ ULONG DPM_data_pages(thread_db* tdbb, jrd_rel* relation)
 				 // msg 243 missing pointer page in DPM_data_pages
 			}
 
-			const ULONG* page = ppage->ppg_page;
-			const ULONG* const end_page = page + ppage->ppg_count;
-			while (page < end_page)
+			const UCHAR* bits = (UCHAR*)(ppage->ppg_page + dbb->dbb_dp_per_pp);
+			for (USHORT slot = 0; slot < ppage->ppg_count; slot++)
 			{
-				if (*page++)
+				if (ppage->ppg_page[slot] &&
+					!PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary) &&
+					!PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty))
+				{
 					pages++;
+				}
 			}
 
 			if (ppage->ppg_header.pag_flags & ppg_eof)
