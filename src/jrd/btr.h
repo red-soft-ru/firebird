@@ -190,7 +190,7 @@ public:
 	IndexRetrieval(jrd_rel* relation, const index_desc* idx, USHORT count, temporary_key* key)
 		: irb_relation(relation), irb_index(idx->idx_id),
 		  irb_generic(0), irb_lower_count(count), irb_upper_count(count), irb_key(key),
-		  irb_name(nullptr), irb_value(nullptr), irb_list(nullptr)
+		  irb_name(nullptr), irb_value(nullptr), irb_list(nullptr), irb_scale(nullptr)
 	{
 		memcpy(&irb_desc, idx, sizeof(irb_desc));
 	}
@@ -201,7 +201,7 @@ public:
 		  irb_generic(0), irb_lower_count(0), irb_upper_count(0), irb_key(NULL),
 		  irb_name(FB_NEW_POOL(pool) MetaName(name)),
 		  irb_value(FB_NEW_POOL(pool) ValueExprNode*[idx->idx_count * 2]),
-		  irb_list(nullptr)
+		  irb_list(nullptr), irb_scale(nullptr)
 	{
 		memcpy(&irb_desc, idx, sizeof(irb_desc));
 	}
@@ -210,6 +210,7 @@ public:
 	{
 		delete irb_name;
 		delete[] irb_value;
+		delete[] irb_scale;
 	}
 
 	index_desc irb_desc;			// Index descriptor
@@ -222,6 +223,7 @@ public:
 	MetaName* irb_name;				// Index name
 	ValueExprNode** irb_value;		// Matching value (for equality search)
 	LookupValueList* irb_list;		// Matching values list (for IN <list>)
+	SSHORT* irb_scale;				// Scale for int64 key
 };
 
 // Flag values for irb_generic
@@ -504,6 +506,11 @@ public:
 	const ValueExprNode* const* getUpperValues() const
 	{
 		return m_upperValues.begin();
+	}
+
+	SSHORT* getScale()
+	{
+		return m_retrieval->irb_scale;
 	}
 
 private:

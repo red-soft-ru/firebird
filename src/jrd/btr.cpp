@@ -189,7 +189,7 @@ namespace
 
 static ULONG add_node(thread_db*, WIN*, index_insertion*, temporary_key*, RecordNumber*,
 					  ULONG*, ULONG*);
-static void compress(thread_db*, const dsc*, temporary_key*, USHORT, bool, USHORT);
+static void compress(thread_db*, const dsc*, const SSHORT scale, temporary_key*, USHORT, bool, USHORT);
 static USHORT compress_root(thread_db*, index_root_page*);
 static void copy_key(const temporary_key*, temporary_key*);
 static contents delete_node(thread_db*, WIN*, UCHAR*);
@@ -594,7 +594,7 @@ idx_e IndexKey::compose(Record* record)
 
 			m_key.key_flags |= key_empty;
 
-			compress(m_tdbb, desc_ptr, &m_key, tail->idx_itype, descending, m_keyType);
+			compress(m_tdbb, desc_ptr, 0, &m_key, tail->idx_itype, descending, m_keyType);
 		}
 		else
 		{
@@ -633,7 +633,7 @@ idx_e IndexKey::compose(Record* record)
 					m_key.key_nulls |= 1 << n;
 				}
 
-				compress(m_tdbb, desc_ptr, &temp, tail->idx_itype, descending, m_keyType);
+				compress(m_tdbb, desc_ptr, 0, &temp, tail->idx_itype, descending, m_keyType);
 
 				const UCHAR* q = temp.key_data;
 				for (USHORT l = temp.key_length; l; --l, --stuff_count)
@@ -770,7 +770,7 @@ void IndexScanListIterator::makeKeys(thread_db* tdbb, temporary_key* lower, temp
 	// Make the lower bound key
 
 	idx_e errorCode = BTR_make_key(tdbb, m_retrieval->irb_lower_count, getLowerValues(),
-		&m_retrieval->irb_desc, lower, keyType);
+		getScale(), &m_retrieval->irb_desc, lower, keyType);
 
 	if (errorCode == idx_e_ok)
 	{
@@ -784,7 +784,7 @@ void IndexScanListIterator::makeKeys(thread_db* tdbb, temporary_key* lower, temp
 			// Make the upper bound key
 
 			errorCode = BTR_make_key(tdbb, m_retrieval->irb_upper_count, getUpperValues(),
-				&m_retrieval->irb_desc, upper, keyType);
+				getScale(), &m_retrieval->irb_desc, upper, keyType);
 		}
 	}
 
@@ -1792,7 +1792,8 @@ bool BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
 			const auto values = iterator ? iterator->getUpperValues() :
 				retrieval->irb_value + retrieval->irb_desc.idx_count;
 
-			errorCode = BTR_make_key(tdbb, count, values, idx, upper, keyType);
+			errorCode = BTR_make_key(tdbb, count, values, retrieval->irb_scale,
+				idx, upper, keyType);
 		}
 
 		if (errorCode == idx_e_ok)
@@ -1802,7 +1803,8 @@ bool BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
 				const auto values = iterator ? iterator->getLowerValues() :
 					retrieval->irb_value;
 
-				errorCode = BTR_make_key(tdbb, count, values, idx, lower, keyType);
+				errorCode = BTR_make_key(tdbb, count, values, retrieval->irb_scale,
+					idx, lower, keyType);
 			}
 		}
 
@@ -1821,6 +1823,7 @@ bool BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
 idx_e BTR_make_key(thread_db* tdbb,
 				   USHORT count,
 				   const ValueExprNode* const* exprs,
+				   const SSHORT* scale,
 				   const index_desc* idx,
 				   temporary_key* key,
 				   USHORT keyType)
@@ -1868,7 +1871,7 @@ idx_e BTR_make_key(thread_db* tdbb,
 
 		key->key_flags |= key_empty;
 
-		compress(tdbb, desc, key, tail->idx_itype, descending, keyType);
+		compress(tdbb, desc, scale ? *scale : 0, key, tail->idx_itype, descending, keyType);
 
 		if (fuzzy && (key->key_flags & key_empty))
 		{
@@ -1901,7 +1904,7 @@ idx_e BTR_make_key(thread_db* tdbb,
 
 			temp.key_flags |= key_empty;
 
-			compress(tdbb, desc, &temp, tail->idx_itype, descending,
+			compress(tdbb, desc, scale ? *scale++ : 0, &temp, tail->idx_itype, descending,
 				(n == count - 1 ?
 					keyType : ((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT)));
 
@@ -2026,7 +2029,7 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 	// If the index is a single segment index, don't sweat the compound stuff
 	if ((idx->idx_count == 1) || (idx->idx_flags & idx_expression))
 	{
-		compress(tdbb, nullptr, key, tail->idx_itype, descending, INTL_KEY_SORT);
+		compress(tdbb, nullptr, 0, key, tail->idx_itype, descending, INTL_KEY_SORT);
 	}
 	else
 	{
@@ -2040,7 +2043,7 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 			for (; stuff_count; --stuff_count)
 				*p++ = 0;
 
-			compress(tdbb, nullptr, &temp, tail->idx_itype, descending, INTL_KEY_SORT);
+			compress(tdbb, nullptr, 0, &temp, tail->idx_itype, descending, INTL_KEY_SORT);
 
 			const UCHAR* q = temp.key_data;
 			for (USHORT l = temp.key_length; l; --l, --stuff_count)
@@ -2736,6 +2739,7 @@ static ULONG add_node(thread_db* tdbb,
 
 static void compress(thread_db* tdbb,
 					 const dsc* desc,
+					 const SSHORT matchScale,
 					 temporary_key* key,
 					 USHORT itype,
 					 bool descending, USHORT key_type)
@@ -2783,6 +2787,8 @@ static void compress(thread_db* tdbb,
 	size_t multiKeyLength;
 	UCHAR* ptr;
 	UCHAR* p = key->key_data;
+	fb_assert(matchScale == 0 || desc->dsc_scale == 0 || matchScale == desc->dsc_scale);
+	SSHORT scale = matchScale ? matchScale : desc->dsc_scale;
 
 	if (itype == idx_string || itype == idx_byte_array || itype == idx_metadata ||
 		itype == idx_decimal || itype == idx_bcd || itype >= idx_first_intl_string)
@@ -2802,8 +2808,8 @@ static void compress(thread_db* tdbb,
 
 				if (itype == idx_bcd)
 				{
-					Int128 i = MOV_get_int128(tdbb, desc, desc->dsc_scale);
-					length = i.makeIndexKey(&buffer, desc->dsc_scale);
+					Int128 i = MOV_get_int128(tdbb, desc, scale);
+					length = i.makeIndexKey(&buffer, scale);
 					ptr = reinterpret_cast<UCHAR*>(buffer.vary_string);
 				}
 				else if (itype == idx_decimal)
@@ -2954,13 +2960,13 @@ static void compress(thread_db* tdbb,
 	else if (itype == idx_numeric2)
 	{
 		int64_key_op = true;
-		temp.temp_int64_key = make_int64_key(MOV_get_int64(tdbb, desc, desc->dsc_scale), desc->dsc_scale);
+		temp.temp_int64_key = make_int64_key(MOV_get_int64(tdbb, desc, scale), scale);
 		temp_copy_length = sizeof(temp.temp_int64_key.d_part);
 		temp_is_negative = (temp.temp_int64_key.d_part < 0);
 
 #ifdef DEBUG_INDEXKEY
 		print_int64_key(*(const SINT64*) desc->dsc_address,
-			desc->dsc_scale, temp.temp_int64_key);
+			scale, temp.temp_int64_key);
 #endif
 
 	}

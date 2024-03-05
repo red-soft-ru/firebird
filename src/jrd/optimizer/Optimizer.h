@@ -607,6 +607,7 @@ struct IndexScratchSegment
 	bool excludeUpper = false;					// exclude upper bound value from scan
 	unsigned scope = 0;							// highest scope level
 	segmentScanType scanType = segmentScanNone;	// scan type
+	SSHORT scale = 0;							// scale for SINT64 (idx_numeric2) index
 
 	MatchedBooleanList matches;					// matched booleans
 };
