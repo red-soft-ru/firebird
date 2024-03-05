@@ -233,6 +233,10 @@ const int irb_exclude_lower	= 32;			// exclude lower bound keys while scanning i
 const int irb_exclude_upper	= 64;			// exclude upper bound keys while scanning index
 const int irb_multi_starting	= 128;		// Use INTL_KEY_MULTI_STARTING
 
+// Force include flags - always include appropriate key while scanning index
+const int irb_force_lower	= irb_exclude_lower;
+const int irb_force_upper	= irb_exclude_upper;
+
 typedef Firebird::HalfStaticArray<float, 4> SelectivityList;
 
 class BtrPageGCLock : public Lock

@@ -571,10 +571,12 @@ UCHAR* IndexTableScan::openStream(thread_db* tdbb, Impure* impure, win* window) 
 	setPage(tdbb, impure, NULL);
 	impure->irsb_nav_length = 0;
 
+	USHORT dummy = 0;		// exclude upper/lower bits are not used here,
+							// i.e. additional forced include not needed
 	// Find the starting leaf page
 	const IndexRetrieval* const retrieval = m_index->retrieval;
 	index_desc* const idx = (index_desc*) ((SCHAR*) impure + m_offset);
-	Ods::btree_page* page = BTR_find_page(tdbb, retrieval, window, idx, lower, upper, firstKeys);
+	Ods::btree_page* page = BTR_find_page(tdbb, retrieval, window, idx, lower, upper, dummy, firstKeys);
 	setPage(tdbb, impure, window);
 
 	// find the upper limit for the search
