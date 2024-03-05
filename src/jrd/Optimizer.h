@@ -103,6 +103,7 @@ public:
 	bool excludeUpper;			// exclude upper bound value from scan
 	int scope;					// highest scope level
 	segmentScanType scanType;	// scan type
+	SSHORT scale;
 
 	Firebird::Array<BoolExprNode*> matches;
 };
