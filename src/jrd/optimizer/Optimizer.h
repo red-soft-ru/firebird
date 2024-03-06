@@ -595,7 +595,7 @@ struct IndexScratchSegment
 	bool excludeUpper = false;					// exclude upper bound value from scan
 	unsigned scope = 0;							// highest scope level
 	segmentScanType scanType = segmentScanNone;	// scan type
-	SSHORT scale = 0;							// scale for SINT64 (idx_numeric2) index
+	SSHORT scale = 0;							// scale for SINT64/Int128-based segment of index
 
 	MatchedBooleanList matches;					// matched booleans
 };
@@ -613,8 +613,8 @@ struct IndexScratch
 	unsigned lowerCount = 0;
 	unsigned upperCount = 0;
 	unsigned nonFullMatchedSegments = 0;
-	bool usePartialKey = false;				// Use INTL_KEY_PARTIAL
-	bool useMultiStartingKeys = false;		// Use INTL_KEY_MULTI_STARTING
+	bool usePartialKey = false;					// Use INTL_KEY_PARTIAL
+	bool useMultiStartingKeys = false;			// Use INTL_KEY_MULTI_STARTING
 	bool useRootListScan = false;
 
 	Firebird::ObjectsArray<IndexScratchSegment> segments;

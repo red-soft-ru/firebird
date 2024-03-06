@@ -1944,9 +1944,17 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 			return false;
 		}
 
-		// Scale idx_numeric2
-		if ((!missingNode) && (matchDesc.dsc_dtype == dtype_int64))
-			segment->scale = matchDesc.dsc_scale;
+		// Scale for big exact numerics
+		if (!missingNode)
+		{
+			switch (matchDesc.dsc_dtype)
+			{
+			case dtype_int64:
+			case dtype_int128:
+				segment->scale = matchDesc.dsc_scale;
+				break;
+			}
+		}
 
 		// A match could be made
 		if (segment->scope < scope)
