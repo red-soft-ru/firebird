@@ -223,7 +223,7 @@ public:
 	MetaName* irb_name;				// Index name
 	ValueExprNode** irb_value;		// Matching value (for equality search)
 	LookupValueList* irb_list;		// Matching values list (for IN <list>)
-	SSHORT* irb_scale;				// Scale for int64 key
+	SSHORT* irb_scale;				// Scale for int64/int128 key
 };
 
 // Flag values for irb_generic
