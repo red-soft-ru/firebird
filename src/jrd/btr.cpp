@@ -2800,7 +2800,6 @@ static void compress(thread_db* tdbb,
 	size_t multiKeyLength;
 	UCHAR* ptr;
 	UCHAR* p = key->key_data;
-	fb_assert(matchScale == 0 || desc->dsc_scale == 0 || matchScale == desc->dsc_scale);
 	SSHORT scale = matchScale ? matchScale : desc->dsc_scale;
 
 	if (itype == idx_string || itype == idx_byte_array || itype == idx_metadata ||
