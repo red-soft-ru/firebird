@@ -289,12 +289,14 @@ jobs:
 
       - name: Prepare - Install tools
         run: |
-          brew install automake autoconf-archive cmake libtool ninja
+          # libcxx build is not working with python >= 3.12
+          brew install automake autoconf-archive cmake libtool ninja python@3.11
+          ln -s "$(brew --prefix python@3.11)/bin/python3" "$(brew --prefix python@3.11)/bin/python"
 
       - name: Cache - vcpkg
         uses: actions/cache@v4
         with:
-          key: ${{ runner.os }}-vcpkg
+          key: ${{ runner.os }}-vcpkg-0
           path: |
             $HOME/.cache/vcpkg/archives
 
@@ -302,6 +304,7 @@ jobs:
         run: |
           export LIBTOOLIZE=glibtoolize
           export LIBTOOL=glibtool
+          export PATH="$(brew --prefix python@3.11)/bin:$PATH"
 
           ./autogen.sh --with-builtin-tommath --with-builtin-tomcrypt
           make -j4
