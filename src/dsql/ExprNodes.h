@@ -791,7 +791,7 @@ public:
 		dsqlDesc = desc;
 	}
 
-	virtual bool deterministic() const override
+	virtual bool deterministic() const
 	{
 		return true;
 	}
@@ -872,7 +872,7 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
-	virtual bool deterministic() const override
+	virtual bool deterministic() const
 	{
 		return false;
 	}
@@ -1633,7 +1633,7 @@ public:
 
 	Request* getParamRequest(Request* request) const;
 
-	virtual bool deterministic() const override
+	virtual bool deterministic() const
 	{
 		return true;
 	}
@@ -1685,7 +1685,7 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
-	virtual bool deterministic() const override
+	virtual bool deterministic() const
 	{
 		return true;
 	}
@@ -2092,7 +2092,7 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
-	virtual bool deterministic() const override;
+	virtual bool deterministic() const;
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
@@ -2174,7 +2174,7 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
-	virtual bool deterministic() const override;
+	virtual bool deterministic() const;
 
 	virtual bool possiblyUnknown() const
 	{
@@ -2274,7 +2274,7 @@ public:
 
 	Request* getVarRequest(Request* request) const;
 
-	virtual bool deterministic() const override
+	virtual bool deterministic() const
 	{
 		return false;
 	}
