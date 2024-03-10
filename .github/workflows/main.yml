@@ -293,7 +293,6 @@ jobs:
 
       # libcxx build is not working with python >= 3.12
       - name: Do not use preinstalled python >= 3.12
-        if: ${{ matrix.arch == 'x64' }}
         run: |
           brew uninstall --ignore-dependencies python@3.12
           [ -e /Library/Frameworks/Python.framework ] && \
