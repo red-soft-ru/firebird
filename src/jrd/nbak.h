@@ -204,7 +204,15 @@ public:
 	public:
 		explicit StateReadGuard(thread_db* tdbb) : m_tdbb(tdbb)
 		{
-			lock(tdbb, LCK_WAIT);
+			try
+			{
+				lock(tdbb, LCK_WAIT);
+			}
+			catch (const Firebird::Exception&)
+			{
+				unlock(tdbb);
+				throw;
+			}
 		}
 
 		~StateReadGuard()
