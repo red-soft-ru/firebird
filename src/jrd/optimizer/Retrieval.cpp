@@ -1393,19 +1393,35 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 
 				// Look if a match is already used by previous matches.
 				bool anyMatchAlreadyUsed = false, matchUsedByNavigation = false;
-				for (const auto currentMatch : currentInv->matches)
+				if (currentInv->boolean)
 				{
-					if (matches.exist(currentMatch))
+					if (matches.exist(currentInv->boolean))
 					{
 						anyMatchAlreadyUsed = true;
 
 						if (navigationCandidate &&
-							navigationCandidate->matches.exist(currentMatch))
+							navigationCandidate->matches.exist(currentInv->boolean))
 						{
 							matchUsedByNavigation = true;
 						}
+					}
+				}
+				else
+				{
+					for (const auto currentMatch : currentInv->matches)
+					{
+						if (matches.exist(currentMatch))
+						{
+							anyMatchAlreadyUsed = true;
 
-						break;
+							if (navigationCandidate &&
+								navigationCandidate->matches.exist(currentMatch))
+							{
+								matchUsedByNavigation = true;
+							}
+
+							break;
+						}
 					}
 				}
 
