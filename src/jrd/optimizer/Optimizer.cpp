@@ -174,6 +174,7 @@ namespace
 			// Save states of the underlying streams and restore them afterwards
 
 			StreamStateHolder stateHolder(csb, m_streams);
+			stateHolder.deactivate();
 
 			// Generate record source objects
 
@@ -569,7 +570,6 @@ Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, boo
 	  compileStreams(getPool()),
 	  bedStreams(getPool()),
 	  keyStreams(getPool()),
-	  subStreams(getPool()),
 	  outerStreams(getPool()),
 	  conjuncts(getPool())
 {
@@ -812,7 +812,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	// Go through the record selection expression generating
 	// record source blocks for all streams
 
-	RiverList rivers;
+	RiverList rivers, dependentRivers;
 
 	bool innerSubStream = false;
 	for (auto node : rse->rse_relations)
@@ -838,11 +838,13 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			StreamList localStreams;
 			rsb->findUsedStreams(localStreams);
 
+			bool computable = false;
+
 			// AB: Save all outer-part streams
 			if (isInnerJoin() || (isLeftJoin() && !innerSubStream))
 			{
-				subStreams.join(localStreams);
-				outerStreams.join(localStreams);
+				if (node->computable(csb, INVALID_STREAM, false))
+					computable = true;
 
 				// Apply local booleans, if any. Note that it's done
 				// only for inner joins and outer streams of left joins.
@@ -851,8 +853,19 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			}
 
 			const auto river = FB_NEW_POOL(getPool()) River(csb, rsb, node, localStreams);
-			river->deactivate(csb);
-			rivers.add(river);
+
+			if (computable)
+			{
+				outerStreams.join(localStreams);
+
+				river->activate(csb);
+				rivers.add(river);
+			}
+			else
+			{
+				river->deactivate(csb);
+				dependentRivers.add(river);
+			}
 		}
 		else
 		{
@@ -881,10 +894,6 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	else
 		rse->rse_aggregate = aggregate = nullptr;
 
-	// AB: Mark the previous used streams (sub-RseNode's) as active
-	for (const auto subStream : subStreams)
-		csb->csb_rpt[subStream].activate();
-
 	bool sortCanBeUsed = true;
 	SortNode* const orgSortNode = sort;
 
@@ -902,7 +911,10 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 
 	// Outer joins are processed their own way
 	if (!isInnerJoin())
+	{
+		rivers.join(dependentRivers);
 		rsb = OuterJoin(tdbb, this, rse, rivers, &sort).generate();
+	}
 	else
 	{
 		// AB: If previous rsb's are already on the stack we can't use
@@ -969,13 +981,18 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			}
 		}
 
-		// attempt to form joins in decreasing order of desirability
+		// Attempt to form joins in decreasing order of desirability
 		generateInnerJoin(joinStreams, rivers, &sort, rse->rse_plan);
+
+		// Re-activate remaining rivers to be hashable/mergeable
+		for (const auto river : rivers)
+			river->activate(csb);
 
 		// If there are multiple rivers, try some hashing or sort/merging
 		while (generateEquiJoin(rivers))
 			;
 
+		rivers.join(dependentRivers);
 		rsb = CrossJoin(csb, rivers).getRecordSource();
 
 		// Pick up any residual boolean that may have fallen thru the cracks
@@ -2259,6 +2276,9 @@ bool Optimizer::generateEquiJoin(RiverList& orgRivers)
 	for (; iter.hasData(); ++iter)
 	{
 		if (iter & CONJUNCT_USED)
+			continue;
+
+		if (!iter->computable(csb, INVALID_STREAM, false))
 			continue;
 
 		NestConst<ValueExprNode> node1;
