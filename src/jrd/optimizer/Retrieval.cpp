@@ -885,12 +885,13 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 					}
 				}
 
-				if (const auto list = segment.valueList)
+				if (segment.scanType == segmentScanList)
 				{
-					fb_assert(segment.scanType == segmentScanList);
-
 					if (listCount) // we cannot have more than one list matched to an index
 						break;
+
+					const auto list = segment.valueList;
+					fb_assert(list);
 
 					listCount = list->getCount();
 					maxSelectivity = scratch.selectivity;
