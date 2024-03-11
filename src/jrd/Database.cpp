@@ -477,6 +477,25 @@ namespace Jrd
 			dbb_filename, dbb_config));
 	}
 
+	void Database::startTipCache(thread_db* tdbb)
+	{
+		fb_assert(!dbb_tip_cache);
+
+		TipCache* cache = FB_NEW_POOL(*dbb_permanent) TipCache(this);
+		try
+		{
+			cache->initializeTpc(tdbb);
+		}
+		catch(const Exception&)
+		{
+			cache->finalizeTpc(tdbb);
+			delete cache;
+			throw;
+		}
+
+		dbb_tip_cache = cache;
+	}
+
 	// Database::Linger class implementation
 
 	void Database::Linger::handler()

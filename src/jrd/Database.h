@@ -668,6 +668,7 @@ public:
 	static int replStateAst(void*);
 
 	const CoercionArray *getBindings() const;
+	void startTipCache(thread_db* tdbb);
 
 	void initGlobalObjects();
 	void shutdownGlobalObjects();
