@@ -2264,7 +2264,10 @@ InversionCandidate* Retrieval::matchOnIndexes(IndexScratchList& inputIndexScratc
 					matches.add(match);
 
 				for (const auto match : invCandidate2->matches)
-					matches.add(match);
+				{
+					if (matches.exist(match))
+						invCandidate->matches.add(match);
+				}
 			}
 
 			return invCandidate;
