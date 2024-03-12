@@ -653,6 +653,12 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 	}
 	else
 	{
+		fb_assert(rpb.rpb_record == record);
+
+		rpb.rpb_format_number = format->fmt_version;
+		rpb.rpb_address = record->getData();
+		rpb.rpb_length = record->getLength();
+
 		doInsert(tdbb, &rpb, transaction); // second (paranoid) attempt
 	}
 }
