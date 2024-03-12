@@ -267,17 +267,21 @@ Applier* Applier::create(thread_db* tdbb)
 
 void Applier::shutdown(thread_db* tdbb)
 {
+	const auto dbb = tdbb->getDatabase();
 	const auto attachment = tdbb->getAttachment();
 
-	cleanupTransactions(tdbb);
-
-	CMP_release(tdbb, m_request);
+	if (!(dbb->dbb_flags & DBB_bugcheck))
+	{
+		cleanupTransactions(tdbb);
+		CMP_release(tdbb, m_request);
+	}
 	m_request = NULL;
 	m_record = NULL;
 
 	m_bitmap->clear();
 
-	attachment->att_repl_appliers.findAndRemove(this);
+	if (attachment)
+		attachment->att_repl_appliers.findAndRemove(this);
 
 	if (m_interface)
 	{
