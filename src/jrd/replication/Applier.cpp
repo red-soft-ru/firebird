@@ -271,16 +271,20 @@ Applier* Applier::create(thread_db* tdbb)
 
 void Applier::shutdown(thread_db* tdbb)
 {
+	const auto dbb = tdbb->getDatabase();
 	const auto attachment = tdbb->getAttachment();
 
-	cleanupTransactions(tdbb);
-
-	CMP_release(tdbb, m_request);
+	if (!(dbb->dbb_flags & DBB_bugcheck))
+	{
+		cleanupTransactions(tdbb);
+		CMP_release(tdbb, m_request);
+	}
 	m_request = nullptr;	// already deleted by pool
 	m_record = nullptr;		// already deleted by pool
 	m_bitmap = nullptr;		// already deleted by pool
 
-	attachment->att_repl_appliers.findAndRemove(this);
+	if (attachment)
+		attachment->att_repl_appliers.findAndRemove(this);
 
 	if (m_interface)
 	{
