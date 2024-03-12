@@ -14,6 +14,9 @@ jobs:
         with:
           fetch-depth: 10
 
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
+
       - name: Prepare
         run: |
           sudo apt-get install libtool-bin libtomcrypt1 libtomcrypt-dev libtommath1 libtommath-dev libicu-dev zlib1g-dev cmake
@@ -54,6 +57,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
       - name: Get Release Notes
         uses: ./.github/actions/get-release-notes
@@ -96,6 +102,9 @@ jobs:
         with:
           fetch-depth: 10
 
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
+
       - name: Get Release Notes
         uses: ./.github/actions/get-release-notes
 
@@ -123,7 +132,10 @@ jobs:
           fetch-depth: 10
 
       - name: Prepare
-        run: apk update && apk --no-cache --update add build-base libtool git autoconf automake cmake zlib-dev icu-dev ncurses-dev libedit-dev linux-headers tar
+        run: apk update && apk --no-cache --update add build-base libtool git autoconf automake cmake zlib-dev icu-dev ncurses-dev libedit-dev linux-headers tar sed
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
       - name: Build
         run: |
@@ -159,6 +171,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
       - name: Prepare
         shell: cmd
@@ -209,6 +224,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
       - name: Get Release Notes
         uses: ./.github/actions/get-release-notes
@@ -286,6 +304,9 @@ jobs:
         with:
           fetch-depth: 10
           submodules: 'true'
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
       - name: Prepare - Install tools
         run: |
@@ -370,6 +391,9 @@ jobs:
         with:
           fetch-depth: 10
 
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
+
       - name: Prepare - install Linux tools
         run: |
           sudo apt-get install libtool-bin libtomcrypt1 libtomcrypt-dev libtommath1 libtommath-dev libicu-dev zlib1g-dev
@@ -418,6 +442,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
       - name: Enable KVM
         run: |
@@ -502,6 +529,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
       - name: Download final build (x86)
         uses: actions/download-artifact@v4
