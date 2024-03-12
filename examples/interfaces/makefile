@@ -72,6 +72,7 @@ all: $(OUTBIN)
 11.batch.o: 11.batch.cpp
 12.batch_isc.o: 12.batch_isc.cpp
 13.null_pk.o: 13.null_pk.cpp
+14.restore.o: 14.restore.cpp
 
 # clean up
 clean:
