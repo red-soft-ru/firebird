@@ -201,11 +201,12 @@ namespace
 		}
 	};
 
-	class LocalThreadContext
+	class LocalThreadContext : Firebird::ContextPoolHolder
 	{
 	public:
 		LocalThreadContext(thread_db* tdbb, jrd_tra* tra, Request* req = NULL)
-			: m_tdbb(tdbb)
+			: Firebird::ContextPoolHolder(req ? req->req_pool : tdbb->getDefaultPool()),
+			  m_tdbb(tdbb)
 		{
 			tdbb->setTransaction(tra);
 			tdbb->setRequest(req);
@@ -572,6 +573,8 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 	rpb.rpb_length = length;
 	record->copyDataFrom(data);
 
+	FbLocalStatus error;
+
 	try
 	{
 		doInsert(tdbb, &rpb, transaction);
@@ -586,6 +589,7 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 			throw;
 		}
 
+		ex.stuffException(&error);
 		fb_utils::init_status(tdbb->tdbb_status_vector);
 
 		// The subsequent backout will delete the blobs we have stored before,
@@ -626,8 +630,14 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 	bool found = false;
 
 #ifdef RESOLVE_CONFLICTS
+	fb_assert(error[1] == isc_unique_key_violation || error[1] == isc_no_dup);
+	fb_assert(error[2] == isc_arg_string);
+	fb_assert(error[3] != 0);
+
+	const char* idxName = reinterpret_cast<const char*>(error[3]);
+
 	index_desc idx;
-	const auto indexed = lookupRecord(tdbb, relation, record, idx);
+	const auto indexed = lookupRecord(tdbb, relation, record, idx, idxName);
 
 	AutoPtr<Record> cleanup;
 
@@ -1076,7 +1086,7 @@ bool Applier::compareKey(thread_db* tdbb, jrd_rel* relation, const index_desc& i
 
 bool Applier::lookupRecord(thread_db* tdbb,
 						   jrd_rel* relation, Record* record,
-						   index_desc& idx)
+						   index_desc& idx, const char* idxName)
 {
 	RecordBitmap::reset(m_bitmap);
 
@@ -1087,7 +1097,24 @@ bool Applier::lookupRecord(thread_db* tdbb,
 		return false;
 	}
 
-	if (lookupKey(tdbb, relation, idx))
+	bool haveIdx = false;
+	if (idxName)
+	{
+		SLONG foundRelId;
+		IndexStatus idxStatus;
+		SLONG idx_id = MET_lookup_index_name(tdbb, idxName, &foundRelId, &idxStatus);
+
+		fb_assert(idxStatus == MET_object_active);
+		fb_assert(foundRelId == relation->rel_id);
+
+		haveIdx = (idxStatus == MET_object_active) && (foundRelId == relation->rel_id) &&
+			BTR_lookup(tdbb, relation, idx_id, &idx, relation->getPages(tdbb));
+	}
+
+	if (!haveIdx)
+		haveIdx = lookupKey(tdbb, relation, idx);
+
+	if (haveIdx)
 	{
 		IndexKey key(tdbb, relation, &idx);
 		if (const auto result = key.compose(record))
