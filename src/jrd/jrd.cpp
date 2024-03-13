@@ -6440,8 +6440,7 @@ void JReplicator::freeEngineData(Firebird::CheckStatusWrapper* user_status)
 {
 	try
 	{
-		EngineContextHolder tdbb(user_status, this, FB_FUNCTION);
-		check_database(tdbb);
+		EngineContextHolder tdbb(user_status, this, FB_FUNCTION, AttachmentHolder::ATT_NO_SHUTDOWN_CHECK);
 
 		try
 		{
