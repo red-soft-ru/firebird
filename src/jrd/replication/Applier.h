@@ -190,7 +190,7 @@ namespace Jrd
 						Record* record1, Record* record2);
 		bool lookupRecord(thread_db* tdbb, jrd_rel* relation,
 						  Record* record, RecordBitmap* bitmap,
-						  index_desc& idx);
+						  index_desc& idx, const char* idxName = nullptr);
 
 		const Format* findFormat(thread_db* tdbb, jrd_rel* relation, ULONG length);
 
