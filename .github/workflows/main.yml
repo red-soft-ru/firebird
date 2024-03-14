@@ -530,6 +530,9 @@ jobs:
         with:
           fetch-depth: 10
 
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
+
       - name: Download final build (x86)
         uses: actions/download-artifact@v4
         with:
