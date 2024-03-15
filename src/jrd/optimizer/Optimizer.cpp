@@ -853,17 +853,15 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			}
 
 			const auto river = FB_NEW_POOL(getPool()) River(csb, rsb, node, localStreams);
+			river->deactivate(csb);
 
 			if (computable)
 			{
 				outerStreams.join(localStreams);
-
-				river->activate(csb);
 				rivers.add(river);
 			}
 			else
 			{
-				river->deactivate(csb);
 				dependentRivers.add(river);
 			}
 		}
@@ -893,6 +891,10 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		sort = aggregate;
 	else
 		rse->rse_aggregate = aggregate = nullptr;
+
+	// Activate the priorly used rivers
+	for (const auto river : rivers)
+		river->activate(csb);
 
 	bool sortCanBeUsed = true;
 	SortNode* const orgSortNode = sort;
