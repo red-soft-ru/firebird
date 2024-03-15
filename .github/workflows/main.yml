@@ -13,6 +13,9 @@ jobs:
         with:
           fetch-depth: 10
 
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
+
       - name: Prepare
         run: |
           sudo apt-get install libtool-bin libtomcrypt1 libtomcrypt-dev libtommath1 libtommath-dev libicu-dev zlib1g-dev
@@ -50,6 +53,9 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
       - name: Download and extract chroot environment
         run: |
@@ -131,7 +137,10 @@ jobs:
           fetch-depth: 10
 
       - name: Prepare
-        run: apk update && apk --no-cache --update add build-base libtool git autoconf automake zlib-dev icu-dev ncurses-dev libedit-dev linux-headers tar
+        run: apk update && apk --no-cache --update add build-base libtool git autoconf automake zlib-dev icu-dev ncurses-dev libedit-dev linux-headers tar sed
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
       - name: Build
         run: |
@@ -164,6 +173,9 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
       - name: Prepare
         shell: cmd
@@ -201,6 +213,9 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
       - name: Prepare - Install tools
         run: |
