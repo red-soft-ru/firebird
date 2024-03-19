@@ -27,7 +27,7 @@ install:
   - cmd: cd builds\win32
   - cmd: run_all.bat JUSTBUILD
   - cmd: set ARTIFACTS_PATH=output_%FB_OUTPUT_SUFFIX%
-  - sh: export APT_PACKAGES="libtool-bin"
+  - sh: export APT_PACKAGES="libtool-bin autoconf"
   - sh: if [ $PLATFORM = "x64" ]; then export APT_PACKAGES="$APT_PACKAGES libtommath1 libtommath-dev libicu-dev zlib1g-dev"; fi
   - sh: if [ $PLATFORM = "x86" ]; then export APT_PACKAGES="$APT_PACKAGES gcc-multilib g++-multilib libncurses5-dev:i386 libtommath-dev:i386 libicu-dev:i386 zlib1g-dev:i386"; fi
   - sh: if [ $PLATFORM = "x64" ]; then export CC="gcc" CXX="g++"; fi
