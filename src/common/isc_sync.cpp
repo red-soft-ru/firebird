@@ -1229,12 +1229,17 @@ static inline void reportError(const char* func, CheckStatusWrapper* statusVecto
 bool allocFileSpace(int fd, off_t offset, FB_SIZE_T length, CheckStatusWrapper* statusVector)
 {
 #if defined(HAVE_LINUX_FALLOC_H) && defined(HAVE_FALLOCATE)
-	if (fallocate(fd, 0, offset, length))
+	if (fallocate(fd, 0, offset, length) == 0)
+		return true;
+
+	if (errno != EOPNOTSUPP && errno != ENOSYS)
 	{
 		reportError("fallocate", statusVector);
 		return false;
 	}
-#else
+	// fallocate is not supported by this kernel or file system
+	// take the long way around
+#endif
 	static const FB_SIZE_T buf128KSize = 131072;
 	HalfStaticArray<UCHAR, BUFFER_LARGE> buf;
 	const FB_SIZE_T bufSize = length < buf128KSize ? length : buf128KSize;
@@ -1258,7 +1263,7 @@ bool allocFileSpace(int fd, off_t offset, FB_SIZE_T length, CheckStatusWrapper* 
 		reportError("fsync", statusVector);
 		return false;
 	}
-#endif
+
 	return true;
 }
 
