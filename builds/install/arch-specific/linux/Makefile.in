@@ -48,7 +48,7 @@ InstallRoot=.
 BuildVersion=$(FirebirdVersion).$(BuildNum)
 
 CommitHash:=-$(shell git rev-parse HEAD | colrm 8)
-ifeq ($(CommitHash), -)
+ifeq ($(CommitHash),-)
 CommitHash:=
 endif
 
