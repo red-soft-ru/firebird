@@ -2941,7 +2941,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 				if (secondPass)
 				{
 					P.RDB$PROCEDURE_TYPE.NULL = FALSE;
-					P.RDB$PROCEDURE_TYPE = (USHORT) prc_selectable;
+					P.RDB$PROCEDURE_TYPE = returns.getCount() != 0 ? (USHORT) prc_selectable : (USHORT) prc_executable;
 				}
 				else
 				{
