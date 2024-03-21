@@ -1111,6 +1111,9 @@ void Optimizer::compileRelation(StreamType stream)
 	const auto relation = tail->csb_relation;
 	fb_assert(relation);
 
+	const auto format = CMP_format(tdbb, csb, stream);
+	tail->csb_cardinality = getCardinality(tdbb, relation, format);
+
 	tail->csb_idx = nullptr;
 
 	if (needIndices && !relation->rel_file && !relation->isVirtual())
@@ -1152,9 +1155,6 @@ void Optimizer::compileRelation(StreamType stream)
 		if (tail->csb_plan)
 			markIndices(tail, relation->rel_id);
 	}
-
-	const auto format = CMP_format(tdbb, csb, stream);
-	tail->csb_cardinality = getCardinality(tdbb, relation, format);
 }
 
 
