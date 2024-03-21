@@ -1130,11 +1130,11 @@ void Optimizer::compileRelation(StreamType stream)
 			bool updated = false;
 			for (const index_desc& idx : idxList)
 			{
-				if (idx.idx_selectivity == 0.0f)
+				if (idx.idx_selectivity <= 0.0f)
 				{
 					SelectivityList	selectivity;
 					BTR_selectivity(tdbb, relation, idx.idx_id, selectivity);
-					if (selectivity[0] != 0.0f)
+					if (selectivity[0] > 0.0f)
 						updated = true;
 				}
 			}
