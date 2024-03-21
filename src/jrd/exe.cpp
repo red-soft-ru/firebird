@@ -646,7 +646,7 @@ void EXE_receive(thread_db* tdbb,
 
 		// ASF: temporary blobs returned to the client should not be released
 		// with the request, but in the transaction end.
-		if (top_level)
+		if (top_level || transaction->tra_temp_blobs_count)
 		{
 			for (int i = 0; i < format->fmt_count; ++i)
 			{
@@ -660,7 +660,8 @@ void EXE_receive(thread_db* tdbb,
 					{
 						BlobIndex* current = &transaction->tra_blobs->current();
 
-						if (current->bli_request &&
+						if (top_level &&
+							current->bli_request &&
 							current->bli_request->req_blobs.locate(id->bid_temp_id()))
 						{
 							current->bli_request->req_blobs.fastRemove();
@@ -673,7 +674,7 @@ void EXE_receive(thread_db* tdbb,
 							current->bli_blob_object->BLB_close(tdbb);
 						}
 					}
-					else
+					else if (top_level)
 					{
 						transaction->checkBlob(tdbb, id, NULL, false);
 					}
