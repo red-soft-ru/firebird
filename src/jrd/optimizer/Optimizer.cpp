@@ -1111,6 +1111,9 @@ void Optimizer::compileRelation(StreamType stream)
 	const auto relation = tail->csb_relation;
 	fb_assert(relation);
 
+	const auto format = CMP_format(tdbb, csb, stream);
+	tail->csb_cardinality = getCardinality(tdbb, relation, format);
+
 	tail->csb_idx = nullptr;
 
 	if (needIndices && !relation->rel_file && !relation->isVirtual())
@@ -1119,15 +1122,39 @@ void Optimizer::compileRelation(StreamType stream)
 		IndexDescList idxList;
 		BTR_all(tdbb, relation, idxList, relPages);
 
+		// if index stats is empty, update it for non-empty and not too big system relations
+
+		const bool updateStats = (relation->isSystem() && idxList.hasData() &&
+			!tdbb->getDatabase()->readOnly() &&
+			(relPages->rel_data_pages > 0) && (relPages->rel_data_pages < 100));
+
+		if (updateStats)
+		{
+			bool updated = false;
+			for (const index_desc& idx : idxList)
+			{
+				if (idx.idx_selectivity <= 0.0f)
+				{
+					SelectivityList	selectivity;
+					BTR_selectivity(tdbb, relation, idx.idx_id, selectivity);
+					if (selectivity[0] > 0.0f)
+						updated = true;
+				}
+			}
+
+			if (updated)
+			{
+				idxList.clear();
+				BTR_all(tdbb, relation, idxList, relPages);
+			}
+		}
+
 		if (idxList.hasData())
 			tail->csb_idx = FB_NEW_POOL(getPool()) IndexDescList(getPool(), idxList);
 
 		if (tail->csb_plan)
 			markIndices(tail, relation->rel_id);
 	}
-
-	const auto format = CMP_format(tdbb, csb, stream);
-	tail->csb_cardinality = getCardinality(tdbb, relation, format);
 }
 
 
