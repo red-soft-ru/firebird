@@ -1168,6 +1168,56 @@ void SharedMemoryBase::unlinkFile(const TEXT* expanded_filename) noexcept
 
 #ifdef UNIX
 
+static inline void reportError(const char* func, CheckStatusWrapper* statusVector)
+{
+	if (!statusVector)
+		system_call_failed::raise(func);
+	else
+		error(statusVector, func, errno);
+}
+
+bool allocFileSpace(int fd, off_t offset, FB_SIZE_T length, CheckStatusWrapper* statusVector)
+{
+#if defined(HAVE_LINUX_FALLOC_H) && defined(HAVE_FALLOCATE)
+	if (fallocate(fd, 0, offset, length) == 0)
+		return true;
+
+	if (errno != EOPNOTSUPP && errno != ENOSYS)
+	{
+		reportError("fallocate", statusVector);
+		return false;
+	}
+	// fallocate is not supported by this kernel or file system
+	// take the long way around
+#endif
+	static const FB_SIZE_T buf128KSize = 131072;
+	HalfStaticArray<UCHAR, BUFFER_LARGE> buf;
+	const FB_SIZE_T bufSize = length < buf128KSize ? length : buf128KSize;
+
+	memset(buf.getBuffer(bufSize), 0, bufSize);
+	os_utils::lseek(fd, LSEEK_OFFSET_CAST offset, SEEK_SET);
+
+	while (length)
+	{
+		const FB_SIZE_T cnt = length < bufSize ? length : bufSize;
+		if (write(fd, buf.begin(), cnt) != (ssize_t) cnt)
+		{
+			reportError("write", statusVector);
+			return false;
+		}
+		length -= cnt;
+	}
+
+	if (fsync(fd))
+	{
+		reportError("fsync", statusVector);
+		return false;
+	}
+
+	return true;
+}
+
+
 void SharedMemoryBase::internalUnmap()
 {
 	if (sh_mem_header)
@@ -1303,7 +1353,10 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	if (mainLock->setlock(&statusVector, FileLock::FLM_TRY_EXCLUSIVE))
 	{
 		if (trunc_flag)
+		{
 			FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), length));
+			allocFileSpace(mainLock->getFd(), 0, length, NULL);
+		}
 
 		if (callback->initialize(this, true))
 		{
@@ -2436,7 +2489,18 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector, ULONG new_len
 	}
 
 	if (flag)
+	{
 		FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), new_length));
+
+		if (new_length > sh_mem_length_mapped)
+		{
+			if (!allocFileSpace(mainLock->getFd(), sh_mem_length_mapped,
+				new_length - sh_mem_length_mapped, statusVector))
+			{
+				return false;
+			}
+		}
+	}
 
 	MemoryHeader* const address = (MemoryHeader*) os_utils::mmap(0, new_length,
 		PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
