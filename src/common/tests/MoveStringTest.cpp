@@ -6,7 +6,7 @@
 using namespace Firebird;
 
 
-BOOST_AUTO_TEST_SUITE(MoveSuit)
+BOOST_AUTO_TEST_SUITE(MoveSuite)
 BOOST_AUTO_TEST_SUITE(StringMoveSemantics)
 
 static constexpr std::string_view EmptyString = "";
@@ -142,5 +142,5 @@ BOOST_AUTO_TEST_CASE(SmallStringMove)
 
 BOOST_AUTO_TEST_SUITE_END() // DoNotMoveString
 
-BOOST_AUTO_TEST_SUITE_END() // CVTDatetimeFormat
-BOOST_AUTO_TEST_SUITE_END()	// CVTSuite
+BOOST_AUTO_TEST_SUITE_END() // StringMoveSemantics
+BOOST_AUTO_TEST_SUITE_END()	// MoveSuite
