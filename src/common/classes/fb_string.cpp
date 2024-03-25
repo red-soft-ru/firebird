@@ -403,7 +403,7 @@ extern "C" {
 			stringBuffer = std::exchange(rhs.stringBuffer, rhs.inlineBuffer);
 			stringLength = std::exchange(rhs.stringLength, 0);
 			bufferSize = std::exchange(rhs.bufferSize, INLINE_BUFFER_SIZE);
-			rhs.shrinkBuffer();
+
 			return true;
 		}
 
