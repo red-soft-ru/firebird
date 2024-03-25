@@ -2107,7 +2107,7 @@ public:
 class TrimNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_TRIM>
 {
 public:
-	explicit TrimNode(MemoryPool& pool, UCHAR aWhere,
+	explicit TrimNode(MemoryPool& pool, UCHAR aWhere, UCHAR aWhat,
 		ValueExprNode* aValue = NULL, ValueExprNode* aTrimChars = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
@@ -2137,6 +2137,7 @@ public:
 
 public:
 	UCHAR where;
+	UCHAR what;
 	NestConst<ValueExprNode> value;
 	NestConst<ValueExprNode> trimChars;	// may be NULL
 };

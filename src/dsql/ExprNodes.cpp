@@ -12531,9 +12531,10 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 static RegisterNode<TrimNode> regTrimNode({blr_trim});
 
-TrimNode::TrimNode(MemoryPool& pool, UCHAR aWhere, ValueExprNode* aValue, ValueExprNode* aTrimChars)
+TrimNode::TrimNode(MemoryPool& pool, UCHAR aWhere, UCHAR aWhat, ValueExprNode* aValue, ValueExprNode* aTrimChars)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_TRIM>(pool),
 	  where(aWhere),
+	  what(aWhat),
 	  value(aValue),
 	  trimChars(aTrimChars)
 {
@@ -12544,9 +12545,9 @@ DmlNode* TrimNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb
 	UCHAR where = csb->csb_blr_reader.getByte();
 	UCHAR what = csb->csb_blr_reader.getByte();
 
-	TrimNode* node = FB_NEW_POOL(pool) TrimNode(pool, where);
+	TrimNode* node = FB_NEW_POOL(pool) TrimNode(pool, where, what);
 
-	if (what == blr_trim_characters)
+	if (what == blr_trim_characters || what == blr_trim_multi_characters)
 		node->trimChars = PAR_parse_value(tdbb, csb);
 
 	node->value = PAR_parse_value(tdbb, csb);
@@ -12567,7 +12568,7 @@ string TrimNode::internalPrint(NodePrinter& printer) const
 
 ValueExprNode* TrimNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	TrimNode* node = FB_NEW_POOL(dsqlScratch->getPool()) TrimNode(dsqlScratch->getPool(), where,
+	TrimNode* node = FB_NEW_POOL(dsqlScratch->getPool()) TrimNode(dsqlScratch->getPool(), where, what,
 		doDsqlPass(dsqlScratch, value), doDsqlPass(dsqlScratch, trimChars));
 
 	// Try to force trimChars to be same type as value: TRIM(? FROM FIELD)
@@ -12595,7 +12596,7 @@ void TrimNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (trimChars)
 	{
-		dsqlScratch->appendUChar(blr_trim_characters);
+		dsqlScratch->appendUChar(what);
 		GEN_expr(dsqlScratch, trimChars);
 	}
 	else
@@ -12665,7 +12666,7 @@ void TrimNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 
 ValueExprNode* TrimNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
-	TrimNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) TrimNode(*tdbb->getDefaultPool(), where);
+	TrimNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) TrimNode(*tdbb->getDefaultPool(), where, what);
 	node->value = copier.copy(tdbb, value);
 	if (trimChars)
 		node->trimChars = copier.copy(tdbb, trimChars);
@@ -12800,34 +12801,87 @@ dsc* TrimNode::execute(thread_db* tdbb, Request* request) const
 
 	SLONG offsetLead = 0;
 	SLONG offsetTrail = valueCanonicalLen;
+	const bool multi = what == blr_trim_multi_characters;
 
 	// CVC: Avoid endless loop with zero length trim chars.
 	if (charactersCanonicalLen)
 	{
-		if (where == blr_trim_both || where == blr_trim_leading)
+		int charSize = charactersCanonical.getCount() / charactersLength;
+		if (!multi)
 		{
-			// CVC: Prevent surprises with offsetLead < valueCanonicalLen; it may fail.
-			for (; offsetLead + charactersCanonicalLen <= valueCanonicalLen;
-				 offsetLead += charactersCanonicalLen)
+			if (where == blr_trim_both || where == blr_trim_leading)
 			{
-				if (memcmp(charactersCanonical.begin(), &valueCanonical[offsetLead],
-						charactersCanonicalLen) != 0)
+				// CVC: Prevent surprises with offsetLead < valueCanonicalLen; it may fail.
+				for (; offsetLead + charactersCanonicalLen <= valueCanonicalLen;
+					 offsetLead += charactersCanonicalLen)
 				{
-					break;
+					if (memcmp(charactersCanonical.begin(), &valueCanonical[offsetLead],
+							   charactersCanonicalLen) != 0)
+					{
+						break;
+					}
+				}
+			}
+
+			if (where == blr_trim_both || where == blr_trim_trailing)
+			{
+				for (; offsetTrail - charactersCanonicalLen >= offsetLead;
+					 offsetTrail -= charactersCanonicalLen)
+				{
+					if (memcmp(charactersCanonical.begin(),
+							   &valueCanonical[offsetTrail - charactersCanonicalLen],
+							   charactersCanonicalLen) != 0)
+					{
+						break;
+					}
 				}
 			}
 		}
-
-		if (where == blr_trim_both || where == blr_trim_trailing)
+		else
 		{
-			for (; offsetTrail - charactersCanonicalLen >= offsetLead;
-				 offsetTrail -= charactersCanonicalLen)
+			if (where == blr_trim_both || where == blr_trim_leading)
 			{
-				if (memcmp(charactersCanonical.begin(),
-						&valueCanonical[offsetTrail - charactersCanonicalLen],
-						charactersCanonicalLen) != 0)
+				while (offsetLead < valueCanonicalLen)
 				{
-					break;
+					bool found = false;
+					for (int i = 0; i < charactersCanonicalLen; i += charSize)
+					{
+						if (memcmp(&charactersCanonical[i],
+								   &valueCanonical[offsetLead],
+								   charSize) == 0)
+						{
+							found = true;
+							break;
+						}
+					}
+					if (!found)
+					{
+						break;
+					}
+					offsetLead += charSize;
+				}
+			}
+
+			if (where == blr_trim_both || where == blr_trim_trailing)
+			{
+				while (offsetTrail - charSize >= offsetLead)
+				{
+					bool found = false;
+					for (int i = 0; i < charactersCanonicalLen; i += charSize)
+					{
+						if (memcmp(&charactersCanonical[i],
+								   &valueCanonical[offsetTrail - charSize],
+								   charSize) == 0)
+						{
+							found = true;
+							break;
+						}
+					}
+					if (!found)
+					{
+						break;
+					}
+					offsetTrail -= charSize;
 				}
 			}
 		}
