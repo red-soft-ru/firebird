@@ -521,16 +521,7 @@ BOOST_AUTO_TEST_CASE(BigAssignmentTest)
 	validate(d, c.data());
 }
 
-
-BOOST_AUTO_TEST_CASE(CompareTests1)
-{
-	PathName c = "Aa";
-	PathName d = "AB";
-
-	check(c.compare(d), -1);
-}
-
-BOOST_AUTO_TEST_CASE(CompareTests2)
+BOOST_AUTO_TEST_CASE(CompareTests)
 {
 	string a = lbl;
 	string b = a;
@@ -538,17 +529,17 @@ BOOST_AUTO_TEST_CASE(CompareTests2)
 	string d = "AB";
 	string e = "Aa";
 
-	check(a.compare(b), 0);
-	check(a.compare(c), -1);
-	check(c.compare(a), 1);
+	BOOST_TEST(a.compare(b) == 0);
+	BOOST_TEST(a.compare(c) < 0);
+	BOOST_TEST(c.compare(a) > 0);
 
-	check(c.compare(d), 1);
-	check(c.compare(e), 1);
+	BOOST_TEST(c.compare(d) > 0);
+	BOOST_TEST(c.compare(e) > 0);
 
-	check(a.compare(1, 10, b), 1);
-	check(a.compare(1, 10, b, 1, 10), 0);
-	check(a.compare(lbl), 0);
-	check(a.compare(1, 3, lbl + 1, 3), 0);
+	BOOST_TEST(a.compare(1, 10, b) > 0);
+	BOOST_TEST(a.compare(1, 10, b, 1, 10) == 0);
+	BOOST_TEST(a.compare(lbl) == 0);
+	BOOST_TEST(a.compare(1, 3, lbl + 1, 3) == 0);
 }
 
 BOOST_AUTO_TEST_CASE(LTrimTest)
