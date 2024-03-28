@@ -784,8 +784,19 @@ namespace Firebird
 		}
 		StringType& operator=(StringType&& rhs)
 		{
-			if (!baseMove(std::forward<AbstractString>(rhs)))
+			// baseMove do not clear the buffer so do it in this method
+			char_type* backup = nullptr;
+			if (stringBuffer != inlineBuffer)
+				backup = stringBuffer;
+
+			if (baseMove(std::forward<AbstractString>(rhs)))
 			{
+				// The dynamic buffer has been replaced, so clear the old one
+				delete[] backup;
+			}
+			else
+			{
+				// Cannot move, do the base assignment
 				assign(rhs.c_str(), rhs.length());
 			}
 			return *this;
