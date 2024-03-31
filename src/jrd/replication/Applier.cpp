@@ -975,6 +975,7 @@ void Applier::executeSql(thread_db* tdbb,
 
 	UserId* const owner = attachment->getUserId(ownerName);
 	AutoSetRestore<UserId*> autoOwner(&attachment->att_ss_user, owner);
+	AutoSetRestore<UserId*> autoUser(&attachment->att_user, owner);
 
 	DSQL_execute_immediate(tdbb, attachment, &transaction,
 						   0, sql.c_str(), dialect,
