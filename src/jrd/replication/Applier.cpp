@@ -991,6 +991,7 @@ void Applier::executeSql(thread_db* tdbb,
 
 	UserId* const owner = attachment->getUserId(ownerName);
 	AutoSetRestore<UserId*> autoOwner(&attachment->att_ss_user, owner);
+	AutoSetRestore<UserId*> autoUser(&attachment->att_user, owner);
 	AutoSetRestoreFlag<ULONG> noCascade(&tdbb->tdbb_flags, TDBB_repl_in_progress, !m_enableCascade);
 
 	DSQL_execute_immediate(tdbb, attachment, &transaction,
