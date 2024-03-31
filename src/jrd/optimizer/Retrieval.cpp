@@ -827,6 +827,8 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 									   unsigned scope) const
 {
 	const double cardinality = csb->csb_rpt[stream].csb_cardinality;
+	fb_assert(cardinality);
+	const double minSelectivity = MIN(MAXIMUM_SELECTIVITY / cardinality, DEFAULT_SELECTIVITY);
 
 	// Walk through indexes to calculate selectivity / candidate
 	MatchedBooleanList matches;
@@ -885,6 +887,15 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 					}
 				}
 
+				auto selectivity = idx->idx_rpt[j].idx_selectivity;
+				const auto useDefaultSelectivity = (selectivity <= 0);
+
+				// When the index selectivity is zero then the statement is prepared
+				// on an empty table or the statistics aren't updated. So assume every
+				// match to represent 1/10 of the maximum selectivity.
+				if (useDefaultSelectivity)
+					selectivity = MAX(scratch.selectivity * DEFAULT_SELECTIVITY, minSelectivity);
+
 				if (segment.scanType == segmentScanList)
 				{
 					if (listCount) // we cannot have more than one list matched to an index
@@ -907,10 +918,10 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 					// This is a perfect usable segment thus update root selectivity
 					scratch.lowerCount++;
 					scratch.upperCount++;
-					scratch.selectivity = idx->idx_rpt[j].idx_selectivity;
 					scratch.nonFullMatchedSegments = idx->idx_count - (j + 1);
 					// Add matches for this segment to the main matches list
 					matches.join(segment.matches);
+					scratch.selectivity = selectivity;
 
 					// An equality scan for any unique index cannot retrieve more
 					// than one row. The same is true for an equivalence scan for
@@ -931,6 +942,12 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 						// so we can stop looking further, because this is the best
 						// one we can get.
 						unique = true;
+
+						// If selectivity is assumed, a better guess for the unique match
+						// would be 1 / cardinality
+						if (useDefaultSelectivity)
+							scratch.selectivity = minSelectivity;
+
 						break;
 					}
 
@@ -942,58 +959,53 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 				}
 				else
 				{
-					// This is our last segment that we can use,
-					// estimate the selectivity
-					auto selectivity = scratch.selectivity;
-					double factor = 1;
-
-					switch (segment.scanType)
-					{
-						case segmentScanBetween:
-							scratch.lowerCount++;
-							scratch.upperCount++;
-							selectivity = idx->idx_rpt[j].idx_selectivity;
-							factor = REDUCE_SELECTIVITY_FACTOR_BETWEEN;
-							break;
-
-						case segmentScanLess:
-							scratch.upperCount++;
-							selectivity = idx->idx_rpt[j].idx_selectivity;
-							factor = REDUCE_SELECTIVITY_FACTOR_LESS;
-							break;
-
-						case segmentScanGreater:
-							scratch.lowerCount++;
-							selectivity = idx->idx_rpt[j].idx_selectivity;
-							factor = REDUCE_SELECTIVITY_FACTOR_GREATER;
-							break;
-
-						case segmentScanStarting:
-						case segmentScanEqual:
-						case segmentScanEquivalent:
-							scratch.lowerCount++;
-							scratch.upperCount++;
-							selectivity = idx->idx_rpt[j].idx_selectivity;
-							factor = REDUCE_SELECTIVITY_FACTOR_STARTING;
-							break;
-
-						default:
-							fb_assert(segment.scanType == segmentScanNone);
-							break;
-					}
-
-					// Adjust the compound selectivity using the reduce factor.
-					// It should be better than the previous segment but worse
-					// than a full match.
-					const double diffSelectivity = scratch.selectivity - selectivity;
-					selectivity += (diffSelectivity * factor);
-					fb_assert(selectivity <= scratch.selectivity);
-					scratch.selectivity = selectivity;
-
 					if (segment.scanType != segmentScanNone)
 					{
-						matches.join(segment.matches);
+						// This is our last segment that we can use,
+						// estimate the selectivity
+						double factor = 1;
+
+						switch (segment.scanType)
+						{
+							case segmentScanBetween:
+								scratch.lowerCount++;
+								scratch.upperCount++;
+								factor = REDUCE_SELECTIVITY_FACTOR_BETWEEN;
+								break;
+
+							case segmentScanLess:
+								scratch.upperCount++;
+								factor = REDUCE_SELECTIVITY_FACTOR_LESS;
+								break;
+
+							case segmentScanGreater:
+								scratch.lowerCount++;
+								factor = REDUCE_SELECTIVITY_FACTOR_GREATER;
+								break;
+
+							case segmentScanStarting:
+							case segmentScanEqual:
+							case segmentScanEquivalent:
+								scratch.lowerCount++;
+								scratch.upperCount++;
+								factor = REDUCE_SELECTIVITY_FACTOR_STARTING;
+								break;
+
+							default:
+								fb_assert(false);
+								break;
+						}
+
+						// Adjust the compound selectivity using the reduce factor.
+						// It should be better than the previous segment but worse
+						// than a full match.
+						const double diffSelectivity = scratch.selectivity - selectivity;
+						selectivity += (diffSelectivity * factor);
+						fb_assert(selectivity <= scratch.selectivity);
+						scratch.selectivity = selectivity;
+
 						scratch.nonFullMatchedSegments = idx->idx_count - j;
+						matches.join(segment.matches);
 					}
 
 					break;
@@ -1003,19 +1015,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 			if (scratch.scopeCandidate)
 			{
 				double selectivity = scratch.selectivity;
-
-				// When the index selectivity is zero then the statement is prepared
-				// on an empty table or the statistics aren't updated. The priorly
-				// calculated selectivity is meaningless in this case. So instead:
-				// - for an unique match, estimate the selectivity via the stream cardinality;
-				// - for a non-unique one, assume 1/10 of the maximum selectivity, so that
-				//   at least some indexes could be utilized by the optimizer.
-				if (idx->idx_selectivity <= 0)
-				{
-					selectivity = unique ?
-						MIN(MAXIMUM_SELECTIVITY / cardinality, DEFAULT_SELECTIVITY) :
-						DEFAULT_SELECTIVITY;
-				}
+				fb_assert(selectivity);
 
 				// Calculate the cost (only index pages) for this index
 				auto cost = DEFAULT_INDEX_COST + selectivity * scratch.cardinality;
