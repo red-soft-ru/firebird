@@ -33,7 +33,7 @@
 #define COMMON_FILE_PARAMS_H
 
 // Derived from Firebird major version
-#define COMMON_FILE_PREFIX "50"
+#define COMMON_FILE_PREFIX "60"
 
 // Per-database usage
 static const char* const EVENT_FILE		= "fb_event_%s";

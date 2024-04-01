@@ -1517,9 +1517,7 @@ void general_on_error()
 		newVector.append(oldVector);
 		newVector.copyTo(isc_status);
 	}
-	BURP_print_status (true, isc_status);
-
-	BURP_abort ();
+	BURP_abort (isc_status);
 }
 
 bool get_acl(BurpGlobals* tdgbl, const TEXT* owner_nm, ISC_QUAD* blob_id, ISC_QUAD* new_blob_id)
@@ -1892,6 +1890,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 			case blr_long:
 			case blr_quad:
 			case blr_int64:
+			case blr_int128:
 				add_byte(blr, field->fld_type);
 				add_byte(blr, field->fld_scale);
 				break;
@@ -2126,6 +2125,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 		case blr_long:
 		case blr_quad:
 		case blr_int64:
+		case blr_int128:
 			add_byte(blr, field->fld_type);
 			add_byte(blr, field->fld_scale);
 			break;
@@ -3085,8 +3085,7 @@ static void check_data_error(BurpGlobals* tdgbl, IStatus* status_vector, const b
 			// msg 114 restore failed for record in relation %s
 			BURP_print(false, 114, relation->rel_name);
 
-			BURP_print_status(false, status_vector);
-			BURP_print(false, 342);	// isc_gbak_invalid_data
+			BURP_print_status(false, status_vector, 342);	// isc_gbak_invalid_data
 		}
 		else
 			BURP_error_redirect(status_vector, 342);	// isc_gbak_invalid_data
@@ -3391,8 +3390,7 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 	}
 	catch (const FbException& ex)
 	{
-		BURP_print_status(true, ex.getStatus());
-		BURP_abort();
+		BURP_abort(ex.getStatus());
 	}
 
 	if (tdgbl->gbl_sw_incremental)
@@ -4386,6 +4384,7 @@ bool get_function(BurpGlobals* tdgbl)
 			X.RDB$OWNER_NAME.NULL = TRUE;
 			X.RDB$MODULE_NAME.NULL = TRUE;
 			X.RDB$ENTRYPOINT.NULL = TRUE;
+			X.RDB$RETURN_ARGUMENT.NULL = TRUE;
 
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 			X.RDB$SYSTEM_FLAG = 0;
@@ -4442,6 +4441,7 @@ bool get_function(BurpGlobals* tdgbl)
 					break;
 
 				case att_function_return_arg:
+					X.RDB$RETURN_ARGUMENT.NULL = FALSE;
 					X.RDB$RETURN_ARGUMENT = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -4601,6 +4601,7 @@ bool get_function(BurpGlobals* tdgbl)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_req_handle1)
 			X IN RDB$FUNCTIONS
+			X.RDB$RETURN_ARGUMENT.NULL = TRUE;
 			X.RDB$SYSTEM_FLAG = 0;
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 			X.RDB$DESCRIPTION.NULL = TRUE;
@@ -4636,6 +4637,7 @@ bool get_function(BurpGlobals* tdgbl)
 					break;
 
 				case att_function_return_arg:
+					X.RDB$RETURN_ARGUMENT.NULL = FALSE;
 					X.RDB$RETURN_ARGUMENT = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -4788,7 +4790,10 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 				break;
 
 			case att_functionarg_field_precision:
-				get_int32(tdgbl);
+				if (tdgbl->RESTORE_format >= 6)
+					get_int32(tdgbl);
+				else
+					bad_attribute(scan_next_attr, attribute, 90);
 				break;
 
 			case att_functionarg_package_name:
@@ -4850,6 +4855,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_arg_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
+			X.RDB$ARGUMENT_POSITION.NULL = TRUE;
 			X.RDB$FIELD_SUB_TYPE.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
 			X.RDB$FIELD_PRECISION.NULL = TRUE;
@@ -4893,6 +4899,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					break;
 
 				case att_functionarg_position:
+					X.RDB$ARGUMENT_POSITION.NULL = FALSE;
 					X.RDB$ARGUMENT_POSITION = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -5060,6 +5067,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_arg_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
+			X.RDB$ARGUMENT_POSITION.NULL = TRUE;
 			X.RDB$FIELD_SUB_TYPE.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
 			X.RDB$FIELD_PRECISION.NULL  = TRUE;
@@ -5077,6 +5085,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					break;
 
 				case att_functionarg_position:
+					X.RDB$ARGUMENT_POSITION.NULL = FALSE;
 					X.RDB$ARGUMENT_POSITION = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -5174,6 +5183,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_arg_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
+			X.RDB$ARGUMENT_POSITION.NULL = TRUE;
 			X.RDB$FIELD_SUB_TYPE.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
 
@@ -5190,6 +5200,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					break;
 
 				case att_functionarg_position:
+					X.RDB$ARGUMENT_POSITION.NULL = FALSE;
 					X.RDB$ARGUMENT_POSITION = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -11925,8 +11936,7 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 	}
 	catch (const FbException& ex)
 	{
-		BURP_print_status(true, ex.getStatus());
-		BURP_abort();
+		BURP_abort(ex.getStatus());
 	}
 
 	return true;
@@ -12292,9 +12302,9 @@ bool RestoreRelationTask::fileReader(Item& item)
 
 	BURP_verbose(124, m_relation->rel_name); // msg 124  restoring data for relation %s
 
-	const ULONG length = m_metadata.m_inMsgLen;	// full record length
+	const RCRD_LENGTH length = m_metadata.m_inMsgLen;	// full record length
 
-	IOBuffer* ioBuf = NULL;
+	IOBuffer*& ioBuf = item.m_buffer = NULL;
 	FB_SSIZE_T space = 0;	// space left in current buffer
 	UCHAR* buf = NULL;		// pointer at the current buffer
 
@@ -12310,7 +12320,7 @@ bool RestoreRelationTask::fileReader(Item& item)
 		if (get(tdgbl) != att_data_length)
 			BURP_error_redirect(NULL, 39); // msg 39 expected record length
 
-		USHORT len = (USHORT) get_int32(tdgbl);
+		RCRD_LENGTH len = get_int32(tdgbl);
 
 		if (!tdgbl->gbl_sw_transportable && len != length)
 		{
@@ -12324,16 +12334,20 @@ bool RestoreRelationTask::fileReader(Item& item)
 				BURP_error_redirect(NULL, 55);
 				// msg 55 Expected XDR record length
 			else
-				len = (USHORT) get_int32(tdgbl);
+				len = get_int32(tdgbl);
 		}
 
 		if (get(tdgbl) != att_data_data)
 			BURP_error_redirect(NULL, 41); // msg 41 expected data attribute
 
 		// check if record fits into current buffer and get a new one if needed
+		// note, non-compressible record takes 1 additional byte per every 127 bytes
+		// due to compression overhead
 
 		const FB_SSIZE_T attLen = 1 + (tdgbl->gbl_sw_transportable ? 12 : 6);
-		if (len + attLen > space)
+		const FB_SSIZE_T overhead = tdgbl->gbl_sw_compress ? (len / 127 + 1) : 0;
+
+		if (len + attLen + overhead > space)
 		{
 			if (ioBuf)
 			{

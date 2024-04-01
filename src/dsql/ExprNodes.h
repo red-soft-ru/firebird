@@ -586,6 +586,16 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
+	virtual bool possiblyUnknown() const
+	{
+		return true;
+	}
+
+	virtual bool ignoreNulls(const StreamList& /*streams*/) const
+	{
+		return false;
+	}
+
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
@@ -824,7 +834,7 @@ public:
 
 private:
 	static dsql_fld* resolveContext(DsqlCompilerScratch* dsqlScratch,
-		const MetaName& qualifier, dsql_ctx* context, bool resolveByAlias);
+		const MetaName& qualifier, dsql_ctx* context);
 
 public:
 	MetaName dsqlQualifier;
@@ -949,6 +959,12 @@ public:
 	virtual bool sameAs(const ExprNode* other, bool ignoreStreams) const;
 	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual dsc* execute(thread_db* tdbb, Request* request) const;
+
+	bool getBoolean() const
+	{
+		fb_assert(litDesc.dsc_dtype == dtype_boolean);
+		return *litDesc.dsc_address != '\0';
+	}
 
 	SLONG getSlong() const
 	{
@@ -2091,7 +2107,7 @@ public:
 class TrimNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_TRIM>
 {
 public:
-	explicit TrimNode(MemoryPool& pool, UCHAR aWhere,
+	explicit TrimNode(MemoryPool& pool, UCHAR aWhere, UCHAR aWhat,
 		ValueExprNode* aValue = NULL, ValueExprNode* aTrimChars = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
@@ -2121,6 +2137,7 @@ public:
 
 public:
 	UCHAR where;
+	UCHAR what;
 	NestConst<ValueExprNode> value;
 	NestConst<ValueExprNode> trimChars;	// may be NULL
 };

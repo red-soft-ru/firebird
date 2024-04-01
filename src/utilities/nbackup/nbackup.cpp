@@ -35,6 +35,8 @@
 #include <string.h>
 #include <time.h>
 
+#include <optional>
+
 #include "../common/db_alias.h"
 #include "../jrd/ods.h"
 #include "../yvalve/gds_proto.h"
@@ -260,8 +262,8 @@ struct inc_header
 	SSHORT version;			// Incremental backup format version.
 	SSHORT level;			// Backup level.
 	// \\\\\ ---- this is 8 bytes. should not cause alignment problems
-	Guid backup_guid;		// GUID of this backup
-	Guid prev_guid;			// GUID of previous level backup
+	UUID backup_guid;		// GUID of this backup
+	UUID prev_guid;			// GUID of previous level backup
 	ULONG page_size;		// Size of pages in the database and backup file
 	// These fields are currently filled, but not used. May be used in future versions
 	ULONG backup_scn;		// SCN of this backup
@@ -314,7 +316,7 @@ public:
 	void fixup_database(bool repl_seq, bool set_readonly = false);
 	void lock_database(bool get_size);
 	void unlock_database();
-	void backup_database(int level, Guid& guid, const PathName& fname);
+	void backup_database(int level, const string& guidStr, const PathName& fname);
 	void restore_database(const BackupFiles& files, bool repl_seq, bool inc_rest);
 
 	bool printed() const
@@ -874,10 +876,8 @@ void NBackup::fixup_database(bool repl_seq, bool set_readonly)
 			if (*p == Ods::HDR_db_guid)
 			{
 				// Replace existing database GUID with a regenerated one
-				Guid guid;
-				GenerateGuid(&guid);
-				fb_assert(p[1] == sizeof(guid));
-				memcpy(p + 2, &guid, sizeof(guid));
+				fb_assert(p[1] == Guid::SIZE);
+				Guid::generate().copyTo(p + 2);
 			}
 			else if (*p == Ods::HDR_repl_seq)
 			{
@@ -1191,14 +1191,13 @@ void NBackup::unlock_database()
 	detach_database();
 }
 
-void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
+void NBackup::backup_database(int level, const string& guidStr, const PathName& fname)
 {
 	bool database_locked = false;
 	// We set this flag when backup file is in inconsistent state
 	bool delete_backup = false;
 	ULONG prev_scn = 0;
-	char prev_guid[GUID_BUFF_SIZE] = "";
-	char str_guid[GUID_BUFF_SIZE] = "";
+	std::optional<Guid> prev_guid;
 	Ods::pag* page_buff = NULL;
 	attach_database();
 	ULONG page_writes = 0, page_reads = 0;
@@ -1221,13 +1220,11 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 	} //
 #endif
 
-	try {
+	try
+	{
 		// Look for SCN and GUID of previous-level backup in history table
 		if (level)
 		{
-			if (level < 0)
-				GuidToString(str_guid, &guid);
-
 			if (isc_start_transaction(status, &trans, 1, &newdb, 0, NULL))
 				pr_error(status, "start transaction");
 			char out_sqlda_data[XSQLDA_LENGTH(2)];
@@ -1249,15 +1246,16 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			else
 			{
 				sprintf(str, "SELECT RDB$GUID, RDB$SCN FROM RDB$BACKUP_HISTORY "
-					"WHERE RDB$GUID = '%s'", str_guid);
+					"WHERE RDB$GUID = '%s'", guidStr.c_str());
 			}
 			if (isc_dsql_prepare(status, &trans, &stmt, 0, str, 1, NULL))
 				pr_error(status, "prepare history query");
 			if (isc_dsql_describe(status, &stmt, 1, out_sqlda))
 				pr_error(status, "describe history query");
 			short guid_null, scn_null;
+			char guid_value[GUID_BUFF_SIZE];
 			out_sqlda->sqlvar[0].sqlind = &guid_null;
-			out_sqlda->sqlvar[0].sqldata = prev_guid;
+			out_sqlda->sqlvar[0].sqldata = guid_value;
 			out_sqlda->sqlvar[1].sqlind = &scn_null;
 			out_sqlda->sqlvar[1].sqldata = (char*) &prev_scn;
 			if (isc_dsql_execute(status, &trans, &stmt, 1, NULL))
@@ -1274,20 +1272,27 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 				else
 				{
 					status_exception::raise(Arg::Gds(isc_nbackup_lostrec_guid_db) << database.c_str() <<
-											Arg::Str(str_guid));
+											Arg::Str(guidStr));
 				}
+				break; // avoid compiler warnings
 
 			case 0:
 				if (guid_null || scn_null)
 					status_exception::raise(Arg::Gds(isc_nbackup_lostguid_db));
-				prev_guid[sizeof(prev_guid) - 1] = 0;
+				guid_value[sizeof(guid_value) - 1] = 0;
 				break;
+
 			default:
 				pr_error(status, "fetch history query");
 			}
+
 			isc_dsql_free_statement(status, &stmt, DSQL_drop);
 			if (isc_commit_transaction(status, &trans))
 				pr_error(status, "commit history query");
+
+			prev_guid = Guid::fromString(guid_value);
+			if (!prev_guid)
+				status_exception::raise(Arg::Gds(isc_nbackup_lostguid_db));
 		}
 
 		// Lock database for backup
@@ -1311,7 +1316,7 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			}
 			else
 			{
-				bakname.printf("%s-%s-%04d%02d%02d-%02d%02d.nbk", fil.c_str(), str_guid,
+				bakname.printf("%s-%s-%04d%02d%02d-%02d%02d.nbk", fil.c_str(), guidStr.c_str(),
 					today.tm_year + 1900, today.tm_mon + 1, today.tm_mday,
 					today.tm_hour, today.tm_min);
 			}
@@ -1339,12 +1344,14 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		open_database_scan();
 
 		// Read database header
-		char unaligned_header_buffer[RAW_HEADER_SIZE + SECTOR_ALIGNMENT];
+		const ULONG ioBlockSize = direct_io ? DIRECT_IO_BLOCK_SIZE : PAGE_ALIGNMENT;
+		const ULONG headerSize = MAX(RAW_HEADER_SIZE, ioBlockSize);
 
-		auto header = reinterpret_cast<Ods::header_page*>(
-			FB_ALIGN(unaligned_header_buffer, SECTOR_ALIGNMENT));
+		Array<UCHAR> header_buffer;
+		Ods::header_page* header = reinterpret_cast<Ods::header_page*>
+			(header_buffer.getAlignedBuffer(headerSize, ioBlockSize));
 
-		if (read_file(dbase, header, RAW_HEADER_SIZE) != RAW_HEADER_SIZE)
+		if (read_file(dbase, header, headerSize) != headerSize)
 			status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdrdb) << dbname.c_str() << Arg::Num(1));
 
 		if (!Ods::isSupported(header))
@@ -1360,11 +1367,9 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		if ((header->hdr_flags & Ods::hdr_backup_mask) != Ods::hdr_nbak_stalled)
 			status_exception::raise(Arg::Gds(isc_nbackup_db_notlock) << Arg::Num(header->hdr_flags));
 
-		Array<UCHAR> unaligned_page_buffer;
-		{ // scope
-			UCHAR* buf = unaligned_page_buffer.getBuffer(header->hdr_page_size + SECTOR_ALIGNMENT);
-			page_buff = reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, SECTOR_ALIGNMENT));
-		} // end scope
+		Array<UCHAR> page_buffer;
+		Ods::pag* page_buff = reinterpret_cast<Ods::pag*>
+			(page_buffer.getAlignedBuffer(header->hdr_page_size, ioBlockSize));
 
 		ULONG db_size = db_size_pages;
 		seek_file(dbase, 0);
@@ -1374,26 +1379,22 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		--db_size;
 		page_reads++;
 
-		Guid backup_guid;
-		bool guid_found = false;
+		std::optional<Guid> backup_guid;
 		auto p = reinterpret_cast<Ods::header_page*>(page_buff)->hdr_data;
 		const auto end = reinterpret_cast<UCHAR*>(page_buff) + header->hdr_page_size;
 		while (p < end && *p != Ods::HDR_end)
 		{
 			if (*p == Ods::HDR_backup_guid)
 			{
-				if (p[1] == sizeof(Guid))
-				{
-					memcpy(&backup_guid, p + 2, sizeof(Guid));
-					guid_found = true;
-				}
+				if (p[1] == Guid::SIZE)
+					backup_guid = Guid(p + 2);
 				break;
 			}
 
 			p += p[1] + 2;
 		}
 
-		if (!guid_found)
+		if (!backup_guid)
 			status_exception::raise(Arg::Gds(isc_nbackup_lostguid_bk));
 
 		// Write data to backup file
@@ -1404,8 +1405,8 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			memcpy(bh.signature, backup_signature, sizeof(backup_signature));
 			bh.version = BACKUP_VERSION;
 			bh.level = level > 0 ? level : 0;
-			bh.backup_guid = backup_guid;
-			StringToGuid(&bh.prev_guid, prev_guid);
+			backup_guid.value().copyTo(bh.backup_guid);
+			prev_guid.value().copyTo(bh.prev_guid);
 			bh.page_size = header->hdr_page_size;
 			bh.backup_scn = backup_scn;
 			bh.prev_scn = prev_scn;
@@ -1427,12 +1428,10 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		ULONG scnsSlot = 0;
 		const ULONG pagesPerSCN = Ods::pagesPerSCN(header->hdr_page_size);
 
-		Array<UCHAR> unaligned_scns_buffer;
-		Ods::scns_page* scns = NULL, *scns_buf = NULL;
-		{ // scope
-			UCHAR* buf = unaligned_scns_buffer.getBuffer(header->hdr_page_size + SECTOR_ALIGNMENT);
-			scns_buf = reinterpret_cast<Ods::scns_page*>(FB_ALIGN(buf, SECTOR_ALIGNMENT));
-		}
+		Array<UCHAR> scns_buffer;
+		Ods::scns_page* scns = NULL;
+		Ods::scns_page* scns_buf = reinterpret_cast<Ods::scns_page*>
+			(scns_buffer.getAlignedBuffer(header->hdr_page_size, ioBlockSize));
 
 		while (true)
 		{
@@ -1585,9 +1584,8 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			in_sqlda->sqlvar[0].sqldata = NULL;
 			in_sqlda->sqlvar[0].sqlind = &null_ind;
 		}
-		char temp[GUID_BUFF_SIZE];
-		GuidToString(temp, &backup_guid);
-		in_sqlda->sqlvar[1].sqldata = temp;
+
+		in_sqlda->sqlvar[1].sqldata = (char*) backup_guid.value().toString().c_str();
 		in_sqlda->sqlvar[1].sqlind = &null_flag;
 		in_sqlda->sqlvar[2].sqldata = (char*) &backup_scn;
 		in_sqlda->sqlvar[2].sqlind = &null_flag;
@@ -1667,9 +1665,9 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 	try
 	{
 		Array<UCHAR> page_buffer;
-
 		int curLevel = 0;
-		Guid prev_guid;
+		std::optional<Guid> prev_guid;
+
 		while (true)
 		{
 			if (!filecount)
@@ -1753,7 +1751,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 						Arg::Num(bakheader.level) << bakname.c_str() << Arg::Num(curLevel));
 				}
 				// We may also add SCN check, but GUID check covers this case too
-				if (memcmp(&bakheader.prev_guid, &prev_guid, sizeof(Guid)) != 0)
+				if (Guid(bakheader.prev_guid) != prev_guid.value())
 					status_exception::raise(Arg::Gds(isc_nbackup_wrong_orderbk) << bakname.c_str());
 
 				// Emulate seek_file(backup, bakheader.page_size)
@@ -1818,24 +1816,21 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 				if (read_file(dbase, page_ptr, header.hdr_page_size) != header.hdr_page_size)
 					status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdr_restdb) << Arg::Num(2));
 
-				bool guid_found = false;
+				prev_guid.reset();
 				auto p = reinterpret_cast<Ods::header_page*>(page_ptr)->hdr_data;
 				const auto end = page_ptr + header.hdr_page_size;
 				while (p < end && *p != Ods::HDR_end)
 				{
 					if (*p == Ods::HDR_backup_guid)
 					{
-						if (p[1] == sizeof(Guid))
-						{
-							memcpy(&prev_guid, p + 2, sizeof(Guid));
-							guid_found = true;
-						}
+						if (p[1] == Guid::SIZE)
+							prev_guid = Guid(p + 2);
 						break;
 					}
 
 					p += p[1] + 2;
 				}
-				if (!guid_found)
+				if (!prev_guid)
 					status_exception::raise(Arg::Gds(isc_nbackup_lostguid_l0bk));
 				// We are likely to have normal database here
 				delete_database = false;
@@ -1874,8 +1869,11 @@ int NBACKUP_main(UtilSvc* uSvc)
 
  		StaticStatusVector status;
  		e.stuffException(status);
- 		uSvc->initStatus();
- 		uSvc->setServiceStatus(status.begin());
+
+		UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+ 		sa.setServiceStatus(status.begin());
+
 		exit_code = FB_FAILURE;
 	}
 	catch (const Exception& e)
@@ -1885,8 +1883,11 @@ int NBACKUP_main(UtilSvc* uSvc)
 
  		StaticStatusVector status;
  		e.stuffException(status);
- 		uSvc->initStatus();
- 		uSvc->setServiceStatus(status.begin());
+
+		UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+ 		sa.setServiceStatus(status.begin());
+
 		exit_code = FB_FAILURE;
 	}
 
@@ -1913,7 +1914,7 @@ void nbackup(UtilSvc* uSvc)
 #endif
 	NBackup::BackupFiles backup_files;
 	int level = -1;
-	Guid guid;
+	std::optional<Guid> guid;
 	bool print_size = false, version = false, inc_rest = false, repl_seq = false;
 	string onOff;
 	bool cleanHistory = false;
@@ -2046,9 +2047,8 @@ void nbackup(UtilSvc* uSvc)
 			if (++itr >= argc)
 				missingParameterForSwitch(uSvc, argv[itr - 1]);
 
-			if (argv[itr][0] == '{')
-				StringToGuid(&guid, argv[itr]);
-			else
+			guid = Guid::fromString(argv[itr]);
+			if (!guid)
 				level = atoi(argv[itr]);
 
 			if (++itr >= argc)
@@ -2177,6 +2177,8 @@ void nbackup(UtilSvc* uSvc)
 		usage(uSvc, isc_nbackup_clean_hist_missed);
 	}
 
+	const string guidStr = guid ? guid.value().toString() : "";
+
 	NBackup nbk(uSvc, database, username, role, password, run_db_triggers, direct_io,
 				decompress, cleanHistKind, keepHistValue);
 	try
@@ -2196,7 +2198,7 @@ void nbackup(UtilSvc* uSvc)
 				break;
 
 			case nbBackup:
-				nbk.backup_database(level, guid, filename);
+				nbk.backup_database(level, guidStr, filename);
 				break;
 
 			case nbRestore:

@@ -528,6 +528,9 @@
     <ClCompile Include="..\..\..\src\jrd\optimizer\InnerJoin.cpp">
       <Filter>Optimizer</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\optimizer\OuterJoin.cpp">
+      <Filter>Optimizer</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\optimizer\Optimizer.cpp">
       <Filter>Optimizer</Filter>
     </ClCompile>

@@ -55,29 +55,6 @@ using namespace Jrd;
 
 namespace
 {
-	ValueExprNode* injectCast(CompilerScratch* csb,
-							  ValueExprNode* value, CastNode*& cast,
-							  const dsc& desc)
-	{
-		// If the indexed column is of type int64, then we need to inject
-		// an extra cast to deliver the scale value to the BTR level
-
-		if (value && desc.dsc_dtype == dtype_int64)
-		{
-			if (!cast)
-			{
-				cast = FB_NEW_POOL(csb->csb_pool) CastNode(csb->csb_pool);
-				cast->source = value;
-				cast->castDesc = desc;
-				cast->impureOffset = csb->allocImpure<impure_value>();
-			}
-
-			value = cast;
-		}
-
-		return value;
-	}
-
 	ValueExprNode* invertBoolValue(CompilerScratch* csb, ValueExprNode* value)
 	{
 		// Having a condition (<field> != <boolean value>),
@@ -629,6 +606,7 @@ void Retrieval::analyzeNavigation(const InversionCandidateList& inversions)
 			candidate->cost = DEFAULT_INDEX_COST + indexScratch.cardinality;
 			candidate->indexes = 1;
 			candidate->scratch = &indexScratch;
+			candidate->nonFullMatchedSegments = indexScratch.segments.getCount();
 			tempCandidates.add(candidate);
 		}
 
@@ -651,14 +629,14 @@ void Retrieval::analyzeNavigation(const InversionCandidateList& inversions)
 
 bool Retrieval::betterInversion(const InversionCandidate* inv1,
 								const InversionCandidate* inv2,
-								bool ignoreUnmatched) const
+								bool navigation) const
 {
 	// Return true if inversion1 is *better* than inversion2.
 	// It's mostly about the retrieval cost, but other aspects are also taken into account.
 
 	if (inv1->unique && !inv2->unique)
 	{
-		// A unique full equal match is better than anything else.
+		// A unique full equal match is better than anything else
 		return true;
 	}
 
@@ -688,7 +666,7 @@ bool Retrieval::betterInversion(const InversionCandidate* inv1,
 			if (!cost1 && !cost2)
 			{
 				// Two zero costs should be handled as being the same
-				// (other comparison criteria should be applied, see below).
+				// (other comparison criteria should be applied, see below)
 				diffCost = 1;
 			}
 			else if (cost1)
@@ -701,19 +679,33 @@ bool Retrieval::betterInversion(const InversionCandidate* inv1,
 			{
 				// If the "same" costs then compare with the nr of unmatched segments,
 				// how many indexes and matched segments. First compare number of indexes.
+
 				int diff = (inv1->indexes - inv2->indexes);
 
 				if (diff == 0)
 				{
 					// For the same number of indexes compare number of matched segments.
 					// Note the inverted condition: the more matched segments the better.
+
 					diff = (inv2->matchedSegments - inv1->matchedSegments);
 
-					if (diff == 0 && !ignoreUnmatched)
+					if (diff == 0 && !navigation)
 					{
-						// For the same number of matched segments
-						// compare ones that aren't full matched
+						// For the same number of matched segments compare ones that aren't full matched.
+						//
+						// However, unmatched segments and small cost difference do not matter
+						// if we already know the first retrieval being usable for navigation.
+
 						diff = (inv1->nonFullMatchedSegments - inv2->nonFullMatchedSegments);
+
+						if (diff == 0)
+						{
+							// For inversions with nearly the same cost but without other preferences found,
+							// return the actually cheaper inversion (based on cost only)
+
+							if (cost1 < cost2)
+								return true;
+						}
 					}
 				}
 
@@ -756,6 +748,9 @@ bool Retrieval::checkIndexCondition(index_desc& idx, MatchedBooleanList& matches
 
 		for (iter.rewind(); iter.hasData(); ++iter)
 		{
+			if (!iter->containsStream(stream))
+				continue;
+
 			if (matchSubset(boolean, *iter))
 			{
 				matches.add(*iter);
@@ -773,6 +768,9 @@ bool Retrieval::checkIndexCondition(index_desc& idx, MatchedBooleanList& matches
 		{
 			for (iter.rewind(); iter.hasData(); ++iter)
 			{
+				if (!iter->containsStream(stream))
+					continue;
+
 				const auto cmpNode = nodeAs<ComparativeBoolNode>(*iter);
 				if (cmpNode && cmpNode->blrOp != blr_equiv)
 				{
@@ -829,6 +827,8 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 									   unsigned scope) const
 {
 	const double cardinality = csb->csb_rpt[stream].csb_cardinality;
+	fb_assert(cardinality);
+	const double minSelectivity = MIN(MAXIMUM_SELECTIVITY / cardinality, DEFAULT_SELECTIVITY);
 
 	// Walk through indexes to calculate selectivity / candidate
 	MatchedBooleanList matches;
@@ -887,12 +887,22 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 					}
 				}
 
-				if (const auto list = segment.valueList)
-				{
-					fb_assert(segment.scanType == segmentScanList);
+				auto selectivity = idx->idx_rpt[j].idx_selectivity;
+				const auto useDefaultSelectivity = (selectivity <= 0);
 
+				// When the index selectivity is zero then the statement is prepared
+				// on an empty table or the statistics aren't updated. So assume every
+				// match to represent 1/10 of the maximum selectivity.
+				if (useDefaultSelectivity)
+					selectivity = MAX(scratch.selectivity * DEFAULT_SELECTIVITY, minSelectivity);
+
+				if (segment.scanType == segmentScanList)
+				{
 					if (listCount) // we cannot have more than one list matched to an index
 						break;
+
+					const auto list = segment.valueList;
+					fb_assert(list);
 
 					listCount = list->getCount();
 					maxSelectivity = scratch.selectivity;
@@ -908,10 +918,10 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 					// This is a perfect usable segment thus update root selectivity
 					scratch.lowerCount++;
 					scratch.upperCount++;
-					scratch.selectivity = idx->idx_rpt[j].idx_selectivity;
 					scratch.nonFullMatchedSegments = idx->idx_count - (j + 1);
 					// Add matches for this segment to the main matches list
 					matches.join(segment.matches);
+					scratch.selectivity = selectivity;
 
 					// An equality scan for any unique index cannot retrieve more
 					// than one row. The same is true for an equivalence scan for
@@ -932,6 +942,12 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 						// so we can stop looking further, because this is the best
 						// one we can get.
 						unique = true;
+
+						// If selectivity is assumed, a better guess for the unique match
+						// would be 1 / cardinality
+						if (useDefaultSelectivity)
+							scratch.selectivity = minSelectivity;
+
 						break;
 					}
 
@@ -943,58 +959,53 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 				}
 				else
 				{
-					// This is our last segment that we can use,
-					// estimate the selectivity
-					auto selectivity = scratch.selectivity;
-					double factor = 1;
-
-					switch (segment.scanType)
-					{
-						case segmentScanBetween:
-							scratch.lowerCount++;
-							scratch.upperCount++;
-							selectivity = idx->idx_rpt[j].idx_selectivity;
-							factor = REDUCE_SELECTIVITY_FACTOR_BETWEEN;
-							break;
-
-						case segmentScanLess:
-							scratch.upperCount++;
-							selectivity = idx->idx_rpt[j].idx_selectivity;
-							factor = REDUCE_SELECTIVITY_FACTOR_LESS;
-							break;
-
-						case segmentScanGreater:
-							scratch.lowerCount++;
-							selectivity = idx->idx_rpt[j].idx_selectivity;
-							factor = REDUCE_SELECTIVITY_FACTOR_GREATER;
-							break;
-
-						case segmentScanStarting:
-						case segmentScanEqual:
-						case segmentScanEquivalent:
-							scratch.lowerCount++;
-							scratch.upperCount++;
-							selectivity = idx->idx_rpt[j].idx_selectivity;
-							factor = REDUCE_SELECTIVITY_FACTOR_STARTING;
-							break;
-
-						default:
-							fb_assert(segment.scanType == segmentScanNone);
-							break;
-					}
-
-					// Adjust the compound selectivity using the reduce factor.
-					// It should be better than the previous segment but worse
-					// than a full match.
-					const double diffSelectivity = scratch.selectivity - selectivity;
-					selectivity += (diffSelectivity * factor);
-					fb_assert(selectivity <= scratch.selectivity);
-					scratch.selectivity = selectivity;
-
 					if (segment.scanType != segmentScanNone)
 					{
-						matches.join(segment.matches);
+						// This is our last segment that we can use,
+						// estimate the selectivity
+						double factor = 1;
+
+						switch (segment.scanType)
+						{
+							case segmentScanBetween:
+								scratch.lowerCount++;
+								scratch.upperCount++;
+								factor = REDUCE_SELECTIVITY_FACTOR_BETWEEN;
+								break;
+
+							case segmentScanLess:
+								scratch.upperCount++;
+								factor = REDUCE_SELECTIVITY_FACTOR_LESS;
+								break;
+
+							case segmentScanGreater:
+								scratch.lowerCount++;
+								factor = REDUCE_SELECTIVITY_FACTOR_GREATER;
+								break;
+
+							case segmentScanStarting:
+							case segmentScanEqual:
+							case segmentScanEquivalent:
+								scratch.lowerCount++;
+								scratch.upperCount++;
+								factor = REDUCE_SELECTIVITY_FACTOR_STARTING;
+								break;
+
+							default:
+								fb_assert(false);
+								break;
+						}
+
+						// Adjust the compound selectivity using the reduce factor.
+						// It should be better than the previous segment but worse
+						// than a full match.
+						const double diffSelectivity = scratch.selectivity - selectivity;
+						selectivity += (diffSelectivity * factor);
+						fb_assert(selectivity <= scratch.selectivity);
+						scratch.selectivity = selectivity;
+
 						scratch.nonFullMatchedSegments = idx->idx_count - j;
+						matches.join(segment.matches);
 					}
 
 					break;
@@ -1004,19 +1015,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 			if (scratch.scopeCandidate)
 			{
 				double selectivity = scratch.selectivity;
-
-				// When the index selectivity is zero then the statement is prepared
-				// on an empty table or the statistics aren't updated. The priorly
-				// calculated selectivity is meaningless in this case. So instead:
-				// - for an unique match, estimate the selectivity via the stream cardinality;
-				// - for a non-unique one, assume 1/10 of the maximum selectivity, so that
-				//   at least some indexes could be utilized by the optimizer.
-				if (idx->idx_selectivity <= 0)
-				{
-					selectivity = unique ?
-						MIN(MAXIMUM_SELECTIVITY / cardinality, DEFAULT_SELECTIVITY) :
-						DEFAULT_SELECTIVITY;
-				}
+				fb_assert(selectivity);
 
 				// Calculate the cost (only index pages) for this index
 				auto cost = DEFAULT_INDEX_COST + selectivity * scratch.cardinality;
@@ -1067,6 +1066,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 			invCandidate->cost = DEFAULT_INDEX_COST + scratch.cardinality;
 			invCandidate->indexes = 1;
 			invCandidate->scratch = &scratch;
+			invCandidate->nonFullMatchedSegments = scratch.segments.getCount();
 			invCandidate->matches.assign(scratch.matches);
 
 			for (auto match : invCandidate->matches)
@@ -1189,6 +1189,16 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 				{
 					fb_assert(!retrieval->irb_list);
 					retrieval->irb_list = segments[i].valueList;
+				}
+
+				if (segments[i].scale)
+				{
+					if (!retrieval->irb_scale)
+					{
+						retrieval->irb_scale = FB_NEW_POOL(getPool()) SSHORT[count];
+						memset(retrieval->irb_scale, 0, sizeof(SSHORT) * count);
+					}
+					retrieval->irb_scale[i] = segments[i].scale;
 				}
 			}
 		}
@@ -1383,19 +1393,35 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 
 				// Look if a match is already used by previous matches.
 				bool anyMatchAlreadyUsed = false, matchUsedByNavigation = false;
-				for (const auto currentMatch : currentInv->matches)
+				if (currentInv->boolean)
 				{
-					if (matches.exist(currentMatch))
+					if (matches.exist(currentInv->boolean))
 					{
 						anyMatchAlreadyUsed = true;
 
 						if (navigationCandidate &&
-							navigationCandidate->matches.exist(currentMatch))
+							navigationCandidate->matches.exist(currentInv->boolean))
 						{
 							matchUsedByNavigation = true;
 						}
+					}
+				}
+				else
+				{
+					for (const auto currentMatch : currentInv->matches)
+					{
+						if (matches.exist(currentMatch))
+						{
+							anyMatchAlreadyUsed = true;
 
-						break;
+							if (navigationCandidate &&
+								navigationCandidate->matches.exist(currentMatch))
+							{
+								matchUsedByNavigation = true;
+							}
+
+							break;
+						}
 					}
 				}
 
@@ -1748,9 +1774,6 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 
 	const bool isDesc = (idx->idx_flags & idx_descending);
 
-	// Needed for int64 matches, see injectCast() function
-	CastNode *cast = nullptr, *cast2 = nullptr;
-
 	fb_assert(indexScratch->segments.getCount() == idx->idx_count);
 
 	for (unsigned i = 0; i < idx->idx_count; i++)
@@ -1777,8 +1800,8 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 						(segment->scanType == segmentScanEquivalent) ||
 						(segment->scanType == segmentScanList)))
 					{
-						segment->lowerValue = injectCast(csb, value, cast, matchDesc);
-						segment->upperValue = injectCast(csb, value2, cast2, matchDesc);
+						segment->lowerValue = value;
+						segment->upperValue = value2;
 						segment->scanType = segmentScanBetween;
 						segment->excludeLower = false;
 						segment->excludeUpper = false;
@@ -1791,8 +1814,7 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 					// override it with worser matches.
 					if (!(segment->scanType == segmentScanEqual))
 					{
-						segment->lowerValue = segment->upperValue =
-							injectCast(csb, value, cast, matchDesc);
+						segment->lowerValue = segment->upperValue = value;
 						segment->scanType = segmentScanEquivalent;
 						segment->excludeLower = false;
 						segment->excludeUpper = false;
@@ -1801,8 +1823,7 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 
 				case blr_eql:
 					segment->matches.add(boolean);
-					segment->lowerValue = segment->upperValue =
-						injectCast(csb, value, cast, matchDesc);
+					segment->lowerValue = segment->upperValue = value;
 					segment->scanType = segmentScanEqual;
 					segment->excludeLower = false;
 					segment->excludeUpper = false;
@@ -1839,7 +1860,7 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 
 						if (forward)
 						{
-							segment->lowerValue = injectCast(csb, value, cast, matchDesc);
+							segment->lowerValue = value;
 							if (segment->scanType == segmentScanLess)
 								segment->scanType = segmentScanBetween;
 							else
@@ -1847,7 +1868,7 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 						}
 						else
 						{
-							segment->upperValue = injectCast(csb, value, cast, matchDesc);
+							segment->upperValue = value;
 							if (segment->scanType == segmentScanGreater)
 								segment->scanType = segmentScanBetween;
 							else
@@ -1871,7 +1892,7 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 
 						if (forward)
 						{
-							segment->upperValue = injectCast(csb, value, cast, matchDesc);
+							segment->upperValue = value;
 							if (segment->scanType == segmentScanGreater)
 								segment->scanType = segmentScanBetween;
 							else
@@ -1879,7 +1900,7 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 						}
 						else
 						{
-							segment->lowerValue = injectCast(csb, value, cast, matchDesc);
+							segment->lowerValue = value;
 							if (segment->scanType == segmentScanLess)
 								segment->scanType = segmentScanBetween;
 							else
@@ -1896,8 +1917,7 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 					if (!((segment->scanType == segmentScanEqual) ||
 						(segment->scanType == segmentScanEquivalent)))
 					{
-						segment->lowerValue = segment->upperValue =
-							injectCast(csb, value, cast, matchDesc);
+						segment->lowerValue = segment->upperValue = value;
 						segment->scanType = segmentScanStarting;
 						segment->excludeLower = false;
 						segment->excludeUpper = false;
@@ -1915,11 +1935,7 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 				(segment->scanType == segmentScanEquivalent)))
 			{
 				fb_assert(listNode->lookup);
-				for (auto& item : *listNode->lookup)
-				{
-					cast = nullptr; // create new cast node for every value
-					item = injectCast(csb, item, cast, matchDesc);
-				}
+
 				segment->lowerValue = segment->upperValue = nullptr;
 				segment->valueList = listNode->lookup;
 				segment->scanType = segmentScanList;
@@ -1943,6 +1959,18 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 		{
 			fb_assert(false);
 			return false;
+		}
+
+		// Scale for big exact numerics
+		if (!missingNode)
+		{
+			switch (matchDesc.dsc_dtype)
+			{
+			case dtype_int64:
+			case dtype_int128:
+				segment->scale = matchDesc.dsc_scale;
+				break;
+			}
 		}
 
 		// A match could be made
@@ -2252,7 +2280,10 @@ InversionCandidate* Retrieval::matchOnIndexes(IndexScratchList& inputIndexScratc
 					matches.add(match);
 
 				for (const auto match : invCandidate2->matches)
-					matches.add(match);
+				{
+					if (matches.exist(match))
+						invCandidate->matches.add(match);
+				}
 			}
 
 			return invCandidate;

@@ -474,6 +474,7 @@ interface Statement : ReferenceCounted
 	const uint PREPARE_PREFETCH_DETAILED_PLAN		= 0x10;
 	const uint PREPARE_PREFETCH_AFFECTED_RECORDS	= 0x20;	// not used yet
 	const uint PREPARE_PREFETCH_FLAGS				= 0x40;
+	const uint PREPARE_REQUIRE_SEMICOLON			= 0x80;
 	const uint PREPARE_PREFETCH_METADATA =
 		PREPARE_PREFETCH_TYPE | PREPARE_PREFETCH_FLAGS |
 		PREPARE_PREFETCH_INPUT_PARAMETERS | PREPARE_PREFETCH_OUTPUT_PARAMETERS;
@@ -940,6 +941,21 @@ interface CryptKeyCallback : Versioned
 	// any further details.
 	uint callback(uint dataLength, const void* data,
 		uint bufferLength, void* buffer);
+
+version:		// 6.0
+	// Result returned by afterAttach()
+	const uint NO_RETRY		= 0;	// Returned by old plugins & stub
+	const uint DO_RETRY		= 1;
+
+	// NULL in attStatus means attach was successful.
+	// DO_RETRY return will be ignored in this case, but plugin has a chance
+	// to reflect internally success.
+	[stub defaultAction]
+	uint afterAttach(Status status, const string dbName, const Status attStatus);
+
+	// interface not needed any more
+	[stub defaultAction]
+	void dispose();
 }
 
 

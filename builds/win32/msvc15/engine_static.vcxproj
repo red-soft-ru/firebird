@@ -108,6 +108,7 @@
     <ClCompile Include="..\..\..\src\jrd\optimizer\Optimizer.cpp" />
     <ClCompile Include="..\..\..\src\jrd\optimizer\Retrieval.cpp" />
     <ClCompile Include="..\..\..\src\jrd\optimizer\InnerJoin.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\optimizer\OuterJoin.cpp" />
     <ClCompile Include="..\..\..\src\jrd\os\win32\winnt.cpp" />
     <ClCompile Include="..\..\..\src\jrd\pag.cpp" />
     <ClCompile Include="..\..\..\src\jrd\par.cpp" />

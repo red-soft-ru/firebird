@@ -712,6 +712,7 @@ public:
 	virtual void wakeup(unsigned int length, const void* data) = 0;
 	virtual Firebird::ICryptKeyCallback* getInterface() = 0;
 	virtual void stop() = 0;
+	virtual void destroy() = 0;
 };
 
 // CryptKey implementation
@@ -859,21 +860,76 @@ private:
 	unsigned nextKey;							// First key to be analyzed
 
 	class ClientCrypt final :
-		public Firebird::VersionedIface<Firebird::ICryptKeyCallbackImpl<ClientCrypt, Firebird::CheckStatusWrapper> >
+		public Firebird::VersionedIface<Firebird::ICryptKeyCallbackImpl<ClientCrypt, Firebird::CheckStatusWrapper> >,
+		public Firebird::GlobalStorage
 	{
 	public:
 		ClientCrypt()
-			: pluginItr(Firebird::IPluginManager::TYPE_KEY_HOLDER, "NoDefault"), currentIface(nullptr)
+			: pluginItr(Firebird::IPluginManager::TYPE_KEY_HOLDER, "NoDefault"),
+			  currentIface(nullptr), afterIface(nullptr),
+			  triedPlugins(getPool())
 		{ }
+
+		~ClientCrypt()
+		{
+			destroy();
+		}
 
 		Firebird::ICryptKeyCallback* create(const Firebird::Config* conf);
 
 		// Firebird::ICryptKeyCallback implementation
 		unsigned callback(unsigned dataLength, const void* data, unsigned bufferLength, void* buffer);
+		unsigned afterAttach(Firebird::CheckStatusWrapper* st, const char* dbName, const Firebird::IStatus* attStatus);
+		void destroy();
 
-	private:
-		Firebird::GetPlugins<Firebird::IKeyHolderPlugin> pluginItr;
-		Firebird::ICryptKeyCallback* currentIface;
+ 	private:
+		typedef Firebird::GetPlugins<Firebird::IKeyHolderPlugin> KeyHolderItr;
+		KeyHolderItr pluginItr;
+ 		Firebird::ICryptKeyCallback* currentIface;
+		Firebird::ICryptKeyCallback* afterIface;
+
+		class TriedPlugins
+		{
+			typedef Firebird::Pair<Firebird::Left<Firebird::PathName, Firebird::IKeyHolderPlugin*> > TriedPlugin;
+			Firebird::ObjectsArray<TriedPlugin> data;
+
+		public:
+			TriedPlugins(MemoryPool& p)
+				: data(p)
+			{ }
+
+			void add(KeyHolderItr& itr)
+			{
+				for (auto& p : data)
+				{
+					if (p.first == itr.name())
+					return;
+				}
+
+				TriedPlugin tp(itr.name(), itr.plugin());
+				data.add(tp);
+				tp.second->addRef();
+			}
+
+			void remove()
+			{
+				fb_assert(data.hasData());
+				data[0].second->release();
+				data.remove(0);
+			}
+
+			bool hasData() const
+			{
+				return data.hasData();
+			}
+
+			Firebird::IKeyHolderPlugin* get()
+			{
+				return data[0].second;
+			}
+		};
+
+		TriedPlugins triedPlugins;
 	};
 	ClientCrypt clientCrypt;
 	Firebird::ICryptKeyCallback** createdInterface;

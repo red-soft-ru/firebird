@@ -138,7 +138,7 @@ private:
 			: holder(p)
 		{ }
 
-		unsigned int callback(unsigned int, const void*, unsigned int length, void* buffer)
+		unsigned int callback(unsigned int, const void*, unsigned int length, void* buffer) override
 		{
 			ISC_UCHAR k = holder->getKey();
 			if (!k)

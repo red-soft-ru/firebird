@@ -14,6 +14,7 @@ jobs:
       matrix:
         branch:
           - master
+          - v5.0-release
           - v4.0-release
 
     steps:

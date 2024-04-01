@@ -162,8 +162,9 @@ int BURP_main(Firebird::UtilSvc* uSvc)
 	{
 		Firebird::StaticStatusVector status;
 		e.stuffException(status);
-		uSvc->initStatus();
-		uSvc->setServiceStatus(status.begin());
+		UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+		sa.setServiceStatus(status.begin());
 		exit_code = FB_FAILURE;
 	}
 
@@ -372,9 +373,8 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 			spb.getBufferLength(), spb.getBuffer());
 		if (!status.isSuccess())
 		{
-			BURP_print_status(true, &status);
-			BURP_print(true, 83);
-			// msg 83 Exiting before completion due to errors
+			BURP_print_status(true, &status, 83);
+				// msg 83 Exiting before completion due to errors
 			return FINI_ERROR;
 		}
 
@@ -407,9 +407,9 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 		svc_handle->start(&status, thdlen, thd);
 		if (!status.isSuccess())
 		{
-			BURP_print_status(true, &status);
+			BURP_print_status(true, &status, 83);
+				// msg 83 Exiting before completion due to errors
 			svc_handle->release();
-			BURP_print(true, 83);	// msg 83 Exiting before completion due to errors
 			return FINI_ERROR;
 		}
 
@@ -438,9 +438,9 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 							  sizeof(respbuf), respbuf);
 			if (!status.isSuccess())
 			{
-				BURP_print_status(true, &status);
+				BURP_print_status(true, &status, 83);
+					// msg 83 Exiting before completion due to errors
 				svc_handle->release();
-				BURP_print(true, 83);	// msg 83 Exiting before completion due to errors
 				return FINI_ERROR;
 			}
 
@@ -488,10 +488,10 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 	{
 		FbLocalStatus s;
 		e.stuffException(&s);
-		BURP_print_status(true, &s);
+		BURP_print_status(true, &s, 83);
+			// msg 83 Exiting before completion due to errors
 		if (svc_handle)
 			svc_handle->release();
-		BURP_print(true, 83);	// msg 83 Exiting before completion due to errors
 		return FINI_ERROR;
 	}
 }
@@ -1496,7 +1496,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 
 
 
-void BURP_abort()
+void BURP_abort(Firebird::IStatus* status)
 {
 /**************************************
  *
@@ -1515,14 +1515,20 @@ void BURP_abort()
 	// msg 351 Error closing database, but backup file is OK
 	// msg 83 Exiting before completion due to errors
 
-	tdgbl->uSvc->setServiceStatus(burp_msg_fac, code, SafeArg());
-	tdgbl->uSvc->started();
+	// StatusAccessor is used only as RAII holder here
+	UtilSvc::StatusAccessor sa = tdgbl->uSvc->getStatusAccessor();
 
-	if (!tdgbl->uSvc->isService())
+	if (status)
+		BURP_print_status(true, status, code);
+	else
 	{
-		BURP_print(true, code);
+		sa.setServiceStatus(burp_msg_fac, code, SafeArg());
+
+		if (!tdgbl->uSvc->isService())
+			BURP_print(true, code);
 	}
 
+	tdgbl->uSvc->started();
 	BURP_exit_local(FINI_ERROR, tdgbl);
 }
 
@@ -1540,8 +1546,10 @@ void BURP_error(USHORT errcode, bool abort, const SafeArg& arg)
 	BurpMaster master;
 	BurpGlobals* tdgbl = master.get();
 
-	tdgbl->uSvc->setServiceStatus(burp_msg_fac, errcode, arg);
-	tdgbl->uSvc->started();
+	// StatusAccessor is used only as RAII holder here
+	UtilSvc::StatusAccessor sa = tdgbl->uSvc->getStatusAccessor();
+
+	sa.setServiceStatus(burp_msg_fac, errcode, arg);
 
 	if (!tdgbl->uSvc->isService())
 	{
@@ -1550,9 +1558,9 @@ void BURP_error(USHORT errcode, bool abort, const SafeArg& arg)
 	}
 
 	if (abort)
-	{
 		BURP_abort();
-	}
+	else
+		tdgbl->uSvc->started();
 }
 
 
@@ -1586,6 +1594,9 @@ void BURP_error_redirect(Firebird::IStatus* status_vector, USHORT errcode, const
  *
  **************************************/
 	BurpMaster master;
+
+	// StatusAccessor is used only as RAII holder here
+	UtilSvc::StatusAccessor sa = master.get()->uSvc->getStatusAccessor();
 
 	BURP_print_status(true, status_vector);
 	BURP_error(errcode, true, arg);
@@ -1723,7 +1734,7 @@ void BURP_print(bool err, USHORT number, const char* str)
 }
 
 
-void BURP_print_status(bool err, Firebird::IStatus* status_vector)
+void BURP_print_status(bool err, Firebird::IStatus* status_vector, USHORT secondNumber)
 {
 /**************************************
  *
@@ -1742,10 +1753,12 @@ void BURP_print_status(bool err, Firebird::IStatus* status_vector)
 		BurpGlobals* tdgbl = master.get();
 
 		const ISC_STATUS* vector = status_vector->getErrors();
-
 		if (err)
 		{
-			tdgbl->uSvc->setServiceStatus(vector);
+			UtilSvc::StatusAccessor sa = tdgbl->uSvc->getStatusAccessor();
+			sa.setServiceStatus(vector);
+			if (secondNumber)
+				sa.setServiceStatus(burp_msg_fac, secondNumber, SafeArg());
 			tdgbl->uSvc->started();
 
 			if (tdgbl->uSvc->isService())
@@ -1765,6 +1778,12 @@ void BURP_print_status(bool err, Firebird::IStatus* status_vector)
 				BURP_msg_partial(err, 256); // msg 256: gbak: ERROR:
 				burp_output(err, "    %s\n", s);
 			}
+		}
+
+		if (secondNumber)
+		{
+			BURP_msg_partial(err, 169);	// msg 169: gbak:
+			BURP_msg_put(true, secondNumber, SafeArg());
 		}
 	}
 }

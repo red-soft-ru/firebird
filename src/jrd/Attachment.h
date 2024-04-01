@@ -62,6 +62,10 @@ namespace Replication
 	class TableMatcher;
 }
 
+namespace Firebird {
+	class TextType;
+}
+
 class CharSetContainer;
 
 namespace Jrd
@@ -84,7 +88,6 @@ namespace Jrd
 	class ArrayField;
 	struct sort_context;
 	class vcl;
-	class TextType;
 	class Parameter;
 	class jrd_fld;
 	class dsql_dbb;

@@ -2668,10 +2668,8 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 		// Set the state on the inventory page
 		TRA_set_state(tdbb, transaction, old_number, state);
 	}
-	if (dbb->dbb_config->getClearGTTAtRetaining())
-		release_temp_tables(tdbb, transaction);
-	else
-		retain_temp_tables(tdbb, transaction, new_number);
+
+	retain_temp_tables(tdbb, transaction, new_number);
 
 	transaction->tra_number = new_number;
 
@@ -2720,11 +2718,6 @@ namespace {
 			: dbb(d)
 		{ }
 
-		void waitForStartup()
-		{
-			sem.enter();
-		}
-
 		static void runSweep(SweepParameter* par)
 		{
 			FbLocalStatus status;
@@ -2747,7 +2740,6 @@ namespace {
 				prov->setDbCryptCallback(&status, cryptCallback);
 				status.check();
 			}
-			par->sem.release();
 
 			AutoDispose<IXpbBuilder> dpb(UtilInterfacePtr()->getXpbBuilder(&status, IXpbBuilder::DPB, nullptr, 0));
 			status.check();
@@ -2771,14 +2763,26 @@ namespace {
 			ex.stuffException(&st);
 			if (st->getErrors()[1] != isc_att_shutdown)
 				iscLogException("Automatic sweep error", ex);
+
+			if (dbb)
+			{
+				dbb->clearSweepStarting();
+				SPTHR_DEBUG(fprintf(stderr, "called clearSweepStarting() dbb=%p par=%p\n", dbb, this));
+				dbb = nullptr;
+			}
+		}
+
+		static void cleanup(SweepParameter* par)
+		{
+			SPTHR_DEBUG(fprintf(stderr, "Cleanup dbb=%p par=%p\n", par->dbb, par));
+			delete par;
 		}
 
 	private:
-		Semaphore sem;
 		Database* dbb;
 	};
 
-	typedef ThreadFinishSync<SweepParameter*> SweepSync;
+	typedef ThreadFinishSync<SweepParameter*, SweepParameter::cleanup> SweepSync;
 	InitInstance<HalfStaticArray<SweepSync*, 16> > sweepThreads;
 	GlobalPtr<Mutex> swThrMutex;
 	bool sweepDown = false;
@@ -2850,10 +2854,9 @@ static void start_sweeper(thread_db* tdbb)
 		}
 
 		AutoPtr<SweepSync> sweepSync(FB_NEW SweepSync(*getDefaultMemoryPool(), SweepParameter::runSweep));
-		SweepParameter swPar(dbb);
-		sweepSync->run(&swPar);
+		SweepParameter* swPar = FB_NEW SweepParameter(dbb);
+		sweepSync->run(swPar);
 		started = true;
-		swPar.waitForStartup();
 		sweepThreads().add(sweepSync.release());
 	}
 	catch (const Exception&)

@@ -24,8 +24,8 @@
  *  Contributor(s): ______________________________________.
  */
 
-#ifndef JRD_UNICODE_UTIL_H
-#define JRD_UNICODE_UTIL_H
+#ifndef COMMON_UNICODE_UTIL_H
+#define COMMON_UNICODE_UTIL_H
 
 #include "intlobj_new.h"
 #include "../common/IntlUtil.h"
@@ -40,7 +40,7 @@
 struct UCollator;
 struct USet;
 
-namespace Jrd {
+namespace Firebird {
 
 class UnicodeUtil
 {
@@ -262,6 +262,6 @@ public:
 	friend class Utf16Collation;
 };
 
-}	// namespace Jrd
+}	// namespace Firebird
 
-#endif	// JRD_UNICODE_UTIL_H
+#endif	// COMMON_UNICODE_UTIL_H

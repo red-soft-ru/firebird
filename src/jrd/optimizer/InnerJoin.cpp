@@ -207,7 +207,10 @@ void InnerJoin::estimateCost(unsigned position,
 	const auto loopCost = currentCost * cardinality;
 	cost = loopCost;
 
-	if (position)
+	// Consider whether the current stream can be hash-joined to the prior ones.
+	// Beware conditional retrievals, this is impossible for them.
+
+	if (position && !candidate->condition)
 	{
 		// Calculate the hashing cost. It consists of the following parts:
 		//  - hashed stream retrieval
@@ -229,6 +232,13 @@ void InnerJoin::estimateCost(unsigned position,
 			// Scan the matches for possible equi-join conditions
 			for (const auto match : candidate->matches)
 			{
+				if (!match->containsStream(stream->number))
+				{
+					// This should never happen but be prepared for the worst
+					fb_assert(false);
+					continue;
+				}
+
 				// Check whether we have an equivalence operation
 				if (!optimizer->checkEquiJoin(match))
 					continue;
@@ -611,9 +621,9 @@ River* InnerJoin::formRiver()
 void InnerJoin::getIndexedRelationships(StreamInfo* testStream)
 {
 #ifdef OPT_DEBUG_RETRIEVAL
-	const auto name = optimizer->getStreamName(testStream->stream);
+	const auto name = optimizer->getStreamName(testStream->number);
 	optimizer->printf("Dependencies for stream %u (%s):\n",
-					  testStream->stream, name.c_str());
+					  testStream->number, name.c_str());
 #endif
 
 	const auto tail = &csb->csb_rpt[testStream->number];

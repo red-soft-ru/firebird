@@ -218,9 +218,9 @@ V. WALK-THROUGH PHASE
       In order to ensure that all pages are fetched during validation, the
       following pages are fetched just for the most basic validation:
 
-      1. The header page (and for 4.0 any overflow header pages).
-      2. Log pages for after-image journalling (4.0 only).
-      3. Page Inventory pages.
+      1. The header page.
+      2. Page Inventory pages.
+      3. System Change Number pages.
       4. Transaction Inventory pages
 
          If the system relation RDB$PAGES could not be read or did not
@@ -740,7 +740,7 @@ static int validate(Firebird::UtilSvc* svc)
 
 	if (status->getState() & IStatus::STATE_ERRORS)
 	{
-		svc->setServiceStatus(status->getErrors());
+		svc->getStatusAccessor().setServiceStatus(status->getErrors());
 		return FB_FAILURE;
 	}
 
@@ -770,7 +770,7 @@ static int validate(Firebird::UtilSvc* svc)
 	{
 		att->att_use_count--;
 		ex.stuffException(&status);
-		svc->setServiceStatus(status->getErrors());
+		svc->getStatusAccessor().setServiceStatus(status->getErrors());
 		ret_code = FB_FAILURE;
 	}
 
@@ -782,7 +782,7 @@ static int validate(Firebird::UtilSvc* svc)
 
 int VAL_service(Firebird::UtilSvc* svc)
 {
-	svc->initStatus();
+	svc->getStatusAccessor().init();
 
 	int exit_code = FB_SUCCESS;
 
@@ -794,7 +794,7 @@ int VAL_service(Firebird::UtilSvc* svc)
 	{
 		FbLocalStatus status;
 		ex.stuffException(&status);
-		svc->setServiceStatus(status->getErrors());
+		svc->getStatusAccessor().setServiceStatus(status->getErrors());
 		exit_code = FB_FAILURE;
 	}
 
@@ -1625,7 +1625,6 @@ void Validation::walk_database()
 	if (!(vdr_flags & VDR_partial))
 	{
 		fb_assert(!(vdr_flags & VDR_online));
-		walk_header(page->hdr_next_page);
 		walk_pip();
 		walk_scns();
 		walk_tip();
@@ -1909,7 +1908,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 						if (!getInfo.m_condition)
 							getInfo.m_condition = FB_NEW_POOL(*pool) IndexCondition(vdr_tdbb, &getInfo.m_desc);
 
-						if (getInfo.m_condition->evaluate(rpb.rpb_record))
+						if (getInfo.m_condition->check(rpb.rpb_record).asBool())
 							RBM_SET(pool, &getInfo.m_recs, recno);
 					}
 				}
@@ -1961,33 +1960,6 @@ void Validation::walk_generators()
 				release_page(&window);
 			}
 		}
-	}
-}
-
-void Validation::walk_header(ULONG page_num)
-{
-/**************************************
- *
- *	w a l k _ h e a d e r
- *
- **************************************
- *
- * Functional description
- *	Walk the overflow header pages
- *
- **************************************/
-
-	while (page_num)
-	{
-#ifdef DEBUG_VAL_VERBOSE
-		if (VAL_debug_level)
-			fprintf(stdout, "walk_header: page %d\n", page_num);
-#endif
-		WIN window(DB_PAGE_SPACE, -1);
-		header_page* page = 0;
-		fetch_page(true, page_num, pag_header, &window, &page);
-		page_num = page->hdr_next_page;
-		release_page(&window);
 	}
 }
 
@@ -2794,21 +2766,44 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	if (header->rhd_flags & rhd_incomplete)
 	{
 		p = fragment->rhdf_data;
-		length -= offsetof(rhdf, rhdf_data[0]);
+		length -= RHDF_SIZE;
 	}
 	else if (header->rhd_flags & rhd_long_tranum)
 	{
 		p = ((rhde*) header)->rhde_data;
-		length -= offsetof(rhde, rhde_data[0]);
+		length -= RHDE_SIZE;
 	}
 	else
 	{
 		p = header->rhd_data;
-		length -= offsetof(rhd, rhd_data[0]);
+		length -= RHD_SIZE;
 	}
 
-	ULONG record_length = (header->rhd_flags & rhd_not_packed) ?
-		length : Compressor::getUnpackedLength(length, p);
+	const auto format = MET_format(vdr_tdbb, relation, header->rhd_format);
+	auto remainingLength = format->fmt_length;
+
+	auto calculateLength = [fragment, remainingLength](ULONG length, const UCHAR* data)
+	{
+		if (fragment->rhdf_flags & rhd_not_packed)
+		{
+			if (length > remainingLength)
+			{
+				// Short records may be zero-padded up to the fragmented header size.
+				// Find out how many zero bytes present inside the tail and adjust
+				// the calculated record length accordingly.
+
+				auto tail = data + remainingLength;
+				for (const auto end = data + length; tail < end && !*tail; tail++)
+					length--;
+			}
+
+			return length;
+		}
+
+		return Compressor::getUnpackedLength(length, data);
+	};
+
+	remainingLength -= calculateLength(length, p);
 
 	// Next, chase down fragments, if any
 
@@ -2847,21 +2842,20 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		if (fragment->rhdf_flags & rhd_incomplete)
 		{
 			p = fragment->rhdf_data;
-			length -= offsetof(rhdf, rhdf_data[0]);
+			length -= RHDF_SIZE;
 		}
 		else if (fragment->rhdf_flags & rhd_long_tranum)
 		{
 			p = ((rhde*) fragment)->rhde_data;
-			length -= offsetof(rhde, rhde_data[0]);
+			length -= RHDE_SIZE;
 		}
 		else
 		{
 			p = ((rhd*) fragment)->rhd_data;
-			length -= offsetof(rhd, rhd_data[0]);
+			length -= RHD_SIZE;
 		}
 
-		record_length += (fragment->rhdf_flags & rhd_not_packed) ?
-			length : Compressor::getUnpackedLength(length, p);
+		remainingLength -= calculateLength(length, p);
 
 		page_number = fragment->rhdf_f_page;
 		line_number = fragment->rhdf_f_line;
@@ -2869,11 +2863,9 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		release_page(&window);
 	}
 
-	// Check out record length and format
+	// Validate unpacked record length
 
-	const Format* format = MET_format(vdr_tdbb, relation, header->rhd_format);
-
-	if (!delta_flag && record_length != format->fmt_length)
+	if (!delta_flag && remainingLength != 0)
 		return corrupt(VAL_REC_WRONG_LENGTH, relation, number.getValue());
 
 	return rtn_ok;

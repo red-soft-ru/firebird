@@ -41,12 +41,14 @@ using namespace Jrd;
 
 
 Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
-			USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length, SSHORT charSetId)
+			USHORT aClientDialect, USHORT aDbDialect, bool aRequireSemicolon,
+			const TEXT* string, size_t length, SSHORT charSetId)
 	: PermanentStorage(pool),
 	  statementPool(aStatementPool),
 	  scratch(aScratch),
 	  client_dialect(aClientDialect),
 	  db_dialect(aDbDialect),
+	  requireSemicolon(aRequireSemicolon),
 	  transformedString(pool),
 	  strMarks(pool),
 	  stmt_ambiguous(false)
@@ -396,19 +398,6 @@ int Parser::yylexAux()
 	Database* const dbb = tdbb->getDatabase();
 	MemoryPool& pool = *tdbb->getDefaultPool();
 
-	unsigned maxByteLength, maxCharLength;
-
-	if (scratch->flags & DsqlCompilerScratch::FLAG_INTERNAL_REQUEST)
-	{
-		maxByteLength = MAX_SQL_IDENTIFIER_LEN;
-		maxCharLength = METADATA_IDENTIFIER_CHAR_LEN;
-	}
-	else
-	{
-		maxByteLength = dbb->dbb_config->getMaxIdentifierByteLength();
-		maxCharLength = dbb->dbb_config->getMaxIdentifierCharLength();
-	}
-
 	SSHORT c = lex.ptr[-1];
 	UCHAR tok_class = classes(c);
 	char string[MAX_TOKEN_LEN];
@@ -432,7 +421,7 @@ int Parser::yylexAux()
 
 		check_bound(p, string);
 
-		if (p > string + maxByteLength || p > string + maxCharLength)
+		if (p > string + MAX_SQL_IDENTIFIER_LEN || p > string + METADATA_IDENTIFIER_CHAR_LEN)
 			yyabandon(yyposn, -104, isc_dyn_name_longer);
 
 		*p = 0;
@@ -558,7 +547,7 @@ int Parser::yylexAux()
 				const unsigned charLength = metadataCharSet->length(
 					name.length(), (const UCHAR*) name.c_str(), true);
 
-				if (name.length() > maxByteLength || charLength > maxCharLength)
+				if (name.length() > MAX_SQL_IDENTIFIER_LEN || charLength > METADATA_IDENTIFIER_CHAR_LEN)
 					yyabandon(yyposn, -104, isc_dyn_name_longer);
 
 				yylval.metaNamePtr = FB_NEW_POOL(pool) MetaName(pool, name);
@@ -1242,7 +1231,7 @@ int Parser::yylexAux()
 		check_bound(p, string);
 		*p = 0;
 
-		if (p > &string[maxByteLength] || p > &string[maxCharLength])
+		if (p > &string[MAX_SQL_IDENTIFIER_LEN] || p > &string[METADATA_IDENTIFIER_CHAR_LEN])
 			yyabandon(yyposn, -104, isc_dyn_name_longer);
 
 		const MetaName str(string, p - string);

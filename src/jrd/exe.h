@@ -120,6 +120,7 @@ const int csb_erase			= 256;		// we are processing an erase
 const int csb_unmatched		= 512;		// stream has conjuncts unmatched by any index
 const int csb_update		= 1024;		// erase or modify for relation
 const int csb_unstable		= 2048;		// unstable explicit cursor
+const int csb_skip_locked	= 4096;		// skip locked record
 
 
 // Aggregate Sort Block (for DISTINCT aggregates)
@@ -427,9 +428,8 @@ public:
 	bool fullDomain;
 };
 
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<MetaNamePair, FieldInfo> > >
-	MapFieldInfo;
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::Right<Item, ItemInfo> > > MapItemInfo;
+typedef Firebird::LeftPooledMap<MetaNamePair, FieldInfo> MapFieldInfo;
+typedef Firebird::RightPooledMap<Item, ItemInfo> MapItemInfo;
 
 // Compile scratch block
 

@@ -309,8 +309,7 @@
 #define blr_agg_list		(unsigned char)170
 #define blr_agg_list_distinct	(unsigned char)171
 #define blr_modify2			(unsigned char)172
-
-// unused codes: 173
+#define blr_erase2			(unsigned char)173
 
 /* FB 1.0 specific BLR */
 
@@ -346,6 +345,7 @@
 /* second sub parameter for blr_trim */
 #define blr_trim_spaces		(unsigned char)0
 #define blr_trim_characters	(unsigned char)1
+#define blr_trim_multi_characters (unsigned char)2
 
 /* These codes are actions for cursors */
 

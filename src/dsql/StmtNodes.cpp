@@ -152,6 +152,40 @@ namespace
 		{}
 	};
 
+	// Combined conditional savepoint and its change marker.
+	class CondSavepointAndMarker
+	{
+	public:
+		CondSavepointAndMarker(thread_db* tdbb, jrd_tra* trans, bool cond) :
+			m_savepoint(tdbb, trans, cond),
+			m_marker(cond ? trans->tra_save_point : nullptr)
+		{}
+
+		~CondSavepointAndMarker()
+		{
+			rollback();
+		}
+
+		void release()
+		{
+			m_marker.done();
+			m_savepoint.release();
+		}
+
+		void rollback()
+		{
+			m_marker.done();
+			m_savepoint.rollback();
+		}
+
+		// Prohibit unwanted creation/copying
+		CondSavepointAndMarker(const CondSavepointAndMarker&) = delete;
+		CondSavepointAndMarker& operator=(const CondSavepointAndMarker&) = delete;
+
+	private:
+		AutoSavePoint m_savepoint;
+		Savepoint::ChangeMarker m_marker;
+	};
 }	// namespace
 
 
@@ -2239,9 +2273,9 @@ const StmtNode* DeclareVariableNode::execute(thread_db* tdbb, Request* request, 
 //--------------------
 
 
-static RegisterNode<EraseNode> regEraseNode({blr_erase});
+static RegisterNode<EraseNode> regEraseNode({blr_erase, blr_erase2});
 
-DmlNode* EraseNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
+DmlNode* EraseNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
 	const USHORT n = csb->csb_blr_reader.getByte();
 
@@ -2253,6 +2287,9 @@ DmlNode* EraseNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch
 
 	if (csb->csb_blr_reader.peekByte() == blr_marks)
 		node->marks |= PAR_marks(csb);
+
+	if (blrOp == blr_erase2)
+		node->returningStatement = PAR_parse_stmt(tdbb, csb);
 
 	return node;
 }
@@ -2314,7 +2351,7 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			PASS1_limit(dsqlScratch, dsqlRows->length, dsqlRows->skip, rse);
 
 		if (dsqlSkipLocked)
-			rse->flags |= RseNode::FLAG_WRITELOCK | RseNode::FLAG_SKIP_LOCKED;
+			rse->flags |= RseNode::FLAG_SKIP_LOCKED;
 	}
 
 	if (dsqlReturning && dsqlScratch->isPsql())
@@ -2348,23 +2385,30 @@ string EraseNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, dsqlReturning);
 	NODE_PRINT(printer, dsqlRse);
 	NODE_PRINT(printer, dsqlContext);
+	NODE_PRINT(printer, dsqlSkipLocked);
 	NODE_PRINT(printer, statement);
 	NODE_PRINT(printer, subStatement);
+	NODE_PRINT(printer, returningStatement);
 	NODE_PRINT(printer, stream);
 	NODE_PRINT(printer, marks);
 
 	return "EraseNode";
 }
 
+// The EraseNode::erase() depends on generated nodes layout in case when
+// RETURNING specified.
 void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	std::optional<USHORT> tableNumber;
+
+	const bool skipLocked = dsqlRse && dsqlRse->hasSkipLocked();
 
 	if (dsqlReturning && !dsqlScratch->isPsql())
 	{
 		if (dsqlCursorName.isEmpty())
 		{
-			dsqlScratch->appendUChar(blr_begin);
+			if (!skipLocked)
+				dsqlScratch->appendUChar(blr_begin);
 
 			tableNumber = dsqlScratch->localTableNumber++;
 			dsqlGenReturningLocalTableDecl(dsqlScratch, tableNumber.value());
@@ -2385,13 +2429,13 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	const auto* context = dsqlContext ? dsqlContext : dsqlRelation->dsqlContext;
 
-	if (dsqlReturning)
+	if (dsqlReturning && !skipLocked)
 	{
 		dsqlScratch->appendUChar(blr_begin);
 		dsqlGenReturning(dsqlScratch, dsqlReturning, tableNumber);
 	}
 
-	dsqlScratch->appendUChar(blr_erase);
+	dsqlScratch->appendUChar(dsqlReturning && skipLocked ? blr_erase2 : blr_erase);
 	GEN_stuff_context(dsqlScratch, context);
 
 	if (marks)
@@ -2399,13 +2443,17 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (dsqlReturning)
 	{
-		dsqlScratch->appendUChar(blr_end);
+		if (!skipLocked)
+			dsqlScratch->appendUChar(blr_end);
+		else
+			dsqlGenReturning(dsqlScratch, dsqlReturning, tableNumber);
 
 		if (!dsqlScratch->isPsql() && dsqlCursorName.isEmpty())
 		{
 			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, tableNumber.value());
 
-			dsqlScratch->appendUChar(blr_end);
+			if (!skipLocked)
+				dsqlScratch->appendUChar(blr_end);
 		}
 	}
 }
@@ -2416,6 +2464,9 @@ EraseNode* EraseNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	doPass1(tdbb, csb, statement.getAddress());
 	doPass1(tdbb, csb, subStatement.getAddress());
+
+	AutoSetRestore<bool> autoReturningExpr(&csb->csb_returning_expr, true);
+	doPass1(tdbb, csb, returningStatement.getAddress());
 
 	return this;
 }
@@ -2533,6 +2584,7 @@ void EraseNode::pass1Erase(thread_db* tdbb, CompilerScratch* csb, EraseNode* nod
 EraseNode* EraseNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	doPass2(tdbb, csb, statement.getAddress(), this);
+	doPass2(tdbb, csb, returningStatement.getAddress(), this);
 	doPass2(tdbb, csb, subStatement.getAddress(), this);
 
 	const jrd_rel* const relation = csb->csb_rpt[stream].csb_relation;
@@ -2611,6 +2663,8 @@ const StmtNode* EraseNode::execute(thread_db* tdbb, Request* request, ExeState* 
 // Perform erase operation.
 const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger whichTrig) const
 {
+	impure_state* impure = request->getImpure<impure_state>(impureOffset);
+
 	jrd_tra* transaction = request->req_transaction;
 	record_param* rpb = &request->req_rpb[stream];
 	jrd_rel* relation = rpb->rpb_relation;
@@ -2636,6 +2690,12 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 		}
 
 		case Request::req_return:
+			if (impure->sta_state == 1)
+			{
+				impure->sta_state = 0;
+				rpb->rpb_number.setValid(false);
+				return parentStmt;
+			}
 			break;
 
 		default:
@@ -2665,7 +2725,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 
 	if (rpb->rpb_runtime_flags & RPB_refetch)
 	{
-		VIO_refetch_record(tdbb, rpb, transaction, RecordLock::NONE, false);
+		VIO_refetch_record(tdbb, rpb, transaction, false, false);
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
 	}
 
@@ -2673,6 +2733,12 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 		return parentStmt;
 
 	SavepointChangeMarker scMarker(transaction);
+
+	// Prepare to undo changes by PRE-triggers if record is locked by another
+	// transaction and delete should be skipped.
+	const bool skipLocked = rpb->rpb_stream_flags & RPB_s_skipLocked;
+	CondSavepointAndMarker spPreTriggers(tdbb, transaction,
+		skipLocked && !(transaction->tra_flags & TRA_system) && relation->rel_pre_erase);
 
 	// Handle pre-operation trigger.
 	preModifyEraseTriggers(tdbb, &relation->rel_pre_erase, whichTrig, rpb, NULL, TRIGGER_DELETE);
@@ -2683,23 +2749,36 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 		VirtualTable::erase(tdbb, rpb);
 	else if (!relation->rel_view_rse)
 	{
-		// VIO_erase returns false if there is an update conflict in Read Consistency
-		// transaction. Before returning false it disables statement-level snapshot
-		// (via setting req_update_conflict flag) so re-fetch should see new data.
+		// VIO_erase returns false if:
+		// a) there is an update conflict in Read Consistency transaction.
+		// Before returning false it disables statement-level snapshot (via
+		// setting req_update_conflict flag) so re-fetch should see new data.
+		// b) record is locked by another transaction and should be skipped.
 
 		if (!VIO_erase(tdbb, rpb, transaction))
 		{
+			// Record was not deleted, flow control should be passed to the parent
+			// ForNode. Note, If RETURNING clause was specified and SKIP LOCKED was
+			// not, then parent node is CompoundStmtNode, not ForNode. If\when this
+			// will be changed, the code below should be changed accordingly.
+
+			if (skipLocked)
+				return forNode;
+
+			spPreTriggers.release();
+
 			forceWriteLock(tdbb, rpb, transaction);
 
 			if (!forNode)
 				restartRequest(request, transaction);
 
 			forNode->setWriteLockMode(request);
-			return parentStmt;
+			return forNode;
 		}
 
 		REPL_erase(tdbb, rpb, transaction);
 	}
+	spPreTriggers.release();
 
 	// Handle post operation trigger.
 	if (relation->rel_post_erase && whichTrig != PRE_TRIG)
@@ -2730,6 +2809,13 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 			request->req_records_deleted++;
 			request->req_records_affected.bumpModified(true);
 		}
+	}
+
+	if (returningStatement)
+	{
+		impure->sta_state = 1;
+		request->req_operation = Request::req_evaluate;
+		return returningStatement;
 	}
 
 	rpb->rpb_number.setValid(false);
@@ -4864,6 +4950,7 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		statement->setType(DsqlStatement::TYPE_EXEC_BLOCK);
 
 	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_BLOCK;
+	dsqlScratch->reserveInitialVarNumbers(parameters.getCount() + returns.getCount());
 
 	ExecBlockNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ExecBlockNode(dsqlScratch->getPool());
 
@@ -6042,7 +6129,6 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	// Sub routine doesn't need ports and should generate BLR as declared in its metadata.
 	const bool isSubRoutine = dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE;
 	const auto& variables = isSubRoutine ? dsqlScratch->outputVariables : dsqlScratch->variables;
-	USHORT locals = variables.getCount();
 
 	Array<dsql_var*> declaredVariables;
 
@@ -6074,7 +6160,7 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			}
 
 			const auto variable = dsqlScratch->makeVariable(field, field->fld_name.c_str(),
-				dsql_var::TYPE_LOCAL, 0, 0, locals);
+				dsql_var::TYPE_LOCAL, 0, 0);
 			declaredVariables.add(variable);
 
 			dsqlScratch->putLocalVariableDecl(variable, varNode, varNode->dsqlDef->type->collate);
@@ -6082,8 +6168,6 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			// Some field attributes are calculated inside putLocalVariable(), so we reinitialize
 			// the descriptor.
 			DsqlDescMaker::fromField(&variable->desc, field);
-
-			++locals;
 		}
 		else if (nodeIs<DeclareCursorNode>(parameter) ||
 			nodeIs<DeclareSubProcNode>(parameter) ||
@@ -7199,6 +7283,7 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 	}
 
 	node->dsqlCursorName = dsqlCursorName;
+	node->dsqlSkipLocked = dsqlSkipLocked;
 
 	if (dsqlCursorName.hasData() && dsqlScratch->isPsql())
 	{
@@ -7305,7 +7390,7 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 			PASS1_limit(dsqlScratch, dsqlRows->length, dsqlRows->skip, rse);
 
 		if (dsqlSkipLocked)
-			rse->flags |= RseNode::FLAG_WRITELOCK | RseNode::FLAG_SKIP_LOCKED;
+			rse->flags |= RseNode::FLAG_SKIP_LOCKED;
 	}
 
 	node->dsqlReturning = dsqlProcessReturning(dsqlScratch,
@@ -7366,6 +7451,7 @@ string ModifyNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, dsqlRseFlags);
 	NODE_PRINT(printer, dsqlRse);
 	NODE_PRINT(printer, dsqlContext);
+	NODE_PRINT(printer, dsqlSkipLocked);
 	NODE_PRINT(printer, statement);
 	NODE_PRINT(printer, statement2);
 	NODE_PRINT(printer, subMod);
@@ -7715,6 +7801,12 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 				SavepointChangeMarker scMarker(transaction);
 
+				// Prepare to undo changes by PRE-triggers if record is locked by another
+				// transaction and update should be skipped.
+				const bool skipLocked = orgRpb->rpb_stream_flags & RPB_s_skipLocked;
+				CondSavepointAndMarker spPreTriggers(tdbb, transaction,
+					skipLocked && !(transaction->tra_flags & TRA_system) && relation->rel_pre_modify);
+
 				preModifyEraseTriggers(tdbb, &relation->rel_pre_modify, whichTrig, orgRpb, newRpb,
 					TRIGGER_UPDATE);
 
@@ -7727,24 +7819,31 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 					VirtualTable::modify(tdbb, orgRpb, newRpb);
 				else if (!relation->rel_view_rse)
 				{
-					// VIO_modify returns false if there is an update conflict in Read Consistency
-					// transaction. Before returning false it disables statement-level snapshot
-					// (via setting req_update_conflict flag) so re-fetch should see new data.
+					// VIO_modify returns false if:
+					// a) there is an update conflict in Read Consistency transaction.
+					// Before returning false it disables statement-level snapshot (via
+					// setting req_update_conflict flag) so re-fetch should see new data.
+					// b) record is locked by another transaction and should be skipped.
 
 					if (!VIO_modify(tdbb, orgRpb, newRpb, transaction))
 					{
-						forceWriteLock(tdbb, orgRpb, transaction);
+						if (!skipLocked)
+						{
+							spPreTriggers.release();
+							forceWriteLock(tdbb, orgRpb, transaction);
 
-						if (!forNode)
-							restartRequest(request, transaction);
+							if (!forNode)
+								restartRequest(request, transaction);
 
-						forNode->setWriteLockMode(request);
+							forNode->setWriteLockMode(request);
+						}
 						return parentStmt;
 					}
 
 					IDX_modify(tdbb, orgRpb, newRpb, transaction);
 					REPL_modify(tdbb, orgRpb, newRpb, transaction);
 				}
+				spPreTriggers.release();
 
 				newRpb->rpb_number = orgRpb->rpb_number;
 				newRpb->rpb_number.setValid(true);
@@ -7815,7 +7914,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 	if (orgRpb->rpb_runtime_flags & RPB_refetch)
 	{
-		VIO_refetch_record(tdbb, orgRpb, transaction, RecordLock::NONE, false);
+		VIO_refetch_record(tdbb, orgRpb, transaction, false, false);
 		orgRpb->rpb_runtime_flags &= ~RPB_refetch;
 	}
 
@@ -10881,8 +10980,7 @@ static VariableNode* dsqlPassHiddenVariable(DsqlCompilerScratch* dsqlScratch, Va
 	}
 
 	VariableNode* varNode = FB_NEW_POOL(*tdbb->getDefaultPool()) VariableNode(*tdbb->getDefaultPool());
-	varNode->dsqlVar = dsqlScratch->makeVariable(NULL, "", dsql_var::TYPE_HIDDEN,
-		0, 0, dsqlScratch->hiddenVarsNumber++);
+	varNode->dsqlVar = dsqlScratch->makeVariable(nullptr, "", dsql_var::TYPE_HIDDEN, 0, 0);
 
 	DsqlDescMaker::fromNode(dsqlScratch, &varNode->dsqlVar->desc, expr);
 	varNode->setDsqlDesc(varNode->dsqlVar->desc);
@@ -11281,13 +11379,13 @@ static void cleanupRpb(thread_db* tdbb, record_param* rpb)
 // Try to set write lock on record until success or record exists
 static void forceWriteLock(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 {
-	while (VIO_refetch_record(tdbb, rpb, transaction, RecordLock::LOCK, true))
+	while (VIO_refetch_record(tdbb, rpb, transaction, true, true))
 	{
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
 
 		// VIO_writelock returns false if record has been deleted or modified
 		// by someone else.
-		if (VIO_writelock(tdbb, rpb, transaction, false) == WriteLockResult::LOCKED)
+		if (VIO_writelock(tdbb, rpb, transaction) == WriteLockResult::LOCKED)
 			break;
 	}
 }

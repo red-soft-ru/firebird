@@ -995,6 +995,12 @@ void DropPackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 	if (!found)
 	{
+		if (silent)
+		{
+			savePoint.release();
+			return;
+		}
+
 		status_exception::raise(
 			Arg::Gds(isc_no_meta_update) <<
 			Arg::Gds(isc_dyn_package_not_found) << Arg::Str(name));

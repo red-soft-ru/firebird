@@ -176,8 +176,10 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 			FB_NEW_POOL(*tdbb->getDefaultPool()) IndexScanListIterator(tdbb, m_index->retrieval) :
 			nullptr;
 
+		USHORT dummy = 0;		// exclude upper/lower bits are not used here,
+								// i.e. additional forced include not needed
 		if (!BTR_make_bounds(tdbb, m_index->retrieval, impure->irsb_iterator,
-							 impure->irsb_nav_lower, impure->irsb_nav_upper))
+							 impure->irsb_nav_lower, impure->irsb_nav_upper, dummy))
 		{
 			rpb->rpb_number.setValid(false);
 			return false;
@@ -261,7 +263,7 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 				const auto nextLower = impure->irsb_nav_current_lower;
 				const auto nextUpper = impure->irsb_nav_current_upper;
 
-				if (impure->irsb_iterator && impure->irsb_iterator->getNext(nextLower, nextUpper))
+				if (impure->irsb_iterator && impure->irsb_iterator->getNext(tdbb, nextLower, nextUpper))
 				{
 					if (retrieval->irb_generic & irb_root_list_scan)
 					{

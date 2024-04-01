@@ -39,14 +39,14 @@
 #include "gen/parse.h"
 
 namespace Firebird {
+class CharSet;
+
 namespace Arg {
 	class StatusVector;
 } // namespace
 } // namespace
 
 namespace Jrd {
-
-class CharSet;
 
 class Parser : public Firebird::PermanentStorage
 {
@@ -132,7 +132,8 @@ public:
 
 public:
 	Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
-		USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length, SSHORT charSetId);
+		USHORT aClientDialect, USHORT aDbDialect, bool aRequireSemicolon,
+		const TEXT* string, size_t length, SSHORT charSetId);
 	~Parser();
 
 public:
@@ -339,6 +340,11 @@ private:
 		return clause.hasData();
 	}
 
+	void setCollate(TypeClause* fld, MetaName* name)
+	{
+		if (name)
+			setClause(fld->collate, "COLLATE", *name);
+	}
 	void checkTimeDialect();
 
 // start - defined in btyacc_fb.ske
@@ -363,10 +369,11 @@ private:
 	DsqlCompilerScratch* scratch;
 	USHORT client_dialect;
 	USHORT db_dialect;
+	const bool requireSemicolon;
 	USHORT parser_version;
-	CharSet* charSet;
+	Firebird::CharSet* charSet;
 
-	CharSet* metadataCharSet;
+	Firebird::CharSet* metadataCharSet;
 	Firebird::string transformedString;
 	Firebird::GenericMap<Firebird::NonPooled<IntlString*, StrMark> > strMarks;
 	bool stmt_ambiguous;

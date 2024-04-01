@@ -34,7 +34,7 @@
 
 static UConverter* create_converter(csconvert* cv, UErrorCode* status)
 {
-	Jrd::UnicodeUtil::ConversionICU& cIcu(Jrd::UnicodeUtil::getConversionICU());
+	Firebird::UnicodeUtil::ConversionICU& cIcu(Firebird::UnicodeUtil::getConversionICU());
 	UConverter* conv = cIcu.ucnv_open(cv->csconvert_impl->cs->charset_name, status);
 	const void* oldContext;
 
@@ -90,7 +90,7 @@ static ULONG unicode_to_icu(csconvert* cv,
 	Firebird::Aligner<UChar> alignedSource(src, srcLen);
 	const UChar* source = alignedSource;
 	char* target = reinterpret_cast<char*>(dst);
-	Jrd::UnicodeUtil::ConversionICU& cIcu(Jrd::UnicodeUtil::getConversionICU());
+	Firebird::UnicodeUtil::ConversionICU& cIcu(Firebird::UnicodeUtil::getConversionICU());
 	cIcu.ucnv_fromUnicode(conv, &target, target + dstLen, &source,
 		source + srcLen / sizeof(UChar), NULL, TRUE, &status);
 
@@ -146,7 +146,7 @@ static ULONG icu_to_unicode(csconvert* cv,
 	const char* source = reinterpret_cast<const char*>(src);
 	Firebird::OutAligner<UChar> alignedTarget(dst, dstLen);
 	UChar* target = alignedTarget;
-	Jrd::UnicodeUtil::ConversionICU& cIcu(Jrd::UnicodeUtil::getConversionICU());
+	Firebird::UnicodeUtil::ConversionICU& cIcu(Firebird::UnicodeUtil::getConversionICU());
 	cIcu.ucnv_toUnicode(conv, &target, target + dstLen / sizeof(UChar), &source,
 		source + srcLen, NULL, TRUE, &status);
 

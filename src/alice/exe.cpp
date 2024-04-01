@@ -126,7 +126,7 @@ int EXE_action(const TEXT* database, const SINT64 switches)
 
 		if (error)
 		{
-			tdgbl->uSvc->setServiceStatus(tdgbl->status);
+			tdgbl->uSvc->getStatusAccessor().setServiceStatus(tdgbl->status);
 		}
 	}
 
@@ -182,7 +182,7 @@ int EXE_two_phase(const TEXT* database, const SINT64 switches)
 
 		if (error)
 		{
-			tdgbl->uSvc->setServiceStatus(tdgbl->status);
+			tdgbl->uSvc->getStatusAccessor().setServiceStatus(tdgbl->status);
 		}
 	}
 

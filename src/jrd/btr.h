@@ -190,7 +190,7 @@ public:
 	IndexRetrieval(jrd_rel* relation, const index_desc* idx, USHORT count, temporary_key* key)
 		: irb_relation(relation), irb_index(idx->idx_id),
 		  irb_generic(0), irb_lower_count(count), irb_upper_count(count), irb_key(key),
-		  irb_name(nullptr), irb_value(nullptr), irb_list(nullptr)
+		  irb_name(nullptr), irb_value(nullptr), irb_list(nullptr), irb_scale(nullptr)
 	{
 		memcpy(&irb_desc, idx, sizeof(irb_desc));
 	}
@@ -201,7 +201,7 @@ public:
 		  irb_generic(0), irb_lower_count(0), irb_upper_count(0), irb_key(NULL),
 		  irb_name(FB_NEW_POOL(pool) MetaName(name)),
 		  irb_value(FB_NEW_POOL(pool) ValueExprNode*[idx->idx_count * 2]),
-		  irb_list(nullptr)
+		  irb_list(nullptr), irb_scale(nullptr)
 	{
 		memcpy(&irb_desc, idx, sizeof(irb_desc));
 	}
@@ -210,6 +210,7 @@ public:
 	{
 		delete irb_name;
 		delete[] irb_value;
+		delete[] irb_scale;
 	}
 
 	index_desc irb_desc;			// Index descriptor
@@ -222,6 +223,7 @@ public:
 	MetaName* irb_name;				// Index name
 	ValueExprNode** irb_value;		// Matching value (for equality search)
 	LookupValueList* irb_list;		// Matching values list (for IN <list>)
+	SSHORT* irb_scale;				// Scale for int64/int128 key
 };
 
 // Flag values for irb_generic
@@ -235,6 +237,10 @@ const int irb_exclude_lower	= 32;			// exclude lower bound keys while scanning i
 const int irb_exclude_upper	= 64;			// exclude upper bound keys while scanning index
 const int irb_multi_starting	= 128;		// Use INTL_KEY_MULTI_STARTING
 const int irb_root_list_scan	= 256;		// Locate list items from the root
+
+// Force include flags - always include appropriate key while scanning index
+const int irb_force_lower	= irb_exclude_lower;
+const int irb_force_upper	= irb_exclude_upper;
 
 typedef Firebird::HalfStaticArray<float, 4> SelectivityList;
 
@@ -343,12 +349,14 @@ public:
 
 	~IndexCondition();
 
-	bool evaluate(Record* record) const;
+	Firebird::TriState check(Record* record, idx_e* errCode = nullptr);
 
 private:
 	thread_db* const m_tdbb;
 	BoolExprNode* m_condition = nullptr;
 	Request* m_request = nullptr;
+
+	bool evaluate(Record* record) const;
 };
 
 class IndexExpression
@@ -482,11 +490,11 @@ public:
 		return m_listValues.isEmpty();
 	}
 
-	bool getNext(temporary_key* lower, temporary_key* upper)
+	bool getNext(thread_db* tdbb, temporary_key* lower, temporary_key* upper)
 	{
 		if (++m_iterator < m_listValues.end())
 		{
-			makeKeys(lower, upper);
+			makeKeys(tdbb, lower, upper);
 			return true;
 		}
 
@@ -504,10 +512,14 @@ public:
 		return m_upperValues.begin();
 	}
 
-private:
-	void makeKeys(temporary_key* lower, temporary_key* upper);
+	SSHORT* getScale()
+	{
+		return m_retrieval->irb_scale;
+	}
 
-	thread_db* const m_tdbb;
+private:
+	void makeKeys(thread_db* tdbb, temporary_key* lower, temporary_key* upper);
+
 	const IndexRetrieval* const m_retrieval;
 	Firebird::HalfStaticArray<const ValueExprNode*, 16> m_listValues;
 	Firebird::HalfStaticArray<const ValueExprNode*, 4> m_lowerValues;

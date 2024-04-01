@@ -490,6 +490,8 @@ type
 	IWireCryptPlugin_getSpecificDataPtr = function(this: IWireCryptPlugin; status: IStatus; keyType: PAnsiChar; length: CardinalPtr): BytePtr; cdecl;
 	IWireCryptPlugin_setSpecificDataPtr = procedure(this: IWireCryptPlugin; status: IStatus; keyType: PAnsiChar; length: Cardinal; data: BytePtr); cdecl;
 	ICryptKeyCallback_callbackPtr = function(this: ICryptKeyCallback; dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal; cdecl;
+	ICryptKeyCallback_afterAttachPtr = function(this: ICryptKeyCallback; status: IStatus; dbName: PAnsiChar; attStatus: IStatus): Cardinal; cdecl;
+	ICryptKeyCallback_disposePtr = procedure(this: ICryptKeyCallback); cdecl;
 	IKeyHolderPlugin_keyCallbackPtr = function(this: IKeyHolderPlugin; status: IStatus; callback: ICryptKeyCallback): Integer; cdecl;
 	IKeyHolderPlugin_keyHandlePtr = function(this: IKeyHolderPlugin; status: IStatus; keyName: PAnsiChar): ICryptKeyCallback; cdecl;
 	IKeyHolderPlugin_useOnlyOwnKeysPtr = function(this: IKeyHolderPlugin; status: IStatus): Boolean; cdecl;
@@ -1533,6 +1535,7 @@ type
 		const PREPARE_PREFETCH_DETAILED_PLAN = Cardinal($10);
 		const PREPARE_PREFETCH_AFFECTED_RECORDS = Cardinal($20);
 		const PREPARE_PREFETCH_FLAGS = Cardinal($40);
+		const PREPARE_REQUIRE_SEMICOLON = Cardinal($80);
 		const PREPARE_PREFETCH_METADATA = Cardinal(IStatement.PREPARE_PREFETCH_TYPE or IStatement.PREPARE_PREFETCH_FLAGS or IStatement.PREPARE_PREFETCH_INPUT_PARAMETERS or IStatement.PREPARE_PREFETCH_OUTPUT_PARAMETERS);
 		const PREPARE_PREFETCH_ALL = Cardinal(IStatement.PREPARE_PREFETCH_METADATA or IStatement.PREPARE_PREFETCH_LEGACY_PLAN or IStatement.PREPARE_PREFETCH_DETAILED_PLAN or IStatement.PREPARE_PREFETCH_AFFECTED_RECORDS);
 		const FLAG_HAS_CURSOR = Cardinal($1);
@@ -2374,18 +2377,26 @@ type
 
 	CryptKeyCallbackVTable = class(VersionedVTable)
 		callback: ICryptKeyCallback_callbackPtr;
+		afterAttach: ICryptKeyCallback_afterAttachPtr;
+		dispose: ICryptKeyCallback_disposePtr;
 	end;
 
 	ICryptKeyCallback = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
+		const NO_RETRY = Cardinal(0);
+		const DO_RETRY = Cardinal(1);
 
 		function callback(dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal;
+		function afterAttach(status: IStatus; dbName: PAnsiChar; attStatus: IStatus): Cardinal;
+		procedure dispose();
 	end;
 
 	ICryptKeyCallbackImpl = class(ICryptKeyCallback)
 		constructor create;
 
 		function callback(dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal; virtual; abstract;
+		function afterAttach(status: IStatus; dbName: PAnsiChar; attStatus: IStatus): Cardinal; virtual;
+		procedure dispose(); virtual;
 	end;
 
 	KeyHolderPluginVTable = class(PluginBaseVTable)
@@ -4044,6 +4055,7 @@ const
 	isc_dpb_upgrade_db = byte(97);
 	isc_dpb_parallel_workers = byte(100);
 	isc_dpb_worker_attach = byte(101);
+	isc_dpb_owner = byte(102);
 	isc_dpb_address = byte(1);
 	isc_dpb_addr_protocol = byte(1);
 	isc_dpb_addr_endpoint = byte(2);
@@ -4178,7 +4190,6 @@ const
 	isc_info_svc_limbo_trans = byte(66);
 	isc_info_svc_running = byte(67);
 	isc_info_svc_get_users = byte(68);
-	isc_info_svc_auth_block = byte(69);
 	isc_info_svc_stdin = byte(78);
 	isc_spb_sec_userid = byte(5);
 	isc_spb_sec_groupid = byte(6);
@@ -5713,6 +5724,9 @@ const
 	 isc_incorrect_hours_period = 335545299;
 	 isc_data_for_format_is_exhausted = 335545300;
 	 isc_trailing_part_of_string = 335545301;
+	 isc_pattern_cant_be_used_without_other_pattern = 335545302;
+	 isc_pattern_cant_be_used_without_other_pattern_and_vice_versa = 335545303;
+	 isc_incompatible_format_patterns = 335545304;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -8100,6 +8114,27 @@ end;
 function ICryptKeyCallback.callback(dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal;
 begin
 	Result := CryptKeyCallbackVTable(vTable).callback(Self, dataLength, data, bufferLength, buffer);
+end;
+
+function ICryptKeyCallback.afterAttach(status: IStatus; dbName: PAnsiChar; attStatus: IStatus): Cardinal;
+begin
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'ICryptKeyCallback', vTable.version, 3);
+		Result := 0;
+	end
+	else begin
+		Result := CryptKeyCallbackVTable(vTable).afterAttach(Self, status, dbName, attStatus);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure ICryptKeyCallback.dispose();
+begin
+	if (vTable.version < 3) then begin
+	end
+	else begin
+		CryptKeyCallbackVTable(vTable).dispose(Self);
+	end;
 end;
 
 function IKeyHolderPlugin.keyCallback(status: IStatus; callback: ICryptKeyCallback): Integer;
@@ -13430,6 +13465,34 @@ begin
 	end
 end;
 
+function ICryptKeyCallbackImpl_afterAttachDispatcher(this: ICryptKeyCallback; status: IStatus; dbName: PAnsiChar; attStatus: IStatus): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ICryptKeyCallbackImpl(this).afterAttach(status, dbName, attStatus);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+function ICryptKeyCallbackImpl.afterAttach(status: IStatus; dbName: PAnsiChar; attStatus: IStatus): Cardinal;
+begin
+	Result := 0;
+end;
+
+procedure ICryptKeyCallbackImpl_disposeDispatcher(this: ICryptKeyCallback); cdecl;
+begin
+	try
+		ICryptKeyCallbackImpl(this).dispose();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+procedure ICryptKeyCallbackImpl.dispose();
+begin
+end;
+
 var
 	ICryptKeyCallbackImpl_vTable: CryptKeyCallbackVTable;
 
@@ -17515,8 +17578,10 @@ initialization
 	IWireCryptPluginImpl_vTable.setSpecificData := @IWireCryptPluginImpl_setSpecificDataDispatcher;
 
 	ICryptKeyCallbackImpl_vTable := CryptKeyCallbackVTable.create;
-	ICryptKeyCallbackImpl_vTable.version := 2;
+	ICryptKeyCallbackImpl_vTable.version := 3;
 	ICryptKeyCallbackImpl_vTable.callback := @ICryptKeyCallbackImpl_callbackDispatcher;
+	ICryptKeyCallbackImpl_vTable.afterAttach := @ICryptKeyCallbackImpl_afterAttachDispatcher;
+	ICryptKeyCallbackImpl_vTable.dispose := @ICryptKeyCallbackImpl_disposeDispatcher;
 
 	IKeyHolderPluginImpl_vTable := KeyHolderPluginVTable.create;
 	IKeyHolderPluginImpl_vTable.version := 5;

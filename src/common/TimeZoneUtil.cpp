@@ -45,8 +45,18 @@ namespace
 	public:
 		TimeZoneDesc(MemoryPool& pool)
 			: asciiName(pool),
-			  unicodeName(pool)
+			  unicodeName(pool),
+			  icuCachedCalendar(nullptr)
 		{
+		}
+
+		~TimeZoneDesc()
+		{
+			if (const auto calendar = icuCachedCalendar.exchange(nullptr))
+			{
+				auto& icuLib = UnicodeUtil::getConversionICU();
+				icuLib.ucalClose(calendar);
+			}
 		}
 
 	public:
@@ -70,9 +80,21 @@ namespace
 			return unicodeName.begin();
 		}
 
+		IcuCalendarWrapper getCalendar(const UnicodeUtil::ConversionICU& icuLib, UErrorCode* err = nullptr) const
+		{
+			auto calendar = icuCachedCalendar.exchange(nullptr);
+			UErrorCode internalErr = U_ZERO_ERROR;
+
+			if (!calendar)
+				calendar = icuLib.ucalOpen(getUnicodeName(), -1, nullptr, UCAL_GREGORIAN, (err ? err : &internalErr));
+
+			return IcuCalendarWrapper(calendar, &icuCachedCalendar);
+		}
+
 	private:
 		string asciiName;
 		Array<UChar> unicodeName;
+		mutable std::atomic<UCalendar*>	icuCachedCalendar;
 	};
 }
 
@@ -98,7 +120,9 @@ namespace
 			PathName temp;
 
 			// Could not call fb_utils::getPrefix here.
-			if (FB_TZDATADIR[0])
+			if (FB_TZDATADIR[0] && PathUtils::isRelative(FB_TZDATADIR))
+				PathUtils::concatPath(temp, Config::getRootDirectory(), FB_TZDATADIR);
+			else if (FB_TZDATADIR[0])
 				temp = FB_TZDATADIR;
 			else
 			{
@@ -312,7 +336,7 @@ USHORT TimeZoneUtil::getSystemTimeZone()
 		return cachedTimeZoneId;
 
 	UErrorCode icuErrorCode = U_ZERO_ERROR;
-	Jrd::UnicodeUtil::ConversionICU& icuLib = Jrd::UnicodeUtil::getConversionICU();
+	UnicodeUtil::ConversionICU& icuLib = UnicodeUtil::getConversionICU();
 
 	char buffer[TimeZoneUtil::MAX_SIZE];
 	const char* str = buffer;
@@ -411,7 +435,7 @@ USHORT TimeZoneUtil::getSystemTimeZone()
 
 void TimeZoneUtil::getDatabaseVersion(Firebird::string& str)
 {
-	Jrd::UnicodeUtil::ConversionICU& icuLib = Jrd::UnicodeUtil::getConversionICU();
+	UnicodeUtil::ConversionICU& icuLib = UnicodeUtil::getConversionICU();
 	UErrorCode icuErrorCode = U_ZERO_ERROR;
 
 	const char* version = icuLib.ucalGetTZDataVersion(&icuErrorCode);
@@ -591,10 +615,9 @@ void TimeZoneUtil::extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, SSHORT* of
 	{
 		UErrorCode icuErrorCode = U_ZERO_ERROR;
 
-		Jrd::UnicodeUtil::ConversionICU& icuLib = Jrd::UnicodeUtil::getConversionICU();
+		UnicodeUtil::ConversionICU& icuLib = UnicodeUtil::getConversionICU();
 
-		UCalendar* icuCalendar = icuLib.ucalOpen(
-			getDesc(timeStampTz.time_zone)->getUnicodeName(), -1, NULL, UCAL_GREGORIAN, &icuErrorCode);
+		auto icuCalendar = getDesc(timeStampTz.time_zone)->getCalendar(icuLib, &icuErrorCode);
 
 		if (!icuCalendar)
 			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
@@ -602,21 +625,13 @@ void TimeZoneUtil::extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, SSHORT* of
 		icuLib.ucalSetMillis(icuCalendar, timeStampToIcuDate(timeStampTz.utc_timestamp), &icuErrorCode);
 
 		if (U_FAILURE(icuErrorCode))
-		{
-			icuLib.ucalClose(icuCalendar);
 			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
-		}
 
 		displacement = (icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
 			icuLib.ucalGet(icuCalendar, UCAL_DST_OFFSET, &icuErrorCode)) / U_MILLIS_PER_MINUTE;
 
 		if (U_FAILURE(icuErrorCode))
-		{
-			icuLib.ucalClose(icuCalendar);
 			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
-		}
-
-		icuLib.ucalClose(icuCalendar);
 	}
 
 	*offset = displacement;
@@ -700,10 +715,9 @@ void TimeZoneUtil::localTimeStampToUtc(ISC_TIMESTAMP_TZ& timeStampTz)
 
 		UErrorCode icuErrorCode = U_ZERO_ERROR;
 
-		Jrd::UnicodeUtil::ConversionICU& icuLib = Jrd::UnicodeUtil::getConversionICU();
+		UnicodeUtil::ConversionICU& icuLib = UnicodeUtil::getConversionICU();
 
-		UCalendar* icuCalendar = icuLib.ucalOpen(
-			getDesc(timeStampTz.time_zone)->getUnicodeName(), -1, NULL, UCAL_GREGORIAN, &icuErrorCode);
+		auto icuCalendar = getDesc(timeStampTz.time_zone)->getCalendar(icuLib, &icuErrorCode);
 
 		if (!icuCalendar)
 			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
@@ -715,21 +729,13 @@ void TimeZoneUtil::localTimeStampToUtc(ISC_TIMESTAMP_TZ& timeStampTz)
 			times.tm_hour, times.tm_min, times.tm_sec, &icuErrorCode);
 
 		if (U_FAILURE(icuErrorCode))
-		{
-			icuLib.ucalClose(icuCalendar);
 			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setDateTime.");
-		}
 
 		displacement = (icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
 			icuLib.ucalGet(icuCalendar, UCAL_DST_OFFSET, &icuErrorCode)) / U_MILLIS_PER_MINUTE;
 
 		if (U_FAILURE(icuErrorCode))
-		{
-			icuLib.ucalClose(icuCalendar);
 			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
-		}
-
-		icuLib.ucalClose(icuCalendar);
 	}
 
 	const auto ticks = TimeStamp::timeStampToTicks(timeStampTz.utc_timestamp) -
@@ -769,10 +775,9 @@ bool TimeZoneUtil::decodeTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, bool gmt
 			if (gmtFallback && getenv("MISSING_ICU_EMULATION"))
 				(Arg::Gds(isc_random) << "Emulating missing ICU").raise();
 #endif
-			Jrd::UnicodeUtil::ConversionICU& icuLib = Jrd::UnicodeUtil::getConversionICU();
+			UnicodeUtil::ConversionICU& icuLib = UnicodeUtil::getConversionICU();
 
-			UCalendar* icuCalendar = icuLib.ucalOpen(
-				getDesc(timeStampTz.time_zone)->getUnicodeName(), -1, NULL, UCAL_GREGORIAN, &icuErrorCode);
+			auto icuCalendar = getDesc(timeStampTz.time_zone)->getCalendar(icuLib, &icuErrorCode);
 
 			if (!icuCalendar)
 				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
@@ -780,21 +785,13 @@ bool TimeZoneUtil::decodeTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, bool gmt
 			icuLib.ucalSetMillis(icuCalendar, timeStampToIcuDate(timeStampTz.utc_timestamp), &icuErrorCode);
 
 			if (U_FAILURE(icuErrorCode))
-			{
-				icuLib.ucalClose(icuCalendar);
 				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
-			}
 
 			displacement = (icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
 				icuLib.ucalGet(icuCalendar, UCAL_DST_OFFSET, &icuErrorCode)) / U_MILLIS_PER_MINUTE;
 
 			if (U_FAILURE(icuErrorCode))
-			{
-				icuLib.ucalClose(icuCalendar);
 				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
-			}
-
-			icuLib.ucalClose(icuCalendar);
 		}
 		catch (const Exception&)
 		{
@@ -1062,12 +1059,11 @@ ISC_TIMESTAMP_TZ TimeZoneUtil::dateToTimeStampTz(const ISC_DATE& date, Callbacks
 
 TimeZoneRuleIterator::TimeZoneRuleIterator(USHORT aId, const ISC_TIMESTAMP_TZ& aFrom, const ISC_TIMESTAMP_TZ& aTo)
 	: id(aId),
-	  icuLib(Jrd::UnicodeUtil::getConversionICU()),
-	  toTicks(TimeStamp::timeStampToTicks(aTo.utc_timestamp))
+	  icuLib(UnicodeUtil::getConversionICU()),
+	  toTicks(TimeStamp::timeStampToTicks(aTo.utc_timestamp)),
+	  icuCalendar(getDesc(aId)->getCalendar(icuLib))
 {
 	UErrorCode icuErrorCode = U_ZERO_ERROR;
-
-	icuCalendar = icuLib.ucalOpen(getDesc(id)->getUnicodeName(), -1, NULL, UCAL_GREGORIAN, &icuErrorCode);
 
 	if (!icuCalendar)
 		status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
@@ -1103,11 +1099,6 @@ TimeZoneRuleIterator::TimeZoneRuleIterator(USHORT aId, const ISC_TIMESTAMP_TZ& a
 	}
 
 	startTicks = TimeStamp::timeStampToTicks(TimeZoneUtil::icuDateToTimeStamp(icuDate));
-}
-
-TimeZoneRuleIterator::~TimeZoneRuleIterator()
-{
-	icuLib.ucalClose(icuCalendar);
 }
 
 bool TimeZoneRuleIterator::next()

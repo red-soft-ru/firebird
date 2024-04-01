@@ -26,9 +26,19 @@ dnl XE_CONF_DIR(param, help, variable, default)
 define([XE_CONF_DIR],[
 AC_ARG_WITH([$1],
 	[AS_HELP_STRING([--with-$1],[$2])],
-	[[$3]="$withval"
-	 CHANGE_PATH_SUPPORT=no
-	 AC_DEFINE_UNQUOTED([$3], "$[$3]", [$2])],
+	[
+		case "$withval" in
+			/*)
+				CHANGE_PATH_SUPPORT=no
+				[$3]="$withval"
+				;;
+			*)
+				[$3]='${fb_install_prefix}'/"${withval}"
+				;;
+		esac
+
+		AC_DEFINE_UNQUOTED([$3], "${withval}", [$2])
+	],
 	[[$3]='${fb_install_prefix}[$4]'
 	 AC_DEFINE_UNQUOTED([$3], [""], [$2])]
 )
@@ -1643,6 +1653,9 @@ gen/make.platform.solaris.examples:${MAKE_SRC_DIR}/make.platform.solaris.example
 )
 ;;
 esac
+
+# Fix problem with autoconf 2.72 inserting -std in CXX.
+CXX=`echo "$CXX" | sed -e 's/\(-std=c++11\)//g' -e 's/\(-std=gnu++11\)//g'`
 
 AC_OUTPUT
 

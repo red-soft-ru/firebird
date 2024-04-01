@@ -152,11 +152,8 @@ enum ConfigKey
 	KEY_GC_POLICY,
 	KEY_REDIRECTION,
 	KEY_DATABASE_GROWTH_INCREMENT,
-	KEY_FILESYSTEM_CACHE_THRESHOLD,
-	KEY_RELAXED_ALIAS_CHECKING,
 	KEY_TRACE_CONFIG,
 	KEY_MAX_TRACELOG_SIZE,
-	KEY_FILESYSTEM_CACHE_SIZE,
 	KEY_PLUG_PROVIDERS,
 	KEY_PLUG_AUTH_SERVER,
 	KEY_PLUG_AUTH_CLIENT,
@@ -171,8 +168,6 @@ enum ConfigKey
 	KEY_REMOTE_ACCESS,
 	KEY_IPV6_V6ONLY,
 	KEY_WIRE_COMPRESSION,
-	KEY_MAX_IDENTIFIER_BYTE_LENGTH,
-	KEY_MAX_IDENTIFIER_CHAR_LENGTH,
 	KEY_ENCRYPT_SECURITY_DATABASE,
 	KEY_STMT_TIMEOUT,
 	KEY_CONN_IDLE_TIMEOUT,
@@ -184,7 +179,6 @@ enum ConfigKey
 	KEY_SNAPSHOTS_MEM_SIZE,
 	KEY_TIP_CACHE_BLOCK_SIZE,
 	KEY_READ_CONSISTENCY,
-	KEY_CLEAR_GTT_RETAINING,
 	KEY_DATA_TYPE_COMPATIBILITY,
 	KEY_USE_FILESYSTEM_CACHE,
 	KEY_INLINE_SORT_THRESHOLD,
@@ -260,11 +254,8 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_STRING,	"GCPolicy",					false,	nullptr},	// garbage collection policy
 	{TYPE_BOOLEAN,	"Redirection",				true,	false},
 	{TYPE_INTEGER,	"DatabaseGrowthIncrement",	false,	128 * 1048576},	// bytes
-	{TYPE_INTEGER,	"FileSystemCacheThreshold",	false,	65536},		// page buffers
-	{TYPE_BOOLEAN,	"RelaxedAliasChecking",		true,	false},		// if true relax strict alias checking rules in DSQL a bit
 	{TYPE_STRING,	"AuditTraceConfigFile",		true,	""},		// location of audit trace configuration file
 	{TYPE_INTEGER,	"MaxUserTraceLogSize",		true,	10},		// maximum size of user session trace log
-	{TYPE_INTEGER,	"FileSystemCacheSize",		true,	0},			// percent
 	{TYPE_STRING,	"Providers",				false,	"Remote, " CURRENT_ENGINE ", Loopback"},
 	{TYPE_STRING,	"AuthServer",				false,	"Srp256"},
 #ifdef WIN_NT
@@ -283,8 +274,6 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_BOOLEAN,	"RemoteAccess",				false,	true},
 	{TYPE_BOOLEAN,	"IPv6V6Only",				false,	false},
 	{TYPE_BOOLEAN,	"WireCompression",			false,	false},
-	{TYPE_INTEGER,	"MaxIdentifierByteLength",	false,	(int)MAX_SQL_IDENTIFIER_LEN},
-	{TYPE_INTEGER,	"MaxIdentifierCharLength",	false,	(int)METADATA_IDENTIFIER_CHAR_LEN},
 	{TYPE_BOOLEAN,	"AllowEncryptedSecurityDatabase",	false,	false},
 	{TYPE_INTEGER,	"StatementTimeout",			false,	0},
 	{TYPE_INTEGER,	"ConnectionIdleTimeout",	false,	0},
@@ -304,7 +293,6 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,	"SnapshotsMemSize",			false,	65536},		// bytes
 	{TYPE_INTEGER,	"TipCacheBlockSize",		false,	4194304},	// bytes
 	{TYPE_BOOLEAN,	"ReadConsistency",			false,	true},
-	{TYPE_BOOLEAN,	"ClearGTTAtRetaining",		false,	false},
 	{TYPE_STRING,	"DataTypeCompatibility",	false,	nullptr},
 	{TYPE_BOOLEAN,	"UseFileSystemCache",		false,	true},
 	{TYPE_INTEGER,	"InlineSortThreshold",		false,	1000},		// bytes
@@ -324,8 +312,14 @@ private:
 	static ConfigValue specialProcessing(ConfigKey key, ConfigValue val);
 
 	void loadValues(const ConfigFile& file, const char* srcName);
-	void setupDefaultConfig();
 	void checkValues();
+
+	// set default ServerMode and default values that didn't depends on ServerMode
+	void setupDefaultConfig();
+
+	// set default values that depends on ServerMode and actual values that was
+	// not set in config file
+	void fixDefaults();
 
 	// helper check-value functions
 	void checkIntForLoBound(ConfigKey key, SINT64 loBound, bool setDefault);
@@ -574,12 +568,6 @@ public:
 
 	CONFIG_GET_PER_DB_INT(getDatabaseGrowthIncrement, KEY_DATABASE_GROWTH_INCREMENT);
 
-	CONFIG_GET_PER_DB_INT(getFileSystemCacheThreshold, KEY_FILESYSTEM_CACHE_THRESHOLD);
-
-	CONFIG_GET_GLOBAL_KEY(FB_UINT64, getFileSystemCacheSize, KEY_FILESYSTEM_CACHE_SIZE, getInt);
-
-	CONFIG_GET_GLOBAL_BOOL(getRelaxedAliasChecking, KEY_RELAXED_ALIAS_CHECKING);
-
 	CONFIG_GET_GLOBAL_STR(getAuditTraceConfigFile, KEY_TRACE_CONFIG);
 
 	CONFIG_GET_GLOBAL_KEY(FB_UINT64, getMaxUserTraceLogSize, KEY_MAX_TRACELOG_SIZE, getInt);
@@ -595,10 +583,6 @@ public:
 	CONFIG_GET_PER_DB_BOOL(getRemoteAccess, KEY_REMOTE_ACCESS);
 
 	CONFIG_GET_PER_DB_BOOL(getWireCompression, KEY_WIRE_COMPRESSION);
-
-	CONFIG_GET_PER_DB_INT(getMaxIdentifierByteLength, KEY_MAX_IDENTIFIER_BYTE_LENGTH);
-
-	CONFIG_GET_PER_DB_INT(getMaxIdentifierCharLength, KEY_MAX_IDENTIFIER_CHAR_LENGTH);
 
 	CONFIG_GET_PER_DB_BOOL(getCryptSecurityDatabase, KEY_ENCRYPT_SECURITY_DATABASE);
 
@@ -625,11 +609,9 @@ public:
 
 	CONFIG_GET_PER_DB_BOOL(getReadConsistency, KEY_READ_CONSISTENCY);
 
-	CONFIG_GET_PER_DB_BOOL(getClearGTTAtRetaining, KEY_CLEAR_GTT_RETAINING);
-
 	CONFIG_GET_PER_DB_STR(getDataTypeCompatibility, KEY_DATA_TYPE_COMPATIBILITY);
 
-	bool getUseFileSystemCache(bool* pPresent = nullptr) const;
+	CONFIG_GET_PER_DB_BOOL(getUseFileSystemCache, KEY_USE_FILESYSTEM_CACHE);
 
 	CONFIG_GET_PER_DB_KEY(ULONG, getInlineSortThreshold, KEY_INLINE_SORT_THRESHOLD, getInt);
 

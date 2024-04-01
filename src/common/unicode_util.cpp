@@ -284,7 +284,7 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 
 }
 
-namespace Jrd {
+namespace Firebird {
 
 // encapsulate ICU collations libraries
 struct UnicodeUtil::ICU : public BaseICU
@@ -519,7 +519,7 @@ static void getVersions(const string& configInfo, ObjectsArray<string>& versions
 	charset cs;
 	IntlUtil::initAsciiCharset(&cs);
 
-	AutoPtr<CharSet> ascii(Jrd::CharSet::createInstance(*getDefaultMemoryPool(), 0, &cs));
+	AutoPtr<CharSet> ascii(Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, &cs));
 
 	IntlUtil::SpecificAttributesMap config;
 	IntlUtil::parseSpecificAttributes(ascii, configInfo.length(),
@@ -1425,7 +1425,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 		++attributeCount;
 
 	string collVersion;
-	if (specificAttributes.get(IntlUtil::convertAsciiToUtf16("COLL-VERSION"), collVersion))
+	if (specificAttributes.get(IntlUtil::convertAsciiToUtf16(ATTR_COLL_VERSION), collVersion))
 	{
 		++attributeCount;
 
@@ -1486,7 +1486,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 	tt->texttype_pad_option = (attributes & TEXTTYPE_ATTR_PAD_SPACE) ? true : false;
 
 	string icuVersion;
-	if (specificAttributes.get(IntlUtil::convertAsciiToUtf16("ICU-VERSION"), icuVersion))
+	if (specificAttributes.get(IntlUtil::convertAsciiToUtf16(ATTR_ICU_VERSION), icuVersion))
 		icuVersion = IntlUtil::convertUtf16ToAscii(icuVersion, &error);
 
 	const auto icu = loadICU(icuVersion, collVersion, locale, configInfo);
@@ -2111,4 +2111,4 @@ void UnicodeUtil::Utf16Collation::normalize(ULONG* strLen, const USHORT** str, b
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird

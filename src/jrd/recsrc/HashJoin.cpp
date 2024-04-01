@@ -318,35 +318,10 @@ void HashJoin::internalOpen(thread_db* tdbb) const
 	impure->irsb_flags = irsb_open | irsb_mustread;
 
 	delete impure->irsb_hash_table;
+	impure->irsb_hash_table = nullptr;
+
 	delete[] impure->irsb_leader_buffer;
-
-	MemoryPool& pool = *tdbb->getDefaultPool();
-
-	const FB_SIZE_T argCount = m_args.getCount();
-
-	impure->irsb_hash_table = FB_NEW_POOL(pool) HashTable(pool, argCount);
-	impure->irsb_leader_buffer = FB_NEW_POOL(pool) UCHAR[m_leader.totalKeyLength];
-
-	UCharBuffer buffer(pool);
-
-	for (FB_SIZE_T i = 0; i < argCount; i++)
-	{
-		// Read and cache the inner streams. While doing that,
-		// hash the join condition values and populate hash tables.
-
-		m_args[i].buffer->open(tdbb);
-
-		ULONG counter = 0;
-		UCHAR* const keyBuffer = buffer.getBuffer(m_args[i].totalKeyLength, false);
-
-		while (m_args[i].buffer->getRecord(tdbb))
-		{
-			const ULONG hash = computeHash(tdbb, request, m_args[i], keyBuffer);
-			impure->irsb_hash_table->put(i, hash, counter++);
-		}
-	}
-
-	impure->irsb_hash_table->sort();
+	impure->irsb_leader_buffer = nullptr;
 
 	m_leader.source->open(tdbb);
 }
@@ -363,10 +338,10 @@ void HashJoin::close(thread_db* tdbb) const
 		impure->irsb_flags &= ~irsb_open;
 
 		delete impure->irsb_hash_table;
-		impure->irsb_hash_table = NULL;
+		impure->irsb_hash_table = nullptr;
 
 		delete[] impure->irsb_leader_buffer;
-		impure->irsb_leader_buffer = NULL;
+		impure->irsb_leader_buffer = nullptr;
 
 		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 			m_args[i].buffer->close(tdbb);
@@ -393,6 +368,38 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 
 			if (!m_leader.source->getRecord(tdbb))
 				return false;
+
+			// We have something to join with, so ensure the hash table is initialized
+
+			if (!impure->irsb_hash_table && !impure->irsb_leader_buffer)
+			{
+				auto& pool = *tdbb->getDefaultPool();
+				const auto argCount = m_args.getCount();
+
+				impure->irsb_hash_table = FB_NEW_POOL(pool) HashTable(pool, argCount);
+				impure->irsb_leader_buffer = FB_NEW_POOL(pool) UCHAR[m_leader.totalKeyLength];
+
+				UCharBuffer buffer(pool);
+
+				for (FB_SIZE_T i = 0; i < argCount; i++)
+				{
+					// Read and cache the inner streams. While doing that,
+					// hash the join condition values and populate hash tables.
+
+					m_args[i].buffer->open(tdbb);
+
+					ULONG counter = 0;
+					const auto keyBuffer = buffer.getBuffer(m_args[i].totalKeyLength, false);
+
+					while (m_args[i].buffer->getRecord(tdbb))
+					{
+						const auto hash = computeHash(tdbb, request, m_args[i], keyBuffer);
+						impure->irsb_hash_table->put(i, hash, counter++);
+					}
+				}
+
+				impure->irsb_hash_table->sort();
+			}
 
 			// Compute and hash the comparison keys
 
@@ -449,7 +456,7 @@ bool HashJoin::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-WriteLockResult HashJoin::lockRecord(thread_db* /*tdbb*/, bool /*skipLocked*/) const
+WriteLockResult HashJoin::lockRecord(thread_db* /*tdbb*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }

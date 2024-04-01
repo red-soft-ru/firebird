@@ -35,7 +35,7 @@
 #include <unicode/utf8.h>
 
 
-using Jrd::UnicodeUtil;
+using Firebird::UnicodeUtil;
 
 
 namespace
@@ -80,11 +80,11 @@ GlobalPtr<IntlUtil::Utf8CharSet> IntlUtil::utf8CharSet;
 IntlUtil::Utf8CharSet::Utf8CharSet(MemoryPool& pool)
 {
 	IntlUtil::initUtf8Charset(&obj);
-	charSet = Jrd::CharSet::createInstance(pool, CS_UTF8, &obj);
+	charSet = Firebird::CharSet::createInstance(pool, CS_UTF8, &obj);
 }
 
 
-string IntlUtil::generateSpecificAttributes(Jrd::CharSet* cs, SpecificAttributesMap& map)
+string IntlUtil::generateSpecificAttributes(Firebird::CharSet* cs, SpecificAttributesMap& map)
 {
 	SpecificAttributesMap::Accessor accessor(&map);
 
@@ -125,7 +125,7 @@ string IntlUtil::generateSpecificAttributes(Jrd::CharSet* cs, SpecificAttributes
 }
 
 
-bool IntlUtil::parseSpecificAttributes(Jrd::CharSet* cs, ULONG len, const UCHAR* s,
+bool IntlUtil::parseSpecificAttributes(Firebird::CharSet* cs, ULONG len, const UCHAR* s,
 									   SpecificAttributesMap* map)
 {
 	// Note that the map isn't cleared.
@@ -523,11 +523,11 @@ bool IntlUtil::initUnicodeCollation(texttype* tt, charset* cs, const ASCII* name
 
 	IntlUtil::SpecificAttributesMap map;
 
-	Jrd::CharSet* charSet = NULL;
+	Firebird::CharSet* charSet = NULL;
 
 	try
 	{
-		charSet = Jrd::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs);
+		charSet = Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs);
 		IntlUtil::parseSpecificAttributes(charSet, specificAttributes.getCount(),
 			specificAttributes.begin(), &map);
 		delete charSet;
@@ -594,7 +594,7 @@ void IntlUtil::finiCharset(charset* cs)
 }
 
 
-ULONG IntlUtil::toLower(Jrd::CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
+ULONG IntlUtil::toLower(Firebird::CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
 	const ULONG* exceptions)
 {
 	const ULONG utf16_length = cs->getConvToUnicode().convertLength(srcLen);
@@ -620,7 +620,7 @@ ULONG IntlUtil::toLower(Jrd::CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG 
 }
 
 
-ULONG IntlUtil::toUpper(Jrd::CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
+ULONG IntlUtil::toUpper(Firebird::CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
 	const ULONG* exceptions)
 {
 	const ULONG utf16_length = cs->getConvToUnicode().convertLength(srcLen);
@@ -646,7 +646,7 @@ ULONG IntlUtil::toUpper(Jrd::CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG 
 }
 
 
-bool IntlUtil::readOneChar(Jrd::CharSet* cs, const UCHAR** s, const UCHAR* end, ULONG* size)
+bool IntlUtil::readOneChar(Firebird::CharSet* cs, const UCHAR** s, const UCHAR* end, ULONG* size)
 {
 	(*s) += *size;
 
@@ -668,7 +668,7 @@ bool IntlUtil::readOneChar(Jrd::CharSet* cs, const UCHAR** s, const UCHAR* end, 
 bool IntlUtil::setupIcuAttributes(charset* cs, const string& specificAttributes,
 	const string& configInfo, string& newSpecificAttributes)
 {
-	AutoPtr<Jrd::CharSet> charSet(Jrd::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs));
+	AutoPtr<Firebird::CharSet> charSet(Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs));
 
 	IntlUtil::SpecificAttributesMap map;
 	if (!IntlUtil::parseSpecificAttributes(charSet, specificAttributes.length(),
@@ -678,7 +678,7 @@ bool IntlUtil::setupIcuAttributes(charset* cs, const string& specificAttributes,
 	}
 
 	string icuVersion;
-	map.get("ICU-VERSION", icuVersion);
+	map.get(ATTR_ICU_VERSION, icuVersion);
 
 	string collVersion;
 	auto icu = UnicodeUtil::getCollVersion(icuVersion, configInfo, collVersion);
@@ -691,20 +691,20 @@ bool IntlUtil::setupIcuAttributes(charset* cs, const string& specificAttributes,
 		int majorVersion, minorVersion;
 		UnicodeUtil::getICUVersion(icu, majorVersion, minorVersion);
 		icuVersion.printf("%d.%d", majorVersion, minorVersion);
-		map.put("ICU-VERSION", icuVersion);
+		map.put(ATTR_ICU_VERSION, icuVersion);
 	}
 
-	map.remove("COLL-VERSION");
+	map.remove(ATTR_COLL_VERSION);
 
 	if (collVersion.hasData())
-		map.put("COLL-VERSION", collVersion);
+		map.put(ATTR_COLL_VERSION, collVersion);
 
 	newSpecificAttributes = IntlUtil::generateSpecificAttributes(charSet, map);
 	return true;
 }
 
 
-string IntlUtil::escapeAttribute(Jrd::CharSet* cs, const string& s)
+string IntlUtil::escapeAttribute(Firebird::CharSet* cs, const string& s)
 {
 	string ret;
 	const UCHAR* p = (const UCHAR*)s.begin();
@@ -739,7 +739,7 @@ string IntlUtil::escapeAttribute(Jrd::CharSet* cs, const string& s)
 }
 
 
-string IntlUtil::unescapeAttribute(Jrd::CharSet* cs, const string& s)
+string IntlUtil::unescapeAttribute(Firebird::CharSet* cs, const string& s)
 {
 	string ret;
 	const UCHAR* p = (const UCHAR*)s.begin();
@@ -753,7 +753,7 @@ string IntlUtil::unescapeAttribute(Jrd::CharSet* cs, const string& s)
 }
 
 
-bool IntlUtil::isAttributeEscape(Jrd::CharSet* cs, const UCHAR* s, ULONG size)
+bool IntlUtil::isAttributeEscape(Firebird::CharSet* cs, const UCHAR* s, ULONG size)
 {
 	UCHAR uc[sizeof(ULONG)];
 	const ULONG uSize = cs->getConvToUnicode().convert(size, s, sizeof(uc), uc);
@@ -762,7 +762,7 @@ bool IntlUtil::isAttributeEscape(Jrd::CharSet* cs, const UCHAR* s, ULONG size)
 }
 
 
-bool IntlUtil::readAttributeChar(Jrd::CharSet* cs, const UCHAR** s, const UCHAR* end, ULONG* size, bool returnEscape)
+bool IntlUtil::readAttributeChar(Firebird::CharSet* cs, const UCHAR** s, const UCHAR* end, ULONG* size, bool returnEscape)
 {
 	if (readOneChar(cs, s, end, size))
 	{

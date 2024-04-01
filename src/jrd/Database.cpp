@@ -51,8 +51,19 @@ namespace Jrd
 {
 	bool Database::onRawDevice() const
 	{
-		const PageSpace* const pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		const auto pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		return pageSpace->onRawDevice();
+	}
+
+	ULONG Database::getIOBlockSize() const
+	{
+		const auto pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		fb_assert(pageSpace && pageSpace->file);
+
+		if ((pageSpace->file->fil_flags & FIL_no_fs_cache) || pageSpace->onRawDevice())
+			return DIRECT_IO_BLOCK_SIZE;
+
+		return PAGE_ALIGNMENT;
 	}
 
 	AttNumber Database::generateAttachmentId()
@@ -362,18 +373,6 @@ namespace Jrd
 			dbb_modules.add(module);
 	}
 
-	void Database::ensureGuid(thread_db* tdbb)
-	{
-		if (readOnly())
-			return;
-
-		if (!dbb_guid.Data1) // It would be better to full check but one field should be enough
-		{
-			GenerateGuid(&dbb_guid);
-			PAG_set_db_guid(tdbb, dbb_guid);
-		}
-	}
-
 	FB_UINT64 Database::getReplSequence(thread_db* tdbb)
 	{
 		USHORT length = sizeof(FB_UINT64);
@@ -552,6 +551,8 @@ namespace Jrd
 		m_replMgr = nullptr;
 
 		delete entry;
+
+		fb_assert(m_tempCacheUsage == 0);
 	}
 
 	LockManager* Database::GlobalObjectHolder::getLockManager()
@@ -591,6 +592,28 @@ namespace Jrd
 				m_replMgr = FB_NEW Replication::Manager(m_id, m_replConfig);
 		}
 		return m_replMgr;
+	}
+
+	bool Database::GlobalObjectHolder::incTempCacheUsage(FB_SIZE_T size)
+	{
+		if (m_tempCacheUsage + size > m_tempCacheLimit)
+			return false;
+
+		const auto old = m_tempCacheUsage.fetch_add(size);
+		if (old + size > m_tempCacheLimit)
+		{
+			m_tempCacheUsage.fetch_sub(size);
+			return false;
+		}
+
+		return true;
+	}
+
+	void Database::GlobalObjectHolder::decTempCacheUsage(FB_SIZE_T size)
+	{
+		fb_assert(m_tempCacheUsage >= size);
+
+		m_tempCacheUsage.fetch_sub(size);
 	}
 
 	GlobalPtr<Database::GlobalObjectHolder::DbIdHash>

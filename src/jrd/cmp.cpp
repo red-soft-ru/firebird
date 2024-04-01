@@ -524,7 +524,7 @@ bool CMP_procedure_arguments(
 			if (argCount > fields.getCount())
 				mismatchStatus << Arg::Gds(isc_wronumarg);
 
-			for (auto pos = 0; pos < positionalArgCount; ++pos)
+			for (auto pos = 0u; pos < positionalArgCount; ++pos)
 			{
 				if (pos < fields.getCount())
 				{
@@ -553,6 +553,7 @@ bool CMP_procedure_arguments(
 		for (auto& parameter : fields)
 		{
 			const auto argValue = argsByName.get(parameter->prm_name);
+			const bool argExists = argsByName.exist(parameter->prm_name);
 
 			if (argValue)
 			{
@@ -560,12 +561,39 @@ bool CMP_procedure_arguments(
 				argsByName.remove(parameter->prm_name);
 			}
 
-			if (isInput && (!argValue || !*argValue))
+			if (!argValue || !*argValue)
 			{
-				if (parameter->prm_default_value)
-					*sourceArgIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+				if (isInput)
+				{
+					if (parameter->prm_default_value)
+						*sourceArgIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+					else if (argExists)	// explicit DEFAULT in caller
+					{
+						FieldInfo fieldInfo;
+
+						if (parameter->prm_mechanism != prm_mech_type_of &&
+							!fb_utils::implicit_domain(parameter->prm_field_source.c_str()))
+						{
+							const MetaNamePair namePair(parameter->prm_field_source, "");
+
+							if (!csb->csb_map_field_info.get(namePair, fieldInfo))
+							{
+								dsc dummyDesc;
+								MET_get_domain(tdbb, csb->csb_pool, parameter->prm_field_source, &dummyDesc, &fieldInfo);
+								csb->csb_map_field_info.put(namePair, fieldInfo);
+							}
+						}
+
+						if (fieldInfo.defaultValue)
+							*sourceArgIt = CMP_clone_node(tdbb, csb, fieldInfo.defaultValue);
+						else
+							*sourceArgIt = NullNode::instance();
+					}
+					else
+						mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+				}
 				else
-					mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+					continue;
 			}
 
 			++sourceArgIt;

@@ -40,6 +40,7 @@
 #include "../dsql/ExprNodes.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/exe.h"
+#include "../jrd/recsrc/RecordSource.h"
 
 namespace Jrd {
 
@@ -309,6 +310,9 @@ public:
 			iter->flags = 0;
 		}
 
+		// Assignment is not currently used in the code and I doubt it should be
+		ConjunctIterator& operator=(const ConjunctIterator& other) = delete;
+
 	private:
 		Conjunct* const begin;
 		const Conjunct* const end;
@@ -320,7 +324,7 @@ public:
 			rewind();
 		}
 
-		explicit ConjunctIterator(const ConjunctIterator& other)
+		ConjunctIterator(const ConjunctIterator& other)
 			: begin(other.begin), end(other.end), iter(other.iter)
 		{}
 	};
@@ -356,55 +360,79 @@ public:
 
 	static double getSelectivity(const BoolExprNode* node)
 	{
-		if (const auto listNode = nodeAs<InListBoolNode>(node))
+		auto factor = REDUCE_SELECTIVITY_FACTOR_OTHER;
+
+		if (const auto binaryNode = nodeAs<BinaryBoolNode>(node))
 		{
-			const auto selectivity = REDUCE_SELECTIVITY_FACTOR_EQUALITY *
-				listNode->list->items.getCount();
-			return MIN(selectivity, MAXIMUM_SELECTIVITY);
+			if (binaryNode->blrOp == blr_and)
+				factor = getSelectivity(binaryNode->arg1) * getSelectivity(binaryNode->arg2);
+			else if (binaryNode->blrOp == blr_or)
+				factor = getSelectivity(binaryNode->arg1) + getSelectivity(binaryNode->arg2);
+			else
+				fb_assert(false);
 		}
-
-		if (nodeIs<MissingBoolNode>(node))
-			return REDUCE_SELECTIVITY_FACTOR_EQUALITY;
-
-		if (const auto cmpNode = nodeAs<ComparativeBoolNode>(node))
+		else if (const auto listNode = nodeAs<InListBoolNode>(node))
+		{
+			factor = REDUCE_SELECTIVITY_FACTOR_EQUALITY * listNode->list->items.getCount();
+		}
+		else if (nodeIs<MissingBoolNode>(node))
+		{
+			factor = REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+		}
+		else if (const auto cmpNode = nodeAs<ComparativeBoolNode>(node))
 		{
 			switch (cmpNode->blrOp)
 			{
 			case blr_eql:
 			case blr_equiv:
-				return REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+				factor = REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+				break;
 
 			case blr_gtr:
 			case blr_geq:
-				return REDUCE_SELECTIVITY_FACTOR_GREATER;
+				factor = REDUCE_SELECTIVITY_FACTOR_GREATER;
+				break;
 
 			case blr_lss:
 			case blr_leq:
-				return REDUCE_SELECTIVITY_FACTOR_LESS;
+				factor = REDUCE_SELECTIVITY_FACTOR_LESS;
+				break;
 
 			case blr_between:
-				return REDUCE_SELECTIVITY_FACTOR_BETWEEN;
+				factor = REDUCE_SELECTIVITY_FACTOR_BETWEEN;
+				break;
 
 			case blr_starting:
-				return REDUCE_SELECTIVITY_FACTOR_STARTING;
+				factor = REDUCE_SELECTIVITY_FACTOR_STARTING;
+				break;
 
 			default:
 				break;
 			}
 		}
 
-		return REDUCE_SELECTIVITY_FACTOR_OTHER;
+		// dimitr:
+		//
+		// Adjust to values similar to those used when the index selectivity is missing.
+		// The final value will be in the range [0.1 .. 0.5] that also matches the v3/v4 logic.
+		// This estimation is quite pessimistic but it seems to work better in practice,
+		// especially when multiple unmatchable booleans are used.
+
+		const auto adjustment = DEFAULT_SELECTIVITY / REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+		const auto selectivity = factor * adjustment;
+
+		return MIN(selectivity, MAXIMUM_SELECTIVITY / 2);
 	}
 
 	static void adjustSelectivity(double& selectivity, double factor, double cardinality)
 	{
-		if (cardinality)
-		{
-			const auto minSelectivity = 1 / cardinality;
-			const auto diffSelectivity = selectivity > minSelectivity ?
-				selectivity - minSelectivity : 0;
-			selectivity = minSelectivity + diffSelectivity * factor;
-		}
+		if (!cardinality)
+			cardinality = DEFAULT_CARDINALITY;
+
+		const auto minSelectivity = MAXIMUM_SELECTIVITY / cardinality;
+		const auto diffSelectivity = selectivity > minSelectivity ?
+			selectivity - minSelectivity : 0;
+		selectivity = minSelectivity + diffSelectivity * factor;
 	}
 
 	static RecordSource* compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse)
@@ -473,6 +501,17 @@ public:
 	RecordSource* applyLocalBoolean(RecordSource* rsb,
 									const StreamList& streams,
 									ConjunctIterator& iter);
+	RecordSource* applyResidualBoolean(RecordSource* rsb);
+
+	BoolExprNode* composeBoolean(ConjunctIterator& iter,
+								 double* selectivity = nullptr);
+
+	BoolExprNode* composeBoolean(double* selectivity = nullptr)
+	{
+		auto iter = getBaseConjuncts();
+		return composeBoolean(iter, selectivity);
+	}
+
 	bool checkEquiJoin(BoolExprNode* boolean);
 	bool getEquiJoinKeys(BoolExprNode* boolean,
 						 NestConst<ValueExprNode>* node1,
@@ -502,9 +541,6 @@ private:
 						   RiverList& rivers,
 						   SortNode** sortClause,
 						   const PlanNode* planClause);
-	RecordSource* generateOuterJoin(RiverList& rivers,
-								    SortNode** sortClause);
-	RecordSource* generateResidualBoolean(RecordSource* rsb);
 	bool getEquiJoinKeys(NestConst<ValueExprNode>& node1,
 						 NestConst<ValueExprNode>& node2,
 						 bool needCast);
@@ -524,7 +560,7 @@ private:
 	unsigned baseParentConjuncts = 0;		// number of conjuncts in our rse + distributed with parent, next are parent
 	unsigned baseMissingConjuncts = 0;		// number of conjuncts in our and parent rse, but without missing
 
-	StreamList compileStreams, bedStreams, keyStreams, subStreams, outerStreams;
+	StreamList compileStreams, bedStreams, keyStreams, outerStreams;
 	ConjunctList conjuncts;
 };
 
@@ -571,6 +607,7 @@ struct IndexScratchSegment
 	bool excludeUpper = false;					// exclude upper bound value from scan
 	unsigned scope = 0;							// highest scope level
 	segmentScanType scanType = segmentScanNone;	// scan type
+	SSHORT scale = 0;							// scale for SINT64/Int128-based segment of index
 
 	MatchedBooleanList matches;					// matched booleans
 };
@@ -588,8 +625,8 @@ struct IndexScratch
 	unsigned lowerCount = 0;
 	unsigned upperCount = 0;
 	unsigned nonFullMatchedSegments = 0;
-	bool usePartialKey = false;				// Use INTL_KEY_PARTIAL
-	bool useMultiStartingKeys = false;		// Use INTL_KEY_MULTI_STARTING
+	bool usePartialKey = false;					// Use INTL_KEY_PARTIAL
+	bool useMultiStartingKeys = false;			// Use INTL_KEY_MULTI_STARTING
 	bool useRootListScan = false;
 
 	Firebird::ObjectsArray<IndexScratchSegment> segments;
@@ -652,7 +689,7 @@ public:
 protected:
 	void analyzeNavigation(const InversionCandidateList& inversions);
 	bool betterInversion(const InversionCandidate* inv1, const InversionCandidate* inv2,
-						 bool ignoreUnmatched) const;
+						 bool navigation) const;
 	bool checkIndexCondition(index_desc& idx, MatchedBooleanList& matches) const;
 	bool checkIndexExpression(const index_desc* idx, ValueExprNode* node) const;
 	InversionNode* composeInversion(InversionNode* node1, InversionNode* node2,
@@ -866,6 +903,31 @@ private:
 	StreamInfoList innerStreams;
 	JoinedStreamList joinedStreams;
 	JoinedStreamList bestStreams;
+};
+
+class OuterJoin : private Firebird::PermanentStorage
+{
+	struct OuterJoinStream
+	{
+		RecordSource* rsb = nullptr;
+		StreamType number = INVALID_STREAM;
+	};
+
+public:
+	OuterJoin(thread_db* tdbb, Optimizer* opt,
+			  const RseNode* rse, RiverList& rivers,
+			  SortNode** sortClause);
+
+	RecordSource* generate();
+
+private:
+	RecordSource* process(const JoinType joinType);
+
+	thread_db* const tdbb;
+	Optimizer* const optimizer;
+	CompilerScratch* const csb;
+	SortNode** sortPtr;
+	OuterJoinStream joinStreams[2];
 };
 
 } // namespace Jrd

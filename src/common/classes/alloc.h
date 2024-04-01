@@ -72,7 +72,6 @@
 namespace Firebird {
 
 // Alignment for all memory blocks
-//#define ALLOC_ALIGNMENT 8
 #define ALLOC_ALIGNMENT 16
 
 static inline size_t MEM_ALIGN(size_t value)

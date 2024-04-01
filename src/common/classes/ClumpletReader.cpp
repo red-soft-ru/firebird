@@ -302,8 +302,6 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 	case SpbSendItems:
 		switch (tag)
 		{
-		case isc_info_svc_auth_block:
-			return Wide;
 		case isc_info_end:
 		case isc_info_truncated:
 		case isc_info_error:

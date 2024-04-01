@@ -3811,26 +3811,45 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 		}
 		else
 		{
-			ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, &EngineCallbacks::instance);
 			switch (impure->vlu_desc.dsc_dtype)
 			{
 				case dtype_sql_time:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_sql_time,
+						&EngineCallbacks::instance);
 					*(ISC_TIME*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_time;
 					break;
+				}
 				case dtype_sql_date:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_sql_date,
+						&EngineCallbacks::instance);
 					*(ISC_DATE*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_date;
 					break;
+				}
 				case dtype_timestamp:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_timestamp,
+						&EngineCallbacks::instance);
 					*(ISC_TIMESTAMP*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp;
 					break;
+				}
 				case dtype_sql_time_tz:
 				case dtype_ex_time_tz:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_sql_time_tz,
+						&EngineCallbacks::instance);
 					*(ISC_TIME_TZ*) impure->vlu_desc.dsc_address = TimeZoneUtil::timeStampTzToTimeTz(timestampTZ);
 					break;
+				}
 				case dtype_timestamp_tz:
 				case dtype_ex_timestamp_tz:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_timestamp_tz,
+						&EngineCallbacks::instance);
 					*(ISC_TIMESTAMP_TZ*) impure->vlu_desc.dsc_address = timestampTZ;
 					break;
+				}
 			}
 		}
 	}
@@ -5315,11 +5334,8 @@ ValueExprNode* DerivedExprNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	SortedStreamList newStreams;
 
-	for (const auto i : internalStreamList)
-	{
-		markVariant(csb, i);
-		expandViewStreams(csb, i, newStreams);
-	}
+	for (const auto stream : internalStreamList)
+		expandViewStreams(csb, stream, newStreams);
 
 #ifdef CMP_DEBUG
 	for (const auto i : newStreams)
@@ -5327,7 +5343,10 @@ ValueExprNode* DerivedExprNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	csb->dump("\n");
 #endif
 
-	internalStreamList.assign(newStreams.begin(), newStreams.getCount());
+	for (const auto stream : newStreams)
+		markVariant(csb, stream);
+
+	internalStreamList.assign(newStreams);
 
 	return this;
 }
@@ -6165,214 +6184,100 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 	ValueExprNode* node = NULL; // This var must be initialized.
 	DsqlContextStack ambiguousCtxStack;
 
-	bool resolveByAlias = true;
-	const bool relaxedAliasChecking = Config::getRelaxedAliasChecking();
-
-	while (true)
+	// AB: Loop through the scope_levels starting by its own.
+	bool done = false;
+	USHORT currentScopeLevel = dsqlScratch->scopeLevel + 1;
+	for (; currentScopeLevel > 0 && !done; --currentScopeLevel)
 	{
-		// AB: Loop through the scope_levels starting by its own.
-		bool done = false;
-		USHORT currentScopeLevel = dsqlScratch->scopeLevel + 1;
-		for (; currentScopeLevel > 0 && !done; --currentScopeLevel)
+		// If we've found a node we're done.
+		if (node)
+			break;
+
+		for (DsqlContextStack::iterator stack(*dsqlScratch->context); stack.hasData(); ++stack)
 		{
-			// If we've found a node we're done.
-			if (node)
-				break;
+			dsql_ctx* context = stack.object();
 
-			for (DsqlContextStack::iterator stack(*dsqlScratch->context); stack.hasData(); ++stack)
+			if (context->ctx_scope_level != currentScopeLevel - 1 ||
+				((context->ctx_flags & CTX_cursor) && dsqlQualifier.isEmpty()) ||
+				(!(context->ctx_flags & CTX_cursor) && dsqlCursorField))
 			{
-				dsql_ctx* context = stack.object();
+				continue;
+			}
 
-				if (context->ctx_scope_level != currentScopeLevel - 1 ||
-					((context->ctx_flags & CTX_cursor) && dsqlQualifier.isEmpty()) ||
-					(!(context->ctx_flags & CTX_cursor) && dsqlCursorField))
+			dsql_fld* field = resolveContext(dsqlScratch, dsqlQualifier, context);
+
+			// AB: When there's no relation and no procedure then we have a derived table.
+			const bool isDerivedTable =
+				(!context->ctx_procedure && !context->ctx_relation && context->ctx_rse);
+
+			if (field)
+			{
+				// If there's no name then we have most probable an asterisk that
+				// needs to be exploded. This should be handled by the caller and
+				// when the caller can handle this, list is true.
+				if (dsqlName.isEmpty())
 				{
-					continue;
+					if (list)
+					{
+						dsql_ctx* stackContext = stack.object();
+
+						if (context->ctx_relation)
+						{
+							RelationSourceNode* relNode = FB_NEW_POOL(*tdbb->getDefaultPool())
+								RelationSourceNode(*tdbb->getDefaultPool());
+							relNode->dsqlContext = stackContext;
+							*list = relNode;
+						}
+						else if (context->ctx_procedure)
+						{
+							ProcedureSourceNode* procNode = FB_NEW_POOL(*tdbb->getDefaultPool())
+								ProcedureSourceNode(*tdbb->getDefaultPool());
+							procNode->dsqlContext = stackContext;
+							*list = procNode;
+						}
+						//// TODO: LocalTableSourceNode
+
+						fb_assert(*list);
+						return NULL;
+					}
+
+					break;
 				}
 
-				dsql_fld* field = resolveContext(dsqlScratch, dsqlQualifier, context, resolveByAlias);
+				NestConst<ValueExprNode> usingField = NULL;
 
-				// AB: When there's no relation and no procedure then we have a derived table.
-				const bool isDerivedTable =
-					(!context->ctx_procedure && !context->ctx_relation && context->ctx_rse);
-
-				if (field)
+				for (; field; field = field->fld_next)
 				{
-					// If there's no name then we have most probable an asterisk that
-					// needs to be exploded. This should be handled by the caller and
-					// when the caller can handle this, list is true.
-					if (dsqlName.isEmpty())
+					if (field->fld_name == dsqlName.c_str())
 					{
-						if (list)
+						if (dsqlQualifier.isEmpty())
 						{
-							dsql_ctx* stackContext = stack.object();
-
-							if (context->ctx_relation)
+							if (!context->getImplicitJoinField(field->fld_name, usingField))
 							{
-								RelationSourceNode* relNode = FB_NEW_POOL(*tdbb->getDefaultPool())
-									RelationSourceNode(*tdbb->getDefaultPool());
-								relNode->dsqlContext = stackContext;
-								*list = relNode;
-							}
-							else if (context->ctx_procedure)
-							{
-								ProcedureSourceNode* procNode = FB_NEW_POOL(*tdbb->getDefaultPool())
-									ProcedureSourceNode(*tdbb->getDefaultPool());
-								procNode->dsqlContext = stackContext;
-								*list = procNode;
-							}
-							//// TODO: LocalTableSourceNode
-
-							fb_assert(*list);
-							return NULL;
-						}
-
-						break;
-					}
-
-					NestConst<ValueExprNode> usingField = NULL;
-
-					for (; field; field = field->fld_next)
-					{
-						if (field->fld_name == dsqlName.c_str())
-						{
-							if (dsqlQualifier.isEmpty())
-							{
-								if (!context->getImplicitJoinField(field->fld_name, usingField))
-								{
-									field = NULL;
-									break;
-								}
-
-								if (usingField)
-									field = NULL;
-							}
-
-							ambiguousCtxStack.push(context);
-							break;
-						}
-					}
-
-					if ((context->ctx_flags & CTX_view_with_check_store) && !field)
-					{
-						node = NullNode::instance();
-						/*** Do not set line/column of shared node.
-						node->line = line;
-						node->column = column;
-						***/
-					}
-					else if (dsqlQualifier.hasData() && !field)
-					{
-						if (!(context->ctx_flags & CTX_view_with_check_modify))
-						{
-							// If a qualifier was present and we didn't find
-							// a matching field then we should stop searching.
-							// Column unknown error will be raised at bottom of function.
-							done = true;
-							break;
-						}
-					}
-					else if (field || usingField)
-					{
-						// Intercept any reference to a field with datatype that
-						// did not exist prior to V6 and post an error
-
-						// CVC: Stop here if this is our second or third iteration.
-						// Anyway, we can't report more than one ambiguity to the status vector.
-						// AB: But only if we're on different scope level, because a
-						// node inside the same context should have priority.
-						if (node)
-							continue;
-
-						ValueListNode* indices = dsqlIndices ?
-							doDsqlPass(dsqlScratch, dsqlIndices, false) : NULL;
-
-						if (context->ctx_flags & CTX_null)
-							node = NullNode::instance();
-						else
-						{
-							if (field)
-								node = MAKE_field(context, field, indices);
-							else
-								node = list ? usingField.getObject() : doDsqlPass(dsqlScratch, usingField, false);
-
-							node->line = line;
-							node->column = column;
-						}
-					}
-				}
-				else if (isDerivedTable)
-				{
-					// if an qualifier is present check if we have the same derived
-					// table else continue;
-					if (dsqlQualifier.hasData())
-					{
-						if (context->ctx_alias.hasData())
-						{
-							if (dsqlQualifier != context->ctx_alias)
-								continue;
-						}
-						else
-							continue;
-					}
-
-					// If there's no name then we have most probable a asterisk that
-					// needs to be exploded. This should be handled by the caller and
-					// when the caller can handle this, list is true.
-					if (dsqlName.isEmpty())
-					{
-						if (list)
-						{
-							// Return node which PASS1_expand_select_node() can deal with it.
-							*list = context->ctx_rse;
-							return NULL;
-						}
-
-						break;
-					}
-
-					// Because every select item has an alias we can just walk
-					// through the list and return the correct node when found.
-					ValueListNode* rseItems = context->ctx_rse->dsqlSelectList;
-
-					for (auto& rseItem : rseItems->items)
-					{
-						DerivedFieldNode* selectItem = nodeAs<DerivedFieldNode>(rseItem);
-
-						// select-item should always be a alias!
-						if (selectItem)
-						{
-							NestConst<ValueExprNode> usingField = NULL;
-
-							if (dsqlQualifier.isEmpty())
-							{
-								if (!context->getImplicitJoinField(dsqlName, usingField))
-									break;
-							}
-
-							if (dsqlName == selectItem->name || usingField)
-							{
-								// This is a matching item so add the context to the ambiguous list.
-								ambiguousCtxStack.push(context);
-
-								// Stop here if this is our second or more iteration.
-								if (node)
-									break;
-
-								node = usingField ? usingField : rseItem;
+								field = NULL;
 								break;
 							}
-						}
-						else
-						{
-							// Internal dsql error: alias type expected by pass1_field
-							ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-									  Arg::Gds(isc_dsql_command_err) <<
-									  Arg::Gds(isc_dsql_derived_alias_field));
-						}
-					}
 
-					if (!node && dsqlQualifier.hasData())
+							if (usingField)
+								field = NULL;
+						}
+
+						ambiguousCtxStack.push(context);
+						break;
+					}
+				}
+
+				if ((context->ctx_flags & CTX_view_with_check_store) && !field)
+				{
+					node = NullNode::instance();
+					/*** Do not set line/column of shared node.
+					node->line = line;
+					node->column = column;
+					***/
+				}
+				else if (dsqlQualifier.hasData() && !field)
+				{
+					if (!(context->ctx_flags & CTX_view_with_check_modify))
 					{
 						// If a qualifier was present and we didn't find
 						// a matching field then we should stop searching.
@@ -6381,16 +6286,116 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 						break;
 					}
 				}
+				else if (field || usingField)
+				{
+					// Intercept any reference to a field with datatype that
+					// did not exist prior to V6 and post an error
+
+					// CVC: Stop here if this is our second or third iteration.
+					// Anyway, we can't report more than one ambiguity to the status vector.
+					// AB: But only if we're on different scope level, because a
+					// node inside the same context should have priority.
+					if (node)
+						continue;
+
+					ValueListNode* indices = dsqlIndices ?
+						doDsqlPass(dsqlScratch, dsqlIndices, false) : NULL;
+
+					if (context->ctx_flags & CTX_null)
+						node = NullNode::instance();
+					else
+					{
+						if (field)
+							node = MAKE_field(context, field, indices);
+						else
+							node = list ? usingField.getObject() : doDsqlPass(dsqlScratch, usingField, false);
+
+						node->line = line;
+						node->column = column;
+					}
+				}
+			}
+			else if (isDerivedTable)
+			{
+				// if an qualifier is present check if we have the same derived
+				// table else continue;
+				if (dsqlQualifier.hasData())
+				{
+					if (context->ctx_alias.hasData())
+					{
+						if (dsqlQualifier != context->ctx_alias)
+							continue;
+					}
+					else
+						continue;
+				}
+
+				// If there's no name then we have most probable a asterisk that
+				// needs to be exploded. This should be handled by the caller and
+				// when the caller can handle this, list is true.
+				if (dsqlName.isEmpty())
+				{
+					if (list)
+					{
+						// Return node which PASS1_expand_select_node() can deal with it.
+						*list = context->ctx_rse;
+						return NULL;
+					}
+
+					break;
+				}
+
+				// Because every select item has an alias we can just walk
+				// through the list and return the correct node when found.
+				ValueListNode* rseItems = context->ctx_rse->dsqlSelectList;
+
+				for (auto& rseItem : rseItems->items)
+				{
+					DerivedFieldNode* selectItem = nodeAs<DerivedFieldNode>(rseItem);
+
+					// select-item should always be a alias!
+					if (selectItem)
+					{
+						NestConst<ValueExprNode> usingField = NULL;
+
+						if (dsqlQualifier.isEmpty())
+						{
+							if (!context->getImplicitJoinField(dsqlName, usingField))
+								break;
+						}
+
+						if (dsqlName == selectItem->name || usingField)
+						{
+							// This is a matching item so add the context to the ambiguous list.
+							ambiguousCtxStack.push(context);
+
+							// Stop here if this is our second or more iteration.
+							if (node)
+								break;
+
+							node = usingField ? usingField : rseItem;
+							break;
+						}
+					}
+					else
+					{
+						// Internal dsql error: alias type expected by pass1_field
+						ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+								  Arg::Gds(isc_dsql_command_err) <<
+								  Arg::Gds(isc_dsql_derived_alias_field));
+					}
+				}
+
+				if (!node && dsqlQualifier.hasData())
+				{
+					// If a qualifier was present and we didn't find
+					// a matching field then we should stop searching.
+					// Column unknown error will be raised at bottom of function.
+					done = true;
+					break;
+				}
 			}
 		}
-
-		if (node)
-			break;
-
-		if (resolveByAlias && !dsqlScratch->checkConstraintTrigger && relaxedAliasChecking)
-			resolveByAlias = false;
-		else
-			break;
 	}
 
 	// CVC: We can't return blindly if this is a check constraint, because there's
@@ -6404,19 +6409,14 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 	// Clean up stack
 	ambiguousCtxStack.clear();
 
-	if (node)
-		return node;
+	if (!node)
+		PASS1_field_unknown(dsqlQualifier.nullStr(), dsqlName.nullStr(), this);
 
-	PASS1_field_unknown(dsqlQualifier.nullStr(), dsqlName.nullStr(), this);
-
-	// CVC: PASS1_field_unknown() calls ERRD_post() that never returns, so the next line
-	// is only to make the compiler happy.
-	return NULL;
+	return node;
 }
 
 // Attempt to resolve field against context. Return first field in context if successful, NULL if not.
-dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const MetaName& qualifier,
-	dsql_ctx* context, bool resolveByAlias)
+dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const MetaName& qualifier, dsql_ctx* context)
 {
 	// CVC: Warning: the second param, "name" is not used anymore and
 	// therefore it was removed. Thus, the local variable "table_name"
@@ -6428,20 +6428,20 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Meta
 	if ((dsqlScratch->flags & DsqlCompilerScratch::FLAG_RETURNING_INTO) &&
 		(context->ctx_flags & CTX_returning))
 	{
-		return NULL;
+		return nullptr;
 	}
 
 	dsql_rel* relation = context->ctx_relation;
 	dsql_prc* procedure = context->ctx_procedure;
 	if (!relation && !procedure)
-		return NULL;
+		return nullptr;
 
 	// if there is no qualifier, then we cannot match against
 	// a context of a different scoping level
 	// AB: Yes we can, but the scope level where the field is has priority.
 	/***
 	if (qualifier.isEmpty() && context->ctx_scope_level != dsqlScratch->scopeLevel)
-		return NULL;
+		return nullptr;
 	***/
 
 	// AB: If this context is a system generated context as in NEW/OLD inside
@@ -6451,43 +6451,38 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Meta
 	// An exception is a check-constraint that is allowed to reference fields
 	// without the qualifier.
 	if (!dsqlScratch->checkConstraintTrigger && (context->ctx_flags & CTX_system) && qualifier.isEmpty())
-		return NULL;
+		return nullptr;
 
-	const TEXT* table_name = NULL;
-	if (context->ctx_internal_alias.hasData() && resolveByAlias)
-		table_name = context->ctx_internal_alias.c_str();
+	MetaString aliasName = context->ctx_internal_alias;
 
 	// AB: For a check constraint we should ignore the alias if the alias
 	// contains the "NEW" alias. This is because it is possible
 	// to reference a field by the complete table-name as alias
 	// (see EMPLOYEE table in examples for a example).
-	if (dsqlScratch->checkConstraintTrigger && table_name)
+	if (dsqlScratch->checkConstraintTrigger && aliasName.hasData())
 	{
 		// If a qualifier is present and it's equal to the alias then we've already the right table-name
-		if (!(qualifier.hasData() && qualifier == table_name))
+		if (qualifier.isEmpty() || qualifier != aliasName)
 		{
-			if (strcmp(table_name, NEW_CONTEXT_NAME) == 0)
-				table_name = NULL;
-			else if (strcmp(table_name, OLD_CONTEXT_NAME) == 0)
+			if (aliasName == NEW_CONTEXT_NAME)
+				aliasName.clear();
+			else if (aliasName == OLD_CONTEXT_NAME)
 			{
 				// Only use the OLD context if it is explicit used. That means the
 				// qualifer should hold the "OLD" alias.
-				return NULL;
+				return nullptr;
 			}
 		}
 	}
 
-	if (!table_name)
-	{
-		if (relation)
-			table_name = relation->rel_name.c_str();
-		else
-			table_name = procedure->prc_name.identifier.c_str();
-	}
+	if (aliasName.isEmpty())
+		aliasName = relation ? relation->rel_name : procedure->prc_name.identifier;
+
+	fb_assert(aliasName.hasData());
 
 	// If a context qualifier is present, make sure this is the proper context
-	if (qualifier.hasData() && qualifier != table_name)
-		return NULL;
+	if (qualifier.hasData() && qualifier != aliasName)
+		return nullptr;
 
 	// Lookup field in relation or procedure
 
@@ -10082,45 +10077,34 @@ ValueExprNode* RecordKeyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	}
 	else
 	{
-		const bool cfgRlxAlias = Config::getRelaxedAliasChecking();
-		bool rlxAlias = false;
-
-		for (;;)
+		for (DsqlContextStack::iterator stack(*dsqlScratch->context); stack.hasData(); ++stack)
 		{
-			for (DsqlContextStack::iterator stack(*dsqlScratch->context); stack.hasData(); ++stack)
+			dsql_ctx* context = stack.object();
+
+			if ((!context->ctx_relation ||
+				context->ctx_relation->rel_name != dsqlQualifier ||
+				context->ctx_internal_alias.hasData()) &&
+				(context->ctx_internal_alias.isEmpty() ||
+				strcmp(dsqlQualifier.c_str(), context->ctx_internal_alias.c_str()) != 0))
 			{
-				dsql_ctx* context = stack.object();
-
-				if ((!context->ctx_relation ||
-						context->ctx_relation->rel_name != dsqlQualifier ||
-						!rlxAlias && context->ctx_internal_alias.hasData()) &&
-					(context->ctx_internal_alias.isEmpty() ||
-						strcmp(dsqlQualifier.c_str(), context->ctx_internal_alias.c_str()) != 0))
-				{
-					continue;
-				}
-
-				if (!context->ctx_relation)
-					raiseError(context);
-
-				if (context->ctx_flags & CTX_null)
-					return NullNode::instance();
-
-				//// TODO: LocalTableSourceNode
-				auto relNode = FB_NEW_POOL(dsqlScratch->getPool()) RelationSourceNode(
-					dsqlScratch->getPool());
-				relNode->dsqlContext = context;
-
-				auto node = FB_NEW_POOL(dsqlScratch->getPool()) RecordKeyNode(dsqlScratch->getPool(), blrOp);
-				node->dsqlRelation = relNode;
-
-				return node;
+				continue;
 			}
 
-			if (rlxAlias == cfgRlxAlias)
-				break;
+			if (!context->ctx_relation)
+				raiseError(context);
 
-			rlxAlias = cfgRlxAlias;
+			if (context->ctx_flags & CTX_null)
+				return NullNode::instance();
+
+			//// TODO: LocalTableSourceNode
+			auto relNode = FB_NEW_POOL(dsqlScratch->getPool()) RelationSourceNode(
+				dsqlScratch->getPool());
+			relNode->dsqlContext = context;
+
+			auto node = FB_NEW_POOL(dsqlScratch->getPool()) RecordKeyNode(dsqlScratch->getPool(), blrOp);
+			node->dsqlRelation = relNode;
+
+			return node;
 		}
 	}
 
@@ -12547,9 +12531,10 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 static RegisterNode<TrimNode> regTrimNode({blr_trim});
 
-TrimNode::TrimNode(MemoryPool& pool, UCHAR aWhere, ValueExprNode* aValue, ValueExprNode* aTrimChars)
+TrimNode::TrimNode(MemoryPool& pool, UCHAR aWhere, UCHAR aWhat, ValueExprNode* aValue, ValueExprNode* aTrimChars)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_TRIM>(pool),
 	  where(aWhere),
+	  what(aWhat),
 	  value(aValue),
 	  trimChars(aTrimChars)
 {
@@ -12560,9 +12545,9 @@ DmlNode* TrimNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb
 	UCHAR where = csb->csb_blr_reader.getByte();
 	UCHAR what = csb->csb_blr_reader.getByte();
 
-	TrimNode* node = FB_NEW_POOL(pool) TrimNode(pool, where);
+	TrimNode* node = FB_NEW_POOL(pool) TrimNode(pool, where, what);
 
-	if (what == blr_trim_characters)
+	if (what == blr_trim_characters || what == blr_trim_multi_characters)
 		node->trimChars = PAR_parse_value(tdbb, csb);
 
 	node->value = PAR_parse_value(tdbb, csb);
@@ -12583,7 +12568,7 @@ string TrimNode::internalPrint(NodePrinter& printer) const
 
 ValueExprNode* TrimNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	TrimNode* node = FB_NEW_POOL(dsqlScratch->getPool()) TrimNode(dsqlScratch->getPool(), where,
+	TrimNode* node = FB_NEW_POOL(dsqlScratch->getPool()) TrimNode(dsqlScratch->getPool(), where, what,
 		doDsqlPass(dsqlScratch, value), doDsqlPass(dsqlScratch, trimChars));
 
 	// Try to force trimChars to be same type as value: TRIM(? FROM FIELD)
@@ -12611,7 +12596,7 @@ void TrimNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (trimChars)
 	{
-		dsqlScratch->appendUChar(blr_trim_characters);
+		dsqlScratch->appendUChar(what);
 		GEN_expr(dsqlScratch, trimChars);
 	}
 	else
@@ -12681,7 +12666,7 @@ void TrimNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 
 ValueExprNode* TrimNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
-	TrimNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) TrimNode(*tdbb->getDefaultPool(), where);
+	TrimNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) TrimNode(*tdbb->getDefaultPool(), where, what);
 	node->value = copier.copy(tdbb, value);
 	if (trimChars)
 		node->trimChars = copier.copy(tdbb, trimChars);
@@ -12816,34 +12801,87 @@ dsc* TrimNode::execute(thread_db* tdbb, Request* request) const
 
 	SLONG offsetLead = 0;
 	SLONG offsetTrail = valueCanonicalLen;
+	const bool multi = what == blr_trim_multi_characters;
 
 	// CVC: Avoid endless loop with zero length trim chars.
 	if (charactersCanonicalLen)
 	{
-		if (where == blr_trim_both || where == blr_trim_leading)
+		int charSize = charactersCanonical.getCount() / charactersLength;
+		if (!multi)
 		{
-			// CVC: Prevent surprises with offsetLead < valueCanonicalLen; it may fail.
-			for (; offsetLead + charactersCanonicalLen <= valueCanonicalLen;
-				 offsetLead += charactersCanonicalLen)
+			if (where == blr_trim_both || where == blr_trim_leading)
 			{
-				if (memcmp(charactersCanonical.begin(), &valueCanonical[offsetLead],
-						charactersCanonicalLen) != 0)
+				// CVC: Prevent surprises with offsetLead < valueCanonicalLen; it may fail.
+				for (; offsetLead + charactersCanonicalLen <= valueCanonicalLen;
+					 offsetLead += charactersCanonicalLen)
 				{
-					break;
+					if (memcmp(charactersCanonical.begin(), &valueCanonical[offsetLead],
+							   charactersCanonicalLen) != 0)
+					{
+						break;
+					}
+				}
+			}
+
+			if (where == blr_trim_both || where == blr_trim_trailing)
+			{
+				for (; offsetTrail - charactersCanonicalLen >= offsetLead;
+					 offsetTrail -= charactersCanonicalLen)
+				{
+					if (memcmp(charactersCanonical.begin(),
+							   &valueCanonical[offsetTrail - charactersCanonicalLen],
+							   charactersCanonicalLen) != 0)
+					{
+						break;
+					}
 				}
 			}
 		}
-
-		if (where == blr_trim_both || where == blr_trim_trailing)
+		else
 		{
-			for (; offsetTrail - charactersCanonicalLen >= offsetLead;
-				 offsetTrail -= charactersCanonicalLen)
+			if (where == blr_trim_both || where == blr_trim_leading)
 			{
-				if (memcmp(charactersCanonical.begin(),
-						&valueCanonical[offsetTrail - charactersCanonicalLen],
-						charactersCanonicalLen) != 0)
+				while (offsetLead < valueCanonicalLen)
 				{
-					break;
+					bool found = false;
+					for (int i = 0; i < charactersCanonicalLen; i += charSize)
+					{
+						if (memcmp(&charactersCanonical[i],
+								   &valueCanonical[offsetLead],
+								   charSize) == 0)
+						{
+							found = true;
+							break;
+						}
+					}
+					if (!found)
+					{
+						break;
+					}
+					offsetLead += charSize;
+				}
+			}
+
+			if (where == blr_trim_both || where == blr_trim_trailing)
+			{
+				while (offsetTrail - charSize >= offsetLead)
+				{
+					bool found = false;
+					for (int i = 0; i < charactersCanonicalLen; i += charSize)
+					{
+						if (memcmp(&charactersCanonical[i],
+								   &valueCanonical[offsetTrail - charSize],
+								   charSize) == 0)
+						{
+							found = true;
+							break;
+						}
+					}
+					if (!found)
+					{
+						break;
+					}
+					offsetTrail -= charSize;
 				}
 			}
 		}
@@ -12957,13 +12995,19 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 					else if (!node->function)
 						node->function = Function::lookup(tdbb, name, false);
 
+					if (!node->function)
+					{
+						blrReader.setPos(startPos);
+						PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString());
+					}
+
 					break;
 				}
 
 				case blr_invoke_function_arg_names:
 				{
 					predateCheck(node->function, "blr_invoke_function_type", "blr_invoke_function_arg_names");
-					predateCheck(!node->args, "blr_invoke_function_arg_names", "blr_invoke_function_arg_names");
+					predateCheck(!node->args, "blr_invoke_function_arg_names", "blr_invoke_function_args");
 
 					argNamesPos = blrReader.getPos();
 					USHORT argNamesCount = blrReader.getWord();
@@ -13017,6 +13061,12 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 		else if (!node->function)
 			node->function = Function::lookup(tdbb, name, false);
 
+		if (!node->function)
+		{
+			blrReader.setPos(startPos);
+			PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString());
+		}
+
 		argCount = blrReader.getByte();
 		node->args = PAR_args(tdbb, csb, argCount, MAX(argCount, node->function->fun_inputs));
 	}
@@ -13029,11 +13079,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 			"blr_invoke_function_arg_names count cannot be greater than blr_invoke_function_args");
 	}
 
-	if (!node->function)
-	{
-		blrReader.setPos(startPos);
-		PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString());
-	}
+	fb_assert(node->function);
 
 	if (node->function->isImplemented() && !node->function->isDefined())
 	{
@@ -13067,7 +13113,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 		if (argCount > node->function->fun_inputs)
 			mismatchStatus << Arg::Gds(isc_wronumarg);
 
-		for (auto pos = 0; pos < positionalArgCount; ++pos)
+		for (auto pos = 0u; pos < positionalArgCount; ++pos)
 		{
 			if (pos < node->function->fun_inputs)
 			{
@@ -13096,9 +13142,11 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 	for (auto& parameter : node->function->getInputFields())
 	{
 		NestConst<Jrd::ValueExprNode>* argValue;
+		bool argExists = false;
 
 		if (parameter->prm_name.hasData())
 		{
+			argExists = argsByName.exist(parameter->prm_name);
 			argValue = argsByName.get(parameter->prm_name);
 
 			if (argValue)
@@ -13114,6 +13162,28 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 		{
 			if (parameter->prm_default_value)
 				*argIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+			else if (argExists)	// explicit DEFAULT in caller
+			{
+				FieldInfo fieldInfo;
+
+				if (parameter->prm_mechanism != prm_mech_type_of &&
+					!fb_utils::implicit_domain(parameter->prm_field_source.c_str()))
+				{
+					const MetaNamePair namePair(parameter->prm_field_source, "");
+
+					if (!csb->csb_map_field_info.get(namePair, fieldInfo))
+					{
+						dsc dummyDesc;
+						MET_get_domain(tdbb, csb->csb_pool, parameter->prm_field_source, &dummyDesc, &fieldInfo);
+						csb->csb_map_field_info.put(namePair, fieldInfo);
+					}
+				}
+
+				if (fieldInfo.defaultValue)
+					*argIt = CMP_clone_node(tdbb, csb, fieldInfo.defaultValue);
+				else
+					*argIt = NullNode::instance();
+			}
 			else
 				mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
 		}
@@ -13497,12 +13567,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 
 			funcRequest->setGmtTimeStamp(request->getGmtTimeStamp());
 
-			EXE_start(tdbb, funcRequest, transaction);
-
-			if (inMsgLength != 0)
-				EXE_send(tdbb, funcRequest, 0, inMsgLength, inMsg);
-
-			EXE_receive(tdbb, funcRequest, 1, outMsgLength, outMsg);
+			EXE_execute_function(tdbb, funcRequest, transaction, inMsgLength, inMsg, outMsgLength, outMsg);
 
 			// Clean up all savepoints started during execution of the function
 
@@ -13972,7 +14037,7 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			else
 			{
 				if (!dsqlScratch->outerVarsMap.exist(node->dsqlVar->number))
-					dsqlScratch->outerVarsMap.put(node->dsqlVar->number, dsqlScratch->hiddenVarsNumber++);
+					dsqlScratch->outerVarsMap.put(node->dsqlVar->number, dsqlScratch->reserveVarNumber());
 			}
 		}
 	}

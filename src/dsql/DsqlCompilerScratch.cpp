@@ -298,8 +298,6 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 	if (variable->field->fld_name.hasData())	// Not a function return value
 		putDebugVariable(variable->number, variable->field->fld_name);
 
-	++hiddenVarsNumber;
-
 	if (variable->type != dsql_var::TYPE_INPUT && hostParam && hostParam->dsqlDef->defaultClause)
 	{
 		hostParam->dsqlDef->defaultClause->value =
@@ -377,7 +375,7 @@ void DsqlCompilerScratch::putOuterMaps()
 
 // Make a variable.
 dsql_var* DsqlCompilerScratch::makeVariable(dsql_fld* field, const char* name,
-	const dsql_var::Type type, USHORT msgNumber, USHORT itemNumber, USHORT localNumber)
+	const dsql_var::Type type, USHORT msgNumber, USHORT itemNumber, std::optional<USHORT> localNumber)
 {
 	DEV_BLKCHK(field, dsql_type_fld);
 
@@ -387,7 +385,7 @@ dsql_var* DsqlCompilerScratch::makeVariable(dsql_fld* field, const char* name,
 	dsqlVar->type = type;
 	dsqlVar->msgNumber = msgNumber;
 	dsqlVar->msgItem = itemNumber;
-	dsqlVar->number = localNumber;
+	dsqlVar->number = localNumber.has_value() ? localNumber.value() : nextVarNumber++;
 	dsqlVar->field = field;
 
 	if (field)

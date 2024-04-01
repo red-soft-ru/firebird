@@ -114,33 +114,6 @@ public:
 		: port(prt), replyLength(0), replyData(NULL), stopped(false), wake(false)
 	{ }
 
-	unsigned int callback(unsigned int dataLength, const void* data,
-		unsigned int bufferLength, void* buffer)
-	{
-		if (stopped)
-			return 0;
-
-		if (port->port_protocol < PROTOCOL_VERSION13 || port->port_type != rem_port::INET)
-			return 0;
-
-		Reference r(*port);
-
-		replyData = buffer;
-		replyLength = bufferLength;
-
-		PACKET p;
-		p.p_operation = op_crypt_key_callback;
-		p.p_cc.p_cc_data.cstr_length = dataLength;
-		p.p_cc.p_cc_data.cstr_address = (UCHAR*) data;
-		p.p_cc.p_cc_reply = bufferLength;
-		port->send(&p);
-
-		if (!sem.tryEnter(60))
-			return 0;
-
-		return replyLength;
-	}
-
 	void wakeup(unsigned int wakeLength, const void* wakeData)
 	{
 		if (replyLength > wakeLength)
@@ -167,6 +140,34 @@ public:
 		return stopped;
 	}
 
+	// ICryptKeyCallback implementation
+	unsigned int callback(unsigned int dataLength, const void* data,
+		unsigned int bufferLength, void* buffer) override
+	{
+		if (stopped)
+			return 0;
+
+		if (port->port_protocol < PROTOCOL_VERSION13 || port->port_type != rem_port::INET)
+			return 0;
+
+		Reference r(*port);
+
+		replyData = buffer;
+		replyLength = bufferLength;
+
+		PACKET p;
+		p.p_operation = op_crypt_key_callback;
+		p.p_cc.p_cc_data.cstr_length = dataLength;
+		p.p_cc.p_cc_data.cstr_address = (UCHAR*) data;
+		p.p_cc.p_cc_reply = bufferLength;
+		port->send(&p);
+
+		if (!sem.tryEnter(60))
+			return 0;
+
+		return replyLength;
+	}
+
 private:
 	rem_port* port;
 	Semaphore sem;
@@ -187,27 +188,9 @@ public:
 
 	~CryptKeyCallback()
 	{
+		dispose();
 		if (keyHolder)
 			PluginManagerInterfacePtr()->releasePlugin(keyHolder);
-	}
-
-	unsigned int callback(unsigned int dataLength, const void* data,
-		unsigned int bufferLength, void* buffer)
-	{
-		if (keyCallback)
-			return keyCallback->callback(dataLength, data, bufferLength, buffer);
-
-		if (networkCallback.isStopped())
-			return 0;
-
-		Reference r(*port);
-		loadClientKey();
-		unsigned rc = keyCallback ?
-			keyCallback->callback(dataLength, data, bufferLength, buffer) :
-			// use legacy behavior if holders do wish to accept keys from client
-			networkCallback.callback(dataLength, data, bufferLength, buffer);
-
-		return rc;
 	}
 
 	void loadClientKey()
@@ -256,6 +239,43 @@ public:
 		networkCallback.stop();
 	}
 
+	// ICryptKeyCallback implementation
+	unsigned int callback(unsigned int dataLength, const void* data,
+		unsigned int bufferLength, void* buffer) override
+	{
+		if (keyCallback)
+			return keyCallback->callback(dataLength, data, bufferLength, buffer);
+
+		if (networkCallback.isStopped())
+			return 0;
+
+		Reference r(*port);
+		loadClientKey();
+		unsigned rc = keyCallback ?
+			keyCallback->callback(dataLength, data, bufferLength, buffer) :
+			// use legacy behavior if holders do wish to accept keys from client
+			networkCallback.callback(dataLength, data, bufferLength, buffer);
+
+		return rc;
+	}
+
+	unsigned afterAttach(Firebird::CheckStatusWrapper* st, const char* dbName,
+		const Firebird::IStatus* attStatus) override
+	{
+		return NO_RETRY;
+	}
+
+	void dispose() override
+	{
+		if (keyCallback)
+		{
+			LocalStatus ls;
+			CheckStatusWrapper st(&ls);
+			keyCallback->dispose();
+			keyCallback = nullptr;
+		}
+	}
+
 private:
 	rem_port* port;
 	NetworkCallback networkCallback;
@@ -273,20 +293,25 @@ public:
 	~ServerCallback()
 	{ }
 
-	void wakeup(unsigned int length, const void* data)
+	void wakeup(unsigned int length, const void* data) override
 	{
 		cryptCallback.wakeup(length, data);
 	}
 
-	ICryptKeyCallback* getInterface()
+	ICryptKeyCallback* getInterface() override
 	{
 		cryptCallback.loadClientKey();
 		return &cryptCallback;
 	}
 
-	void stop()
+	void stop() override
 	{
 		cryptCallback.stop();
+	}
+
+	void destroy() override
+	{
+		cryptCallback.dispose();
 	}
 
 private:
@@ -1925,7 +1950,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	{
 		if ((protocol->p_cnct_version == PROTOCOL_VERSION10 ||
 			 (protocol->p_cnct_version >= PROTOCOL_VERSION11 &&
-			  protocol->p_cnct_version <= PROTOCOL_VERSION18)) &&
+			  protocol->p_cnct_version <= PROTOCOL_VERSION19)) &&
 			 (protocol->p_cnct_architecture == arch_generic ||
 			  protocol->p_cnct_architecture == ARCHITECTURE) &&
 			protocol->p_cnct_weight >= weight)
@@ -2494,6 +2519,7 @@ void DatabaseAuth::accept(PACKET* send, Auth::WriterImplementation* authBlock)
 	CheckStatusWrapper status_vector(&ls);
 
 	fb_assert(authPort->port_server_crypt_callback);
+	authPort->port_server_crypt_callback->destroy();
 	provider->setDbCryptCallback(&status_vector, authPort->port_server_crypt_callback->getInterface());
 
 	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
@@ -2512,12 +2538,13 @@ void DatabaseAuth::accept(PACKET* send, Auth::WriterImplementation* authBlock)
 #endif
 			rdb->rdb_port = authPort;
 			rdb->rdb_iface = iface;
+
+			authPort->port_server_crypt_callback->stop();
 		}
 	}
 
 	CSTRING* const s = &send->p_resp.p_resp_data;
 	authPort->extractNewKeys(s);
-	authPort->port_server_crypt_callback->stop();
 	authPort->send_response(send, 0, s->cstr_length, &status_vector, false);
 }
 
@@ -4840,7 +4867,8 @@ ISC_STATUS rem_port::prepare_statement(P_SQLST * prepareL, PACKET* sendL)
 	// stuff isc_info_length in front of info items buffer
 	*info = isc_info_length;
 	memmove(info + 1, prepareL->p_sqlst_items.cstr_address, infoLength++);
-	const unsigned int flags = StatementMetadata::buildInfoFlags(infoLength, info);
+	unsigned flags = StatementMetadata::buildInfoFlags(infoLength, info) |
+		prepareL->p_sqlst_flags;
 
 	ITransaction* iface = NULL;
 	if (transaction)
@@ -6213,6 +6241,7 @@ ISC_STATUS rem_port::service_attach(const char* service_name,
 	CheckStatusWrapper status_vector(&ls);
 
 	fb_assert(port_server_crypt_callback);
+	port_server_crypt_callback->destroy();
 	provider->setDbCryptCallback(&status_vector, port_server_crypt_callback->getInterface());
 
 	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
@@ -6232,9 +6261,10 @@ ISC_STATUS rem_port::service_attach(const char* service_name,
 			rdb->rdb_port = this;
 			Svc* svc = rdb->rdb_svc = FB_NEW Svc;
 			svc->svc_iface = iface;
+
+			port_server_crypt_callback->stop();
 		}
 	}
-	port_server_crypt_callback->stop();
 
 	return this->send_response(sendL, 0, sendL->p_resp.p_resp_data.cstr_length, &status_vector,
 		false);
