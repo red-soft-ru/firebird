@@ -1,6 +1,6 @@
 #include "boost/test/unit_test.hpp"
 #include "../common/classes/fb_string.h"
-
+#include <filesystem>
 #include <string_view>
 
 using namespace Firebird;
@@ -478,35 +478,30 @@ BOOST_AUTO_TEST_CASE(SubstrTest)
 
 BOOST_AUTO_TEST_CASE(LoadFromFileTest)
 {
-	// Find the path of the file 'test.txt' to read from
-	// The file in the same directory
+	namespace fs = std::filesystem;
+	auto tempFilePath = fs::temp_directory_path() / "test.txt";
+	const char* filename = tempFilePath.string().data();
+	FILE *x = fopen(tempFilePath.string().data(), "w+");
 
-	string path = __FILE__;
-	FB_SIZE_T pos = path.rfind('/');
-	if (pos == string::npos)
-	{
-		pos = path.rfind('\\');
-		if (pos == string::npos)
-		{
-			pos = 0;
-		}
-		else
-			++pos;
-	}
-	else
-		++pos;
+	std::string_view line1 = "char lbl[] = \"0123456789\";";
+	std::string_view line2 = ""; // LoadFormFile read from '\n'
+	std::string_view line3 = "//#define CHECK_FATAL_RANGE_EXCEPTION";
 
-	path.resize(pos);
-	path += "test.txt";
+	fwrite(line1.data(), 1, line1.length(), x);
+	fwrite("\n", 1, 1, x);
+	fwrite(line2.data(), 1, line2.length(), x);
+	fwrite("\n", 1, 1, x);
+	fwrite(line3.data(), 1, line3.length(), x);
+	fclose(x);
 
+	x = fopen(filename, "r");
 	string b;
-	FILE *x = fopen(path.data(), "rt");
 	b.LoadFromFile(x);
-	validate(b, "char lbl[] = \"0123456789\";");
+	validate(b, line1);
 	b.LoadFromFile(x);
-	validate(b, "");
+	validate(b, line2);
 	b.LoadFromFile(x);
-	validate(b, "//#define CHECK_FATAL_RANGE_EXCEPTION");
+	validate(b, line3);
 	fclose(x);
 }
 
