@@ -218,7 +218,6 @@ public:
 		m_tdbb_flags(tdbb->tdbb_flags),
 		m_flags(0),
 		m_creation(creation),
-		m_sorts(*m_pool, m_dbb),
 		m_items(*m_pool),
 		m_stop(false),
 		m_countPP(0),
@@ -291,7 +290,6 @@ public:
 		{
 			if (m_sort)
 			{
-				MutexLockGuard guard(getTask()->m_mutex, FB_FUNCTION);
 				delete m_sort;
 				m_sort = NULL;
 			}
@@ -384,8 +382,8 @@ public:
 
 				MutexLockGuard guard(getTask()->m_mutex, FB_FUNCTION);
 
-				m_sort = FB_NEW_POOL(getTask()->m_sorts.getPool())
-							Sort(att->att_database, &getTask()->m_sorts,
+				m_sort = FB_NEW_POOL(m_tra->tra_sorts.getPool())
+							Sort(att->att_database, &m_tra->tra_sorts,
 								 creation->key_length + sizeof(index_sort_record),
 								 2, 1, creation->key_desc, callback, callback_arg);
 
@@ -428,7 +426,6 @@ private:
 	const ULONG m_tdbb_flags;
 	ULONG m_flags;
 	IndexCreation* m_creation;
-	SortOwner m_sorts;
 	bid m_exprBlob;
 	bid m_condBlob;
 
