@@ -1,3 +1,0 @@
-char lbl[] = "0123456789";
-
-//#define CHECK_FATAL_RANGE_EXCEPTION
