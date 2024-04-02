@@ -14207,10 +14207,12 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 			request->req_flags |= req_null;
 		else
 		{
-			EVL_make_value(tdbb, &varImpure->vlu_desc, impure);
+			auto varDesc = varImpure->vlu_desc;
 
-			if (impure->vlu_desc.dsc_dtype == dtype_text)
-				INTL_adjust_text_descriptor(tdbb, &impure->vlu_desc);
+			if (varDesc.dsc_dtype == dtype_text)
+				INTL_adjust_text_descriptor(tdbb, &varDesc);
+
+			EVL_make_value(tdbb, &varDesc, impure);
 		}
 
 		if (!(varImpure->vlu_flags & VLU_checked))
