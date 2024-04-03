@@ -751,7 +751,8 @@ void EXE_receive(thread_db* tdbb,
 						}
 
 						if (!current->bli_materialized &&
-							(current->bli_blob_object->blb_flags & BLB_close_on_read))
+							(current->bli_blob_object->blb_flags & (BLB_close_on_read | BLB_stream)) ==
+								(BLB_close_on_read | BLB_stream))
 						{
 							current->bli_blob_object->BLB_close(tdbb);
 						}
