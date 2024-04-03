@@ -2805,9 +2805,9 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	const auto format = MET_format(vdr_tdbb, relation, header->rhd_format);
 	auto remainingLength = format->fmt_length;
 
-	auto calculateLength = [fragment, remainingLength](ULONG length, const UCHAR* data)
+	auto calculateLength = [remainingLength](ULONG length, const UCHAR* data, bool notPacked)
 	{
-		if (fragment->rhdf_flags & rhd_not_packed)
+		if (notPacked)
 		{
 			if (length > remainingLength)
 			{
@@ -2826,7 +2826,8 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		return Compressor::getUnpackedLength(length, data);
 	};
 
-	remainingLength -= calculateLength(length, p);
+	bool notPacked = (fragment->rhdf_flags & rhd_not_packed) != 0;
+	remainingLength -= calculateLength(length, p, notPacked);
 
 	// Next, chase down fragments, if any
 
@@ -2878,7 +2879,8 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 			length -= RHD_SIZE;
 		}
 
-		remainingLength -= calculateLength(length, p);
+		notPacked = (fragment->rhdf_flags & rhd_not_packed) != 0;
+		remainingLength -= calculateLength(length, p, notPacked);
 
 		page_number = fragment->rhdf_f_page;
 		line_number = fragment->rhdf_f_line;
