@@ -458,8 +458,6 @@ public:
 
 	Lock*		dbb_retaining_lock;		// lock for preserving commit retaining snapshot
 	PageManager dbb_page_manager;
-	vcl*		dbb_t_pages;			// pages number for transactions
-	vcl*		dbb_gen_id_pages;		// known pages for gen_id
 	BlobFilter*	dbb_blob_filters;		// known blob filters
 
 	MonitoringData*			dbb_monitoring_data;	// monitoring data
@@ -470,6 +468,10 @@ private:
 	Firebird::SyncObject dbb_modules_sync;
 	DatabaseModules	dbb_modules;		// external function/filter modules
 
+	// Vectors of known pages and their synchronization
+	Firebird::SyncObject dbb_pages_sync;	// guard access to dbb_XXX_pages vectors
+	vcl* dbb_tip_pages;						// known TIP pages
+	vcl* dbb_gen_pages;						// known generator pages
 public:
 	Firebird::AutoPtr<ExtEngineManager>	dbb_extManager;	// external engine manager
 
@@ -590,6 +592,12 @@ public:
 	{
 		return (dbb_replica_mode == mode);
 	}
+
+	// Methods encapsulating operations with vectors of known pages
+	ULONG getKnownPagesCount(SCHAR ptype);
+	ULONG getKnownPage(SCHAR ptype, ULONG sequence);
+	void setKnownPage(SCHAR ptype, ULONG sequence, ULONG value);
+	void copyKnownPages(SCHAR ptype, ULONG count, ULONG* data);
 
 private:
 	Database(MemoryPool* p, Firebird::IPluginConfig* pConf, bool shared)
