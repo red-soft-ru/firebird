@@ -3215,9 +3215,8 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			CCH_flush(tdbb, FLUSH_FINI, 0);
 
 			// The newly created database should have FW = ON, unless the opposite is specified in DPB
-			const bool forceWrite = options.dpb_set_force_write ? options.dpb_force_write : true;
-			if (forceWrite)
-				PAG_set_force_write(tdbb, options.dpb_force_write);
+			if (!options.dpb_set_force_write || options.dpb_force_write)
+				PAG_set_force_write(tdbb, true);
 
 			dbb->dbb_crypto_manager->attach(tdbb, attachment);
 			dbb->dbb_backup_manager->dbCreating = false;
