@@ -1754,8 +1754,8 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 				status_exception::raise(Arg::Gds(isc_dyn_func_not_found) << Arg::Str(name));
 		}
 	}
-	else
-		executeCreate(tdbb, dsqlScratch, transaction);
+	else if (!executeCreate(tdbb, dsqlScratch, transaction))
+		return;
 
 	compile(tdbb, dsqlScratch);
 
@@ -1781,7 +1781,7 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 	}
 }
 
-void CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+bool CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->getAttachment();
@@ -1790,7 +1790,7 @@ void CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 	if (package.isEmpty())
 	{
 		if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_udf))
-			return;
+			return false;
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 			DDL_TRIGGER_CREATE_FUNCTION, name, NULL);
@@ -1865,6 +1865,8 @@ void CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 		storePrivileges(tdbb, transaction, name, obj_udf, EXEC_PRIVILEGES);
 
 	executeAlter(tdbb, dsqlScratch, transaction, false, false);
+
+	return true;
 }
 
 bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -2772,8 +2774,8 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 				status_exception::raise(Arg::Gds(isc_dyn_proc_not_found) << Arg::Str(name));
 		}
 	}
-	else
-		executeCreate(tdbb, dsqlScratch, transaction);
+	else if (!executeCreate(tdbb, dsqlScratch, transaction))
+		return;
 
 	compile(tdbb, dsqlScratch);
 
@@ -2799,7 +2801,7 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 	}
 }
 
-void CreateAlterProcedureNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+bool CreateAlterProcedureNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->getAttachment();
@@ -2808,7 +2810,7 @@ void CreateAlterProcedureNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 	if (package.isEmpty())
 	{
 		if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_procedure))
-			return;
+			return false;
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 			DDL_TRIGGER_CREATE_PROCEDURE, name, NULL);
@@ -2875,6 +2877,8 @@ void CreateAlterProcedureNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 		storePrivileges(tdbb, transaction, name, obj_procedure, EXEC_PRIVILEGES);
 
 	executeAlter(tdbb, dsqlScratch, transaction, false, false);
+
+	return true;
 }
 
 bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -6430,20 +6434,6 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	dsql_fld* field = clause->field;
 	dsql_rel* relation = dsqlScratch->relation;
 
-	if (clause->createIfNotExistsOnly)
-	{
-		AutoCacheRequest request(tdbb, drq_l_rel_fld_name, DYN_REQUESTS);
-
-		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-			RFL IN RDB$RELATION_FIELDS
-			WITH RFL.RDB$RELATION_NAME = relation->rel_name.c_str() AND
-				 RFL.RDB$FIELD_NAME = field->fld_name.c_str()
-		{
-			return;
-		}
-		END_FOR
-	}
-
 	// Add the field to the relation being defined for parsing purposes.
 
 	bool permanent = false;
@@ -6645,20 +6635,6 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	ObjectsArray<CreateDropConstraint>& constraints, bool* notNull)
 {
 	MemoryPool& pool = dsqlScratch->getPool();
-
-	if (clause->createIfNotExistsOnly)
-	{
-		AutoCacheRequest request(tdbb, drq_l_rel_con, DYN_REQUESTS);
-
-		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-			RC IN RDB$RELATION_CONSTRAINTS
-			WITH RC.RDB$CONSTRAINT_NAME EQ clause->name.c_str() AND
-				 RC.RDB$RELATION_NAME EQ name.c_str()
-		{
-			return;
-		}
-		END_FOR
-	}
 
 	switch (clause->constraintType)
 	{
@@ -7754,10 +7730,33 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			switch ((*i)->type)
 			{
 				case Clause::TYPE_ADD_COLUMN:
-					executeBeforeTrigger();
-					defineField(tdbb, dsqlScratch, transaction,
-						static_cast<AddColumnClause*>(i->getObject()), -1, NULL);
+				{
+					const auto addColumnClause = static_cast<AddColumnClause*>(i->getObject());
+					bool createColumn = true;
+
+					if (addColumnClause->createIfNotExistsOnly)
+					{
+						AutoCacheRequest request(tdbb, drq_l_rel_fld_name, DYN_REQUESTS);
+
+						FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+							RFL IN RDB$RELATION_FIELDS
+							WITH RFL.RDB$RELATION_NAME = relation->rel_name.c_str() AND
+								 RFL.RDB$FIELD_NAME = addColumnClause->field->fld_name.c_str()
+						{
+							createColumn = false;
+							break;
+						}
+						END_FOR
+					}
+
+					if (createColumn)
+					{
+						executeBeforeTrigger();
+						defineField(tdbb, dsqlScratch, transaction, addColumnClause, -1, nullptr);
+					}
+
 					break;
+				}
 
 				case Clause::TYPE_ALTER_COL_TYPE:
 					executeBeforeTrigger();
@@ -7937,16 +7936,46 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 				}
 
 				case Clause::TYPE_ADD_CONSTRAINT:
-					executeBeforeTrigger();
-					makeConstraint(tdbb, dsqlScratch, transaction,
-						static_cast<AddConstraintClause*>(i->getObject()), constraints);
-					break;
-
 				case Clause::TYPE_DROP_CONSTRAINT:
 				{
-					CreateDropConstraint& dropConstraint = constraints.add();
-					dropConstraint.name = static_cast<const DropConstraintClause*>(i->getObject())->name;
-					dropConstraint.silent = static_cast<const DropConstraintClause*>(i->getObject())->silent;
+					const bool silent = (*i)->type == Clause::TYPE_ADD_CONSTRAINT ?
+						static_cast<AddConstraintClause*>(i->getObject())->createIfNotExistsOnly :
+						static_cast<DropConstraintClause*>(i->getObject())->silent;
+					bool found = false;
+
+					if (silent)
+					{
+						const auto& constraintName = (*i)->type == Clause::TYPE_ADD_CONSTRAINT ?
+							static_cast<AddConstraintClause*>(i->getObject())->name :
+							static_cast<DropConstraintClause*>(i->getObject())->name;
+
+						AutoCacheRequest request(tdbb, drq_l_rel_con, DYN_REQUESTS);
+
+						FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+							RC IN RDB$RELATION_CONSTRAINTS
+							WITH RC.RDB$CONSTRAINT_NAME EQ constraintName.c_str() AND
+								 RC.RDB$RELATION_NAME EQ name.c_str()
+						{
+							found = true;
+							break;
+						}
+						END_FOR
+					}
+
+					if ((*i)->type == Clause::TYPE_ADD_CONSTRAINT && !(silent && found))
+					{
+						executeBeforeTrigger();
+						makeConstraint(tdbb, dsqlScratch, transaction,
+							static_cast<AddConstraintClause*>(i->getObject()), constraints);
+					}
+					else if ((*i)->type == Clause::TYPE_DROP_CONSTRAINT && !(silent && !found))
+					{
+						executeBeforeTrigger();
+						CreateDropConstraint& dropConstraint = constraints.add();
+						dropConstraint.name = static_cast<const DropConstraintClause*>(i->getObject())->name;
+						dropConstraint.silent = static_cast<const DropConstraintClause*>(i->getObject())->silent;
+					}
+
 					break;
 				}
 
@@ -8038,15 +8067,11 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						 RC.RDB$RELATION_NAME EQ name.c_str()
 				{
 					found = true;
-					executeBeforeTrigger();
 					ERASE RC;
 				}
 				END_FOR
 
-				if (!constraint->silent && !found)
-					executeBeforeTrigger();
-
-				if (!found && !constraint->silent)
+				if (!found)
 				{
 					// msg 130: "CONSTRAINT %s does not exist."
 					status_exception::raise(Arg::PrivateDyn(130) << constraint->name);

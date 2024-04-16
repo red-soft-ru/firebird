@@ -675,11 +675,15 @@ already exists.
 For ALTER TABLE ... ADD subclause, DDL triggers are not fired if there are only IF NOT EXISTS subclauses and all
 of them are related to existing columns or constraints.
 
-For others commands where IF NOT EXISTS is part of the main command, DDL triggers are not fired when the object
-already exists.
+For others commands (except users currently) where IF NOT EXISTS is part of the main command,
+DDL triggers are not fired when the object already exists.
 
 The engine only verifies if the name (object, column or constraint) already exists, and if yes, do nothing.
 It never tries to match the existing object with the one being created.
+
+Some objects share the same "namespace", for example, there cannot be a table and a procedure with the same name.
+In this case, if there is table XYZ and CREATE PROCEDURE IF NOT EXISTS XYZ is tried, the procedure will not be created
+and no error will be raised.
 
 The following statements are supported:
 
