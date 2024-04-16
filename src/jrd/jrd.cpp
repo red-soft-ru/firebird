@@ -9858,6 +9858,8 @@ void TrigVector::release()
 
 void TrigVector::release(thread_db* tdbb)
 {
+	fb_assert(useCount.value() > 0);
+
 	if (--useCount == 0)
 	{
 		decompile(tdbb);
