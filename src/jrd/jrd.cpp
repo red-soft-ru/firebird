@@ -8387,6 +8387,8 @@ void TrigVector::release() const
 
 void TrigVector::release(thread_db* tdbb) const
 {
+	fb_assert(useCount.value() > 0);
+
 	if (--useCount == 0)
 	{
 		const const_iterator e = end();
