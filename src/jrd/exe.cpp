@@ -834,10 +834,15 @@ void EXE_release(thread_db* tdbb, Request* request)
 		if (request->req_attachment->att_requests.find(request, pos))
 			request->req_attachment->att_requests.remove(pos);
 
-		request->req_attachment = NULL;
+		request->req_attachment = nullptr;
 	}
 
 	request->req_flags &= ~req_in_use;
+	if (request->req_timer)
+	{
+		request->req_timer->stop();
+		request->req_timer = nullptr;
+	}
 }
 
 
