@@ -771,6 +771,12 @@ void EXE_release(thread_db* tdbb, jrd_req* request)
 
 		request->req_attachment = NULL;
 	}
+
+	if (request->req_timer)
+	{
+		request->req_timer->stop();
+		request->req_timer = NULL;
+	}
 }
 
 
