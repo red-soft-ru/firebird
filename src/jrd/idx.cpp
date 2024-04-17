@@ -1283,7 +1283,7 @@ void IDX_modify(thread_db* tdbb,
 		idx_e error_code = idx_e_ok;
 
 		IndexCondition condition(tdbb, &idx);
-		const auto checkResult = condition.check(new_rpb->rpb_record, &error_code);
+		auto checkResult = condition.check(new_rpb->rpb_record, &error_code);
 
 		if (error_code)
 		{
@@ -1312,15 +1312,29 @@ void IDX_modify(thread_db* tdbb,
 
 		expression.reset();
 
-		if (newKey != orgKey)
+		if (newKey == orgKey)
 		{
-			insertion.iib_key = newKey;
+			// The new record satisfies index condition, check old record too:
+			// if it does not satisfies condition, key should be inserted into index
 
-			if ( (error_code = insert_key(tdbb, new_rpb->rpb_relation, new_rpb->rpb_record,
-										 transaction, &window, &insertion, context)) )
+			checkResult = condition.check(org_rpb->rpb_record, &error_code);
+
+			if (error_code)
 			{
-				context.raise(tdbb, error_code, new_rpb->rpb_record);
+				CCH_RELEASE(tdbb, &window);
+				context.raise(tdbb, error_code, org_rpb->rpb_record);
 			}
+
+			fb_assert(checkResult.isAssigned());
+			if (checkResult.asBool())
+				continue;
+		}
+
+		insertion.iib_key = newKey;
+		if ( (error_code = insert_key(tdbb, new_rpb->rpb_relation, new_rpb->rpb_record,
+										transaction, &window, &insertion, context)) )
+		{
+			context.raise(tdbb, error_code, new_rpb->rpb_record);
 		}
 	}
 }
