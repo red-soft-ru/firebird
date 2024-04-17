@@ -1287,7 +1287,7 @@ BoolExprNode* InListBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 			const auto castNode = FB_NEW_POOL(dsqlScratch->getPool())
 				CastNode(dsqlScratch->getPool(), item, field);
-			item = castNode->dsqlPass(dsqlScratch);
+			item = castNode;
 		}
 	}
 
