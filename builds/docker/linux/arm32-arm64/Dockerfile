@@ -1,21 +1,21 @@
-ARG ARG_BASE=arm64v8/ubuntu:22.04
+ARG ARG_BASE=arm64v8/ubuntu:23.10
 ARG ARG_TARGET_ARCH=aarch64-pc-linux-gnu
 ARG ARG_CTNF_CONFIG=crosstool-ng-config-arm64
 
-ARG ARG_CTNG_VERSION=1.25.0
+ARG ARG_CTNG_VERSION=1.26.0
 ARG ARG_LIBTOOL_VERSION=2.4.6
 ARG ARG_NCURSES_VERSION=6.3
 ARG ARG_LTM_VERSION=1.2.0
-ARG ARG_ZLIB_VERSION=1.2.13
+ARG ARG_ZLIB_VERSION=1.3.1
 ARG ARG_ICU_VERSION=70-1
 
-ARG ARG_CPUCOUNT=6
+ARG ARG_CPUCOUNT=24
 
 ARG ARG_CTNG_UID=1000
 ARG ARG_CTNG_GID=1000
 
 
-FROM ubuntu:22.04 as builder
+FROM ubuntu:23.10 as builder
 
 ARG ARG_TARGET_ARCH
 ARG ARG_CTNF_CONFIG
@@ -32,7 +32,8 @@ ARG ARG_CPUCOUNT
 ARG ARG_CTNG_UID
 ARG ARG_CTNG_GID
 
-RUN groupadd -g $ARG_CTNG_GID ctng && \
+RUN userdel -r ubuntu && \
+	groupadd -g $ARG_CTNG_GID ctng && \
 	useradd -d /home/ctng -m -g $ARG_CTNG_GID -u $ARG_CTNG_UID -s /bin/bash ctng && \
 	\
 	{ echo 'tzdata tzdata/Areas select Etc'; echo 'tzdata tzdata/Zones/Etc select UTC'; } | debconf-set-selections && \
@@ -42,6 +43,7 @@ RUN groupadd -g $ARG_CTNG_GID ctng && \
 		sudo \
 		automake \
 		bison \
+		bzip2 \
 		chrpath \
 		flex \
 		gcc \
@@ -56,13 +58,13 @@ RUN groupadd -g $ARG_CTNG_GID ctng && \
 		libtool \
 		libtool-bin \
 		libtool-doc \
-		python2.7-dev \
 		python3-dev \
 		texinfo \
 		make \
 		curl \
 		wget \
 		unzip \
+		xz-utils \
 		nano && \
 	\
 	adduser ctng sudo && \
@@ -70,7 +72,7 @@ RUN groupadd -g $ARG_CTNG_GID ctng && \
 
 USER ctng
 
-COPY --from=asfernandes/firebird-builder:fb5-x64-ng-v1 --chown=ctng:ctng /home/ctng/x-tools /home/ctng/x-tools
+COPY --from=asfernandes/firebird-builder:fb6-x64-ng-v1 --chown=ctng:ctng /home/ctng/x-tools /home/ctng/x-tools
 
 RUN mkdir ~/build && \
 	curl -SL --output ~/build/icu4c-${ARG_ICU_VERSION}-src.tgz https://github.com/unicode-org/icu/releases/download/release-${ARG_ICU_VERSION}/icu4c-`echo ${ARG_ICU_VERSION} | tr - _`-src.tgz && \
@@ -207,7 +209,6 @@ RUN cd ~/build && \
 FROM $ARG_BASE
 
 ARG ARG_TARGET_ARCH
-ARG ARG_CPUCOUNT
 ARG ARG_CTNG_UID
 ARG ARG_CTNG_GID
 
@@ -220,6 +221,7 @@ RUN apt-get update && \
 	rm -rf /var/lib/apt/lists/*
 
 RUN ln -s /usr/x86_64-linux-gnu/lib64 /lib64 && \
+	userdel -r ubuntu && \
 	groupadd -g $ARG_CTNG_GID ctng && \
 	useradd -d /home/ctng -m -g $ARG_CTNG_GID -u $ARG_CTNG_UID -s /bin/bash ctng
 
@@ -238,7 +240,6 @@ ENV LIBRARY_PATH "/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysro
 ENV LD_LIBRARY_PATH "/usr/x86_64-linux-gnu/lib:/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysroot/usr/local/lib"
 
 ENV BUILD_ARCH=$ARG_TARGET_ARCH
-ENV CPUCOUNT=$ARG_CPUCOUNT
 
 WORKDIR /firebird
 
