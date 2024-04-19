@@ -6,7 +6,7 @@ TARGET	:= release
 
 CC	:= $(CC)
 CXX	:= $(CXX)
-LD	:= $(CXX)
+LD	:= $(CXX) -static-libstdc++
 
 SRC_DIR		:= src
 BUILD_DIR	:= build
