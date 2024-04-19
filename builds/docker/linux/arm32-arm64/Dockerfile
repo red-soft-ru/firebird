@@ -1,4 +1,4 @@
-ARG ARG_BASE=arm64v8/ubuntu:23.10
+ARG ARG_BASE=arm64v8/debian:bookworm
 ARG ARG_TARGET_ARCH=aarch64-pc-linux-gnu
 ARG ARG_CTNF_CONFIG=crosstool-ng-config-arm64
 
@@ -15,7 +15,7 @@ ARG ARG_CTNG_UID=1000
 ARG ARG_CTNG_GID=1000
 
 
-FROM ubuntu:23.10 as builder
+FROM debian:bookworm as builder
 
 ARG ARG_TARGET_ARCH
 ARG ARG_CTNF_CONFIG
@@ -32,8 +32,7 @@ ARG ARG_CPUCOUNT
 ARG ARG_CTNG_UID
 ARG ARG_CTNG_GID
 
-RUN userdel -r ubuntu && \
-	groupadd -g $ARG_CTNG_GID ctng && \
+RUN groupadd -g $ARG_CTNG_GID ctng && \
 	useradd -d /home/ctng -m -g $ARG_CTNG_GID -u $ARG_CTNG_UID -s /bin/bash ctng && \
 	\
 	{ echo 'tzdata tzdata/Areas select Etc'; echo 'tzdata tzdata/Zones/Etc select UTC'; } | debconf-set-selections && \
@@ -111,7 +110,7 @@ RUN sudo apt-get -y remove \
 		libtomcrypt-dev && \
 	sudo rm -rf /var/lib/apt/lists/*
 
-ENV PATH "/home/ctng/x-tools/x86_64-pc-linux-gnu/bin:${PATH}"
+ENV PATH "/home/ctng/x-tools/x86_64-pc-linux-gnu/bin:/home/ctng/x-tools/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sysroot/usr/local/bin:${PATH}"
 ENV PATH "/home/ctng/x-tools/${ARG_TARGET_ARCH}/bin:/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysroot/usr/local/bin:${PATH}"
 
 RUN cd ~/build && \
@@ -186,22 +185,20 @@ RUN cd ~/build && \
 	tar xvf icu4c-${ARG_ICU_VERSION}-src.tgz --strip 1 -C icu4c-${ARG_ICU_VERSION}-src && \
 	mkdir icu4c-${ARG_ICU_VERSION}-build-x86_64 && \
 	cd icu4c-${ARG_ICU_VERSION}-build-x86_64 && \
-	../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
+	CXXFLAGS='-std=c++17 -static-libstdc++' ../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
 		Linux \
-		--host=x86_64-pc-linux-gnu \
-		CXXFLAGS=-std=c++17 && \
+		--host=x86_64-pc-linux-gnu && \
 	make -j${ARG_CPUCOUNT}
 
 RUN cd ~/build && \
 	mkdir icu4c-${ARG_ICU_VERSION}-build && \
 	cd icu4c-${ARG_ICU_VERSION}-build && \
-	../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
+	CXXFLAGS='-std=c++17 -static-libstdc++' ../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
 		Linux \
 		--host=${ARG_TARGET_ARCH} \
 		--with-cross-build=/home/ctng/build/icu4c-${ARG_ICU_VERSION}-build-x86_64 \
 		--prefix=/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysroot/usr/local \
-		--includedir=/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysroot/usr/include \
-		CXXFLAGS=-std=c++17 && \
+		--includedir=/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysroot/usr/include && \
 	make -j${ARG_CPUCOUNT} && \
 	make install
 
@@ -221,7 +218,6 @@ RUN apt-get update && \
 	rm -rf /var/lib/apt/lists/*
 
 RUN ln -s /usr/x86_64-linux-gnu/lib64 /lib64 && \
-	userdel -r ubuntu && \
 	groupadd -g $ARG_CTNG_GID ctng && \
 	useradd -d /home/ctng -m -g $ARG_CTNG_GID -u $ARG_CTNG_UID -s /bin/bash ctng
 

@@ -1,4 +1,4 @@
-ARG ARG_BASE=ubuntu:23.10
+ARG ARG_BASE=debian:bookworm
 ARG ARG_SET_ARCH=x86_64
 ARG ARG_TARGET_ARCH=x86_64-pc-linux-gnu
 ARG ARG_CTNF_CONFIG=crosstool-ng-config-x64
@@ -34,8 +34,7 @@ ARG ARG_CPUCOUNT
 ARG ARG_CTNG_UID
 ARG ARG_CTNG_GID
 
-RUN userdel -r ubuntu && \
-	groupadd -g $ARG_CTNG_GID ctng && \
+RUN groupadd -g $ARG_CTNG_GID ctng && \
 	useradd -d /home/ctng -m -g $ARG_CTNG_GID -u $ARG_CTNG_UID -s /bin/bash ctng && \
 	\
 	{ echo 'tzdata tzdata/Areas select Etc'; echo 'tzdata tzdata/Zones/Etc select UTC'; } | debconf-set-selections && \
@@ -208,8 +207,7 @@ RUN apt-get update && \
 		xz-utils && \
 	rm -rf /var/lib/apt/lists/*
 
-RUN userdel -r ubuntu && \
-	groupadd -g $ARG_CTNG_GID ctng && \
+RUN groupadd -g $ARG_CTNG_GID ctng && \
 	useradd -d /home/ctng -m -g $ARG_CTNG_GID -u $ARG_CTNG_UID -s /bin/bash ctng
 
 USER ctng
