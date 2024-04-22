@@ -509,7 +509,7 @@ jobs:
           path: gen/Firebird-*-android-${{ matrix.arch }}-withDebugSymbols.tar.gz
 
       - name: Delete initial build
-        uses: geekyeggo/delete-artifact@v4
+        uses: geekyeggo/delete-artifact@v5
         with:
           name: firebird-android-initial-${{ matrix.arch }}
 
