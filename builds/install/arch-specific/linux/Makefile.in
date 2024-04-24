@@ -87,7 +87,7 @@ $(TarFile) :  buildTarDir
 debugfile:  $(DebugFile)
 
 $(DebugFile) :  buildImageDir
-	(cd $(GEN_ROOT)/$(DebugDir); $(TAR) -czf ../$(DebugFile) .)
+	(cd $(GEN_ROOT)/$(DebugDir); $(TAR) -czf ../$(DebugFile) `find . -not -type d`)
 
 buildRoot:
 	(cd $(GEN_ROOT); ./install/makeInstallImage.sh)
