@@ -464,7 +464,7 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 			m_connections.add(AttToConn(NULL, &conn));
 	}
 
-	if (!inPool || !connPool || !conn.isConnected() || !conn.resetSession(tdbb))
+	if (!inPool || !connPool || !connPool->getMaxCount() || !conn.isConnected() || !conn.resetSession(tdbb))
 	{
 		{	// scope
 			MutexLockGuard guard(m_mutex, FB_FUNCTION);
