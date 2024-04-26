@@ -1998,6 +1998,61 @@ SLONG DPM_prefetch_bitmap(thread_db* tdbb, jrd_rel* relation, PageBitmap* bitmap
 #endif
 
 
+ULONG DPM_pointer_pages(thread_db* tdbb, jrd_rel* relation)
+{
+/**************************************
+ *
+ *	D P M _ p o i n t e r _ p a g e s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Return the number of pointer pages in a relation.
+ *
+ **************************************/
+	SET_TDBB(tdbb);
+	const Database* const dbb = tdbb->getDatabase();
+
+#ifdef VIO_DEBUG
+	VIO_trace(DEBUG_TRACE_ALL,
+		"DPM_pointer_pages (relation %d)\n", relation->rel_id);
+#endif
+
+	RelationPages* relPages = relation->getPages(tdbb);
+	ULONG sequence = relPages->rel_pages ? relPages->rel_pages->count() - 1 : 0;
+	WIN window(relPages->rel_pg_space_id, -1);
+
+	while (true)
+	{
+		const pointer_page* ppage =
+			get_pointer_page(tdbb, relation, relPages, &window, sequence, LCK_read);
+
+		if (!ppage)
+		{
+			 BUGCHECK(243);
+			 // msg 243 missing pointer page in DPM_data_pages
+		}
+
+		const bool eof = (ppage->ppg_header.pag_flags & ppg_eof);
+		CCH_RELEASE(tdbb, &window);
+
+		if (eof)
+			break;
+
+		sequence++;
+		tdbb->checkCancelState();
+	}
+
+#ifdef VIO_DEBUG
+	VIO_trace(DEBUG_TRACE_ALL,
+		"    returned pointer pages: %" ULONGFORMAT"\n", sequence + 1);
+#endif
+	fb_assert(relPages->rel_pages && relPages->rel_pages->count() == sequence + 1);
+
+	return sequence + 1;
+}
+
+
 void DPM_scan_pages( thread_db* tdbb)
 {
 /**************************************

@@ -252,7 +252,7 @@ public:
 					m_flags |= IS_LARGE_SCAN;
 			}
 
-			m_countPP = m_creation->relation->getPages(tdbb)->rel_pages->count();
+			m_countPP = DPM_pointer_pages(tdbb, m_creation->relation);
 
 			if ((m_creation->index->idx_flags & (idx_expression | idx_condition)) && (workers > 1))
 				MET_lookup_index_expr_cond_blr(tdbb, m_creation->index_name, m_exprBlob, m_condBlob);
