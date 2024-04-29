@@ -165,11 +165,6 @@ static const Switches::in_sw_tab_t alice_in_sw_table[] =
 	{IN_SW_ALICE_COMMIT, isc_spb_rpr_commit_trans, "COMMIT", sw_commit,
 		0, ~(sw_commit | sw_auth_set | sw_nolinger), false, false, 29, 2, NULL},
 	// msg 29: \t-commit\t\tcommit transaction <tr / all>
-/*
-	{IN_SW_ALICE_CACHE, 0, "CACHE", sw_cache,
-		sw_shut, 0, false, false, 30, 2, NULL},
-	// msg 30: \t-cache\t\tshutdown cache manager
-*/
 #ifdef DEV_BUILD
 /*
 	{IN_SW_ALICE_DISABLE, 0, "DISABLE", sw_disable,
@@ -249,7 +244,7 @@ static const Switches::in_sw_tab_t alice_in_sw_table[] =
 		0, ~(sw_sweep | sw_auth_set | sw_nolinger), false, true, 45, 2, NULL},
 	// msg 45: \t-sweep\t\tforce garbage collection
 	{IN_SW_ALICE_SHUT, isc_spb_prp_shutdown_mode, "SHUTDOWN", sw_shut,
-		0, ~(sw_shut | sw_attach | /*sw_cache | */sw_force | sw_tran | sw_auth_set),
+		0, ~(sw_shut | sw_attach | sw_force | sw_tran | sw_auth_set),
 		false, false, 46, 2, NULL},
 	// msg 46: \t-shut\t\tshutdown
 	{IN_SW_ALICE_TWO_PHASE, isc_spb_rpr_recover_two_phase, "TWO_PHASE", sw_two_phase,
