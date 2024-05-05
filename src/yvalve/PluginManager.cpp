@@ -607,7 +607,7 @@ namespace
 		FbLocalStatus ls;
 		IPluginBase* plugin = module->getPlugin(regPlugin).factory->createPlugin(&ls, par);
 
-		if (!(ls->getState() & Firebird::IStatus::STATE_ERRORS))
+		if (plugin && !(ls->getState() & Firebird::IStatus::STATE_ERRORS))
 		{
 			plugin->setOwner(par);
 			return plugin;
