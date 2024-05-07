@@ -113,10 +113,12 @@ namespace
 ChangeLog::Segment::Segment(MemoryPool& pool, const PathName& filename, int handle)
 	: m_filename(pool, filename), m_handle(handle)
 {
+	memset(&m_builtinHeader, 0, sizeof(SegmentHeader));
+
 	struct stat stats;
 	if (fstat(m_handle, &stats) < 0 || stats.st_size < (int) sizeof(SegmentHeader))
 	{
-		m_header = &g_dummyHeader;
+		m_header = &m_builtinHeader;
 		return;
 	}
 
@@ -125,10 +127,11 @@ ChangeLog::Segment::Segment(MemoryPool& pool, const PathName& filename, int hand
 
 ChangeLog::Segment::~Segment()
 {
-	if (m_header != &g_dummyHeader)
+	if (m_header != &m_builtinHeader)
 		unmapHeader();
 
-	::close(m_handle);
+	if (m_handle != -1)
+		::close(m_handle);
 }
 
 void ChangeLog::Segment::init(FB_UINT64 sequence, const Guid& guid)
@@ -168,6 +171,8 @@ bool ChangeLog::Segment::validate(const Guid& guid) const
 
 void ChangeLog::Segment::copyTo(const PathName& filename) const
 {
+	fb_assert(m_header != &m_builtinHeader);
+
 	if (os_utils::lseek(m_handle, 0, SEEK_SET) != 0)
 		raiseIOError("seek", m_filename.c_str());
 
@@ -206,6 +211,7 @@ void ChangeLog::Segment::copyTo(const PathName& filename) const
 
 void ChangeLog::Segment::append(ULONG length, const UCHAR* data)
 {
+	fb_assert(m_header != &m_builtinHeader);
 	fb_assert(m_header->hdr_state == SEGMENT_STATE_USED);
 	fb_assert(length);
 
@@ -225,10 +231,36 @@ void ChangeLog::Segment::setState(SegmentState state)
 	const auto full = (state == SEGMENT_STATE_FULL);
 	m_header->hdr_state = state;
 	flush(full);
+
+	if ((state == SEGMENT_STATE_FREE) && (m_header != &m_builtinHeader))
+		closeFile();
+}
+
+void ChangeLog::Segment::closeFile()
+{
+	if (m_header == &m_builtinHeader)
+	{
+		fb_assert(m_handle == -1);
+		return;
+	}
+
+	memcpy(&m_builtinHeader, m_header, sizeof(SegmentHeader));
+
+	unmapHeader();
+
+	if (m_handle != -1)
+	{
+		::close(m_handle);
+		m_handle = -1;
+	}
+
+	m_header = &m_builtinHeader;
 }
 
 void ChangeLog::Segment::truncate()
 {
+	fb_assert(m_header != &m_builtinHeader);
+
 	const auto length = m_header->hdr_length;
 
 	unmapHeader();
@@ -877,6 +909,18 @@ void ChangeLog::initSegments()
 		if (segment->getSequence() > state->sequence)
 			segment->setState(SEGMENT_STATE_FREE);
 
+		if (segment->getState() == SEGMENT_STATE_FREE)
+		{
+			segment->closeFile();
+
+			if (segment->getSequence() + m_config->segmentCount <= state->sequence)
+			{
+				const PathName& fname = segment->getPathName();
+				unlink(fname.c_str());
+				continue;
+			}
+		}
+
 		segment->addRef();
 		m_segments.add(segment.release());
 	}
@@ -893,13 +937,17 @@ void ChangeLog::clearSegments()
 ChangeLog::Segment* ChangeLog::createSegment()
 {
 	const auto state = m_sharedMemory->getHeader();
-	const auto sequence = ++state->sequence;
+	const auto sequence = state->sequence + 1;
 
 	PathName filename;
 	filename.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), sequence);
 	filename = m_config->journalDirectory + filename;
 
 	const auto fd = os_utils::openCreateSharedFile(filename.c_str(), O_EXCL | O_BINARY);
+	if (fd == -1)
+	{
+		raiseError("Journal file %s create() failed (error %d)", filename.c_str(), ERRNO);
+	}
 
 	if (::write(fd, &g_dummyHeader, sizeof(SegmentHeader)) != sizeof(SegmentHeader))
 	{
@@ -914,6 +962,7 @@ ChangeLog::Segment* ChangeLog::createSegment()
 
 	m_segments.add(segment);
 	state->generation++;
+	state->sequence++;
 
 	return segment;
 }
@@ -939,7 +988,7 @@ ChangeLog::Segment* ChangeLog::reuseSegment(ChangeLog::Segment* segment)
 	// Increase the sequence
 
 	const auto state = m_sharedMemory->getHeader();
-	const auto sequence = ++state->sequence;
+	const auto sequence = state->sequence + 1;
 
 	// Attempt to rename the backing file
 
@@ -950,11 +999,26 @@ ChangeLog::Segment* ChangeLog::reuseSegment(ChangeLog::Segment* segment)
 	// If renaming fails, then we just create a new file.
 	// The old segment will be reused later in this case.
 	if (::rename(orgname.c_str(), newname.c_str()) < 0)
+	{
+#ifdef DEV_BUILD
+		const auto err = ERRNO;
+
+		string warn;
+		warn.printf("Journal file %s rename to %s failed (error %d)",
+					orgname.c_str(), newname.c_str(), err);
+
+		logPrimaryWarning(m_config->dbName, warn);
+#endif
 		return createSegment();
+	}
 
 	// Re-open the segment using a new name and initialize it
 
 	const auto fd = os_utils::openCreateSharedFile(newname.c_str(), O_BINARY);
+	if (fd == -1)
+	{
+		raiseError("Journal file %s create() failed (error %d)", newname.c_str(), errno);
+	}
 
 	segment = FB_NEW_POOL(getPool()) Segment(getPool(), newname, fd);
 
@@ -963,6 +1027,7 @@ ChangeLog::Segment* ChangeLog::reuseSegment(ChangeLog::Segment* segment)
 
 	m_segments.add(segment);
 	state->generation++;
+	state->sequence++;
 
 	return segment;
 }
