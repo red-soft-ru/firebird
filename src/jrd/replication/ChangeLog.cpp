@@ -97,12 +97,12 @@ namespace
 #endif
 	}
 
-	void raiseIOError(const char* syscall, const char* filename)
+	void raiseIOError(const char* syscall, const char* filename, ISC_STATUS errcode)
 	{
 		Arg::Gds temp(isc_io_error);
 		temp << Arg::Str(syscall);
 		temp << Arg::Str(filename);
-		temp << SYS_ERR(ERRNO);
+		temp << SYS_ERR(errcode);
 		temp.raise();
 	}
 }
@@ -174,7 +174,7 @@ void ChangeLog::Segment::copyTo(const PathName& filename) const
 	fb_assert(m_header != &m_builtinHeader);
 
 	if (os_utils::lseek(m_handle, 0, SEEK_SET) != 0)
-		raiseIOError("seek", m_filename.c_str());
+		raiseIOError("seek", m_filename.c_str(), ERRNO);
 
 	const auto totalLength = m_header->hdr_length;
 	fb_assert(totalLength > sizeof(SegmentHeader));
@@ -193,16 +193,20 @@ void ChangeLog::Segment::copyTo(const PathName& filename) const
 
 		if (::read(m_handle, data, length) != length)
 		{
+			const ISC_STATUS errcode = ERRNO;
+
 			dstFile.release();
 			unlink(filename.c_str());
-			raiseIOError("read", m_filename.c_str());
+			raiseIOError("read", m_filename.c_str(), errcode);
 		}
 
 		if (::write(dstFile, data, length) != length)
 		{
+			const ISC_STATUS errcode = ERRNO;
+
 			dstFile.release();
 			unlink(filename.c_str());
-			raiseIOError("write", filename.c_str());
+			raiseIOError("write", filename.c_str(), errcode);
 		}
 	}
 
