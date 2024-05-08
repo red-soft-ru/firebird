@@ -559,6 +559,7 @@ CREATE_PRIVILEGED_ROLES			Use SET SYSTEM PRIVILEGES in roles
 MODIFY_EXT_CONN_POOL			Manage properties of pool of external connections
 REPLICATE_INTO_DATABASE			Use replication API to load changesets into database
 PROFILE_ANY_ATTACHMENT			Profile other users' attachments
+GET_DBCRYPT_INFO				Use getInfo() items, related with DB encryption
 
 
 22) New grantee type in GRANT and REVOKE operators - SYSTEM PRIVILEGE.
