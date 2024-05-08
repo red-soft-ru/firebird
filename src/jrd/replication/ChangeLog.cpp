@@ -79,8 +79,6 @@ namespace
 	const char* PATHNAME_WILDCARD = "$(pathname)";
 	const char* ARCHPATHNAME_WILDCARD = "$(archivepathname)";
 
-	SegmentHeader g_dummyHeader;
-
 	static THREAD_ENTRY_DECLARE archiver_thread(THREAD_ENTRY_PARAM arg)
 	{
 		ChangeLog* const log = static_cast<ChangeLog*>(arg);
@@ -948,12 +946,9 @@ ChangeLog::Segment* ChangeLog::createSegment()
 	filename = m_config->journalDirectory + filename;
 
 	const auto fd = os_utils::openCreateSharedFile(filename.c_str(), O_EXCL | O_BINARY);
-	if (fd == -1)
-	{
-		raiseError("Journal file %s create() failed (error %d)", filename.c_str(), ERRNO);
-	}
 
-	if (::write(fd, &g_dummyHeader, sizeof(SegmentHeader)) != sizeof(SegmentHeader))
+	SegmentHeader dummyHeader = {0};
+	if (::write(fd, &dummyHeader, sizeof(SegmentHeader)) != sizeof(SegmentHeader))
 	{
 		::close(fd);
 		raiseError("Journal file %s write failed (error %d)", filename.c_str(), ERRNO);
@@ -1019,10 +1014,6 @@ ChangeLog::Segment* ChangeLog::reuseSegment(ChangeLog::Segment* segment)
 	// Re-open the segment using a new name and initialize it
 
 	const auto fd = os_utils::openCreateSharedFile(newname.c_str(), O_BINARY);
-	if (fd == -1)
-	{
-		raiseError("Journal file %s create() failed (error %d)", newname.c_str(), errno);
-	}
 
 	segment = FB_NEW_POOL(getPool()) Segment(getPool(), newname, fd);
 
