@@ -905,7 +905,8 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 	fb_assert(conn->getConnPool() == this);
 
 	Connection* oldConn = NULL;
-	bool startIdleTimer = false;
+	Firebird::RefPtr<IdleTimer>	timer;
+
 	if (m_maxCount > 0)
 	{
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
@@ -977,7 +978,7 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 			if (!m_timer)
 				m_timer = FB_NEW IdleTimer(*this);
 
-			startIdleTimer = true;
+			timer = m_timer;
 		}
 
 #ifdef EDS_DEBUG
@@ -996,8 +997,10 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 	if (oldConn)
 		oldConn->getProvider()->releaseConnection(tdbb, *oldConn, false);
 
-	if (startIdleTimer)
-		m_timer->start();
+	// Note, m_timer could be cleared at this point - due to shutdown.
+	// Then m_idleList will be empty and start() will do nothing.
+	if (timer)
+		timer->start();
 }
 
 void ConnectionsPool::addConnection(thread_db* tdbb, Connection* conn, ULONG hash)
