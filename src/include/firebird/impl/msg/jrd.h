@@ -39,7 +39,7 @@ FB_IMPL_MSG(JRD, 37, open_trans, -901, "01", "002", "cannot disconnect database 
 FB_IMPL_MSG(JRD, 38, port_len, -901, "HY", "000", "message length error (encountered @1, expected @2)")
 FB_IMPL_MSG(JRD, 39, read_only_field, -151, "42", "000", "attempted update of read-only column @1")
 FB_IMPL_MSG(JRD, 40, read_only_rel, -150, "42", "000", "attempted update of read-only table")
-FB_IMPL_MSG(JRD, 41, read_only_trans, -817, "42", "000", "attempted update during read-only transaction")
+FB_IMPL_MSG(JRD, 41, read_only_trans, -817, "25", "006", "attempted update during read-only transaction")
 FB_IMPL_MSG(JRD, 42, read_only_view, -150, "42", "000", "cannot update read-only view @1")
 FB_IMPL_MSG(JRD, 43, req_no_trans, -901, "25", "000", "no transaction for request")
 FB_IMPL_MSG(JRD, 44, req_sync, -901, "HY", "000", "request synchronization error")

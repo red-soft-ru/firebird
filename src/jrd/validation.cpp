@@ -1942,21 +1942,19 @@ void Validation::walk_generators()
 
 	WIN window(DB_PAGE_SPACE, -1);
 
-	vcl* vector = dbb->dbb_gen_id_pages;
-	if (vector)
+	if (const auto idsCount = dbb->getKnownPagesCount(pag_ids))
 	{
-        vcl::iterator ptr, end;
-		for (ptr = vector->begin(), end = vector->end(); ptr < end; ++ptr)
+		for (ULONG sequence = 0; sequence < idsCount; sequence++)
 		{
-			if (*ptr)
+			if (const auto pageNumber = dbb->getKnownPage(pag_ids, sequence))
 			{
 #ifdef DEBUG_VAL_VERBOSE
 				if (VAL_debug_level)
-					fprintf(stdout, "walk_generator: page %d\n", *ptr);
+					fprintf(stdout, "walk_generator: page %d\n", pageNumber);
 #endif
 				// It doesn't make a difference generator_page or pointer_page because it's not used.
 				generator_page* page = NULL;
-				fetch_page(true, *ptr, pag_ids, &window, &page);
+				fetch_page(true, pageNumber, pag_ids, &window, &page);
 				release_page(&window);
 			}
 		}
@@ -2782,9 +2780,9 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	const auto format = MET_format(vdr_tdbb, relation, header->rhd_format);
 	auto remainingLength = format->fmt_length;
 
-	auto calculateLength = [fragment, remainingLength](ULONG length, const UCHAR* data)
+	auto calculateLength = [remainingLength](ULONG length, const UCHAR* data, bool notPacked)
 	{
-		if (fragment->rhdf_flags & rhd_not_packed)
+		if (notPacked)
 		{
 			if (length > remainingLength)
 			{
@@ -2803,7 +2801,8 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		return Compressor::getUnpackedLength(length, data);
 	};
 
-	remainingLength -= calculateLength(length, p);
+	bool notPacked = (fragment->rhdf_flags & rhd_not_packed) != 0;
+	remainingLength -= calculateLength(length, p, notPacked);
 
 	// Next, chase down fragments, if any
 
@@ -2855,7 +2854,8 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 			length -= RHD_SIZE;
 		}
 
-		remainingLength -= calculateLength(length, p);
+		notPacked = (fragment->rhdf_flags & rhd_not_packed) != 0;
+		remainingLength -= calculateLength(length, p, notPacked);
 
 		page_number = fragment->rhdf_f_page;
 		line_number = fragment->rhdf_f_line;
@@ -3279,8 +3279,7 @@ Validation::RTN Validation::walk_tip()
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	vcl* vector = dbb->dbb_t_pages;
-	if (!vector)
+	if (!dbb->getKnownPagesCount(pag_transactions))
 		return corrupt(VAL_TIP_LOST, 0);
 
 	tx_inv_page* page = 0;
@@ -3291,43 +3290,37 @@ Validation::RTN Validation::walk_tip()
 
 	for (ULONG sequence = 0; sequence <= last; sequence++)
 	{
-		if (sequence >= vector->count() || !(*vector)[sequence])
+		auto pageNumber = dbb->getKnownPage(pag_transactions, sequence);
+		if (!pageNumber)
 		{
 			corrupt(VAL_TIP_LOST_SEQUENCE, 0, sequence);
 
 			if (saved_tip_next)
-			{
-				if (sequence >= vector->count())
-				{
-					vector = dbb->dbb_t_pages =
-						vcl::newVector(*dbb->dbb_permanent, dbb->dbb_t_pages, sequence + 1);
-				}
-
-				(*vector)[sequence] = saved_tip_next;
-			}
+				dbb->setKnownPage(pag_transactions, sequence, saved_tip_next);
 			else
 			{
-				if ((vdr_flags & VDR_repair) && sequence >= vector->count())
+				if ((vdr_flags & VDR_repair) && sequence >= dbb->getKnownPagesCount(pag_transactions))
 				{
 					TRA_extend_tip(vdr_tdbb, sequence);
-					vector = dbb->dbb_t_pages;
 					vdr_fixed++;
 				}
 				else
 					continue;
 			}
+
+			pageNumber = dbb->getKnownPage(pag_transactions, sequence);
 		}
 	
-		if (saved_tip_next && saved_tip_next != (*vector)[sequence])
+		if (saved_tip_next && saved_tip_next != pageNumber)
 			corrupt(VAL_TIP_CONFUSED, 0, sequence - 1);
 
 		WIN window(DB_PAGE_SPACE, -1);
-		fetch_page(true, (*vector)[sequence], pag_transactions, &window, &page);
+		fetch_page(true, pageNumber, pag_transactions, &window, &page);
 		saved_tip_next = page->tip_next;
 
 #ifdef DEBUG_VAL_VERBOSE
 		if (VAL_debug_level)
-			fprintf(stdout, "walk_tip: page %d next %d\n", (*vector)[sequence], page->tip_next);
+			fprintf(stdout, "walk_tip: page %d next %d\n", pageNumber, page->tip_next);
 #endif
 		if (sequence == last)
 		{
@@ -3340,7 +3333,7 @@ Validation::RTN Validation::walk_tip()
 				if (state != tra_active)
 				{
 					if (!advanced_NT)
-						corrupt(VAL_TIP_NON_ACTIVE_AFTER_NT, 0, (*vector)[sequence], sequence);
+						corrupt(VAL_TIP_NON_ACTIVE_AFTER_NT, 0, pageNumber, sequence);
 						
 					advanced_NT = sequence * trans_per_tip + number;
 				}

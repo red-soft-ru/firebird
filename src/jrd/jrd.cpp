@@ -3140,7 +3140,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			INI_format(tdbb, options.dpb_set_db_charset);
 
 			// If we have not allocated first TIP page, do it now.
-			if (!dbb->dbb_t_pages || !dbb->dbb_t_pages->count())
+			if (!dbb->getKnownPagesCount(pag_transactions))
 				TRA_extend_tip(tdbb, 0);
 
 			// There is no point to move database online at database creation since it is online by default.
@@ -3215,9 +3215,8 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			CCH_flush(tdbb, FLUSH_FINI, 0);
 
 			// The newly created database should have FW = ON, unless the opposite is specified in DPB
-			const bool forceWrite = options.dpb_set_force_write ? options.dpb_force_write : true;
-			if (forceWrite)
-				PAG_set_force_write(tdbb, options.dpb_force_write);
+			if (!options.dpb_set_force_write || options.dpb_force_write)
+				PAG_set_force_write(tdbb, true);
 
 			dbb->dbb_crypto_manager->attach(tdbb, attachment);
 			dbb->dbb_backup_manager->dbCreating = false;
@@ -9859,6 +9858,8 @@ void TrigVector::release()
 
 void TrigVector::release(thread_db* tdbb)
 {
+	fb_assert(useCount.value() > 0);
+
 	if (--useCount == 0)
 	{
 		decompile(tdbb);

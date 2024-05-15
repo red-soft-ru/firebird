@@ -3759,7 +3759,8 @@ bool VIO_next_record(thread_db* tdbb,
 					 record_param* rpb,
 					 jrd_tra* transaction,
 					 MemoryPool* pool,
-					 FindNextRecordScope scope)
+					 FindNextRecordScope scope,
+					 const RecordNumber* upper)
 {
 /**************************************
  *
@@ -3794,9 +3795,14 @@ bool VIO_next_record(thread_db* tdbb,
 		rpb->rpb_f_page, rpb->rpb_f_line);
 #endif
 
-	do {
+	do
+	{
 		if (!DPM_next(tdbb, rpb, lock_type, scope))
+			return false;
+
+		if (upper && rpb->rpb_number > *upper)
 		{
+			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 			return false;
 		}
 	} while (!VIO_chase_record_version(tdbb, rpb, transaction, pool, false, false));

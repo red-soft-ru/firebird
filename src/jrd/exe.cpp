@@ -751,7 +751,8 @@ void EXE_receive(thread_db* tdbb,
 						}
 
 						if (!current->bli_materialized &&
-							(current->bli_blob_object->blb_flags & BLB_close_on_read))
+							(current->bli_blob_object->blb_flags & (BLB_close_on_read | BLB_stream)) ==
+								(BLB_close_on_read | BLB_stream))
 						{
 							current->bli_blob_object->BLB_close(tdbb);
 						}
@@ -833,10 +834,15 @@ void EXE_release(thread_db* tdbb, Request* request)
 		if (request->req_attachment->att_requests.find(request, pos))
 			request->req_attachment->att_requests.remove(pos);
 
-		request->req_attachment = NULL;
+		request->req_attachment = nullptr;
 	}
 
 	request->req_flags &= ~req_in_use;
+	if (request->req_timer)
+	{
+		request->req_timer->stop();
+		request->req_timer = nullptr;
+	}
 }
 
 
@@ -1288,7 +1294,7 @@ void EXE_execute_triggers(thread_db* tdbb,
  *	if any blow up.
  *
  **************************************/
-	if (!*triggers)
+	if (!*triggers || (*triggers)->isEmpty())
 		return;
 
 	SET_TDBB(tdbb);
@@ -1296,7 +1302,7 @@ void EXE_execute_triggers(thread_db* tdbb,
 	Request* const request = tdbb->getRequest();
 	jrd_tra* const transaction = request ? request->req_transaction : tdbb->getTransaction();
 
-	TrigVector* vector = *triggers;
+	RefPtr<TrigVector> vector(*triggers);
 	Record* const old_rec = old_rpb ? old_rpb->rpb_record : NULL;
 	Record* const new_rec = new_rpb ? new_rpb->rpb_record : NULL;
 
@@ -1421,15 +1427,9 @@ void EXE_execute_triggers(thread_db* tdbb,
 
 			trigger = NULL;
 		}
-
-		if (vector != *triggers)
-			MET_release_triggers(tdbb, &vector, true);
 	}
 	catch (const Exception& ex)
 	{
-		if (vector != *triggers)
-			MET_release_triggers(tdbb, &vector, true);
-
 		if (trigger)
 		{
 			EXE_unwind(tdbb, trigger);

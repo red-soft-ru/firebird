@@ -1883,6 +1883,7 @@ void MET_load_ddl_triggers(thread_db* tdbb)
 
 	attachment->att_ddl_triggers = FB_NEW_POOL(*attachment->att_pool)
 		TrigVector(*attachment->att_pool);
+	attachment->att_ddl_triggers->addRef();
 
 	AutoRequest trigger_request;
 
