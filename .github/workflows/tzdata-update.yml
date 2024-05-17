@@ -23,7 +23,7 @@ jobs:
           ref: ${{ matrix.branch }}
 
       - name: Checkout ICU
-        run: git clone --depth 1 https://github.com/unicode-org/icu-data.git -b main /tmp/icu-checkout
+        run: git clone -c core.hooksPath=/dev/null --depth 1 https://github.com/unicode-org/icu-data.git -b main /tmp/icu-checkout
 
       - name: Check and update
         run: |
