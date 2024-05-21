@@ -2221,8 +2221,13 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 				// procedure name to track parameter dependencies
 				DFW_post_work_arg(transaction, work, &desc, procedure->getId(), dfw_arg_proc_name);
 			}
-			EVL_field(0, rpb->rpb_record, f_prm_sname, &desc2);
-			DFW_post_work(transaction, dfw_delete_global, &desc2, 0);
+
+			if (!EVL_field(0, rpb->rpb_record, f_prm_fname, &desc2))
+			{
+				EVL_field(0, rpb->rpb_record, f_prm_sname, &desc2);
+				DFW_post_work(transaction, dfw_delete_global, &desc2, 0);
+			}
+
 			break;
 
 		case rel_fields:
