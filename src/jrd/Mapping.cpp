@@ -1171,7 +1171,9 @@ private:
 					g |= l;
 				}
 
-				ULONG gg = 0; g.store(&gg);
+				FB_UINT64 gg = 0;
+				fb_assert(sizeof(gg) >= g.BYTES_COUNT);
+				g.store(&gg);
 				MAP_DEBUG(fprintf(stderr, "poprole %s 0x%x\n", key.c_str(), gg));
 				put(key, g);
 			}
