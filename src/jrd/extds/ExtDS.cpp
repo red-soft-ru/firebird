@@ -441,9 +441,9 @@ void Provider::jrdAttachmentEnd(thread_db* tdbb, Jrd::Attachment* att, bool forc
 void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 {
 	ConnectionsPool* connPool = conn.getConnPool();
+	Attachment* att = conn.getBoundAtt();
 
 	{ // m_mutex scope
-		Attachment* att = conn.getBoundAtt();
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		bool found = false;
@@ -464,7 +464,42 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 			m_connections.add(AttToConn(NULL, &conn));
 	}
 
-	if (!inPool || !connPool || !connPool->getMaxCount() || !conn.isConnected() || !conn.resetSession(tdbb))
+	FbLocalStatus resetError;
+	inPool = inPool && connPool && connPool->getMaxCount() && conn.isConnected();
+
+	if (inPool)
+	{
+		inPool = conn.resetSession(tdbb);
+
+		// Check if reset of external session failed when parent (local) attachment
+		// is resetting or run ON DISCONNECT trigger.
+
+		const auto status = tdbb->tdbb_status_vector;
+		if (!inPool && status->hasData())
+		{
+			if (att->att_flags & ATT_resetting)
+				resetError.loadFrom(status);
+			else
+			{
+				auto req = tdbb->getRequest();
+				while (req)
+				{
+					if (req->req_trigger_action == TRIGGER_DISCONNECT)
+					{
+						resetError.loadFrom(status);
+						break;
+					}
+					req = req->req_caller;
+				}
+			}
+		}
+	}
+
+	if (inPool)
+	{
+		connPool->putConnection(tdbb, &conn);
+	}
+	else
 	{
 		{	// scope
 			MutexLockGuard guard(m_mutex, FB_FUNCTION);
@@ -477,9 +512,8 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 			connPool->delConnection(tdbb, &conn, false);
 
 		Connection::deleteConnection(tdbb, &conn);
+		resetError.check();
 	}
-	else
-		connPool->putConnection(tdbb, &conn);
 }
 
 void Provider::clearConnections(thread_db* tdbb)
