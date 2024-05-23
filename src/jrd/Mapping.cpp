@@ -1163,7 +1163,9 @@ private:
 				}
 
 				FB_UINT64 gg = 0;
-				fb_assert(sizeof(gg) >= g.BYTES_COUNT);
+				static_assert(sizeof(gg) >= g.BYTES_COUNT,
+					"The value for storing system privileges is too small");
+
 				g.store(&gg);
 				MAP_DEBUG(fprintf(stderr, "poprole %s 0x%x\n", key.c_str(), gg));
 				put(key, g);
