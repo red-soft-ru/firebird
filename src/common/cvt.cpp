@@ -2577,9 +2577,10 @@ static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, 
 		const char* p;
 		USHORT length = CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
 
-		RetValue<SSHORTTraits> rv(&value);
-		scale -= cvt_decompose(p, length, &rv, err);
-
+		{
+			RetValue<SSHORTTraits> rv(&value);
+			scale -= cvt_decompose(p, length, &rv, err);
+		}
 		adjustForScale(value, scale, SHORT_LIMIT, err);
 	}
 	else {
@@ -4793,8 +4794,10 @@ SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
 
 			SINT64 i64;
-			RetValue<SINT64Traits> rv(&i64);
-			scale -= cvt_decompose(p, length, &rv, err);
+			{
+				RetValue<SINT64Traits> rv(&i64);
+				scale -= cvt_decompose(p, length, &rv, err);
+			}
 			SINT64_to_SQUAD(i64, value);
 		}
 		break;
