@@ -465,7 +465,7 @@ copy %FB_ROOT_PATH%\builds\install\misc\databases.conf %FB_OUTPUT_DIR%\databases
 :: that and they all have windows EOL
 ::===============================================
 for /R %FB_OUTPUT_DIR% %%W in ( *.txt *.conf *.sql *.c *.cpp *.hpp *.h *.bat *.pas *.e *.def *.rc *.md *.html ) do (
-  unix2dos -q --safe %%W || exit /b 1
+  unix2dos --quiet --safe %%W || exit /b 1
 )
 
 ::End of SET_CRLF
@@ -612,12 +612,12 @@ set ERRLEV=%errorlevel%
 @echo.
 ::End of ERROR
 ::------------
-@goto :EOF
+@goto :END
 
 
 :WARNING
 ::======
-set ERRLEV=%errorlevel%
+set ERRLEV=%ERRORLEVEL%
 @echo.
 @echo   **** WARNING - Execution of a non-critical component failed with error level %ERRLEV%. ****
 @echo   %*
@@ -629,7 +629,10 @@ if "%FBBUILD_PROD_STATUS%"=="PROD" (
 @echo.
 ) else (
 set ERRLEV=0
+@ver > nul
 )
+::End of WARNING
+::--------------
 @goto :EOF
 
 
@@ -645,6 +648,7 @@ for %%v in ( %1 %2 %3 %4 %5 %6 %7 %8 %9 )  do (
 pushd ..\..\..\win32
 ::This must be called from the directory it resides in.
 @call setenvvar.bat
+@if ERRORLEVEL 1 (popd & (call :ERROR Failure after calling setenvvar.bat ) & goto :END )
 popd
 @if errorlevel 1 (goto :END)
 
@@ -713,6 +717,10 @@ if %FBBUILD_ISX_PACK% EQU 1 (
 @echo.
 @echo Completed building installation kit(s)
 @echo.
+
+:: If we got this far then be sure to reset ERRLEV
+:: because run_all.bat will check for ERRLEV
+@set ERRLEV=
 
 ::@if %FB2_ISS_DEBUG% equ 0 (ENDLOCAL)
 ::End of MAIN
