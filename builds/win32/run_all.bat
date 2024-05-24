@@ -9,6 +9,7 @@ set FBBUILD_BUILDTYPE=release
 set FBBUILD_INCLUDE_PDB=
 set FBBUILD_MAKE_KITS_ONLY=
 set FBBUILD_BUILD_ONLY=0
+set FBBUILD_TEST_ONLY=
 set FB2_SNAPSHOT=
 
 ::Check if on-line help is required
@@ -27,10 +28,13 @@ for %%v in ( %* )  do (
 ( if /I "%%v"=="PDB" (set FBBUILD_INCLUDE_PDB=1) )
 ( if /I "%%v"=="REPACK" (set FBBUILD_MAKE_KITS_ONLY=1) )
 ( if /I "%%v"=="JUSTBUILD" (set FBBUILD_BUILD_ONLY=1) )
+( if /I "%%v"=="TESTENV" (set FBBUILD_TEST_ONLY=1) )
 ( if /I "%%v"=="SNAPSHOT" (set FB2_SNAPSHOT=1) )
 )
 
 call :SETVCENV
+
+if defined FBBUILD_TEST_ONLY ( goto TEST_ENV & goto :EOF )
 
 if defined FBBUILD_MAKE_KITS_ONLY (goto :MAKE_KITS & goto :EOF)
 
@@ -53,10 +57,12 @@ if "%FBBUILD_BUILD_ONLY%"=="1" goto :END
 :: Package everything up
 pushd ..\install\arch-specific\win32
 call BuildExecutableInstall ISX ZIP EMB %FBBUILD_BUILDTYPE%
-if "%ERRLEV%"=="1" ( @echo Oops - some sort of error & popd & goto :END)
+if "%ERRLEV%"=="1" (
+  @echo Oops - some sort of error during packaging & popd & goto :END
+)
 if defined FBBUILD_INCLUDE_PDB (
-set /A FBBUILD_PACKAGE_NUMBER-=1
-call BuildExecutableInstall ISX ZIP EMB %FBBUILD_BUILDTYPE% PDB
+  set /A FBBUILD_PACKAGE_NUMBER-=1
+  call BuildExecutableInstall ISX ZIP EMB %FBBUILD_BUILDTYPE% PDB
 )
 popd
 
@@ -82,12 +88,30 @@ goto :END
 @echo.
 @echo    JUSTBUILD - Just build - don't create packages.
 @echo.
+@echo    TESTENV   - Sanity check - is Visual Studio available?.
+@echo                              - print the build variables that will be used
+@echo.
 @echo    SNAPSHOT  - Build and create a zip kit.
 @echo                This is intended to produce a x64 test kit
 @echo                with no dependency on Win32
 @echo.
 
 @goto :EOF
+::---------
+
+
+:TEST_ENV
+::===============================
+:: Show variables
+@call setenvvar.bat %*
+if "%ERRLEV%"=="1" goto :END
+echo.
+set FB
+set MS
+set VC
+set VS
+echo.
+goto :END
 ::---------
 
 
