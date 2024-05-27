@@ -2120,12 +2120,14 @@ void DPM_scan_pages( thread_db* tdbb)
 			break;
 
 		case pag_transactions:
-			tipSeqList.resize(sequence + 1);
+			if (sequence >= tipSeqList.getCount())
+				tipSeqList.resize(sequence + 1);
 			tipSeqList[sequence] = X.RDB$PAGE_NUMBER;
 			break;
 
 		case pag_ids:
-			genSeqList.resize(sequence + 1);
+			if (sequence >= genSeqList.getCount())
+				genSeqList.resize(sequence + 1);
 			genSeqList[sequence] = X.RDB$PAGE_NUMBER;
 			break;
 
