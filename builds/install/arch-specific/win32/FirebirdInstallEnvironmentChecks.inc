@@ -387,11 +387,9 @@ var
   product: Integer;
   gds32VersionString: String;
   VerInt: Array of Integer;
-//  BoolOne, BoolTwo, BoolEval: Boolean;
-//  EvalOne, EvalTwo: Integer;
+
   dbg_ProductPath, dbg_BinPath, dbg_ClientVersion, dbg_GBAKVersion, dbg_Server: String;
   dbg_InstallType : Integer;
-//  eval_bool: boolean;
 
 
 begin
@@ -1179,23 +1177,6 @@ begin
     if ((InstallAndConfigure AND Configure) = Configure) then
       InstallAndConfigure := InstallAndConfigure - Configure;
 end;
-
-
-{ procedure RenamePreFB3RC1Files;
-//The method of specifying the architecture used changed after Beta 2
-//Detect this old config and rename it.
-var
-  FirebirdConfStr: AnsiString;
-begin
-  if FileExists(GetAppPath+'\firebird.conf') then begin
-    LoadStringFromFile( GetAppPath+'\firebird.conf', FirebirdConfStr );
-    if  pos('SharedDatabase', FirebirdConfStr) > 0 then begin
-      RenameFile(GetAppPath+'\firebird.conf', GetAppPath+'\firebird.conf.preRC1');
-      RenameFile(GetAppPath+'\security5.fdb', GetAppPath+'\security5.fdb.preRC1');
-    end
-  end
-end;
-}
 
 
 function ConfigureAuthentication: boolean;

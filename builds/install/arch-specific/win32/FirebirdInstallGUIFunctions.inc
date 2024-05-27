@@ -30,11 +30,11 @@
   o EnumerateObjectList;
      - Simple demonstration of object enumeration.
 
-	o Show Help	 
+	o Show Help
 		- CreateHelpDlg;
 		- ShowHelpDlg: Integer;
 		- CloseHelpDlg;
-	
+
 	o Show some debug info for debugging inno setup script
 		- CreateDebugDlg
 		- CloseDebugDlg;
@@ -49,9 +49,9 @@ var
   CompGroupButtonsArray: array of string;
   CompGroup1, CompGroup2, CompGroup3, CompGroupButtons: TStringList;
 
-// This is a non-exhaustive list of components that need to be repositioned 
-// and/or resized if the form size is changed. Use EnumerateObjectList to 
-// get a full list of components. 
+// This is a non-exhaustive list of components that need to be repositioned
+// and/or resized if the form size is changed. Use EnumerateObjectList to
+// get a full list of components.
 procedure SetupWizardFormComponentsArrays;
 var
   i: integer;
@@ -85,12 +85,12 @@ begin
   CompGroup1Array[23]:='OuterNotebook';
 
   CompGroup1 := TStringList.create;
-  
+
   for i := 0 to GetArrayLength( CompGroup1Array )-1 do begin
-    CompGroup1.add( CompGroup1Array[i] );	
+    CompGroup1.add( CompGroup1Array[i] );
     CompGroup1.objects[i] := (WizardForm.FindComponent(CompGroup1Array[i]));
   end;
-  
+
 	SetArrayLength(CompGroup2Array,8);
 	CompGroup2Array[0] := 'Bevel';
 	CompGroup2Array[1] := 'BeveledLabel';
@@ -103,7 +103,7 @@ begin
 
   CompGroup2 := TStringList.create;
   for i := 0 to GetArrayLength( CompGroup2Array )-1 do begin
-    CompGroup2.add(CompGroup2Array[i]);	
+    CompGroup2.add(CompGroup2Array[i]);
     CompGroup2.objects[i] := (WizardForm.FindComponent(CompGroup2Array[i]));
   end;
 
@@ -111,7 +111,7 @@ begin
 	CompGroup3Array[0] := 'WizardBitmapImage';
   CompGroup3 := TStringList.create;
   for i:=0 to GetArrayLength(CompGroup3Array)-1 do begin
-    CompGroup3.add(CompGroup3Array[i]);	
+    CompGroup3.add(CompGroup3Array[i]);
     CompGroup3.objects[i] := (WizardForm.FindComponent(CompGroup3Array[i]));
   end;
 
@@ -121,12 +121,12 @@ begin
 	CompGroupButtonsArray[2] := 'CancelButton';
 	CompGroupButtons := TStringList.create;
   for i:=0 to GetArrayLength(CompGroupButtonsArray)-1 do begin
-    CompGroupButtons.add(CompGroupButtonsArray[i]);	
+    CompGroupButtons.add(CompGroupButtonsArray[i]);
     CompGroupButtons.objects[i] := (WizardForm.FindComponent(CompGroupButtonsArray[i]));
   end;
 
 end;
-	
+
 procedure ResizeWizardFormHeight(AValue: Integer);
 var
 	i: integer;
@@ -145,11 +145,11 @@ begin
     // Group 3 - reset top of components but keep 'centered' vertically.
 		for i:=0 to GetArrayLength(CompGroup3Array)-1 do
 			TControl( CompGroup3.objects[i]).top := TControl(CompGroup3.objects[i]).top + (AValue div 2);
-			
-    // Group Buttons - reset top of components 
+
+    // Group Buttons - reset top of components
 		for i:=0 to GetArrayLength(CompGroupButtonsArray)-1 do
 			TControl(CompGroupButtons.objects[i]).top := TControl(CompGroupButtons.objects[i]).top + AValue;
-			
+
 end;
 
 
@@ -160,7 +160,7 @@ var
 begin
     wizardform.width := wizardform.width + AValue;
 		wizardform.left := wizardform.left - (AValue div 2);
-	
+
     // Group 1 - reset width of components
 		for i:=0 to GetArrayLength(CompGroup1Array)-1 do begin
 			TControl(CompGroup1.objects[i]).width := TControl(CompGroup1.objects[i]).width + Avalue;
@@ -291,9 +291,9 @@ end;
 
 
 // Add a simple debug dialogue
-var 
+var
 	DebugDlg: TForm;
-	
+
 procedure CreateDebugDlg(aString: String; ADescription: String);
 var
   DebugText: TMemo;
@@ -328,8 +328,8 @@ begin
   DebugDlg.ActiveControl := OKButton;
 
 end;
-	
-	
+
+
 procedure CloseDebugDlg;
 begin
   with DebugDlg do begin
