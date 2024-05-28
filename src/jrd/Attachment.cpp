@@ -1115,6 +1115,18 @@ void Attachment::checkReplSetLock(thread_db* tdbb)
 
 void Attachment::invalidateReplSet(thread_db* tdbb, bool broadcast)
 {
+	if (broadcast)
+	{
+		// Signal other attachments about the changed state
+		if (att_repl_lock->lck_logical == LCK_none)
+			LCK_lock(tdbb, att_repl_lock, LCK_EX, LCK_WAIT);
+		else
+			LCK_convert(tdbb, att_repl_lock, LCK_EX, LCK_WAIT);
+	}
+
+	if (att_flags & ATT_repl_reset)
+		return;
+
 	att_flags |= ATT_repl_reset;
 
 	if (att_relations)
@@ -1124,15 +1136,6 @@ void Attachment::invalidateReplSet(thread_db* tdbb, bool broadcast)
 			if (relation)
 				relation->rel_repl_state.invalidate();
 		}
-	}
-
-	if (broadcast)
-	{
-		// Signal other attachments about the changed state
-		if (att_repl_lock->lck_logical == LCK_none)
-			LCK_lock(tdbb, att_repl_lock, LCK_EX, LCK_WAIT);
-		else
-			LCK_convert(tdbb, att_repl_lock, LCK_EX, LCK_WAIT);
 	}
 
 	LCK_release(tdbb, att_repl_lock);
