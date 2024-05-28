@@ -2156,7 +2156,7 @@ InversionCandidate* Retrieval::matchDbKey(BoolExprNode* boolean) const
 			{
 				const auto inversion = FB_NEW_POOL(getPool()) InversionNode(value, n);
 				inversion->impure = csb->allocImpure<impure_inversion>();
-				listInversion = composeInversion(listInversion, inversion, InversionNode::TYPE_IN);
+				listInversion = composeInversion(listInversion, inversion, InversionNode::TYPE_OR);
 			}
 
 			invCandidate->inversion = listInversion;
