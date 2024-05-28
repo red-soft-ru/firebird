@@ -99,9 +99,6 @@ PluginLogWriter::~PluginLogWriter()
 
 	if (m_fileHandle != -1)
 		::close(m_fileHandle);
-
-	if (m_sharedMemory && m_sharedMemory->getHeader())
-		m_sharedMemory->removeMapFile();
 }
 
 SINT64 PluginLogWriter::seekToEnd()
