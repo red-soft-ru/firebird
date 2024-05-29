@@ -642,7 +642,7 @@ namespace
 		CheckStatusWrapper s(&ls);
 		IPluginBase* plugin = module->getPlugin(regPlugin).factory->createPlugin(&s, par);
 
-		if (!(s.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (plugin && !(s.getState() & Firebird::IStatus::STATE_ERRORS))
 		{
 			plugin->setOwner(par);
 			return plugin;
