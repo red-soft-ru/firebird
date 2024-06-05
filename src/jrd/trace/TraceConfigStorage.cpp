@@ -90,8 +90,7 @@ ConfigStorage::ConfigStorage()
 	  m_filename(getPool()),
 	  m_recursive(0),
 	  m_mutexTID(0),
-	  m_dirty(false),
-	  m_nextIdx(0)
+	  m_dirty(false)
 {
 #ifdef WIN_NT
 	DWORD sesID = 0;
@@ -744,19 +743,14 @@ bool ConfigStorage::getSession(Firebird::TraceSession& session, GET_FLAGS getFla
 	return readSession(slot, session, getFlag);
 }
 
-void ConfigStorage::restart()
-{
-	m_nextIdx = 0;
-}
-
-bool ConfigStorage::getNextSession(TraceSession& session, GET_FLAGS getFlag)
+bool ConfigStorage::getNextSession(TraceSession& session, GET_FLAGS getFlag, ULONG& nextIdx)
 {
 	TraceCSHeader* header = m_sharedMemory->getHeader();
 
-	while (m_nextIdx < header->slots_cnt)
+	while (nextIdx < header->slots_cnt)
 	{
-		TraceCSHeader::Slot* slot = header->slots + m_nextIdx;
-		m_nextIdx++;
+		TraceCSHeader::Slot* slot = header->slots + nextIdx;
+		nextIdx++;
 
 		if (slot->used)
 			return readSession(slot, session, getFlag);
@@ -893,6 +887,31 @@ void ConfigStorage::updateFlags(TraceSession& session)
 
 	setDirty();
 	slot->ses_flags = session.ses_flags;
+}
+
+bool ConfigStorage::Accessor::getNext(TraceSession& session, GET_FLAGS getFlag)
+{
+	if (m_guard)
+		return m_storage->getNextSession(session, getFlag, m_nextIdx);
+
+	StorageGuard guard(m_storage);
+
+	// Restore position, if required: find index of slot with session ID greater than m_sesId.
+	if (m_change_number != m_storage->getChangeNumber())
+	{
+		if (m_storage->findSession(m_sesId, m_nextIdx))
+			m_nextIdx++;
+
+		m_change_number = m_storage->getChangeNumber();
+	}
+
+	if (m_storage->getNextSession(session, getFlag, m_nextIdx))
+	{
+		m_sesId = session.ses_id;
+		return true;
+	}
+
+	return false;
 }
 
 void ConfigStorage::Writer::write(ITEM tag, ULONG len, const void* data)
