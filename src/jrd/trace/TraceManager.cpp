@@ -193,10 +193,10 @@ void TraceManager::update_sessions()
 		const bool noNewSessions = attachment && (attachment->att_purge_tid);
 
 		StorageGuard guard(storage);
-		storage->restart();
+		ConfigStorage::Accessor acc(&guard);
 
 		TraceSession session(pool);
-		while (storage->getNextSession(session, ConfigStorage::FLAGS))
+		while (acc.getNext(session, ConfigStorage::FLAGS))
 		{
 			if ((session.ses_flags & trs_active) && !(session.ses_flags & trs_log_full))
 			{
