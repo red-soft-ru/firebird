@@ -1127,13 +1127,17 @@ void SharedMemoryBase::removeMapFile()
 	if (!sh_mem_header->isDeleted())
 	{
 #ifndef WIN_NT
-		unlinkFile();
+		FileLockHolder initLock(initFile);
+		if (!sh_mem_header->isDeleted())
+		{
+			unlinkFile();
+			sh_mem_header->markAsDeleted();
+		}
 #else
 		fb_assert(!sh_mem_unlink);
 		sh_mem_unlink = true;
-#endif // WIN_NT
-
 		sh_mem_header->markAsDeleted();
+#endif // WIN_NT
 	}
 }
 
