@@ -1958,8 +1958,6 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 		Arg::Gds(isc_bad_svc_handle).raise();
 	}
 
-	bool needTraceEvent = false;
-
 	try
 	{
 	if (!svcShutdown)
@@ -2098,8 +2096,6 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 		svc_status->init();
 	}
 
-	needTraceEvent = svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_START);
-
 	if (serv->serv_thd)
 	{
 		svc_flags &= ~(SVC_evnt_fired | SVC_finished);
@@ -2138,7 +2134,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 	}	// try
 	catch (const Firebird::Exception& ex)
 	{
-		if (needTraceEvent)
+		if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_START))
 		{
 			FbLocalStatus status_vector;
 			ex.stuffException(&status_vector);
@@ -2154,7 +2150,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 		throw;
 	}
 
-	if (needTraceEvent)
+	if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_START))
 	{
 		TraceServiceImpl service(this);
 		this->svc_trace_manager->event_service_start(&service,
