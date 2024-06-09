@@ -181,6 +181,10 @@ void TraceManager::update_sessions()
 	{	// scope
 		ConfigStorage* storage = getStorage();
 
+		// don't attach going attachment to the new trace sessions, it allows
+		// to avoid problems later - when mapping uses this going attachment
+		const bool noNewSessions = attachment && (attachment->att_purge_tid);
+
 		StorageGuard guard(storage);
 		storage->restart();
 
@@ -192,7 +196,7 @@ void TraceManager::update_sessions()
 				FB_SIZE_T pos;
 				if (trace_sessions.find(session.ses_id, pos))
 					liveSessions.add(session.ses_id);
-				else
+				else if (!noNewSessions)
 					newSessions.add(FB_NEW_POOL(pool) TraceSession(pool, session));
 			}
 		}
