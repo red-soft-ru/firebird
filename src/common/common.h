@@ -222,6 +222,7 @@
 
 #define UNIX
 #define FB_OS OsDarwin
+
 #ifdef ARM
 #define FB_CPU CpuArm
 #endif /* ARM */
@@ -241,6 +242,10 @@
 #define DARWINPPC64
 #define FB_CPU CpuPowerPc64
 #endif
+#ifdef ARM64
+#define DARWIN64		// Wrong, bad, but I follow HEAD rules for a while
+#endif
+
 #define IEEE
 #define QUADCONST(n) (n##LL)
 #define QUADFORMAT "q"
