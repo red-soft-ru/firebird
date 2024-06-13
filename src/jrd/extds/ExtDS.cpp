@@ -126,6 +126,15 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 	else
 	{
 		FB_SIZE_T pos = dataSource.find("::");
+
+		// Check if it is part of IPv6 address, assume provider name can't contain square brackets
+		if (pos != string::npos &&
+			dataSource.rfind("[", pos) != string::npos &&
+			dataSource.find("]", pos) != string::npos)
+		{
+			pos = string::npos;
+		}
+
 		if (pos != string::npos)
 		{
 			prvName = dataSource.substr(0, pos);
