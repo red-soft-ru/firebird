@@ -109,6 +109,8 @@ enum P_ARCH
 	arch_max			= 44	// Keep this at the end
 };
 
+#include "../remote/remote_def.h"
+
 // Protocol Types
 // p_acpt_type
 //const USHORT ptype_page		= 1;	// Page server protocol

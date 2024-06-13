@@ -30,7 +30,7 @@
 #define REMOTE_REMOTE_H
 
 #include "gen/iberror.h"
-#include "../remote/remote_def.h"
+#include "../remote/protocol.h"
 #include "../common/ThreadData.h"
 #include "../common/ThreadStart.h"
 #include "../common/Auth.h"

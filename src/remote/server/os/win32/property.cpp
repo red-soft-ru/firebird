@@ -38,7 +38,7 @@
 #include "../jrd/license.h"
 #include "../common/file_params.h"
 #include "../remote/remote.h"
-#include "../remote/remote_def.h"
+#include "../remote/protocol.h"
 #include "../../remote/server/serve_proto.h"
 #include "../../remote/server/os/win32/window.h"
 #include "../../remote/server/os/win32/window.rh"

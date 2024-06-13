@@ -40,7 +40,7 @@
 #ifndef REMOTE_REMOTE_DEF_H
 #define REMOTE_REMOTE_DEF_H
 
-#include "../remote/protocol.h"
+#include "../common/common.h"
 
 #if defined(__sun)
 #	ifdef sparc
