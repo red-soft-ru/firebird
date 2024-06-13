@@ -86,6 +86,19 @@ dnl Test for special ar options?
 AR_OPT_CHECK=false
 
 case "$build" in
+  aarch64-*-darwin*)
+    MAKEFILE_PREFIX=darwin_aarch64
+    MAKEFILE_POSTFIX=darwin
+    PLATFORM=DARWIN
+    INSTALL_PREFIX=darwin
+    AC_DEFINE(DARWIN, 1, [Define this if OS is DARWIN])
+	XE_APPEND(-framework CoreFoundation,LIBS)
+    EDITLINE_FLG=Y
+    SHRLIB_EXT=dylib
+    CPU_TYPE=arm64
+    EXPORT_SYMBOLS_STYLE=darwin
+    RAW_DEVICES_FLG=N
+    ;;
   x*64-*-darwin*)
     MAKEFILE_PREFIX=darwin_x86_64
     MAKEFILE_POSTFIX=darwin
