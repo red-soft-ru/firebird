@@ -228,52 +228,84 @@ void TraceSvcJrd::listSessions()
 {
 	m_svc.started();
 
-	ConfigStorage* storage = TraceManager::getStorage();
-	StorageGuard guard(storage);
+	// Don't put data into service while storage is locked, see gh-8151
 
-	storage->restart();
+	typedef HalfStaticArray<char, 1024> CharBufferBase;
 
-	TraceSession session(*getDefaultMemoryPool());
-	while (storage->getNextSession(session))
+	class CharBuff : public CharBufferBase
 	{
-		if (checkPrivileges(session))
-		{
-			m_svc.printf(false, "\nSession ID: %d\n", session.ses_id);
-			if (!session.ses_name.empty()) {
-				m_svc.printf(false, "  name:  %s\n", session.ses_name.c_str());
-			}
-			m_svc.printf(false, "  user:  %s\n", session.ses_user.c_str());
+	public:
+		CharBuff() : CharBufferBase(*getDefaultMemoryPool())
+		{}
 
-			struct tm* t = localtime(&session.ses_start);
-			m_svc.printf(false, "  date:  %04d-%02d-%02d %02d:%02d:%02d\n",
+		// Format string and append it to the end of buffer
+		void printf(const char* format, ...)
+		{
+			string str;
+
+			va_list params;
+			va_start(params, format);
+			str.vprintf(format, params);
+			va_end(params);
+
+			this->append(str.c_str(), str.length());
+		}
+
+	};
+
+	CharBuff buff;
+
+	ConfigStorage* storage = TraceManager::getStorage();
+	{
+		StorageGuard guard(storage);
+
+		storage->restart();
+
+		TraceSession session(*getDefaultMemoryPool());
+		while (storage->getNextSession(session))
+		{
+			if (checkPrivileges(session))
+			{
+				buff.printf("\nSession ID: %d\n", session.ses_id);
+				if (!session.ses_name.empty()) {
+					buff.printf("  name:  %s\n", session.ses_name.c_str());
+				}
+				buff.printf("  user:  %s\n", session.ses_user.c_str());
+
+				struct tm* t = localtime(&session.ses_start);
+				buff.printf("  date:  %04d-%02d-%02d %02d:%02d:%02d\n",
 					t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
 					t->tm_hour, t->tm_min, t->tm_sec);
 
-			string flags;
-			if (session.ses_flags & trs_active) {
-				flags = "active";
+				string flags;
+				if (session.ses_flags & trs_active) {
+					flags = "active";
+				}
+				else {
+					flags = "suspend";
+				}
+				if (session.ses_flags & trs_admin) {
+					flags += ", admin";
+				}
+				if (session.ses_flags & trs_system) {
+					flags += ", system";
+				}
+				if (session.ses_logfile.empty()) {
+					flags += ", audit";
+				}
+				else {
+					flags += ", trace";
+				}
+				if (session.ses_flags & trs_log_full) {
+					flags += ", log full";
+				}
+				buff.printf("  flags: %s\n", flags.c_str());
 			}
-			else {
-				flags = "suspend";
-			}
-			if (session.ses_flags & trs_admin) {
-				flags += ", admin";
-			}
-			if (session.ses_flags & trs_system) {
-				flags += ", system";
-			}
-			if (session.ses_logfile.empty()) {
-				flags += ", audit";
-			}
-			else {
-				flags += ", trace";
-			}
-			if (session.ses_flags & trs_log_full) {
-				flags += ", log full";
-			}
-			m_svc.printf(false, "  flags: %s\n", flags.c_str());
 		}
 	}
+
+	if (buff.hasData())
+		m_svc.putBytes(reinterpret_cast<UCHAR*>(buff.begin()), buff.getCount());
 }
 
 void TraceSvcJrd::readSession(TraceSession& session)
