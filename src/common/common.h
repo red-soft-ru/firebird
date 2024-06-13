@@ -74,6 +74,13 @@
 #include "fb_macros.h"
 #include "fb_types.h"
 
+
+// Valid for any OS
+#ifdef ARM64
+#define FB_CPU CpuArm64
+#endif /* ARM64 */
+
+
 /*****************************************************
 * Linux platforms
 *****************************************************/
@@ -130,10 +137,6 @@
 #ifdef ARM
 #define FB_CPU CpuArm
 #endif /* ARM */
-
-#ifdef ARM64
-#define FB_CPU CpuArm64
-#endif /* ARM64 */
 
 #ifdef sparc
 #define FB_CPU CpuUltraSparc
