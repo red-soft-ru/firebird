@@ -115,6 +115,9 @@ Manager::~Manager()
 
 void Manager::addProvider(Provider* provider)
 {
+	// TODO: if\when usage of user providers will be implemented,
+	// need to check provider name for allowed chars (file system rules ?)
+
 	for (const Provider* prv = m_providers; prv; prv = prv->m_next)
 	{
 		if (prv->m_name == provider->m_name) {
@@ -155,6 +158,15 @@ static void splitDataSourceName(thread_db* tdbb, const string& dataSource,
 	else
 	{
 		FB_SIZE_T pos = dataSource.find("::");
+
+		// Check if it is part of IPv6 address, assume provider name can't contain square brackets
+		if (pos != string::npos &&
+			dataSource.rfind("[", pos) != string::npos &&
+			dataSource.find("]", pos) != string::npos)
+		{
+			pos = string::npos;
+		}
+
 		if (pos != string::npos)
 		{
 			prvName = dataSource.substr(0, pos);
