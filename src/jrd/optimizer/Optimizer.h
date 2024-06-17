@@ -548,7 +548,7 @@ private:
 	unsigned baseParentConjuncts = 0;		// number of conjuncts in our rse + distributed with parent, next are parent
 	unsigned baseMissingConjuncts = 0;		// number of conjuncts in our and parent rse, but without missing
 
-	StreamList compileStreams, bedStreams, keyStreams, subStreams, outerStreams;
+	StreamList compileStreams, bedStreams, keyStreams, outerStreams;
 	ConjunctList conjuncts;
 };
 
