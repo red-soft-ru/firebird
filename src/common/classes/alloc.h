@@ -285,6 +285,11 @@ using Firebird::MemoryPool;
 
 // operators new and delete
 
+#if _MSC_VER >= 1900
+#pragma warning(push)
+#pragma warning(disable : 4595)		// non-member operator new or delete functions may not be declared inline
+#endif
+
 inline void* operator new(size_t s ALLOC_PARAMS) throw (OOM_EXCEPTION)
 {
 	return MemoryPool::globalAlloc(s ALLOC_PASS_ARGS);
@@ -320,6 +325,10 @@ inline void operator delete[](void* mem, Firebird::MemoryPool& pool ALLOC_PARAMS
 {
 	MemoryPool::globalFree(mem);
 }
+
+#if _MSC_VER >= 1900
+#pragma warning(pop)
+#endif
 
 #ifdef DEBUG_GDS_ALLOC
 
