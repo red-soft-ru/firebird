@@ -18,6 +18,10 @@ jobs:
             container: alpine
           - os: macOS-latest
             platform: x64
+          - os: windows-2022
+            platform: x64
+          - os: windows-2022
+            platform: x86
 
     steps:
     - uses: actions/checkout@v1
@@ -111,13 +115,14 @@ jobs:
         mv gen/Release/*.pkg gen/artifacts
 
     - name: Prepare (Windows)
-      if: matrix.os == 'windows-2016'
+      if: matrix.os == 'windows-2022'
       shell: cmd
       run: |
         for /r %%i in (*.bat) do unix2dos "%%i"
+        choco install --no-progress --yes vcredist2010
 
     - name: Build (Windows)
-      if: matrix.os == 'windows-2016'
+      if: matrix.os == 'windows-2022'
       shell: cmd
       env:
         PLATFORM: ${{ matrix.platform }}
@@ -130,7 +135,7 @@ jobs:
         if "%PLATFORM%" == "x86" set FB_PROCESSOR_ARCHITECTURE=x86
         if "%PLATFORM%" == "x86" set FB_OUTPUT_SUFFIX=win32
         set
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=%FB_VS_ARCH%
+        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=%FB_VS_ARCH%
         cd builds\win32
         run_all.bat JUSTBUILD
 
@@ -156,14 +161,14 @@ jobs:
         path: gen/artifacts
 
     - name: Upload (Windows x64)
-      if: matrix.os == 'windows-2016' && matrix.platform == 'x64'
+      if: matrix.os == 'windows-2022' && matrix.platform == 'x64'
       uses: actions/upload-artifact@master
       with:
         name: firebird-windows-x64
         path: output_x64
 
     - name: Upload (Windows x86)
-      if: matrix.os == 'windows-2016' && matrix.platform == 'x86'
+      if: matrix.os == 'windows-2022' && matrix.platform == 'x86'
       uses: actions/upload-artifact@master
       with:
         name: firebird-windows-x86
