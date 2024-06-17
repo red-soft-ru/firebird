@@ -7,6 +7,8 @@
 ::     but we call devenv with $config|$platform (note variable in reverse order
 ::      and odd syntax.) This extended syntax for devenv does not seem to be
 ::      supported in MSVC7 (despite documentation to the contrary.)
+:: 
+::   Note3: use msbuild with MSVC15
 
 setlocal
 set solution=%1
@@ -19,7 +21,7 @@ set projects=
 	set config=debug
 )
 
-if %MSVC_VERSION% GEQ 8 (
+if %MSVC_VERSION% LSS 15 (
 	set config="%config%|%FB_TARGET_PLATFORM%"
 )
 
@@ -36,14 +38,22 @@ shift
 
 if "%1" == "" goto loop_end
 
-set projects=%projects% /project %1
+if %MSVC_VERSION% GEQ 15 (
+  set projects=%projects% /target:%1
+) else (
+  set projects=%projects% /project %1
+)
 
 shift
 goto loop_start
 
 :loop_end
 
-%exec% %solution%.sln %projects% %FB_CLEAN% %config% /OUT %output%
+if %MSVC_VERSION% GEQ 15 (
+  msbuild "%solution%.sln" /maxcpucount /p:Configuration=%config% /p:Platform=%FB_TARGET_PLATFORM% %projects% /fileLoggerParameters:LogFile=%output%
+) else (
+  %exec% %solution%.sln %projects% %FB_CLEAN% %config% /OUT %output%
+)
 
 endlocal
 

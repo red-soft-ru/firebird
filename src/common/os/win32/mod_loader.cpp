@@ -101,7 +101,7 @@ public:
 				"msvcr110.dll",
 #elif _MSC_VER == 1800
 					"msvcr120.dll",
-#elif _MSC_VER >= 1900 && _MSC_VER < 1920
+#elif _MSC_VER >= 1900
 					"vcruntime140.dll",
 #else
                     #error Specify CRT DLL name here !
