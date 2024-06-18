@@ -106,8 +106,8 @@ Const
   FB25_x64_Install  = 14;
   FB30Install       = 15;
   FB30_x64_Install  = 16;
-  Current32Install  = FB30Install;
-  Current64Install  = FB30_x64_Install;
+  Current32Install  = FB{#FB_MAJOR_VER}0Install;
+  Current64Install  = FB{#FB_MAJOR_VER}0_x64_Install;
 
   MaxProdInstalled = FB30_x64_Install;
 
@@ -129,8 +129,8 @@ Const
   FB21_x64  = $04000;
   FB25_x64  = $08000;
   FB30_x64  = $10000;
-  CurFB32   = FB30;
-  CurFB64   = FB30_x64;
+  CurFB32   = FB{#FB_MAJOR_VER}0;
+  CurFB64   = FB{#FB_MAJOR_VER}0_x64;
 
   //  Likely gds32 version strings for installed versions of Firebird or InterBase are:
   //  [6,0,n,n]     InterBase 6.0
@@ -793,7 +793,7 @@ else
 SharedFileArray[27].Filename := ExpandConstant('{app}')+'databases.conf';
 SharedFileArray[28].Filename := ExpandConstant('{app}')+'firebird.conf';
 SharedFileArray[29].Filename := ExpandConstant('{app}')+'firebird.log';
-SharedFileArray[30].Filename := ExpandConstant('{app}')+'security5.fdb';
+SharedFileArray[30].Filename := ExpandConstant('{app}')+'security{#FB_MAJOR_VER}.fdb';
 SharedFileArray[31].Filename := ExpandConstant('{app}')+'fbtrace.conf';
 SharedFileArray[32].Filename := ExpandConstant('{app}')+'fbsvcmgr.exe';
 SharedFileArray[33].Filename := ExpandConstant('{app}')+'fbrmclib.dll';
@@ -1154,9 +1154,9 @@ begin
 //// **** FIX ME **** Don't use hardcoded constants here. They get overlooked.
   if ( (ProductsInstalledCount = 1) AND
 #if PlatformTarget == "x64"
-    ((ProductsInstalled AND FB30_x64 ) = FB30_x64 ) ) then begin
+    ((ProductsInstalled AND FB{#FB_MAJOR_VER}0_x64 ) = FB{#FB_MAJOR_VER}0_x64 ) ) then begin
 #else
-    ((ProductsInstalled AND FB30 ) = FB30 ) ) then begin
+    ((ProductsInstalled AND FB{#FB_MAJOR_VER}0 ) = FB{#FB_MAJOR_VER}0 ) ) then begin
 #endif
         result := true;
         exit;

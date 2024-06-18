@@ -187,7 +187,7 @@ if "%FB_TARGET_PLATFORM%"=="x64" (
   -e s/\$RELEASE/%FB_REV_NO%/g
 @echo   Processing version strings in Readme_%FBBUILD_PROD_STATUS%.txt
 @%SED_COMMAND% Readme_%FBBUILD_PROD_STATUS%.txt > %FB_GEN_DIR%\readmes\Readme.txt
-@for %%f in (installation_readme.txt) do (
+@for %%f in ( installation_readme.txt installation_scripted.txt ) do (
   @echo   Processing version strings in %%f
   @%SED_COMMAND% %%f > %FB_GEN_DIR%\readmes\%%f
 )
