@@ -246,8 +246,7 @@ double DPM_cardinality(thread_db* tdbb, jrd_rel* relation, const Format* format)
 	ULONG recordCount = 0, recordLength = 0;
 
 	RelationPages* const relPages = relation->getPages(tdbb);
-	const vcl* const vector = relPages->rel_pages;
-	if (vector)
+	if (relPages->rel_pages)
 	{
 		bool done = false;
 		for (ULONG sequence = 0; !done; sequence++)
