@@ -482,7 +482,7 @@ Source: {#FilesDir}\databases.conf; DestDir: {app}; Components: ClientComponent;
 Source: {#FilesDir}\replication.conf; DestDir: {app}; DestName: replication.conf.default; Components: ServerComponent;
 Source: {#FilesDir}\replication.conf; DestDir: {app}; Components: ServerComponent; Flags: uninsneveruninstall onlyifdoesntexist; check: NoReplicationConfExists;
 Source: {#FilesDir}\security{#FB_MAJOR_VER}.fdb; DestDir: {app}; Destname: security{#FB_MAJOR_VER}.fdb.empty; Components: ServerComponent;
-Source: {#FilesDir}\security{#FB_MAJOR_VER}.fdb; DestDir: {app}; Components: ServerComponent; Flags: uninsneveruninstall onlyifdoesntexist
+Source: {#FilesDir}\security{#FB_MAJOR_VER}.fdb; DestDir: {app}; Components: ServerComponent; Check: ConfigureAuthentication; Flags: uninsneveruninstall onlyifdoesntexist
 Source: {#FilesDir}\firebird.msg; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
 Source: {#FilesDir}\firebird.log; DestDir: {app}; Components: ServerComponent; Flags: uninsneveruninstall skipifsourcedoesntexist external dontcopy
 
@@ -635,6 +635,10 @@ program Setup;
 // b) Debugged.
 // This hopefully keeps the main script simpler to follow.
 
+
+const
+  UNDEFINED = -1;
+
 Var
   InstallRootDir: String;
   FirebirdConfSaved: String;
@@ -649,6 +653,8 @@ Var
                                 // databases.conf, fbtrace.conf and the security database.
 
   SYSDBAPassword: String;       // SYSDBA password
+
+  init_secdb: integer;          // Is set to UNDEFINED by default in InitializeSetup
 
 #ifdef setuplogging
 // Not yet implemented - leave log in %TEMP%
@@ -741,6 +747,7 @@ begin
   InitExistingInstallRecords;
   AnalyzeEnvironment;
   result := AnalysisAssessment;
+  init_secdb := UNDEFINED;
 
 end;
 
@@ -1052,7 +1059,8 @@ begin
       IncrementSharedCount(Is64BitInstallMode, GetAppPath+'\security{#FB_MAJOR_VER}.fdb', false);
       IncrementSharedCount(Is64BitInstallMode, GetAppPath+'\replication.conf', false);
 
-			InitSecurityDB;
+      if init_secdb = 1 then
+        InitSecurityDB;
 
       //Fix up conf file
       UpdateFirebirdConf;
