@@ -135,10 +135,10 @@ begin
     wizardform.top := wizardform.top - (AValue div 2);
 
     // Group 1 - reset height of components
-		for i:=0 to GetArrayLength(CompGroup1Array)-1 do
-			TControl(CompGroup1.objects[i]).height := TControl(CompGroup1.objects[i]).height + Avalue;
+    for i:=0 to GetArrayLength(CompGroup1Array)-1 do
+      TControl(CompGroup1.objects[i]).height := TControl(CompGroup1.objects[i]).height + Avalue;
 
-		// Group 2 - reset top of components
+    // Group 2 - reset top of components
     for i:=0 to GetArrayLength(CompGroup2Array)-1 do
       TControl(CompGroup2.objects[i]).top := TControl(CompGroup2.objects[i]).top + AValue;
 
@@ -167,11 +167,11 @@ begin
 //      TControl(CompGroup1.objects[i]).left := TControl(CompGroup1.objects[i]).left + (Avalue div 2);
     end;
 
-		// Group 2 - reset left of components
-		for i:=0 to GetArrayLength(CompGroup2Array)-1 do begin
-			TControl(CompGroup2.objects[i]).left := TControl(CompGroup2.objects[i]).left + AValue;
-			TControl(CompGroup2.objects[i]).width := TControl(CompGroup2.objects[i]).width + (AValue div 2);
-		end;
+    // Group 2 - reset left of components
+    for i:=0 to GetArrayLength(CompGroup2Array)-1 do begin
+      TControl(CompGroup2.objects[i]).left := TControl(CompGroup2.objects[i]).left + AValue;
+      TControl(CompGroup2.objects[i]).width := TControl(CompGroup2.objects[i]).width + (AValue div 2);
+    end;
 
     // Group 3 - reset left of components but keep 'centered' horizontally.
 //		for i:=0 to GetArrayLength(CompGroup3Array)-1 do
@@ -284,7 +284,7 @@ end;
 
 function ShowHelpDlg: Integer;
 begin
-	CreateHelpDlg;
+  CreateHelpDlg;
   result := HelpDlg.ShowModal;
   CloseHelpDlg;
 end;
