@@ -17,7 +17,7 @@
  Helper functions for FB installer
 
  These are / ought to be fairly generic
- It makes more sense if they are independent functions - ie, they don't
+ It makes more sense if they are independant functions - ie, they don't
  call other functions in the script and they don't need to know about the
  install script itself.
 
