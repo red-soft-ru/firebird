@@ -52,7 +52,7 @@ if not defined FB2_SNAPSHOT (set FB2_SNAPSHOT=0)
   ( if /I "%%v"=="ALL" ( (set FBBUILD_ZIP_PACK=1) & (set FBBUILD_ISX_PACK=1) ) )
 )
 
-::Are we doing a snapshot build? If so we always do less work.
+:: Are we doing a snapshot build? If so we always do less work.
 if "%FB2_SNAPSHOT%"=="1" (
   (set FBBUILD_ISX_PACK=0)
 )
@@ -79,28 +79,28 @@ if defined MD5_COMMAND (
   @echo     o POSIX md5sum utility found at %MD5_COMMAND%
 )
 
-if %FBBUILD_ZIP_PACK% EQU 1 (
+@if %FBBUILD_ZIP_PACK% EQU 1 (
   if not defined SEVENZIP (
     if exist "%ProgramW6432%\7-Zip\7z.exe" set SEVENZIP=%ProgramW6432%\7-Zip
   )
   if not defined SEVENZIP (
     call :ERROR SEVENZIP environment variable is not defined.
-    @goto :EOF
+    goto :EOF
   ) else (
-	@echo     o Compression utility found.
+    echo     o Compression utility found.
   )
 )
 
-if %FBBUILD_ISX_PACK% NEQ 1 goto :SKIP_INNO
+@if %FBBUILD_ISX_PACK% NEQ 1 goto :SKIP_INNO
 
-if defined INNO6_SETUP_PATH (
+@if defined INNO6_SETUP_PATH (
   set ISCC_COMMAND="%INNO6_SETUP_PATH%\iscc.exe"
 )
 :: If the environment variable is not set let's search in PATH
-if not defined ISCC_COMMAND (
-  @for /f "usebackq tokens=*" %%c in ( `where /f iscc 2^>nul` ) do set ISCC_COMMAND=%%c
+@if not defined ISCC_COMMAND (
+  for /f "usebackq tokens=*" %%c in ( `where /f iscc 2^>nul` ) do set ISCC_COMMAND=%%c
 )
-if not defined ISCC_COMMAND (
+@if not defined ISCC_COMMAND (
   @echo  Required Inno Setup compiler not found
   @exit /b 1
 )
@@ -108,23 +108,23 @@ if not defined ISCC_COMMAND (
 
 :SKIP_INNO
 
-if not defined WIX (
-  @echo.
-  @echo The WIX environment var not defined.
-  @echo WiX is needed to build the MSI kits of the CRT runtimes.
-  @echo.
+@if not defined WIX (
+  echo.
+  echo The WIX environment var not defined.
+  echo WiX is needed to build the MSI kits of the CRT runtimes.
+  echo.
 ) else (
- @echo     o WiX found at "%WIX%".
+  echo     o WiX found at "%WIX%".
 )
 
-if not defined FB_EXTERNAL_DOCS (
- @echo.
- @echo The FB_EXTERNAL_DOCS environment var is not defined
- @echo It should point to the directory containing the relevant release notes
- @echo in adobe pdf format.
- @echo.
+@if not defined FB_EXTERNAL_DOCS (
+  echo.
+  echo The FB_EXTERNAL_DOCS environment var is not defined
+  echo It should point to the directory containing the relevant release notes
+  echo in adobe pdf format.
+  echo.
 ) else (
- @echo     o Package will include documentation from "%FB_EXTERNAL_DOCS%".
+  echo     o Package will include documentation from "%FB_EXTERNAL_DOCS%".
 )
 
 
@@ -137,7 +137,7 @@ if not defined FB_EXTERNAL_DOCS (
 ::==========
 
 :: Cut off everything that is not #define to let Inno Setup use it
-findstr /B /L "#define" "%FB_ROOT_PATH%\src\jrd\build_no.h" >"%FB_ROOT_PATH%\gen\jrd\build_no.h"
+@findstr /B /L "#define" "%FB_ROOT_PATH%\src\jrd\build_no.h" >"%FB_ROOT_PATH%\gen\jrd\build_no.h"
 :: Read version parameters from build_no.h
 @for /F "tokens=2*" %%a in ( %FB_ROOT_PATH%\gen\jrd\build_no.h ) do (
   echo   Setting %%a to %%~b
@@ -167,13 +167,13 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
 @if not exist "%FBBUILD_INSTALL_IMAGES%" ( mkdir "%FBBUILD_INSTALL_IMAGES%" )
 
 :: Determine Product Status
-if %FB_BUILD_TYPE%==V (
+@if %FB_BUILD_TYPE%==V (
   set FBBUILD_PROD_STATUS=PROD
 ) else (
   set FBBUILD_PROD_STATUS=DEV
 )
 
-if "%FB_TARGET_PLATFORM%"=="x64" (
+@if "%FB_TARGET_PLATFORM%"=="x64" (
   set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows-x64
 ) else (
   set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows-x86
@@ -188,8 +188,8 @@ if "%FB_TARGET_PLATFORM%"=="x64" (
 @echo   Processing version strings in Readme_%FBBUILD_PROD_STATUS%.txt
 @%SED_COMMAND% Readme_%FBBUILD_PROD_STATUS%.txt > %FB_GEN_DIR%\readmes\Readme.txt
 @for %%f in ( installation_readme.txt installation_scripted.txt ) do (
-  @echo   Processing version strings in %%f
-  @%SED_COMMAND% %%f > %FB_GEN_DIR%\readmes\%%f
+  echo   Processing version strings in %%f
+  %SED_COMMAND% %%f > %FB_GEN_DIR%\readmes\%%f
 )
 @for %%d in (ba cz de es fr hu it pl pt ru si ) do (
   if not exist %FB_GEN_DIR%\readmes\%%d ( @mkdir %FB_GEN_DIR%\readmes\%%d )
@@ -214,7 +214,7 @@ if "%FB_TARGET_PLATFORM%"=="x64" (
 
 @echo   Copying MSVC runtime libraries...
 @if not exist %FB_OUTPUT_DIR%\system32 (
-  @mkdir %FB_OUTPUT_DIR%\system32
+  mkdir %FB_OUTPUT_DIR%\system32
 )
 :: Note the confusion of RT library numbers here! These notes, as of time of
 :: writing 2021-12-21, are accurate for current versions of Visual Studio
@@ -225,7 +225,7 @@ if "%FB_TARGET_PLATFORM%"=="x64" (
 :: %MSVC_RUNTIME_LIBRARY_VERSION% is based on the Visual Studio version used.
 :: These variables are set in setenvvar.bat.
 @for %%f in ( msvcp%MSVC_RUNTIME_FILE_VERSION%.dll vcruntime%MSVC_RUNTIME_FILE_VERSION%.dll  ) do (
-    echo Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f"
+    echo   Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f"
     copy  "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" %FB_OUTPUT_DIR%\ >nul
     if ERRORLEVEL 1 (
     call :ERROR Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" failed with error %ERRLEV%  & goto :EOF
@@ -235,8 +235,8 @@ if "%FB_TARGET_PLATFORM%"=="x64" (
 @where /Q implib.exe
 @if not ERRORLEVEL 1 (
   if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
-    @echo   Generating fbclient_bor.lib
-    @implib %FB_OUTPUT_DIR%\lib\fbclient_bor.lib %FB_OUTPUT_DIR%\fbclient.dll > nul
+    echo   Generating fbclient_bor.lib
+    implib %FB_OUTPUT_DIR%\lib\fbclient_bor.lib %FB_OUTPUT_DIR%\fbclient.dll > nul
   )
 )
 
@@ -299,7 +299,9 @@ if "%FB_TARGET_PLATFORM%"=="x64" (
     for %%v in ( Firebird-%FB_MAJOR_VER%.%FB_MINOR_VER%.%FB_REV_NO%%FBBUILD_FILENAME_SUFFIX%-ReleaseNotes.pdf ) do (
         echo     ... %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v
         copy /Y %FB_EXTERNAL_DOCS%\%%v %FB_OUTPUT_DIR%\doc\%%v > nul
-        if ERRORLEVEL 1 ( call :ERROR Copying %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v FAILED. & @goto :EOF )
+        if ERRORLEVEL 1 (
+            call :ERROR Copying %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v FAILED. &  @goto :EOF
+        )
     )
 
     echo   Copying optional pdf docs...
@@ -312,7 +314,6 @@ if "%FB_TARGET_PLATFORM%"=="x64" (
   echo   Finished copying pdf docs...
   echo.
 )
-
 
 @echo   Cleaning irrelevant files...
 :: Clean out text notes that are either not relevant to Windows or
@@ -346,8 +347,8 @@ for /R %FB_OUTPUT_DIR%\doc %%v in ( * ) do (
   )
 )
 
-if %FB2_SNAPSHOT% EQU 1 (
-  @copy %FB_ROOT_PATH%\builds\install\arch-specific\win32\readme_snapshot.txt %FB_OUTPUT_DIR%\readme_snapshot.txt > nul
+@if %FB2_SNAPSHOT% EQU 1 (
+  copy %FB_ROOT_PATH%\builds\install\arch-specific\win32\readme_snapshot.txt %FB_OUTPUT_DIR%\readme_snapshot.txt > nul
 )
 
 @echo   Completed copying docs.
@@ -385,7 +386,7 @@ if %FB2_SNAPSHOT% EQU 1 (
 :INCLUDE_DIR
 ::==========
 :: Prepare other files needed for deployment to /include dir
-setlocal
+@setlocal
 :: grab some missing bits'n'pieces from different parts of the source tree
 ::=========================================================================
 @echo   Copying ib_util etc
@@ -398,7 +399,7 @@ set OUTPATH=%FB_OUTPUT_DIR%\include
 @copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\ > nul || (@call :ERROR Failure executing copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\  )
 @if ERRORLEVEL 1 goto :END
 
-endlocal
+@endlocal
 
 ::End of INCLUDE_DIR
 ::------------------
@@ -409,7 +410,7 @@ endlocal
 :: Generate sample databases file
 ::===============================
 @echo   Creating sample databases.conf
-copy %FB_ROOT_PATH%\builds\install\misc\databases.conf %FB_OUTPUT_DIR%\databases.conf > nul
+@copy %FB_ROOT_PATH%\builds\install\misc\databases.conf %FB_OUTPUT_DIR%\databases.conf > nul
 
 ::End of DB_CONF
 ::-----------------
@@ -435,7 +436,7 @@ copy %FB_ROOT_PATH%\builds\install\misc\databases.conf %FB_OUTPUT_DIR%\databases
 :: Get a list of all files in the tree make sure
 :: that and they all have windows EOL
 ::===============================================
-for /R %FB_OUTPUT_DIR% %%W in ( *.txt *.conf *.sql *.c *.cpp *.hpp *.h *.bat *.pas *.e *.def *.rc *.md *.html ) do (
+@for /R %FB_OUTPUT_DIR% %%W in ( *.txt *.conf *.sql *.c *.cpp *.hpp *.h *.bat *.pas *.e *.def *.rc *.md *.html ) do (
   unix2dos --quiet --safe %%W || exit /b 1
 )
 
@@ -447,11 +448,11 @@ for /R %FB_OUTPUT_DIR% %%W in ( *.txt *.conf *.sql *.c *.cpp *.hpp *.h *.bat *.p
 :ZIP_PACK
 ::=======
 :: Forcefully disable delayed expansion because of exclamation marks in 7z switches
-setlocal DisableDelayedExpansion
+@setlocal DisableDelayedExpansion
 
-set SKIP_FILES=-x!*.log -x!*.exp -x!*_test.exe -x!installation_readme.txt
+@set SKIP_FILES=-x!*.log -x!*.exp -x!*_test.exe -x!installation_readme.txt
 
-if "%FBBUILD_SHIP_PDB%" == "ship_pdb" (
+@if "%FBBUILD_SHIP_PDB%" == "ship_pdb" (
     set FBBUILD_ZIPFILE=%FBBUILD_INSTALL_IMAGES%\Firebird-%FBBUILD_FILE_ID%-withDebugSymbols.zip
 ) else (
     set FBBUILD_ZIPFILE=%FBBUILD_INSTALL_IMAGES%\Firebird-%FBBUILD_FILE_ID%.zip
@@ -459,15 +460,15 @@ if "%FBBUILD_SHIP_PDB%" == "ship_pdb" (
 )
 
 :: No need to ship this file with the msi runtime
-set SKIP_FILES=%SKIP_FILES% -x!*.wixpdb
+@set SKIP_FILES=%SKIP_FILES% -x!*.wixpdb
 
-if "%FB2_EXAMPLES%" == "0" set SKIP_FILES=%SKIP_FILES% -xr-!examples
+@if "%FB2_EXAMPLES%" == "0" set SKIP_FILES=%SKIP_FILES% -xr-!examples
 
-if exist %FBBUILD_ZIPFILE% del %FBBUILD_ZIPFILE%
+@if exist %FBBUILD_ZIPFILE% del %FBBUILD_ZIPFILE%
 
-"%SEVENZIP%\7z.exe" a -r -tzip -mx9 %SKIP_FILES% %FBBUILD_ZIPFILE% %FB_OUTPUT_DIR%\*
+@"%SEVENZIP%\7z.exe" a -r -tzip -mx9 %SKIP_FILES% %FBBUILD_ZIPFILE% %FB_OUTPUT_DIR%\*
 
-endlocal
+@endlocal
 
 ::End of ZIP_PACK
 ::----------------
@@ -495,9 +496,9 @@ endlocal
 ::=========
 :: Generate the md5sum checksum file
 ::==================================
-if not defined MD5_COMMAND (
+@if not defined MD5_COMMAND (
   call :WARNING md5sum utility not found. Cannot generate md5 sums.
-  @goto :EOF
+  goto :EOF
 )
 @set FBBUILD_MD5SUMS_FILENAME=Firebird-%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows.md5sum
 @echo   Generating md5sums for %FBBUILD_MD5SUMS_FILENAME%
@@ -513,7 +514,7 @@ if not defined MD5_COMMAND (
 ) else (
      echo Error calling %0 & popd & @goto :END
 )
-popd
+@popd
 
 ::End of DO_MD5SUMS
 ::-----------------
@@ -576,7 +577,7 @@ popd
 
 :ERROR
 ::====
-set ERRLEV=%ERRORLEVEL%
+@set ERRLEV=%ERRORLEVEL%
 @echo.
 @echo   Error code %ERRLEV% in %SCRIPT_SHORT_NAME%
 @echo     %*
@@ -588,7 +589,7 @@ set ERRLEV=%ERRORLEVEL%
 
 :WARNING
 ::======
-set ERRLEV=%ERRORLEVEL%
+@set ERRLEV=%ERRORLEVEL%
 @echo.
 @echo   **** WARNING - Execution of a non-critical component failed with error level %ERRLEV%. ****
 @echo   %*
@@ -656,20 +657,20 @@ popd
 @echo.
 
 @echo   Writing databases conf
-@(@call :DB_CONF ) || (@echo Error calling DB_CONF & @goto :END)
+@(call :DB_CONF ) || ( echo Error calling DB_CONF & goto :END )
 @echo.
 @echo   Copying firebird.msg
-@(@call :FB_MSG ) || (@echo Error calling FB_MSG & @goto :END)
+@(call :FB_MSG ) || ( echo Error calling FB_MSG & goto :END )
 @echo.
 
 @echo   Fix up line endings...
-@(@call :SET_CRLF ) || ( @echo Error calling SET_CRLF & @goto :EOF )
+@( call :SET_CRLF ) || ( echo Error calling SET_CRLF & goto :EOF )
 @echo.
 
 @if %FBBUILD_ZIP_PACK% EQU 1 (
-  @echo   Zipping files for zip pack
-  (@call :ZIP_PACK ) || ( @echo Error calling ZIP_PACK & @goto :END )
-  @echo.
+  echo   Zipping files for zip pack
+  ( call :ZIP_PACK ) || ( echo Error calling ZIP_PACK & goto :END )
+  echo.
 )
 
 @if %FBBUILD_ISX_PACK% EQU 1 (
