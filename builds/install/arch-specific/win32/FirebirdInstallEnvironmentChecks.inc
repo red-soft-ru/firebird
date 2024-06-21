@@ -1181,23 +1181,6 @@ begin
 end;
 
 
-{ procedure RenamePreFB3RC1Files;
-//The method of specifying the architecture used changed after Beta 2
-//Detect this old config and rename it.
-var
-  FirebirdConfStr: AnsiString;
-begin
-  if FileExists(GetAppPath+'\firebird.conf') then begin
-    LoadStringFromFile( GetAppPath+'\firebird.conf', FirebirdConfStr );
-    if  pos('SharedDatabase', FirebirdConfStr) > 0 then begin
-      RenameFile(GetAppPath+'\firebird.conf', GetAppPath+'\firebird.conf.preRC1');
-      RenameFile(GetAppPath+'\security6.fdb', GetAppPath+'\security6.fdb.preRC1');
-    end
-  end
-end;
-}
-
-
 function ConfigureAuthentication: boolean;
 begin
   if IsNotServerInstall then
