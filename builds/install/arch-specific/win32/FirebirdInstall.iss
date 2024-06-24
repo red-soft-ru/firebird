@@ -138,7 +138,7 @@
 ; even Windows 7 are now deprecated and hopefully no production install of
 ; W2K8 R2 is unpatched. If necessary we can define 'support_legacy_windows' to
 ; roll back this new feature but users who need to deploy to what are now
-; ancient versions of windows are advised to manually install Firebird 4.0 with
+; ancient versions of windows are advised to manually install Firebird with
 ; the zip package.
 #ifdef support_legacy_windows
 #define MINVER "6.0"
@@ -208,13 +208,6 @@
 #endif
 #endif
 
-#if FB_BUILD_TYPE == "T"
-;If we are still under development we can ignore some missing files.
-#define SkipFileIfDevStatus " skipifsourcedoesntexist "
-#else
-#define SkipFileIfDevStatus " "
-#endif
-
 ;This location is relative to SourceDir (declared below)
 #define FilesDir="output_" + PlatformTarget
 #if PlatformTarget == "x64"
@@ -242,12 +235,15 @@
 ;#endif
 
 
-;Some more strings to distinguish the name of final executable
+; Some more strings to distinguish the name of final executable
+; shipping with debug symbols should not be confused with actual debug builds
 #ifdef ship_pdb
 #define pdb_str="-pdb"
 #else
 #define pdb_str=""
 #endif
+; This is intended for builds that have been built with the debug flag
+; So far we have never actually released such a build.
 #if GetEnv("FBBUILD_BUILDTYPE") == "debug"
 #define debug_str="-debug"
 #else
@@ -485,8 +481,8 @@ Source: {#FilesDir}\fbsvcmgr.exe; DestDir: {app}; Components: DevAdminComponent;
 Source: {#FilesDir}\fbtracemgr.exe; DestDir: {app}; Components: DevAdminComponent; Flags: ignoreversion
 Source: {#FilesDir}\fbclient.dll; DestDir: {app}; Components: ClientComponent; Flags: overwritereadonly sharedfile promptifolder
 #if PlatformTarget == "x64"
-Source: {#WOW64Dir}\fbclient.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: overwritereadonly sharedfile promptifolder {#SkipFileIfDevStatus}
-Source: {#WOW64Dir}\instclient.exe; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile ignoreversion {#SkipFileIfDevStatus}
+Source: {#WOW64Dir}\fbclient.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: overwritereadonly sharedfile promptifolder
+Source: {#WOW64Dir}\instclient.exe; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile ignoreversion
 #endif
 Source: {#FilesDir}\icuuc??.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
 Source: {#FilesDir}\icuin??.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
@@ -516,8 +512,8 @@ Source: {#FilesDir}\{#msvcr_filename}{#msvc_runtime_major_version}{#msvc_runtime
 Source: {#FilesDir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}; Components: ClientComponent; Flags: sharedfile;
 #if PlatformTarget == "x64"
 ;If we are installing on x64 we need some 32-bit libraries for compatibility with 32-bit applications
-Source: {#WOW64Dir}\{#msvcr_filename}{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile {#SkipFileIfDevStatus};
-Source: {#WOW64Dir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile {#SkipFileIfDevStatus};
+Source: {#WOW64Dir}\{#msvcr_filename}{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile;
+Source: {#WOW64Dir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_version_0}.dll; DestDir: {app}\WOW64; Components: ClientComponent; Flags: sharedfile;
 #endif
 #endif  /* #if Int(msvc_runtime_major_version,14) >= 10 */
 
@@ -525,10 +521,10 @@ Source: {#WOW64Dir}\msvcp{#msvc_runtime_major_version}{#msvc_runtime_minor_versi
 #if PlatformTarget == "x64"
 ;MinVersion 0,5.0 means no version of Win9x and at least Win2k if NT O/S
 ;In addition, O/S must have Windows Installer 3.0.
-Source: {#FilesDir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.msi; DestDir: {tmp};  Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent; Flags: {#SkipFileIfDevStatus}
-Source: {#WOW64Dir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent; Flags: {#SkipFileIfDevStatus}
+Source: {#FilesDir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.msi; DestDir: {tmp};  Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent;
+Source: {#WOW64Dir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent;
 #else
-Source: {#FilesDir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent; Flags: {#SkipFileIfDevStatus}
+Source: {#FilesDir}\system32\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent;
 #endif
 #endif
 
@@ -545,7 +541,7 @@ Source: {#FilesDir}\intl\fbintl.dll; DestDir: {app}\intl; Components: ServerComp
 Source: {#FilesDir}\intl\fbintl.conf; DestDir: {app}\intl; Components: ServerComponent; Flags: onlyifdoesntexist
 Source: {#FilesDir}\lib\*.*; DestDir: {app}\lib; Components: DevAdminComponent; Flags: ignoreversion;
 #if PlatformTarget == "x64"
-Source: {#WOW64Dir}\lib\*.lib; DestDir: {app}\WOW64\lib; Components: DevAdminComponent; Flags: ignoreversion {#SkipFileIfDevStatus}
+Source: {#WOW64Dir}\lib\*.lib; DestDir: {app}\WOW64\lib; Components: DevAdminComponent; Flags: ignoreversion
 #endif
 
 ;deprecated in FB4.0
@@ -571,7 +567,7 @@ Source: {#FilesDir}\tzdata\*.*; DestDir: {app}\tzdata; Components: ClientCompone
 #endif /* files */
 
 #ifdef examples
-Source: {#FilesDir}\examples\*.*; DestDir: {app}\examples; Components: DevAdminComponent;  Flags: ignoreversion  createallsubdirs recursesubdirs {#SkipFileIfDevStatus};
+Source: {#FilesDir}\examples\*.*; DestDir: {app}\examples; Components: DevAdminComponent;  Flags: ignoreversion  createallsubdirs recursesubdirs;
 #endif
 
 #ifdef ship_pdb
