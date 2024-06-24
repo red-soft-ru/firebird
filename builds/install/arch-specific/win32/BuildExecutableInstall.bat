@@ -70,14 +70,6 @@ if "%FB2_SNAPSHOT%"=="1" (
 @echo     o Checking for unix2dos...
 @(cmd /c "unix2dos.exe --version 2>&1 | findstr version > nul" ) || ( call :ERROR Could not locate unix2dos & goto :EOF )
 
-@for /f "usebackq tokens=*" %%c in (`where /f touch 2^>nul`) do set TOUCH_COMMAND=%%c
-if defined TOUCH_COMMAND (
-  @%TOUCH_COMMAND% --version <nul >nul 2>nul
-  if not errorlevel 1 (
-    @echo     o POSIX touch utility found at %TOUCH_COMMAND%
-  ) else ( @set TOUCH_COMMAND= )
-)
-
 @for /f "usebackq tokens=*" %%c in (`where /f md5sum 2^>nul`) do set MD5_COMMAND=%%c
 if defined MD5_COMMAND (
   echo     o POSIX md5sum utility found at %MD5_COMMAND%
