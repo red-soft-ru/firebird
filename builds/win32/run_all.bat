@@ -30,6 +30,7 @@ for %%v in ( %* )  do (
 ( if /I "%%v"=="JUSTBUILD" (set FBBUILD_BUILD_ONLY=1) )
 ( if /I "%%v"=="TESTENV" (set FBBUILD_TEST_ONLY=1) )
 ( if /I "%%v"=="SNAPSHOT" (set FB2_SNAPSHOT=1) )
+( if /I "%%v"=="NO_RN" set FB_EXTERNAL_DOCS=)
 )
 
 call :SETVCENV
@@ -89,13 +90,15 @@ goto :END
 @echo    JUSTBUILD - Just build - don't create packages.
 @echo.
 @echo    TESTENV   - Sanity check - is Visual Studio available?.
-@echo                              - print the build variables that will be used
+@echo                             - print the build variables that will be used
 @echo.
 @echo    SNAPSHOT  - Build and create a zip kit.
 @echo                This is intended to produce a x64 test kit
 @echo                with no dependency on Win32
 @echo.
-
+@echo    NO_RN     - Do not fail the packaging if release notes unavailable.
+@echo                Default is to fail if FB_EXTERNAL_DOCS is set and release notes not found.
+@echo.
 @goto :EOF
 ::---------
 
@@ -105,12 +108,8 @@ goto :END
 :: Show variables
 @call setenvvar.bat %*
 if "%ERRLEV%"=="1" goto :END
-echo.
-set FB
-set MS
-set VC
-set VS
-echo.
+set > %TEMP%\fb_build_vars_%PROCESSOR_ARCHITECTURE%.txt
+type  %TEMP%\fb_build_vars_%PROCESSOR_ARCHITECTURE%.txt
 goto :END
 ::---------
 
