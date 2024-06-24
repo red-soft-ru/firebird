@@ -64,15 +64,16 @@ HELP
                 DevAdminComponent and
                 ClientComponent
 
-  Overrides the default components settings. For example:
+  Overrides the default components settings. Using this command line
+  parameter causes Setup to automatically select a custom type. A full
+  install requires combining components. For example:
 
     /COMPONENTS="ClientComponent"
 
   would be required for a client only install.
 
-  NOTE - If a full server install is required DO NOT specify /COMPONENTS.
-  This parameter should only be used if you do not wish to do a full
-  server install.
+  NOTE - If a full server install is required there is no need to 
+  specify /COMPONENTS. All three are chosen by default.
 
 
 /TASKS="comma separated list of task names"
@@ -148,7 +149,7 @@ Parameters specific to Firebird uninstalls
     firebird.conf
     databases.conf
     firebird.log
-    security4.fdb
+    security$MAJOR.fdb
     fbtrace.conf
     replication.conf
 

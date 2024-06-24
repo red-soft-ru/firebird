@@ -118,8 +118,8 @@ Const
   FB80_x64_Install  = 26;
   FB90Install       = 27;
   FB90_x64_Install  = 28;
-  Current32Install  = FB40Install;
-  Current64Install  = FB40_x64_Install;
+  Current32Install  = FB{#FB_MAJOR_VER}0Install;
+  Current64Install  = FB{#FB_MAJOR_VER}0_x64_Install;
 
   MaxProdInstalled  = FB90_x64_Install;
 
@@ -153,8 +153,8 @@ Const
   FB80_x64  = 26;
   FB90      = 27;
   FB90_x64  = 28;
-  CurFB32   = FB40;
-  CurFB64   = FB40_x64;
+  CurFB32   = FB{#FB_MAJOR_VER}0;
+  CurFB64   = FB{#FB_MAJOR_VER}0_x64;
 
   //  Likely gds32 version strings for installed versions of Firebird or InterBase are:
   //  [6,0,n,n]     InterBase 6.0
@@ -1093,7 +1093,7 @@ else
 SharedFileArray[27].Filename := ExpandConstant('{app}')+'databases.conf';
 SharedFileArray[28].Filename := ExpandConstant('{app}')+'firebird.conf';
 SharedFileArray[29].Filename := ExpandConstant('{app}')+'firebird.log';
-SharedFileArray[30].Filename := ExpandConstant('{app}')+'security4.fdb';
+SharedFileArray[30].Filename := ExpandConstant('{app}')+'security{#FB_MAJOR_VER}.fdb';
 SharedFileArray[31].Filename := ExpandConstant('{app}')+'fbtrace.conf';
 SharedFileArray[32].Filename := ExpandConstant('{app}')+'fbsvcmgr.exe';
 SharedFileArray[33].Filename := ExpandConstant('{app}')+'fbrmclib.dll';
@@ -1454,9 +1454,9 @@ begin
 //// **** FIX ME **** Don't use hardcoded constants here. They get overlooked.
   if ( (ProductsInstalledCount = 1) AND
 #if PlatformTarget == "x64"
-    ((ProductsInstalled AND FB40_x64 ) = FB40_x64 ) ) then begin
+    ((ProductsInstalled AND FB{#FB_MAJOR_VER}0_x64 ) = FB{#FB_MAJOR_VER}0_x64 ) ) then begin
 #else
-    ((ProductsInstalled AND FB40 ) = FB40 ) ) then begin
+    ((ProductsInstalled AND FB{#FB_MAJOR_VER}0 ) = FB{#FB_MAJOR_VER}0 ) ) then begin
 #endif
         result := true;
         exit;
@@ -1489,7 +1489,7 @@ function ConfigureAuthentication: boolean;
 begin
   // if it is the first time we are called test for existence of the security db
   if init_secdb = UNDEFINED then begin
-    if FileExists(WizardDirValue + '\security4.fdb') then
+    if FileExists(WizardDirValue + '\security{#FB_MAJOR_VER}.fdb') then
       Result := false
     else
       Result := true
