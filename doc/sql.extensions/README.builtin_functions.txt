@@ -729,6 +729,9 @@ Notes:
        In the case of string literal, relation ID is evaluated at prepare time.
        In the case of expression, relation ID is evaluated at execution time.
        If the relation couldn't be found, then isc_relnotdef error is raised.
+	   Relation ID's could be changed after database restore thus beware of using
+	   integer literals in the first argument (relation) in stored PSQL code 
+	   (procedures, functions, triggers).
     2) If the first argument (relation) is a numeric expression or literal, then
        it's treated as a relation ID and used "as is", without verification
        against existing relations.

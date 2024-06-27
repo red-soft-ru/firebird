@@ -12321,6 +12321,23 @@ DmlNode* SysFuncCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScrat
 
 	node->args = PAR_args(tdbb, csb);
 
+	if (name == "MAKE_DBKEY")
+	{
+		// Special handling for system function MAKE_DBKEY:
+		// convert constant relation name into ID at the parsing time
+
+		auto literal = nodeAs<LiteralNode>(node->args->items[0]);
+
+		if (literal && literal->litDesc.isText())
+		{
+			const MetaName relName = literal->getText();
+			const jrd_rel* const relation = MET_lookup_relation(tdbb, relName);
+
+			if (relation)
+				node->args->items[0] = MAKE_const_slong(relation->rel_id);
+		}
+	}
+
 	return node;
 }
 
@@ -12462,32 +12479,6 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (node->function)
 	{
-		if (name == "MAKE_DBKEY")
-		{
-			// Special handling for system function MAKE_DBKEY:
-			// convert constant relation name into ID at the parsing time
-
-			auto literal = nodeAs<LiteralNode>(node->args->items[0]);
-
-			if (literal && literal->litDesc.isText())
-			{
-				const MetaName relName = literal->getText();
-
-				const dsql_rel* const relation =
-					METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, relName);
-
-				if (!relation)
-				{
-					status_exception::raise(
-						Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-						Arg::Gds(isc_dsql_command_err) <<
-						Arg::Gds(isc_dsql_table_not_found) << relName);
-				}
-
-				node->args->items[0] = MAKE_const_slong(relation->rel_id);
-			}
-		}
-
 		if (node->function->setParamsFunc)
 		{
 			Array<dsc> tempDescs(node->args->items.getCount());
