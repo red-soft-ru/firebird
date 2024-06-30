@@ -433,6 +433,7 @@ const ULONG TRA_own_interface		= 0x20000L;		// tra_interface was created for int
 const ULONG TRA_read_consistency	= 0x40000L; 	// ensure read consistency in this transaction
 const ULONG TRA_ex_restart			= 0x80000L; 	// Exception was raised to restart request
 const ULONG TRA_replicating			= 0x100000L;	// transaction is allowed to be replicated
+const ULONG TRA_no_blob_check		= 0x200000L;	// disable blob access checking
 
 // flags derived from TPB, see also transaction_options() at tra.cpp
 const ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |
