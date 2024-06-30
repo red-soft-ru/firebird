@@ -4071,7 +4071,7 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 
 	if (rel_id == 0 ||
 		(tra_flags & TRA_no_blob_check) ||
-		(tra_attachment->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE)))
+		tra_attachment->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE))
 	{
 		return;
 	}
