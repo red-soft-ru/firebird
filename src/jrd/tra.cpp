@@ -3442,6 +3442,9 @@ static void transaction_options(thread_db* tdbb,
 			transaction->tra_flags |= TRA_read_consistency | TRA_rec_version;
 	}
 
+	if (transaction->tra_attachment->isGbak())
+		transaction->tra_flags |= TRA_no_blob_check;
+
 	// If there aren't any relation locks to seize, we're done.
 
 	vec<Lock*>* vector = transaction->tra_relation_locks;
@@ -4066,11 +4069,11 @@ void jrd_tra::releaseSavepoint(thread_db* tdbb)
 
 void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool punt)
 {
-	USHORT rel_id = blob_id->bid_internal.bid_relation_id;
+	const USHORT rel_id = blob_id->bid_internal.bid_relation_id;
 
-	if (tra_attachment->isGbak() ||
-		(tra_attachment->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE)) ||
-		rel_id == 0)
+	if (rel_id == 0 ||
+		(tra_flags & TRA_no_blob_check) ||
+		tra_attachment->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE))
 	{
 		return;
 	}
