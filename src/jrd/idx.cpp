@@ -1681,7 +1681,9 @@ static idx_e check_duplicates(thread_db* tdbb,
 	index_desc* insertion_idx = insertion->iib_descriptor;
 	record_param rpb;
 	rpb.rpb_relation = insertion->iib_relation;
-	rpb.rpb_record = NULL;
+
+	AutoTempRecord gc_record(VIO_gc_record(tdbb, rpb.rpb_relation));
+	rpb.rpb_record = gc_record;
 
 	jrd_rel* const relation_1 = insertion->iib_relation;
 	RecordBitmap::Accessor accessor(insertion->iib_duplicates);
@@ -1754,7 +1756,8 @@ static idx_e check_duplicates(thread_db* tdbb,
 		}
 	} while (accessor.getNext());
 
-	delete rpb.rpb_record;
+	if (rpb.rpb_record != gc_record)
+		delete rpb.rpb_record;
 
 	return result;
 }
@@ -1952,12 +1955,13 @@ static idx_e check_partner_index(thread_db* tdbb,
 		if ((idx->idx_flags & idx_descending) != (partner_idx.idx_flags & idx_descending))
 			BTR_complement_key(key);
 
-		RecordBitmap* bitmap = NULL;
+		RecordBitmap bm(*tdbb->getDefaultPool());
+		RecordBitmap* bitmap = &bm;
 		BTR_evaluate(tdbb, &retrieval, &bitmap, NULL);
 
 		// if there is a bitmap, it means duplicates were found
 
-		if (bitmap)
+		if (bitmap->getFirst())
 		{
 			index_insertion insertion;
 			insertion.iib_descriptor = &partner_idx;
@@ -1972,7 +1976,6 @@ static idx_e check_partner_index(thread_db* tdbb,
 				result = result ? idx_e_foreign_references_present : idx_e_ok;
 			if (idx->idx_flags & idx_foreign)
 				result = result ? idx_e_ok : idx_e_foreign_target_doesnt_exist;
-			delete bitmap;
 		}
 		else if (idx->idx_flags & idx_foreign)
 			result = idx_e_foreign_target_doesnt_exist;
