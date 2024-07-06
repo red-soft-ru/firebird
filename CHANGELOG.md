@@ -1,3 +1,220 @@
+# v5.0.1
+
+## Improvements
+
+* [#8104](https://github.com/FirebirdSQL/firebird/issues/8104): More efficient evaluation of expressions like `RDB$DB_KEY <= ?` after mass delete   
+  Contributor(s): Vlad Khorsun
+
+* [#8066](https://github.com/FirebirdSQL/firebird/issues/8066): Make protocol schemes case-insensitive  
+  Contributor(s): Vlad Khorsun
+
+* [#8042](https://github.com/FirebirdSQL/firebird/issues/8042): Improve conflict resolution on replica when table have both primary and unique keys  
+  Contributor(s): Vlad Khorsun
+
+* [#8030](https://github.com/FirebirdSQL/firebird/issues/8030): Better cardinality estimation when empty data pages exist  
+  Contributor(s): Vlad Khorsun
+
+* [#8010](https://github.com/FirebirdSQL/firebird/issues/8010): Remove _gfix -cache_ option  
+  Contributor(s): Vlad Khorsun
+
+* [#7978](https://github.com/FirebirdSQL/firebird/issues/7978): Update Windows distributions with _zlib_ version 1.3.1  
+  Contributor(s): Vlad Khorsun
+
+* [#7928](https://github.com/FirebirdSQL/firebird/issues/7928): Make _TempCacheLimit_ setting to be per-database (not per-attachment) for SuperClassic  
+  Contributor(s): Vlad Khorsun
+
+## Bugfixes
+
+* [#8168](https://github.com/FirebirdSQL/firebird/issues/8168): `MAKE_DBKEY` bug after backup/restore  
+  Contributor(s): Vlad Khorsun
+
+* [#8156](https://github.com/FirebirdSQL/firebird/issues/8156): Can not specify concrete IPv6 address in ES/EDS connection string.  
+  Contributor(s): Vlad Khorsun
+
+* [#8151](https://github.com/FirebirdSQL/firebird/issues/8151): Deadlock happens when run 'List Trace Sessions' service and there are many active trace sessions  
+  Contributor(s): Vlad Khorsun
+
+* [#8150](https://github.com/FirebirdSQL/firebird/issues/8150): Process could attach to the deleted instance of shared memory  
+  Contributor(s): Alexander Peshkov, Vlad Khorsun
+
+* [#8149](https://github.com/FirebirdSQL/firebird/issues/8149): The hung or crash could happen when connection fires _TRACE_EVENT_DETACH_ event and new trace session created concurrently  
+  Contributor(s): Vlad Khorsun
+
+* [#8138](https://github.com/FirebirdSQL/firebird/issues/8138): Bugcheck when replicator state is changed concurrently  
+  Contributor(s): Vlad Khorsun
+
+* [#8136](https://github.com/FirebirdSQL/firebird/issues/8136): Server crashes with `IN (dbkey1, dbkey2, ...)` condition  
+  Contributor(s): Dmitry Yemanov
+
+* [#8123](https://github.com/FirebirdSQL/firebird/issues/8123): Procedure manipulation can lead to wrong dependencies removal  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#8120](https://github.com/FirebirdSQL/firebird/issues/8120): Cast dies with numeric value is out of range error  
+  Contributor(s): Vlad Khorsun
+
+* [#8115](https://github.com/FirebirdSQL/firebird/issues/8115): Unexpected results using `LEFT JOIN` with `WHEN` function  
+  Contributor(s): Dmitry Yemanov
+
+* [#8114](https://github.com/FirebirdSQL/firebird/issues/8114): Segfault in connections pool during server shutdown  
+  Contributor(s): Vlad Khorsun
+
+* [#8112](https://github.com/FirebirdSQL/firebird/issues/8112): Error _isc_read_only_trans (335544361)_ should report _SQLSTATE 25006_  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#8110](https://github.com/FirebirdSQL/firebird/issues/8110): Firebird 5 crashes on Android API level 34  
+  Contributor(s): Vlad Khorsun
+
+* [#8108](https://github.com/FirebirdSQL/firebird/issues/8108): ICU 63.1 suppresses conversion errors  
+  Contributor(s): Dmitry Kovalenko
+
+* [#8101](https://github.com/FirebirdSQL/firebird/issues/8101): Firebird crashes if a plugin factory returns `nullptr` and no error in status  
+  Contributor(s): Vlad Khorsun, Dimitry Sibiryakov
+
+* [#8100](https://github.com/FirebirdSQL/firebird/issues/8100): The `isc_array_lookup_bounds` function returns invalid values for low and high array bounds  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#8094](https://github.com/FirebirdSQL/firebird/issues/8094): Creation index error when restore with parallels workers  
+  Contributor(s): Vlad Khorsun
+
+* [#8089](https://github.com/FirebirdSQL/firebird/issues/8089): AV when attaching database while low of free memory  
+  Contributor(s): Vlad Khorsun
+
+* [#8087](https://github.com/FirebirdSQL/firebird/issues/8087): AV when preparing a query with `IN` list that contains both literals and sub-query  
+  Contributor(s): Vlad Khorsun
+
+* [#8086](https://github.com/FirebirdSQL/firebird/issues/8086): `IN` predicate with string-type elements is evaluated wrongly against a numeric field  
+  Contributor(s): Dmitry Yemanov
+
+* [#8085](https://github.com/FirebirdSQL/firebird/issues/8085): Memory leak when executing a lot of different queries and _StatementTimeout > 0_  
+  Contributor(s): Vlad Khorsun
+
+* [#8084](https://github.com/FirebirdSQL/firebird/issues/8084): Partial index uniqueness violation  
+  Contributor(s): Vlad Khorsun
+
+* [#8083](https://github.com/FirebirdSQL/firebird/issues/8083): AV when writting into internal trace log  
+  Contributor(s): Vlad Khorsun
+
+* [#8079](https://github.com/FirebirdSQL/firebird/issues/8079): Engine could crash when executing some trigger(s) while another attachment modifies them  
+  Contributor(s): Vlad Khorsun
+
+* [#8078](https://github.com/FirebirdSQL/firebird/issues/8078): `SIMILAR TO` with constant pattern using ‘|’, ‘*’, ‘?’ or ‘{0,N}’ doesn't work as expected  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#8077](https://github.com/FirebirdSQL/firebird/issues/8077): Error "Too many recursion levels" does not stop execution of code that uses `ON DISCONNECT` trigger  
+  Contributor(s): Alexander Peshkov, Vlad Khorsun
+
+* [#8063](https://github.com/FirebirdSQL/firebird/issues/8063): `(VAR)CHAR` variables/parameters assignments fail in stored procedures with subroutines  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#8058](https://github.com/FirebirdSQL/firebird/issues/8058): DDL changes in replication does not set the correct grantor  
+  Contributor(s): Dmitry Yemanov
+
+* [#8056](https://github.com/FirebirdSQL/firebird/issues/8056): "Too many temporary blobs" with blob_append when select a stored procedue using rows-clause  
+  Contributor(s): Vlad Khorsun
+
+* [#8040](https://github.com/FirebirdSQL/firebird/issues/8040): Bugcheck 183 (wrong record length) could happen on replica database after UK violation on insert   
+  Contributor(s): Vlad Khorsun
+
+* [#8039](https://github.com/FirebirdSQL/firebird/issues/8039): Segfault when opening damaged (last TIP is missing in _RDB$PAGES_, user's FW was OFF) database  
+  Contributor(s): Alexander Peshkov
+
+* [#8037](https://github.com/FirebirdSQL/firebird/issues/8037): Remove directory entries from debug symbols tarbal  
+  Contributor(s): Alexander Peshkov
+
+* [#8034](https://github.com/FirebirdSQL/firebird/issues/8034): (re)set owner/group in tarbal of non-root builds  
+  Contributor(s): Alexander Peshkov
+
+* [#8033](https://github.com/FirebirdSQL/firebird/issues/8033): Invalid result when string compared with indexed `NUMERIC(x,y)` field `where x > 18 and y != 0`  
+  Contributor(s): Alexander Peshkov
+
+* [#8027](https://github.com/FirebirdSQL/firebird/issues/8027): Broken gbak statistics  
+  Contributor(s): Alexander Peshkov
+
+* [#8026](https://github.com/FirebirdSQL/firebird/issues/8026): Crash LI-V5.0.0.1306 in _libEngine13.so_  
+  Contributor(s): Alexander Peshkov
+
+* [#8016](https://github.com/FirebirdSQL/firebird/pull/8016): Free memory issued for _isql_ command list but has never been freed on output file write  
+  Contributor(s): 
+
+* [#8011](https://github.com/FirebirdSQL/firebird/issues/8011): `DECFLOAT` error working with `INT128` in UDR  
+  Contributor(s): Alexander Peshkov
+
+* [#8006](https://github.com/FirebirdSQL/firebird/issues/8006): `INT128` datatype not supported in _FB_MESSAGE_ macro   
+  Contributor(s): Alexander Peshkov
+
+* [#8003](https://github.com/FirebirdSQL/firebird/issues/8003): _gbak_ can't backup database in ODS < 13  
+  Contributor(s): Vlad Khorsun
+
+* [#7998](https://github.com/FirebirdSQL/firebird/issues/7998): Сrash during partial index checking if the condition raises a conversion error  
+  Contributor(s): Dmitry Yemanov
+
+* [#7997](https://github.com/FirebirdSQL/firebird/issues/7997): Unexpected results when comparing integer with string containing value out of range of that integer datatype  
+  Contributor(s): Alexander Peshkov
+
+* [#7996](https://github.com/FirebirdSQL/firebird/issues/7996): _gbak_ terminates/crashes when a read error occurs during restore  
+  Contributor(s): Vlad Khorsun
+
+* [#7995](https://github.com/FirebirdSQL/firebird/issues/7995): Unexpected results after creating partial index  
+  Contributor(s): Dmitry Yemanov
+
+* [#7993](https://github.com/FirebirdSQL/firebird/issues/7993): Unexpected results when using `CASE WHEN` with `RIGHT JOIN`  
+  Contributor(s): Dmitry Yemanov
+
+* [#7992](https://github.com/FirebirdSQL/firebird/issues/7992): Assertion _(space > 0)_ failure during restore  
+  Contributor(s): Vlad Khorsun
+
+* [#7985](https://github.com/FirebirdSQL/firebird/issues/7985): Hang in case of error when sweep thread is attaching to database (CS case)  
+  Contributor(s): Alexander Peshkov
+
+* [#7979](https://github.com/FirebirdSQL/firebird/issues/7979): Hang when database with disconnect trigger using MON$ tables is shutting down  
+  Contributor(s): Alexander Peshkov
+
+* [#7976](https://github.com/FirebirdSQL/firebird/issues/7976): False validation error for short unpacked records  
+  Contributor(s): Dmitry Yemanov
+
+* [#7974](https://github.com/FirebirdSQL/firebird/issues/7974): Restore of wide table can fail with "adjusting an invalid decompression length from <N> to <M>"  
+  Contributor(s): Vlad Khorsun
+
+* [#7969](https://github.com/FirebirdSQL/firebird/issues/7969): Characters are garbled when replicating fields with type `BLOB SUB_TYPE TEXT` if the character set of the connection and the field are different  
+  Contributor(s): Dmitry Yemanov
+
+* [#7962](https://github.com/FirebirdSQL/firebird/issues/7962): System procedure/function inconsistency between `SHOW FUNCTIONS` and `SHOW PROCEDURES` in _isql_  
+  Contributor(s): 
+
+* [#7950](https://github.com/FirebirdSQL/firebird/issues/7950): Unable to restore database when .fbk was created on host with other ICU  
+  Contributor(s): Alexander Peshkov
+
+* [#7942](https://github.com/FirebirdSQL/firebird/issues/7942): Error: database file appears corrupted after restore from backup  
+  Contributor(s): Vlad Khorsun
+
+* [#7937](https://github.com/FirebirdSQL/firebird/issues/7937): Inner join raises error "no current record for fetch operation" if a stored procedure depends on some table via input parameter and also has an indexed relationship with another table  
+  Contributor(s): Dmitry Yemanov
+
+* [#7927](https://github.com/FirebirdSQL/firebird/issues/7927): Some default values is set incorrectly for SC/CS architectures  
+  Contributor(s): Vlad Khorsun
+
+* [#7921](https://github.com/FirebirdSQL/firebird/issues/7921): FB5 uses PK for ordered plan even if less count of fields matching index exists  
+  Contributor(s): Dmitry Yemanov
+
+* [#7899](https://github.com/FirebirdSQL/firebird/issues/7899): Inconsistent state of master-detail occurs after RE-connect + 'SET AUTODDL OFF' + 'drop <FK>' which is ROLLED BACK  
+  Contributor(s): Vlad Khorsun
+
+* [#7896](https://github.com/FirebirdSQL/firebird/issues/7896): replication.log remains empty (and without any error in firebird.log) until concurrent FB instance is running under different account and generates segments on its master. Significant delay required after stop concurrent FB it in order allow first one to write in its replication log.  
+  Contributor(s): Vlad Khorsun
+
+* [#7873](https://github.com/FirebirdSQL/firebird/issues/7873): Wrong memory buffer alignment and I/O buffer size when working in direct I/O mode  
+  Contributor(s): Vlad Khorsun
+
+* [#7869](https://github.com/FirebirdSQL/firebird/issues/7869): _GBAK_ can write uninitialized data into `RDB$RETURN_ARGUMENT` and `RDB$ARGUMENT_POSITION` fields  
+  Contributor(s): Dmitry Kovalenko
+
+* [#7863](https://github.com/FirebirdSQL/firebird/issues/7863): Non-correlated sub-query is evaluated multiple times if it is based on a VIEW rather than on appropriate derived table  
+  Contributor(s): Dmitry Yemanov
+
+* [#7394](https://github.com/FirebirdSQL/firebird/issues/7394): autoconf 2.72  
+  Contributor(s): Alexander Peshkov
+
+
 # v5.0 Final Release
 
 (no changes)
