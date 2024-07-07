@@ -9291,7 +9291,7 @@ end;
 function ITracePlugin.trace_dsql_restart(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean;
 begin
 	if (vTable.version < 4) then begin
-		Result := false;
+		Result := true;
 	end
 	else begin
 		Result := TracePluginVTable(vTable).trace_dsql_restart(Self, connection, transaction, statement, number);
@@ -9301,7 +9301,7 @@ end;
 function ITracePlugin.trace_proc_compile(connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean;
 begin
 	if (vTable.version < 5) then begin
-		Result := false;
+		Result := true;
 	end
 	else begin
 		Result := TracePluginVTable(vTable).trace_proc_compile(Self, connection, procedure_, time_millis, proc_result);
@@ -9311,7 +9311,7 @@ end;
 function ITracePlugin.trace_func_compile(connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean;
 begin
 	if (vTable.version < 5) then begin
-		Result := false;
+		Result := true;
 	end
 	else begin
 		Result := TracePluginVTable(vTable).trace_func_compile(Self, connection, function_, time_millis, func_result);
@@ -9321,7 +9321,7 @@ end;
 function ITracePlugin.trace_trigger_compile(connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean;
 begin
 	if (vTable.version < 5) then begin
-		Result := false;
+		Result := true;
 	end
 	else begin
 		Result := TracePluginVTable(vTable).trace_trigger_compile(Self, connection, trigger, time_millis, trig_result);
