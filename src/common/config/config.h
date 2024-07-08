@@ -193,6 +193,7 @@ enum ConfigKey
 	KEY_MAX_PARALLEL_WORKERS,
 	KEY_OPTIMIZE_FOR_FIRST_ROWS,
 	KEY_OUTER_JOIN_CONVERSION,
+	KEY_SUBQUERY_CONVERSION,
 	MAX_CONFIG_KEY		// keep it last
 };
 
@@ -312,7 +313,8 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,	"ParallelWorkers",			true,	1},
 	{TYPE_INTEGER,	"MaxParallelWorkers",		true,	1},
 	{TYPE_BOOLEAN,	"OptimizeForFirstRows",		false,	false},
-	{TYPE_BOOLEAN,	"OuterJoinConversion",		false,	true}
+	{TYPE_BOOLEAN,	"OuterJoinConversion",		false,	true},
+	{TYPE_BOOLEAN,	"SubQueryConversion",		false,	false}
 };
 
 
@@ -648,6 +650,8 @@ public:
 	CONFIG_GET_PER_DB_BOOL(getOptimizeForFirstRows, KEY_OPTIMIZE_FOR_FIRST_ROWS);
 
 	CONFIG_GET_PER_DB_BOOL(getOuterJoinConversion, KEY_OUTER_JOIN_CONVERSION);
+
+	CONFIG_GET_PER_DB_BOOL(getSubQueryConversion, KEY_SUBQUERY_CONVERSION);
 };
 
 // Implementation of interface to access master configuration file

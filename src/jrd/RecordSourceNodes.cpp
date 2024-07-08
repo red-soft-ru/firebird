@@ -3215,6 +3215,10 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 	if (rse_jointype != blr_inner || !rse_boolean)
 		return nullptr;
 
+	const auto dbb = tdbb->getDatabase();
+	if (!dbb->dbb_config->getSubQueryConversion())
+		return nullptr;
+
 	RecordSourceNodeStack rseStack;
 	BoolExprNodeStack booleanStack;
 
