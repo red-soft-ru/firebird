@@ -6007,7 +6007,7 @@ namespace Firebird
 		{
 			if (cloopVTable->version < 4)
 			{
-				return 0;
+				return true;
 			}
 			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_dsql_restart(this, connection, transaction, statement, number);
 			return ret;

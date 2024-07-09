@@ -1533,6 +1533,7 @@ interface TracePlugin : ReferenceCounted
 			boolean started, uint func_result);
 
 version:	// 4.0.1 -> 4.0.2
+	[notImplemented(true)]
 	boolean trace_dsql_restart(TraceDatabaseConnection connection, TraceTransaction transaction, TraceSQLStatement statement,
 		uint number);
 

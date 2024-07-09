@@ -8931,7 +8931,7 @@ end;
 function ITracePlugin.trace_dsql_restart(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean;
 begin
 	if (vTable.version < 4) then begin
-		Result := false;
+		Result := true;
 	end
 	else begin
 		Result := TracePluginVTable(vTable).trace_dsql_restart(Self, connection, transaction, statement, number);
