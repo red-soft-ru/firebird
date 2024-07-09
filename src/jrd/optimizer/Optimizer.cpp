@@ -837,7 +837,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	// Go through the record selection expression generating
 	// record source blocks for all streams
 
-	RiverList rivers, dependentRivers;
+	RiverList rivers, dependentRivers, activateRivers;
 
 	bool semiJoin = false;
 	bool innerSubStream = false;
@@ -853,6 +853,8 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			fb_assert(rse->rse_jointype == blr_inner);
 			semiJoin = true;
 		}
+		else
+			fb_assert(!semiJoin);
 
 		// Find the stream number and place it at the end of the bedStreams array
 		// (if this is really a stream and not another RseNode)
@@ -877,7 +879,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			// AB: Save all outer-part streams
 			if (isInnerJoin() || (isLeftJoin() && !innerSubStream))
 			{
-				if (!semiJoin && node->computable(csb, INVALID_STREAM, false))
+				if (node->computable(csb, INVALID_STREAM, false))
 					computable = true;
 
 				// Apply local booleans, if any. Note that it's done
@@ -893,6 +895,9 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			{
 				outerStreams.join(localStreams);
 				rivers.add(river);
+
+				if (!semiJoin)
+					activateRivers.add(river);
 			}
 			else
 			{
@@ -923,7 +928,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		rse->rse_aggregate = aggregate = nullptr;
 
 	// Activate the priorly used rivers
-	for (const auto river : rivers)
+	for (const auto river : activateRivers)
 		river->activate(csb);
 
 	bool sortCanBeUsed = true;
@@ -2506,7 +2511,7 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 		{
 			maxCardinality2 = maxCardinality1;
 			maxCardinality1 = cardinality;
-			maxCardinalityPosition = rivers.getCount();
+			maxCardinalityPosition = joinedRivers.getCount();
 		}
 		else if (cardinality > maxCardinality2)
 			maxCardinality2 = cardinality;
