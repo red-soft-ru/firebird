@@ -791,7 +791,10 @@ void ProfilerIpc::internalSendAndReceive(thread_db* tdbb, Tag tag,
 
 	sharedMemory->eventPost(&header->serverEvent);
 
-	sharedMemory->eventWait(&header->clientEvent, value, 0);
+	{
+		EngineCheckout cout(tdbb, FB_FUNCTION);
+		sharedMemory->eventWait(&header->clientEvent, value, 0);
+	}
 
 	if (header->tag == Tag::RESPONSE)
 	{
