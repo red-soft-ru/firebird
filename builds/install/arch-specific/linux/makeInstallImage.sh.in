@@ -166,7 +166,7 @@ copyFiles() {
 
 	#directories
 
-	makeDirs "@FB_CONFDIR@ @FB_LIBDIR@ @FB_INCDIR@/firebird @FB_MSGDIR@ @FB_TZDATADIR@"
+	makeDirs "@FB_CONFDIR@ @FB_LIBDIR@ @FB_INCDIR@/firebird/impl @FB_MSGDIR@ @FB_TZDATADIR@"
 
 	if [ "$CLIENT_ONLY_FLG" = "N" ] || [ "$WITH_TOMCRYPT" = "Y" ]; then
 		makeDirs "@FB_PLUGDIR@"
@@ -248,6 +248,7 @@ copyFiles() {
 
 	#include (.h .pas files)
 	cp $BuiltFBDir/include/*.h ${TargetDir}@FB_INCDIR@
+	cp $BuiltFBDir/include/firebird/impl/iberror_c.h ${TargetDir}@FB_INCDIR@/firebird/impl
 	cp $BuildRootDir/src/include/firebird/*.h ${TargetDir}@FB_INCDIR@/firebird
 	tar -C $BuildRootDir/src/include/firebird -cf - impl | tar -C ${TargetDir}@FB_INCDIR@/firebird -x
 	if [ "$CLIENT_ONLY_FLG" = "N" ]; then
