@@ -163,7 +163,7 @@ void ConfigStorage::shutdown()
 
 	{
 		StorageGuard guard(this);
-		assert(m_sharedMemory->getHeader()->cnt_uses != 0);
+		fb_assert(m_sharedMemory->getHeader()->cnt_uses != 0);
 		--(m_sharedMemory->getHeader()->cnt_uses);
 		if (m_sharedMemory->getHeader()->cnt_uses == 0)
 		{
@@ -477,7 +477,7 @@ void ConfigStorage::compact()
 			((slot->ses_flags & trs_system) == 0) && // System sessions are shared for multiple connections so they may live without the original process
 			!ISC_check_process_existence(slot->ses_pid))
 		{
-			assert(header->cnt_uses != 0);
+			fb_assert(header->cnt_uses != 0);
 			header->cnt_uses--; // Process that created trace session disappeared, count it out
 			markDeleted(slot);
 		}
