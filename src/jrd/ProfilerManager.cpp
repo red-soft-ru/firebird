@@ -385,10 +385,13 @@ int ProfilerManager::blockingAst(void* astObject)
 		const auto dbb = attachment->att_database;
 		AsyncContextHolder tdbb(dbb, FB_FUNCTION, attachment->att_profiler_listener_lock);
 
-		const auto profilerManager = attachment->getProfilerManager(tdbb);
+		if (!(attachment->att_flags & ATT_shutdown))
+		{
+			const auto profilerManager = attachment->getProfilerManager(tdbb);
 
-		if (!profilerManager->listener)
-			profilerManager->listener = FB_NEW_POOL(*attachment->att_pool) ProfilerListener(tdbb);
+			if (!profilerManager->listener)
+				profilerManager->listener = FB_NEW_POOL(*attachment->att_pool) ProfilerListener(tdbb);
+		}
 
 		LCK_release(tdbb, attachment->att_profiler_listener_lock);
 	}
