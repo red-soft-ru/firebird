@@ -4,3 +4,4 @@ temp/
 *.a
 *.l*
 .libs/
+/libtommath_MSVC10.vcxproj.user
