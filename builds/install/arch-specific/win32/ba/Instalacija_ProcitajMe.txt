@@ -22,7 +22,7 @@ Sadrzaj
 o Prije instalacije
 o Deployment gds32.dll
 o Instalacija Guardian-a
-o Re-instalacija Firebird-a 3
+o Re-instalacija Firebird-a $MAJOR
 o Poznati problemi u vezi s instalacijom
 o Deinstalacija
 o Instalacija batch datotekom
@@ -38,8 +38,8 @@ fbclient.dll i gds32.dll uklonjeni iz <system32>.
 Pogledajte UNINSTALL sekciju ispod za vise informacija o ovome.
 
 Ako ste instalirali beta ili alpha verziju 
-firebird-a 3, instalacija ce preimenovati firebid.conf i
-security3.fdb jer ove datoteke vise nisu kompatibilne.
+firebird-a $MAJOR, instalacija ce preimenovati firebird.conf i
+security$MAJOR.fdb jer ove datoteke vise nisu kompatibilne.
 
 
 Deployment gds32.dll
@@ -60,12 +60,12 @@ SuperServer ili SuperClassic, onda je ponudjen
 ali nije izabran po default-u.
 
 
-Re-instalacija Firebird-a 3
+Re-instalacija Firebird-a $MAJOR
 -----------------------------
 
 Instalacioni program radi sve sto moze da detektuje i 
 sacuva prethodnu instalaciju. Ako instalacija detektuje 
-firebird.conf ili security3.fdb onda nece ponuditi 
+firebird.conf ili security$MAJOR.fdb onda nece ponuditi 
 opciju da instalira legacy_auth. Niti ce ponuditi 
 opciju da postavi SYSDBA username i password.
 
@@ -119,7 +119,7 @@ o Deinstalacija ostavlja 5 datoteka u install
   - firebird.conf
   - fbtrace.conf
   - firebird.log
-  - security3.fdb
+  - security$MAJOR.fdb
 
   Ovo je uradjeno namjerno. Ove datoteke su sve
   potencijalno modifikovane od strane korisnika i mogu
