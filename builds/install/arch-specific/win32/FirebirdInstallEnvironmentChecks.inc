@@ -543,12 +543,9 @@ var
   product: Integer;
   gds32VersionString: String;
   VerInt: Array of Integer;
-  BoolOne, BoolTwo, BoolEval: Boolean;
-  EvalOne, EvalTwo: Integer;
 
   dbg_ProductPath, dbg_BinPath, dbg_ClientVersion, dbg_GBAKVersion, dbg_Server: String;
   dbg_InstallType : Integer;
-  eval_bool: boolean;
 
 
 begin
@@ -1096,7 +1093,7 @@ else
 SharedFileArray[27].Filename := ExpandConstant('{app}')+'databases.conf';
 SharedFileArray[28].Filename := ExpandConstant('{app}')+'firebird.conf';
 SharedFileArray[29].Filename := ExpandConstant('{app}')+'firebird.log';
-SharedFileArray[30].Filename := ExpandConstant('{app}')+'security3.fdb';
+SharedFileArray[30].Filename := ExpandConstant('{app}')+'security{#FB_MAJOR_VER}.fdb';
 SharedFileArray[31].Filename := ExpandConstant('{app}')+'fbtrace.conf';
 SharedFileArray[32].Filename := ExpandConstant('{app}')+'fbsvcmgr.exe';
 SharedFileArray[33].Filename := ExpandConstant('{app}')+'fbrmclib.dll';
@@ -1187,6 +1184,24 @@ begin
     GetInstalledVersion(InterBaseDir+'\gbak.exe',InterBaseVer);
 
   Result := InterBaseDir;
+end;
+
+
+function IsServerInstall: Boolean;
+begin
+  if IsComponentSelected('ServerComponent') then
+    Result := true
+  else
+    Result := False;
+end;
+
+
+function IsNotServerInstall: Boolean;
+begin
+  if IsServerInstall then
+    Result := False
+  else
+    Result := True;
 end;
 
 
@@ -1305,8 +1320,8 @@ function InstallGuardian: boolean;
 begin
   result := False;
   if (ConfigureFirebird) then
-     result := IsTaskSelected('UseSuperServerTask\UseGuardianTask') 
-			or IsTaskSelected('UseSuperClassicTask\UseGuardianTask');
+     result := IsTaskSelected('UseSuperServerTask\UseGuardianTask')
+       or IsTaskSelected('UseSuperClassicTask\UseGuardianTask');
 end;
 
 
@@ -1347,7 +1362,7 @@ var
   i: Integer;
   StatusDescription: String;
   InstallSummary: String;
-  prodstr: String;
+//  prodstr: String;
 begin
 
 //do nothing gracefully if we are called by accident.
@@ -1421,7 +1436,7 @@ function AnalysisAssessment: boolean;
 var
   MsgText: String;
   MsgResult: Integer;
-  VerString: String;
+//  VerString: String;
 begin
   result := false;
 
@@ -1462,22 +1477,6 @@ begin
 end;
 
 
-procedure RenamePreFB3RC1Files;
-//The method of specifying the architecture used changed after Beta 2
-//Detect this old config and rename it.
-var
-  FirebirdConfStr: AnsiString;
-begin
-  if FileExists(GetAppPath+'\firebird.conf') then begin
-    LoadStringFromFile( GetAppPath+'\firebird.conf', FirebirdConfStr );
-    if  pos('SharedDatabase', FirebirdConfStr) > 0 then begin
-      RenameFile(GetAppPath+'\firebird.conf', GetAppPath+'\firebird.conf.preRC1');
-      RenameFile(GetAppPath+'\security3.fdb', GetAppPath+'\security3.fdb.preRC1');
-		end
-  end
-end;
-
-
 function ConfigureAuthentication: boolean;
 // This function should only be called once - when the innosetup installer tries to
 // install the secdb. If it is called a second time it will always find the secdb
@@ -1486,12 +1485,19 @@ function ConfigureAuthentication: boolean;
 // sec$users table. Except we cannot do that as we need this information before we
 // install the files needed to read the database.
 begin
-  if FileExists(WizardDirValue + '\security3.fdb') then
-    Result := false
-	else
-    Result := true;
+  // if it is the first time we are called test for existence of the security db
+  if init_secdb = UNDEFINED then begin
+    if FileExists(WizardDirValue + '\security{#FB_MAJOR_VER}.fdb') then
+      Result := false
+    else
+      Result := true
+    end
+  else
+    // else the result is the current setting of init_secdb
+    Result := Boolean(init_secdb);
 
-  init_secdb := Result;
+  // Whatever the result, cast it to an integer and update init_secdb
+  init_secdb := Integer(Result);
 
 end;
 

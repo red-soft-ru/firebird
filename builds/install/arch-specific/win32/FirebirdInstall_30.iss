@@ -576,6 +576,10 @@ program Setup;
 // b) Debugged.
 // This hopefully keeps the main script simpler to follow.
 
+
+const
+  UNDEFINED = -1;
+
 Var
   InstallRootDir: String;
   FirebirdConfSaved: String;
@@ -591,7 +595,7 @@ Var
 
   SYSDBAPassword: String;       // SYSDBA password
 
-  init_secdb: Boolean;          // Is set to true by default in InitializeSetup
+  init_secdb: integer;          // Is set to UNDEFINED by default in InitializeSetup
 
 #ifdef setuplogging
 // Not yet implemented - leave log in %TEMP%
@@ -684,7 +688,7 @@ begin
   InitExistingInstallRecords;
   AnalyzeEnvironment;
   result := AnalysisAssessment;
-  init_secdb := true;
+  init_secdb := UNDEFINED;
 
 end;
 
@@ -832,7 +836,7 @@ begin
   InputStr := TempDir + '\' + PluginName + '_temp.sql';
   OutputStr := InputStr + '.txt';
 
-  // Do we need to do this?
+  // Ensure these files do not already exist.
   if FileExists( InputStr ) then DeleteFile( InputStr );
   if FileExists( OutputStr ) then DeleteFile( OutputStr );
 
@@ -1046,7 +1050,7 @@ begin
       IncrementSharedCount(Is64BitInstallMode, GetAppPath+'\fbtrace.conf', false);
       IncrementSharedCount(Is64BitInstallMode, GetAppPath+'\security{#FB_MAJOR_VER}.fdb', false);
 
-      if init_secdb then
+      if init_secdb = 1 then
         InitSecurityDB('Srp');
 
       //Fix up conf file
@@ -1197,7 +1201,7 @@ begin
     { If we are not configuring Firebird then don't prompt for SYSDBA pw. }
     if not ConfigureFirebird then
       Result := True
-    else if not init_secdb then
+    else if not ConfigureAuthentication then
       Result := True
     else
       Result := False;
