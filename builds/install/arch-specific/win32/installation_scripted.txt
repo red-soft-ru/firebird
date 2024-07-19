@@ -17,6 +17,7 @@ These notes only document the firebird specific options for a scripted
 installation. Developers should refer to the full InnoSetup documentation
 for a description of the other options available for a scripted install.
 This can be found here:
+
   http://www.jrsoftware.org/ishelp/
 
 It is highly recommended that a scripted install is tested thoroughly
@@ -54,7 +55,7 @@ Parameters specific to Firebird installs
 HELP
   Invoke this file as a help screen at installation time.
   Note no / is prefixed !! Because /? and /HELP are now
-  used by innosetup itself to dispaly innosetup specific help.
+  used by innosetup itself to display innosetup specific help.
 
 
 /COMPONENTS="comma separated list of component names"
@@ -67,11 +68,11 @@ HELP
   parameter causes Setup to automatically select a custom type. A full
   install requires combining components. For example:
 
-  /COMPONENTS="ClientComponent"
+    /COMPONENTS="ClientComponent"
 
   would be required for a client only install.
 
-  NOTE - If a full server install is required there is no need to
+  NOTE - If a full server install is required there is no need to 
   specify /COMPONENTS. All three are chosen by default.
 
 
@@ -148,7 +149,7 @@ Parameters specific to Firebird uninstalls
     firebird.conf
     databases.conf
     firebird.log
-    security3.fdb
+    security$MAJOR.fdb
     fbtrace.conf
 
   The assumption is that these files will be useful to users
