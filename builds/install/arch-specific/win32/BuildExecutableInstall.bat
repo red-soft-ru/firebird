@@ -228,11 +228,13 @@ set > %FB_ROOT_PATH%\builds\install\arch-specific\win32\test_installer\fb_build_
 
 @if ERRORLEVEL 1 ( (call :ERROR Copying MSVC runtime library failed with error %ERRORLEVEL% ) & (goto :EOF))
 
-@where /Q implib.exe
-@if not ERRORLEVEL 1 (
-  if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
-    echo   Generating fbclient_bor.lib
+if "%PROCESSOR_ARCHITECTURE%"=="x86" (
+  echo   Generating fbclient_bor.lib
+  where /Q implib.exe
+  if not ERRORLEVEL 1 (
     implib %FB_OUTPUT_DIR%\lib\fbclient_bor.lib %FB_OUTPUT_DIR%\fbclient.dll > nul
+  ) else (
+    call :ERROR implib not found & goto :EOF
   )
 )
 
