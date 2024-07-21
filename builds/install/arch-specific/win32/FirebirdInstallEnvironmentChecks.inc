@@ -118,10 +118,10 @@ Const
   FB80_x64_Install  = 26;
   FB90Install       = 27;
   FB90_x64_Install  = 28;
+  MaxProdInstalled  = FB90_x64_Install;
+
   Current32Install  = FB{#FB_MAJOR_VER}0Install;
   Current64Install  = FB{#FB_MAJOR_VER}0_x64_Install;
-
-  MaxProdInstalled  = FB{#FB_MAJOR_VER}0_x64_Install;
 
 //ProductsInstalled
   IB4       = 0;
