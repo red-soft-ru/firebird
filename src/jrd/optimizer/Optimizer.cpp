@@ -641,6 +641,9 @@ Optimizer::~Optimizer()
 
 RecordSource* Optimizer::compile(RseNode* subRse, BoolExprNodeStack* parentStack)
 {
+	if (isSemiJoined())
+		parentStack = nullptr;
+
 	Optimizer subOpt(tdbb, csb, subRse, firstRows);
 	const auto rsb = subOpt.compile(parentStack);
 

@@ -137,7 +137,8 @@ namespace
 			auto rse = rseNode->rse;
 			fb_assert(rse);
 
-			if (rse->rse_boolean)
+			if (rse->rse_boolean && rse->rse_jointype == blr_inner &&
+				!rse->rse_first && !rse->rse_skip && !rse->rse_plan)
 			{
 				StreamList streams;
 				rse->computeRseStreams(streams);
