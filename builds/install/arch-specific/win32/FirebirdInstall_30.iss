@@ -866,7 +866,7 @@ begin
 end;
 
 
-function ConfigLegacyClientAuth: Boolean;
+procedure ConfigLegacyClientAuth;
 begin
 
 // This order of plugin evaluation favours Legacy_Auth as the preferred plugin
