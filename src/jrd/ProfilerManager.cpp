@@ -36,6 +36,10 @@
 
 #include <atomic>
 
+#ifdef WIN_NT
+#include <process.h>
+#endif
+
 using namespace Jrd;
 using namespace Firebird;
 
