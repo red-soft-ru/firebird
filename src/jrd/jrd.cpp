@@ -7670,8 +7670,6 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 	if (!attachment)
 		return;
 
-	attachment->releaseProfilerManager();
-
 	attachment->att_replicator = nullptr;
 
 	if (attachment->att_dsql_instance)
@@ -8407,6 +8405,8 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 			throw;
 		}
 	}
+
+	attachment->releaseProfilerManager(tdbb);
 
 	// stop crypt thread using this attachment
 	dbb->dbb_crypto_manager->stopThreadUsing(tdbb, attachment);
