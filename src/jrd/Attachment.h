@@ -847,7 +847,7 @@ public:
 	ProfilerManager* getProfilerManager(thread_db* tdbb);
 	ProfilerManager* getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb);
 	bool isProfilerActive();
-	void releaseProfilerManager();
+	void releaseProfilerManager(thread_db* tdbb);
 
 	JProvider* getProvider()
 	{

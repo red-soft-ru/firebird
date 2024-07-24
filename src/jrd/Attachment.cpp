@@ -1207,7 +1207,16 @@ bool Attachment::isProfilerActive()
 	return att_profiler_manager && att_profiler_manager->isActive();
 }
 
-void Attachment::releaseProfilerManager()
+void Attachment::releaseProfilerManager(thread_db* tdbb)
 {
-	att_profiler_manager.reset();
+	if (!att_profiler_manager)
+		return;
+
+	if (att_profiler_manager->haveListener())
+	{
+		EngineCheckout cout(tdbb, FB_FUNCTION);
+		att_profiler_manager.reset();
+	}
+	else
+		att_profiler_manager.reset();
 }
