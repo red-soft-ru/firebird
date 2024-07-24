@@ -470,8 +470,8 @@ void ConfigStorage::compact()
 	ULONG check_used, check_size;
 	check_used = check_size = sizeof(TraceCSHeader);
 
-	// Track undeleted slots from dead storages
-	Firebird::NonPooledMap<ULONG, bool> deadStorages;
+	// Track undeleted slots from dead processes
+	Firebird::SortedArray<ULONG, InlineStorage<ULONG, 16>> deadProcesses;
 
 	// collect used slots, sort them by offset
 	for (TraceCSHeader::Slot* slot = header->slots; slot < header->slots + header->slots_cnt; slot++)
@@ -481,8 +481,8 @@ void ConfigStorage::compact()
 			!ISC_check_process_existence(slot->ses_pid))
 		{
 			// A SUPER server may shut down, but its Storage shared memory continues to live due to an embedded user session.
-			// The storage might allocate multiple slots, so count them carefully.
-			deadStorages.put(slot->ses_pid);
+			// The process might allocate multiple slots, so count them carefully.
+			deadProcesses.add(slot->ses_pid);
 
 			markDeleted(slot);
 		}
@@ -497,9 +497,9 @@ void ConfigStorage::compact()
 	}
 
 	// Process that created storages disappeared, count it out
-	fb_assert(header->cnt_uses > deadStorages.count());
-	header->cnt_uses -= deadStorages.count();
-	deadStorages.clear();
+	fb_assert(header->cnt_uses > deadProcesses.getCount());
+	header->cnt_uses -= deadProcesses.getCount();
+	deadProcesses.clear();
 
 	fb_assert(check_used == header->mem_used);
 	fb_assert(check_size == header->mem_offset);
