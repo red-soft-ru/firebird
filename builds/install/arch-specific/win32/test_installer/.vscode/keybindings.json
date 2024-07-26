@@ -1,0 +1,13 @@
+// Place your key bindings in this file to override the defaults
+[
+    {
+        "key": "ctrl+oem_minus",
+        "command": "editor.foldAll",
+        "when": "editorTextFocus && foldingEnabled"
+    },
+    {
+        "key": "ctrl+oem_plus",
+        "command": "editor.unfoldAll",
+        "when": "editorTextFocus && foldingEnabled"
+    }
+]
