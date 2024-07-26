@@ -8,7 +8,7 @@
 ;  for the specific language governing rights and limitations under the
 ;  License.
 ;
-;  The Original Code is copyright 2001-2021 Paul Reeves for IBPhoenix.
+;  The Original Code is copyright 2001-2024 Paul Reeves for IBPhoenix.
 ;
 ;  The Initial Developer of the Original Code is Paul Reeves for IBPhoenix.
 ;
@@ -373,9 +373,9 @@ Name: CopyFbClientAsGds32Task; Description: {cm:CopyFbClientAsGds32Task}; Compon
 [Run]
 ; due to the changes required to support MSVC15 support for earlier versions is now broken.
 #if Int(msvc_runtime_major_version,14) >= 14
-Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.log"" "; StatusMsg: "Installing MSVC 32-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
+Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_Win32.log"" "; StatusMsg: {cm:InstallingMSVC32runtimes}; Check: HasWI30; Components: ClientComponent;
 #if PlatformTarget == "x64"
-Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.log"" ";  StatusMsg: "Installing MSVC 64-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
+Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_major_version}{#msvc_runtime_minor_version_1}_x64.log"" ";  StatusMsg: {cm:InstallingMSVC64runtimes}; Check: HasWI30; Components: ClientComponent;
 #endif
 #endif
 
@@ -457,7 +457,7 @@ Source: {#FilesDir}\databases.conf; DestDir: {app}; Components: ClientComponent;
 Source: {#FilesDir}\replication.conf; DestDir: {app}; DestName: replication.conf.default; Components: ServerComponent;
 Source: {#FilesDir}\replication.conf; DestDir: {app}; Components: ServerComponent; Flags: uninsneveruninstall onlyifdoesntexist; check: NoReplicationConfExists;
 Source: {#FilesDir}\security{#FB_MAJOR_VER}.fdb; DestDir: {app}; Destname: security{#FB_MAJOR_VER}.fdb.empty; Components: ServerComponent;
-Source: {#FilesDir}\security{#FB_MAJOR_VER}.fdb; DestDir: {app}; Components: ServerComponent; Flags: uninsneveruninstall onlyifdoesntexist
+Source: {#FilesDir}\security{#FB_MAJOR_VER}.fdb; DestDir: {app}; Components: ServerComponent; Check: ConfigureAuthentication; Flags: uninsneveruninstall onlyifdoesntexist
 Source: {#FilesDir}\firebird.msg; DestDir: {app}; Components: ClientComponent; Flags: sharedfile ignoreversion
 Source: {#FilesDir}\firebird.log; DestDir: {app}; Components: ServerComponent; Flags: uninsneveruninstall skipifsourcedoesntexist external dontcopy
 
@@ -563,7 +563,6 @@ Source: {#FilesDir}\misc\*.*; DestDir: {app}\misc; Components: ServerComponent; 
 
 Source: {#FilesDir}\tzdata\*.*; DestDir: {app}\tzdata; Components: ClientComponent; Flags: ignoreversion;
 
-;Source: {#FilesDir}\system32\Firebird2Control.cpl; DestDir: {sys}; Components: ServerComponent; MinVersion: {#MinVer}; Flags: sharedfile ignoreversion promptifolder restartreplace uninsrestartdelete; Check: InstallCPLApplet
 #endif /* files */
 
 #ifdef examples
@@ -614,7 +613,7 @@ program Setup;
 
 
 const
- UNDEFINED = -1;
+  UNDEFINED = -1;
 
 Var
   InstallRootDir: String;
@@ -860,19 +859,34 @@ var
   TempDir: String;
   ResultCode: Integer;
   CmdStr: string;
+  InputStr: string;
+  OutputStr: string;
 begin
   TempDir := ExpandConstant( '{tmp}' );
   CmdStr := ExpandConstant( '{app}\isql.exe' );
+  InputStr := TempDir + '\' + 'temp.sql';
+  OutputStr := InputStr + '.txt';
+
+  // Ensure these files do not already exist.
+  if FileExists( InputStr ) then DeleteFile( InputStr );
+  if FileExists( OutputStr ) then DeleteFile( OutputStr );
+
   AStringList := TStringList.create;
   with AStringList do begin
-    Add( 'create user ' + GetAdminUserName + ' password ''' + GetAdminUserPassword + ''' using plugin Srp;' );
-    Add( 'commit;' );  //Technically exit implies a commit so this not necessary. OTOH, explicitly committing makes for more readable code.
+    Add( 'create or alter user ' + GetAdminUserName + ' password ''' + GetAdminUserPassword + ''' using plugin Srp;' );
     Add( 'exit;' );
-    SaveToFile( Tempdir +'\temp.sql' );
+    SaveToFile( InputStr );
   end;
-  Result := Exec( CmdStr , ' -m -m2 -user SYSDBA -i ' + TempDir + '\temp.sql -o ' + TempDir + '\temp.sql.txt employee ' , TempDir, SW_HIDE, ewWaitUntilTerminated, ResultCode );
-  DeleteFile( TempDir + '\temp.sql');
-  DeleteFile( TempDir + '\temp.sql.txt');
+  Result := Exec( CmdStr , ' -m -m2 -user SYSDBA -i ' + InputStr + ' -o ' + OutputStr + ' employee ' , TempDir, SW_HIDE, ewWaitUntilTerminated, ResultCode );
+  if ResultCode <> 0 then begin
+    Result := False;
+    Log( 'In function InitSecurityDB Exec isql returned ' + IntToStr(ResultCode) + ' executing ' + InputStr  );
+  end;
+  if FindInFile( OutputStr, 'error' ) then begin
+    Result := False;
+    Log( 'In function InitSecurityDB FindInFile found an error in ' + OutputStr );
+  end;
+
 end;
 
 
