@@ -26,9 +26,11 @@
 
 @echo off
 :: reset ERRLEV to clear error from last run in same cmd shell
-set ERRLEV=0
+set ERRLEV=
+
 :: Assume we are preparing a production build
 set FBBUILD_BUILDTYPE=release
+
 :: Don't ship pdb files by default
 set FBBUILD_SHIP_PDB=no_pdb
 :: Reset "make" vars to zero
@@ -50,7 +52,7 @@ if not defined FB2_SNAPSHOT (set FB2_SNAPSHOT=0)
 
 :: Are we doing a snapshot build? If so we always do less work.
 if "%FB2_SNAPSHOT%"=="1" (
-  (set FBBUILD_ISX_PACK=0)
+  ( set FBBUILD_ISX_PACK=0 )
 )
 
 
@@ -68,14 +70,17 @@ if "%FB2_SNAPSHOT%"=="1" (
 @(cmd /c "sed.exe --version 2>&1 | findstr version > nul ") || ( call :ERROR Could not locate sed & goto :EOF )
 
 @echo     o Checking for unix2dos...
-@(cmd /c "unix2dos.exe --version 2>&1 | findstr version > nul" ) || ( call :ERROR Could not locate unix2dos & goto :EOF )
+@( cmd /c "unix2dos.exe --version 2>&1 | findstr version > nul" ) || ( call :ERROR Could not locate unix2dos & goto :EOF )
 
-@for /f "usebackq tokens=*" %%c in (`where /f md5sum 2^>nul`) do set MD5_COMMAND=%%c
+@for /f "usebackq tokens=*" %%c in ( `where /f md5sum 2^>nul` ) do set MD5_COMMAND=%%c
 if defined MD5_COMMAND (
   echo     o POSIX md5sum utility found at %MD5_COMMAND%
 )
 
 @if %FBBUILD_ZIP_PACK% EQU 1 (
+  if not defined SEVENZIP (
+    if exist "%ProgramW6432%\7-Zip\7z.exe" set SEVENZIP=%ProgramW6432%\7-Zip
+  )
   if not defined SEVENZIP (
     call :ERROR SEVENZIP environment variable is not defined.
     goto :EOF
@@ -94,8 +99,8 @@ if defined MD5_COMMAND (
   for /f "usebackq tokens=*" %%c in ( `where /f iscc 2^>nul` ) do set ISCC_COMMAND=%%c
 )
 @if not defined ISCC_COMMAND (
-  @echo  Required Inno Setup compiler not found
-  @exit /b 1
+  echo  Required Inno Setup compiler not found
+  exit /b 1
 )
 @echo     o Inno Setup found as %ISCC_COMMAND%.
 
@@ -142,7 +147,7 @@ if defined MD5_COMMAND (
 @if not defined FBBUILD_PACKAGE_NUMBER (
   set FBBUILD_PACKAGE_NUMBER=0
 ) else (
-set /A FBBUILD_PACKAGE_NUMBER+=1
+  set /A FBBUILD_PACKAGE_NUMBER+=1
 )
 @echo   Setting FBBUILD_PACKAGE_NUMBER to %FBBUILD_PACKAGE_NUMBER%
 
@@ -154,7 +159,7 @@ set /A FBBUILD_PACKAGE_NUMBER+=1
 )
 
 :: Set up our final destination
-set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
+@set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
 @if not exist "%FBBUILD_INSTALL_IMAGES%" ( mkdir "%FBBUILD_INSTALL_IMAGES%" )
 
 :: Determine Product Status
@@ -188,6 +193,9 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
 
 @endlocal
 
+:: Dump env vars to file for later testing.
+set > %FB_ROOT_PATH%\builds\install\arch-specific\win32\test_installer\fb_build_vars_%PROCESSOR_ARCHITECTURE%.txt
+
 ::End of SET_VERSION
 ::----------------
 @goto :EOF
@@ -217,17 +225,19 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
 )
 @for %%f in ( msvcp%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_0%.dll vcruntime%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_0%.dll  ) do (
     echo Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_1%.CRT\%%f"
-    copy  "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_1%.CRT\%%f" %FB_OUTPUT_DIR%\ >nul
-    if %ERRORLEVEL% GEQ 1 (
+    copy "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_1%.CRT\%%f" %FB_OUTPUT_DIR%\ >nul
+    if ERRORLEVEL 1 (
        call :ERROR Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_1%.CRT\%%f" failed with error %ERRORLEVEL%  & goto :EOF
     )
 )
 
-@where /Q implib.exe
-@if not ERRORLEVEL 1 (
-  if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
-    echo   Generating fbclient_bor.lib
+@if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
+  echo     Generating fbclient_bor.lib
+  where /Q implib.exe
+  if not ERRORLEVEL 1 (
     implib %FB_OUTPUT_DIR%\lib\fbclient_bor.lib %FB_OUTPUT_DIR%\fbclient.dll > nul
+  ) else (
+    call :ERROR implib not found & goto :EOF
   )
 )
 
@@ -300,8 +310,8 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
         echo     ... %%v
         copy /Y %FB_EXTERNAL_DOCS%\%%v %FB_OUTPUT_DIR%\doc\%%v > nul
         if ERRORLEVEL 1 (
-            call :WARNING Copying %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v FAILED. & @goto :EOF 
-         )
+            call :WARNING Copying %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v FAILED. & goto :EOF
+        )
     )
 
   echo   Finished copying pdf docs...
@@ -326,7 +336,7 @@ for %%v in (IPLicense.txt IDPLicense.txt ) do (
 
 ::  Walk through all docs and transform any that are not .txt, .pdf or .html to .txt
 @echo   Setting .txt filetype to ascii docs.
-for /R %FB_OUTPUT_DIR%\doc %%v in ( * ) do (
+@for /R %FB_OUTPUT_DIR%\doc %%v in ( * ) do (
   if /I not "%%~xv" == ".md" (
     if /I not "%%~xv" == ".txt" (
       if /I not "%%~xv" == ".pdf" (
@@ -364,7 +374,7 @@ for /R %FB_OUTPUT_DIR%\doc %%v in ( * ) do (
         ( call :ERROR Could not generate wixobj for MSVC Runtime MSI ) & ( goto :EOF )
     ) else (
         "%WIX%\bin\light.exe" -sw1076 %FB_GEN_DIR%\vccrt_%FB_TARGET_PLATFORM%.wixobj -out %FB_OUTPUT_DIR%\system32\vccrt%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_1%_%FB_TARGET_PLATFORM%.msi
-        if %ERRORLEVEL% GEQ 1 ( (call :ERROR Could not generate MSVCC Runtime MSI ) & (goto :EOF))
+        if ERRORLEVEL 1 ( (call :ERROR Could not generate MSVCC Runtime MSI ) & (goto :EOF))
     )
   ) else (
     echo   Using an existing build of %FB_OUTPUT_DIR%\system32\vccrt%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION_1%_%FB_TARGET_PLATFORM%.msi
@@ -387,7 +397,7 @@ for /R %FB_OUTPUT_DIR%\doc %%v in ( * ) do (
 @copy %FB_ROOT_PATH%\lang_helpers\ib_util.pas %FB_OUTPUT_DIR%\include > nul || (call :WARNING Copying ib_util.pas failed. & goto :EOF )
 
 @echo   Copying other include files required for development...
-set OUTPATH=%FB_OUTPUT_DIR%\include
+@set OUTPATH=%FB_OUTPUT_DIR%\include
 @copy %FB_ROOT_PATH%\src\yvalve\perf.h %OUTPATH%\ > nul
 @copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\ > nul || (@call :ERROR Failure executing copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\  )
 @if ERRORLEVEL 1 goto :END
@@ -446,7 +456,7 @@ set OUTPATH=%FB_OUTPUT_DIR%\include
 :: that and they all have windows EOL
 ::===============================================
 @for /R %FB_OUTPUT_DIR% %%W in ( *.txt *.conf *.sql *.c *.cpp *.hpp *.h *.bat *.pas *.e *.def *.rc *.md *.html ) do (
-  unix2dos --quiet --safe %%W || exit /b 1
+  unix2dos --safe %%W > nul 2>&1 || exit /b 1
 )
 
 ::End of SET_CRLF
@@ -513,7 +523,7 @@ set OUTPATH=%FB_OUTPUT_DIR%\include
 
 :: write sums into temporary file to avoid including it into the process
 @pushd %FBBUILD_INSTALL_IMAGES%
-@call %MD5_COMMAND% Firebird-%PRODUCT_VER_STRING%?%FBBUILD_PACKAGE_NUMBER%*.* >md5sum.tmp
+@call %MD5_COMMAND% Firebird-%PRODUCT_VER_STRING%?%FBBUILD_PACKAGE_NUMBER%*.* > md5sum.tmp
 
 :: then rename it to the proper name
 @if not ERRORLEVEL 1 (
@@ -650,7 +660,7 @@ popd
 @echo.
 
 @echo   Copying additional files needed for installation, documentation etc.
-@( call :COPY_XTRA ) || ( echo Error calling COPY_XTRA & @goto :END )
+@( call :COPY_XTRA ) || ( echo Error calling COPY_XTRA & goto :END )
 @echo.
 
 :: WIX is not necessary for a snapshot build, so we don't throw
