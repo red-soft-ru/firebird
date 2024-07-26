@@ -118,10 +118,11 @@ Const
   FB80_x64_Install  = 26;
   FB90Install       = 27;
   FB90_x64_Install  = 28;
+  MaxProdInstalled  = FB90_x64_Install;
+
   Current32Install  = FB{#FB_MAJOR_VER}0Install;
   Current64Install  = FB{#FB_MAJOR_VER}0_x64_Install;
 
-  MaxProdInstalled  = FB90_x64_Install;
 
 //ProductsInstalled
   IB4       = 0;
@@ -1322,7 +1323,7 @@ begin
   result := False;
   if (ConfigureFirebird) then
      result := WizardIsTaskSelected('UseSuperServerTask\UseGuardianTask')
-			or WizardIsTaskSelected('UseSuperClassicTask\UseGuardianTask');
+       or WizardIsTaskSelected('UseSuperClassicTask\UseGuardianTask');
 end;
 
 
@@ -1451,7 +1452,6 @@ begin
 
   //If existing install of the same majorver.minorver is
   //found then we can upgrade it.
-//// **** FIX ME **** Don't use hardcoded constants here. They get overlooked.
   if ( (ProductsInstalledCount = 1) AND
 #if PlatformTarget == "x64"
     ((ProductsInstalled AND FB{#FB_MAJOR_VER}0_x64 ) = FB{#FB_MAJOR_VER}0_x64 ) ) then begin

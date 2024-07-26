@@ -30,7 +30,7 @@
   o EnumerateObjectList;
      - Simple demonstration of object enumeration.
 
-  o Show Help   
+  o Show Help
     - CreateHelpDlg;
     - ShowHelpDlg: Integer;
     - CloseHelpDlg;
@@ -103,7 +103,7 @@ begin
 
   CompGroup2 := TStringList.create;
   for i := 0 to GetArrayLength( CompGroup2Array )-1 do begin
-    CompGroup2.add(CompGroup2Array[i]);	
+    CompGroup2.add(CompGroup2Array[i]);
     CompGroup2.objects[i] := (WizardForm.FindComponent(CompGroup2Array[i]));
   end;
 
