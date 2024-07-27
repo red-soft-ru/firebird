@@ -177,6 +177,8 @@ void DsqlRequest::destroy(thread_db* tdbb, DsqlRequest* dsqlRequest)
 	{
 		childStatement->addFlags(DsqlStatement::FLAG_ORPHAN);
 		childStatement->setParentRequest(nullptr);
+		childStatement->setParentDbKey(nullptr);
+		childStatement->setParentRecVersion(nullptr);
 
 		// hvlad: lines below is commented out as
 		// - child is already unlinked from its parent request
