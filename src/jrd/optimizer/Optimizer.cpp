@@ -641,9 +641,6 @@ Optimizer::~Optimizer()
 
 RecordSource* Optimizer::compile(RseNode* subRse, BoolExprNodeStack* parentStack)
 {
-	if (isSemiJoined())
-		parentStack = nullptr;
-
 	Optimizer subOpt(tdbb, csb, subRse, firstRows);
 	const auto rsb = subOpt.compile(parentStack);
 
@@ -698,7 +695,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	// AB: If we have limit our retrieval with FIRST / SKIP syntax then
 	// we may not deliver above conditions (from higher rse's) to this
 	// rse, because the results should be consistent.
-	if (rse->rse_skip || rse->rse_first)
+	if (rse->rse_skip || rse->rse_first || isSemiJoined())
 		parentStack = nullptr;
 
 	// Set base-point before the parent/distributed nodes begin.
