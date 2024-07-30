@@ -3212,7 +3212,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 						options.dpb_session_tz.c_str(), options.dpb_session_tz.length());
 			}
 
-			CCH_flush(tdbb, FLUSH_FINI, 0);
+			CCH_flush(tdbb, FLUSH_ALL, 0);
 
 			// The newly created database should have FW = ON, unless the opposite is specified in DPB
 			if (!options.dpb_set_force_write || options.dpb_force_write)
