@@ -85,16 +85,19 @@ namespace
 
 		if (const auto cmpNode = nodeAs<ComparativeBoolNode>(boolean))
 		{
-			SortedStreamList streams;
-			cmpNode->collectStreams(streams);
-
-			for (const auto stream : streams)
+			if (cmpNode->blrOp == blr_eql || cmpNode->blrOp == blr_equiv)
 			{
-				if (!rseStreams.exist(stream))
+				SortedStreamList streams;
+				cmpNode->collectStreams(streams);
+
+				for (const auto stream : streams)
 				{
-					booleanStack.push(boolean);
-					*parentBoolean = nullptr;
-					return true;
+					if (!rseStreams.exist(stream))
+					{
+						booleanStack.push(boolean);
+						*parentBoolean = nullptr;
+						return true;
+					}
 				}
 			}
 		}
