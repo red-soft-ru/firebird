@@ -1115,9 +1115,10 @@ namespace Jrd
 	class NestedLoopJoin : public RecordSource
 	{
 	public:
-		NestedLoopJoin(CompilerScratch* csb, FB_SIZE_T count, RecordSource* const* args);
+		NestedLoopJoin(CompilerScratch* csb, FB_SIZE_T count, RecordSource* const* args,
+					   JoinType joinType = INNER_JOIN);
 		NestedLoopJoin(CompilerScratch* csb, RecordSource* outer, RecordSource* inner,
-					   BoolExprNode* boolean, JoinType joinType);
+					   BoolExprNode* boolean);
 
 		void close(thread_db* tdbb) const override;
 
@@ -1143,14 +1144,16 @@ namespace Jrd
 		bool fetchRecord(thread_db*, FB_SIZE_T) const;
 
 		const JoinType m_joinType;
+		const NestConst<BoolExprNode> m_boolean;
+
 		Firebird::Array<NestConst<RecordSource> > m_args;
-		NestConst<BoolExprNode> const m_boolean;
 	};
 
 	class FullOuterJoin : public RecordSource
 	{
 	public:
-		FullOuterJoin(CompilerScratch* csb, RecordSource* arg1, RecordSource* arg2);
+		FullOuterJoin(CompilerScratch* csb, RecordSource* arg1, RecordSource* arg2,
+					  const StreamList& checkStreams);
 
 		void close(thread_db* tdbb) const override;
 
@@ -1175,6 +1178,7 @@ namespace Jrd
 	private:
 		NestConst<RecordSource> m_arg1;
 		NestConst<RecordSource> m_arg2;
+		const StreamList m_checkStreams;
 	};
 
 	class HashJoin : public RecordSource
@@ -1202,7 +1206,11 @@ namespace Jrd
 		};
 
 	public:
-		HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
+		HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType,
+				 FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
+				 double selectivity = 0);
+		HashJoin(thread_db* tdbb, CompilerScratch* csb,
+				 BoolExprNode* boolean,
 				 RecordSource* const* args, NestValueArray* const* keys,
 				 double selectivity = 0);
 
@@ -1229,9 +1237,15 @@ namespace Jrd
 		bool internalGetRecord(thread_db* tdbb) const override;
 
 	private:
+		void init(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
+				  RecordSource* const* args, NestValueArray* const* keys,
+				  double selectivity);
 		ULONG computeHash(thread_db* tdbb, Request* request,
 						  const SubStream& sub, UCHAR* buffer) const;
 		bool fetchRecord(thread_db* tdbb, Impure* impure, FB_SIZE_T stream) const;
+
+		const JoinType m_joinType;
+		const NestConst<BoolExprNode> m_boolean;
 
 		SubStream m_leader;
 		Firebird::Array<SubStream> m_args;
