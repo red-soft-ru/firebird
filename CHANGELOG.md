@@ -2,11 +2,20 @@
 
 ## Improvements
 
+* [#8181](https://github.com/FirebirdSQL/firebird/pull/8181): Ensure the standalone CS listener on Linux uses the _SO_REUSEADDR_ socket option   
+  Contributor(s): Dmitry Yemanov
+
+* [#8165](https://github.com/FirebirdSQL/firebird/pull/8165): Added shutdown handler for _Classic Server_   
+  Contributor(s): Alexander Zhdanov
+
 * [#8104](https://github.com/FirebirdSQL/firebird/issues/8104): More efficient evaluation of expressions like `RDB$DB_KEY <= ?` after mass delete   
   Contributor(s): Vlad Khorsun
 
 * [#8066](https://github.com/FirebirdSQL/firebird/issues/8066): Make protocol schemes case-insensitive  
   Contributor(s): Vlad Khorsun
+
+* [#8061](https://github.com/FirebirdSQL/firebird/pull/8061): Unnest `IN/ANY/EXISTS` subqueries and optimize them using semi-join algorithm  
+  Contributor(s): Dmitry Yemanov
 
 * [#8042](https://github.com/FirebirdSQL/firebird/issues/8042): Improve conflict resolution on replica when table have both primary and unique keys  
   Contributor(s): Vlad Khorsun
@@ -20,10 +29,34 @@
 * [#7978](https://github.com/FirebirdSQL/firebird/issues/7978): Update Windows distributions with _zlib_ version 1.3.1  
   Contributor(s): Vlad Khorsun
 
-* [#7928](https://github.com/FirebirdSQL/firebird/issues/7928): Make _TempCacheLimit_ setting to be per-database (not per-attachment) for SuperClassic  
+* [#7928](https://github.com/FirebirdSQL/firebird/issues/7928): Make _TempCacheLimit_ setting to be per-database (not per-attachment) for _SuperClassic_  
   Contributor(s): Vlad Khorsun
 
 ## Bugfixes
+
+* [#8189](https://github.com/FirebirdSQL/firebird/issues/8189): Slow connection times with a lot of simultaneous connections and active trace session present  
+  Contributor(s): Alex Peshkoff
+
+* [#8186](https://github.com/FirebirdSQL/firebird/issues/8186): Fixed a few issues with IPC used by remote profiler  
+  Contributor(s): Vlad Khorsun
+
+* [#8185](https://github.com/FirebirdSQL/firebird/issues/8185): SIGSEGV in Firebird 5.0.0.1306 Embedded during update on cursor  
+  Contributor(s): Adriano dos Santos Fernandes, Dmitry Yemanov
+
+* [#8180](https://github.com/FirebirdSQL/firebird/issues/8180): Sometimes a system trace session is terminated spontaneously  
+  Contributor(s): Artyom Abakumov
+
+* [#8178](https://github.com/FirebirdSQL/firebird/pull/8178): Fix boolean conversion to string inside `DataTypeUtil::makeFromList()`  
+  Contributor(s): Dmitry Yemanov
+
+* [#8176](https://github.com/FirebirdSQL/firebird/issues/8176): Firebird 5 hangs after starting remote profiling session  
+  Contributor(s): Vlad Khorsun
+
+* [#8172](https://github.com/FirebirdSQL/firebird/issues/8172): File _include/firebird/impl/iberror_c.h_ is missing from the Linux x64 tar archive  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#8171](https://github.com/FirebirdSQL/firebird/issues/8171): Trace plugin unloaded if called method is not implemented  
+  Contributor(s): Vlad Khorsun
 
 * [#8168](https://github.com/FirebirdSQL/firebird/issues/8168): `MAKE_DBKEY` bug after backup/restore  
   Contributor(s): Vlad Khorsun
