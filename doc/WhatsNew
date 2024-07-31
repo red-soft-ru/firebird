@@ -1,4 +1,129 @@
   **************************
+  * v3.0.12
+  **************************
+
+    * Improvement #8181
+        Ensure the standalone CS listener on Linux uses the SO_REUSEADDR socket option
+      Contributor(s): Dmitry Yemanov
+
+    * Improvement #8030
+        Better cardinality estimation when empty data pages exist
+      Contributor(s): Vlad Khorsun
+
+    * Improvement #7978
+        Update Windows distributions with zlib version 1.3.1
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #8178
+        Fix boolean conversion to string inside DataTypeUtil::makeFromList()
+      Contributor(s): Dmitry Yemanov
+
+    * Bugfix #8156
+        Can not specify concrete IPv6 address in ES/EDS connection string
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #8151
+        Deadlock happens when run 'List Trace Sessions' service and there are many active trace sessions
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #8149
+        The hung or crash could happen when connection fires TRACE_EVENT_DETACH event and new trace session created concurrently
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #8110
+        Firebird 5 crash On Android API level 34
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #8101
+        Firebird crashes if a plugin factory returns nullptr and no error in status
+      Contributor(s): Vlad Khorsun, Dimitry Sibiryakov
+
+    * Bugfix #8089
+        AV when attaching database while low of free memory
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #8079
+        Engine could crash when executing some trigger(s) while another attachment modifies them
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #8027
+        Broken gbak statistics
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7993
+        Unexpected results when using CASE WHEN with RIGHT JOIN
+      Contributor(s): Dmitry Yemanov
+
+    * Bugfix #7985
+        Hang in case of error when sweep thread is attaching to database (Classic Server)
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7979
+        Hang when database with disconnect trigger using MON$ tables is shutting down
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7950
+        Unable to restore database when .fbk was created on host with other ICU
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7917
+        Hang in case of error when sweep thread is attaching to database
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7860
+        Crash potentially caused by BETWEEN operator
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #7844
+        Removing first column with SET WIDTH crashes ISQL
+      Contributor(s): Adriano dos Santos Fernandes
+
+    * Bugfix #7839
+        Potential bug in BETWEEN operator
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #7817
+        Memory leak is possible for UDF array arguments
+      Contributor(s): Dmitry Yemanov
+
+    * Bugfix #7812
+        Service backup does not work in multiple engines configuration
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7779
+        Firebird is constantly crashing with the same symptoms (fbclient.dll)
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #7762
+        Crash on "Operating system call pthread_mutex_destroy failed. Error code 16" in log
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7747
+        Fix an issue where the garbage collection in indexes and blobs is not performed in VIO_backout()
+      Contributor(s): Ilya Eremin
+
+    * Bugfix #7738
+        Crash on multiple connections/disconnections
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix #7737
+        Fix cases where the precedence relationship between a record page and a blob page is not set
+      Contributor(s): Ilya Eremin
+
+    * Bugfix #7713
+        FOR SELECT statement can not see any changes made in DO block
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #7522
+        Shared memory area is probably already created by another engine instance in another Windows session, failed to create database
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #7480
+        Firebird server stops accepting new connections after some time
+      Contributor(s): Alexander Peshkov
+
+
+  **************************
   * v3.0.11
   **************************
 
