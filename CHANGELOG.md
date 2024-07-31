@@ -1,3 +1,196 @@
+# v4.0.5
+
+## Improvements
+
+* [#8181](https://github.com/FirebirdSQL/firebird/pull/8181): Ensure the standalone CS listener on Linux uses the _SO_REUSEADDR_ socket option  
+  Contributor(s): Dmitry Yemanov
+
+* [#8165](https://github.com/FirebirdSQL/firebird/pull/8165): Added shutdown handler for _Classic Server_  
+  Contributor(s): Alexander Zhdanov
+
+* [#8104](https://github.com/FirebirdSQL/firebird/issues/8104): More efficient evaluation of expressions like `RDB$DB_KEY <= ?` after mass delete   
+  Contributor(s): Vlad Khorsun
+
+* [#8066](https://github.com/FirebirdSQL/firebird/issues/8066): Make protocol schemes case-insensitive  
+  Contributor(s): Vlad Khorsun
+
+* [#8042](https://github.com/FirebirdSQL/firebird/issues/8042): Improve conflict resolution on replica when table have both primary and unique keys  
+  Contributor(s): Vlad Khorsun
+
+* [#8030](https://github.com/FirebirdSQL/firebird/issues/8030): Better cardinality estimation when empty data pages exist  
+  Contributor(s): Vlad Khorsun
+
+* [#8010](https://github.com/FirebirdSQL/firebird/issues/8010): Remove `gfix -cache` option  
+  Contributor(s): Vlad Khorsun
+
+* [#7978](https://github.com/FirebirdSQL/firebird/issues/7978): Update Windows distributions with _zlib_ version 1.3.1  
+  Contributor(s): Vlad Khorsun
+
+* [#7928](https://github.com/FirebirdSQL/firebird/issues/7928):  Make `TempCacheLimit` setting to be per-database, (not per-attachment) for _SuperClassic_  
+  Contributor(s): Vlad Khorsun
+
+* [#7854](https://github.com/FirebirdSQL/firebird/issues/7854): Performance issue with time zones  
+  Contributor(s): Adriano dos Santos Fernandes, Vlad Khorsun
+
+## Bugfixes
+
+* [#8189](https://github.com/FirebirdSQL/firebird/issues/8189): Slow connection times with a lot of simultaneous connections and active trace session present  
+  Contributor(s): Alexander Peshkov, Vlad Khorsun
+
+* [#8180](https://github.com/FirebirdSQL/firebird/issues/8180): Sometimes a system trace session is terminated spontaneously  
+  Contributor(s): Artyom Abakumov
+
+* [#8178](https://github.com/FirebirdSQL/firebird/pull/8178): Fix boolean conversion to string inside `DataTypeUtil::makeFromList()`  
+  Contributor(s): Dmitry Yemanov
+
+* [#8171](https://github.com/FirebirdSQL/firebird/issues/8171): Trace plugin unloaded if called method is not implemented  
+  Contributor(s): Vlad Khorsun
+
+* [#8156](https://github.com/FirebirdSQL/firebird/issues/8156): Can not specify concrete IPv6 address in ES/EDS connection string  
+  Contributor(s): Vlad Khorsun
+
+* [#8151](https://github.com/FirebirdSQL/firebird/issues/8151): Deadlock happens when run 'List Trace Sessions' service and there are many active trace sessions  
+  Contributor(s): Vlad Khorsun
+
+* [#8150](https://github.com/FirebirdSQL/firebird/issues/8150): Process could attach to the deleted instance of shared memory  
+  Contributor(s): Alexander Peshkov, Vlad Khorsun
+
+* [#8149](https://github.com/FirebirdSQL/firebird/issues/8149): The hung or crash could happen when connection fires _TRACE_EVENT_DETACH_ event and new trace session created concurrently  
+  Contributor(s): Vlad Khorsun
+
+* [#8138](https://github.com/FirebirdSQL/firebird/issues/8138): Bugcheck when replicator state is changed concurrently  
+  Contributor(s): Vlad Khorsun
+
+* [#8120](https://github.com/FirebirdSQL/firebird/issues/8120): `CAST` dies with numeric value is out of range error  
+  Contributor(s): Vlad Khorsun
+
+* [#8114](https://github.com/FirebirdSQL/firebird/issues/8114): Segfault in connections pool during server shutdown  
+  Contributor(s): Vlad Khorsun
+
+* [#8110](https://github.com/FirebirdSQL/firebird/issues/8110): Firebird crashes on Android API level 34  
+  Contributor(s): Vlad Khorsun
+
+* [#8108](https://github.com/FirebirdSQL/firebird/issues/8108): ICU 63.1 suppresses conversion errors  
+  Contributor(s): Dmitry Kovalenko
+
+* [#8101](https://github.com/FirebirdSQL/firebird/issues/8101): Firebird crashes if a plugin factory returns _nullptr_ and no error in status  
+  Contributor(s): Vlad Khorsun, Dimitry Sibiryakov
+
+* [#8089](https://github.com/FirebirdSQL/firebird/issues/8089): AV when attaching database while low of free memory  
+  Contributor(s): Vlad Khorsun
+
+* [#8085](https://github.com/FirebirdSQL/firebird/issues/8085): Memory leak when executing a lot of different queries and `StatementTimeout > 0`  
+  Contributor(s): Vlad Khorsun
+
+* [#8083](https://github.com/FirebirdSQL/firebird/issues/8083): AV when writting into internal trace log  
+  Contributor(s): Vlad Khorsun
+
+* [#8079](https://github.com/FirebirdSQL/firebird/issues/8079): Engine could crash when executing some trigger(s) while another attachment modifies them  
+  Contributor(s): Vlad Khorsun
+
+* [#8077](https://github.com/FirebirdSQL/firebird/issues/8077): Error "Too many recursion levels" does not stop execution of code that uses `ON DISCONNECT` trigger  
+  Contributor(s): Alexander Peshkov, Vlad Khorsun
+
+* [#8058](https://github.com/FirebirdSQL/firebird/issues/8058): Replicated DDL changes do not set the correct grantor  
+  Contributor(s): Dmitry Yemanov
+
+* [#8056](https://github.com/FirebirdSQL/firebird/issues/8056): Error "Too many temporary blobs" with blob_append when select a stored procedue using rows-clause  
+  Contributor(s): Vlad Khorsun
+
+* [#8040](https://github.com/FirebirdSQL/firebird/issues/8040): Bugcheck 183 (wrong record length) could happen on replica database after UK violation on insert   
+  Contributor(s): Vlad Khorsun
+
+* [#8039](https://github.com/FirebirdSQL/firebird/issues/8039): Segfault when opening damaged (last TIP is missing in `RDB$PAGES`, user's FW was OFF) database  
+  Contributor(s): Alexander Peshkov
+
+* [#8027](https://github.com/FirebirdSQL/firebird/issues/8027): Broken _gbak_ statistics  
+  Contributor(s): Alexander Peshkov
+
+* [#8011](https://github.com/FirebirdSQL/firebird/issues/8011): DECFLOAT error working with `INT128` in UDR  
+  Contributor(s): Alexander Peshkov
+
+* [#8006](https://github.com/FirebirdSQL/firebird/issues/8006): Int128 datatype not supported in FB_MESSAGE macro   
+  Contributor(s): Alexander Peshkov
+
+* [#8003](https://github.com/FirebirdSQL/firebird/issues/8003): _gbak_ v4 can't backup database in _ODS < 13_  
+  Contributor(s): Vlad Khorsun
+
+* [#7997](https://github.com/FirebirdSQL/firebird/issues/7997): Unexpected results when comparing integer with string containing value out of range of that integer datatype  
+  Contributor(s): Alexander Peshkov
+
+* [#7993](https://github.com/FirebirdSQL/firebird/issues/7993): Unexpected results when using `CASE WHEN` with `RIGHT JOIN`  
+  Contributor(s): Dmitry Yemanov
+
+* [#7985](https://github.com/FirebirdSQL/firebird/issues/7985): Hang in case of error when sweep thread is attaching to database (_Classic Server_)
+  Contributor(s): Alexander Peshkov
+
+* [#7979](https://github.com/FirebirdSQL/firebird/issues/7979): Hang when database with disconnect trigger using `MON$` tables is shutting down  
+  Contributor(s): Alexander Peshkov
+
+* [#7969](https://github.com/FirebirdSQL/firebird/issues/7969): Characters are garbled when replicating fields with type `BLOB SUB_TYPE TEXT` if the character set of the connection and the field are different  
+  Contributor(s): Dmitry Yemanov
+
+* [#7950](https://github.com/FirebirdSQL/firebird/issues/7950): Unable to restore database when .fbk was created on host with other ICU  
+  Contributor(s): Alexander Peshkov
+
+* [#7927](https://github.com/FirebirdSQL/firebird/issues/7927): Some default values is set incorrectly for SC/CS architectures  
+  Contributor(s): Vlad Khorsun
+
+* [#7917](https://github.com/FirebirdSQL/firebird/issues/7917): Hang in case of error when sweep thread is attaching to database  
+  Contributor(s): Alexander Peshkov
+
+* [#7905](https://github.com/FirebirdSQL/firebird/issues/7905): Segfault during TPC initialization  
+  Contributor(s): Alexander Peshkov
+
+* [#7899](https://github.com/FirebirdSQL/firebird/issues/7899): Inconsistent state of master-detail occurs after RE-connect + 'SET AUTODDL OFF' + 'drop <FK>' which is ROLLED BACK  
+  Contributor(s): Vlad Khorsun
+
+* [#7896](https://github.com/FirebirdSQL/firebird/issues/7896): _replication.log_ remains empty (and without any error in firebird.log) until concurrent FB instance is running under different account and generates segments on its master. Significant delay required after stop concurrent FB it in order allow first one to write in its replication log.  
+  Contributor(s): Vlad Khorsun
+
+* [#7885](https://github.com/FirebirdSQL/firebird/issues/7885): Unstable error messages in services due to races related with service status vector  
+  Contributor(s): Alexander Peshkov
+
+* [#7873](https://github.com/FirebirdSQL/firebird/issues/7873): Wrong memory buffer alignment and I/O buffer size when working in direct I/O mode  
+  Contributor(s): Vlad Khorsun
+
+* [#7869](https://github.com/FirebirdSQL/firebird/issues/7869): _gbak_ can write uninitialized data into `RDB$RETURN_ARGUMENT` and `RDB$ARGUMENT_POSITION` fields  
+  Contributor(s): Dmitry Kovalenko
+
+* [#7867](https://github.com/FirebirdSQL/firebird/issues/7867): Error "wrong page type" during garbage collection on v4.0.4  
+  Contributor(s): Ilya Eremin
+
+* [#7860](https://github.com/FirebirdSQL/firebird/issues/7860): Crash potentially caused by `BETWEEN` operator  
+  Contributor(s): Vlad Khorsun
+
+* [#7851](https://github.com/FirebirdSQL/firebird/issues/7851): The skip of `att_functionarg_field_precision` does not check `RESTORE_format`  
+  Contributor(s): Dmitry Kovalenko
+
+* [#7846](https://github.com/FirebirdSQL/firebird/issues/7846): FB4 can't backup/restore `INT128`-array  
+  Contributor(s): Dmitry Kovalenko
+
+* [#7844](https://github.com/FirebirdSQL/firebird/issues/7844): Removing first column with `SET WIDTH` crashes _isql_  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7839](https://github.com/FirebirdSQL/firebird/issues/7839): Potential bug in `BETWEEN` operator  
+  Contributor(s): Vlad Khorsun
+
+* [#7831](https://github.com/FirebirdSQL/firebird/issues/7831): Incorrect type of UDF-argument with array  
+  Contributor(s): Dmitry Kovalenko
+
+* [#7827](https://github.com/FirebirdSQL/firebird/issues/7827): Problem using Python _firebird-driver_ with either Intel or M1 Mac builds with version 4.0.3 or 5.0+  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#7809](https://github.com/FirebirdSQL/firebird/issues/7809): Crash "Fatal lock manager error: Process disappeared in LockManager::acquire_shmem"  
+  Contributor(s): Alexander Peshkov
+
+* [#7800](https://github.com/FirebirdSQL/firebird/issues/7800): Default publication status is not preserved after backup/restore  
+  Contributor(s): Dmitry Yemanov
+
+* [#7461](https://github.com/FirebirdSQL/firebird/issues/7461): Differences in field metadata descriptions between Firebird 2.5 and Firebird 4  
+  Contributor(s): Dmitry Yemanov
+
+
 # v4.0.4
 
 ## Improvements
