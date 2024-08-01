@@ -268,7 +268,6 @@ Compression=none
 SolidCompression=yes
 #endif
 
-ShowUndisplayableLanguages={#defined iss_debug}
 AllowNoIcons=true
 AlwaysShowComponentsList=true
 PrivilegesRequired=admin
@@ -863,6 +862,8 @@ begin
     Log( 'In function InitSecurityDB FindInFile found an error in ' + OutputStr );
   end;
 
+  DeleteFile( InputStr );
+  DeleteFile( OutputStr );
 end;
 
 
@@ -1230,4 +1231,3 @@ end;
 begin
 end.
 
-; kate: replace-tabs on; indent-width 2; tab-width 2; replace-tabs-save on; syntax Pascal;
