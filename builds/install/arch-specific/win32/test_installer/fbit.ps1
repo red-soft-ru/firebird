@@ -20,7 +20,7 @@ fbit {PARAM [...]]
 
  REQUIREMENTS
  ============
- 
+
  Some knowledge of InnoSetup will be useful. See $FIREBIRD/doc/installation_scripted.txt
  for more info.
 
@@ -36,12 +36,12 @@ fbit {PARAM [...]]
  -scripted       -                               Sets VERYSILENT, SP and nomsg
  -testname       NameOfTestRun                   Optional. No spaces allowed. Used for storing test run details.
 
- -fbinst_exec    Path and filename of Installer  Will be dynamically determined if not set. 
+ -fbinst_exec    Path and filename of Installer  Will be dynamically determined if not set.
 
- -config         A file name                     Pass parameters in a config file. 
+ -config         A file name                     Pass parameters in a config file.
                                                  Overrides params passed on the command-line.
 
- The following parameters are set by default. They are unset 
+ The following parameters are set by default. They are unset
  automatically when a conflicting parameter is passed:
 
  DefaultParam    Default Value set by fbit       Unset by
@@ -145,7 +145,7 @@ param(
 
   # Load a configuration file
   [string]$config,
-  
+
   [Parameter(Mandatory = $true, ParameterSetName = "classic")]
   [switch]$classicserver,
 
@@ -209,7 +209,6 @@ param(
 
 )
 
-Import-Module .\fbit-functions.psm1
 
 # Vars available to all functions in script
 $TAB = '  '
@@ -218,14 +217,22 @@ $ErrorCount = 0
 # Full Install/Uninstall command that will be executed
 [string]$finalcmd
 # The actual list of commands that will be passed to the installer/uninstaller
-[string]$full_cmdline
+[string]$full_cmdline = ""
 # Override timestamp
 [string]$run_timestamp
-  
 
-[System.ConsoleColor]$fbcol = "Black"
-[System.ConsoleColor]$fbred = "Red"
-[System.ConsoleColor]$fbgreen = "Green"
+[boolean]$IsVerbose = $false
+[boolean]$IsDebug = $false
+
+[string]$uninst_cmdline = ""
+[string]$inno_silent = ""
+
+
+[System.ConsoleColor]$fgcol = "Black"
+[System.ConsoleColor]$fgred = "Red"
+[System.ConsoleColor]$fggreen = "Green"
+
+Import-Module .\fbit-functions.psm1
 
 <#
  TO DO list
@@ -235,11 +242,165 @@ $ErrorCount = 0
 
 <#
 .SYNOPSIS
+Load a simple config file and assign key-value pairs to $key variables
+
+.DESCRIPTION
+
+
+.EXAMPLE
+# Comment lines may start with # or //
+# Variables are strings by default
+avar="AValue"
+# Booleans must be passed as 0 or 1 and are converted to boolean types
+aboolean=$true
+# Switches may be set by passing the switch name prefixed with a hyphen
+  -aswitch
+# Or just passed 'as is'
+  aswitch
+
+.NOTES
+General notes
+#>
+function LoadConfig( [string] $_conffile ) {
+  Write-Debug "Entering function $($MyInvocation.MyCommand.Name)"
+  Write-Debug "_conffile is $_conffile"
+  foreach ($i in $(Get-Content $_conffile)) {
+    # Trim any lead/trailing whitespace
+    # Include value in quotes if you need trailing whitespace!
+    $local:line = $i.trim()
+    if ($local:line -ne '') {
+      if ( -not ($line.startswith( '#' ) -or $line.startswith( '//' )) ) {
+        Write-Verbose "Processing $local:line"
+
+        $local:avalue = $null
+        $local:akey = $null
+
+        $local:akey = $i.split('=')[0]
+        if ( $null -ne $local:akey ) { $local:akey = $local:akey.trim() }
+
+        # Check if key is a switch.
+        if ( $local:akey.StartsWith('-') ) {
+          Write-Debug "$local:akey is a switch"
+          Set-Variable -Scope global -Name $local:akey.TrimStart('-') -Value $true
+          Set-Variable -Scope Script -Name $local:akey.TrimStart('-') -Value $true
+          continue
+        }
+
+        try {
+          $local:avalue = $i.split('=', 2)[1]
+        } catch {
+          Write-Debug "Setting $local:akey to true"
+          Set-Variable -Scope global -Name $local:akey -Value $true
+          Set-Variable -Scope Script -Name $local:akey -Value $true
+          continue
+        }
+
+        if ( $null -ne $local:avalue ) { $local:avalue = $local:avalue.trim() }
+        Write-Debug "akey is $local:akey and avalue is $local:avalue"
+        # Test avalue and change type to boolean if necessary
+        switch ( $local:avalue ) {
+          { $_ -eq "1" } {
+            Write-Debug "Setting $local:akey to true"
+            Set-Variable -Scope Global -Name $local:akey -Value $true
+            Set-Variable -Scope Script -Name $local:akey -Value $true
+          }
+          { $_ -eq "0" } {
+            Write-Debug "Setting $local:akey to false"
+            Set-Variable -Scope Global -Name $local:akey -Value $false
+            Set-Variable -Scope Script -Name $local:akey -Value $false          }
+          { $_ -eq $null } {
+            Write-Debug "Setting $local:akey to true"
+            Set-Variable -Scope Global -Name $local:akey -Value $true
+            Set-Variable -Scope Script -Name $local:akey -Value $true
+          }
+          Default {
+            Set-Variable -Scope global -Name $local:akey -Value $local:avalue
+            Set-Variable -Scope Script -Name $local:akey -Value $local:avalue
+          }
+        }
+      } else {
+        Write-Debug "NOT processing commented $local:line"
+
+      }
+    }
+  }
+#  Set-PSDebug -Off
+#  Get-ChildItem Variable:
+#  Pause "In $($MyInvocation.MyCommand.Name)  called from line $($MyInvocation.ScriptLineNumber)"
+  Write-Debug "Leaving function $($MyInvocation.MyCommand.Name)"
+}
+
+
+function print_vars( [string]$_action ) {
+  Write-Debug "Entering function $($MyInvocation.MyCommand.Name)"
+
+  $local:varfile = "$fbinstalllogdir/${testname}-${_action}-$run_timestamp.vars"
+  if ( $script:IsDebug ) {
+    Get-ChildItem Variable:
+    Pause "In $($MyInvocation.MyCommand.Name)  called from line $($MyInvocation.ScriptLineNumber)"
+  }
+  if ( $script:IsVerbose ) {
+    spacer > $local:varfile
+    if ( check_file_exists "fb_build_vars_${env:PROCESSOR_ARCHITECTURE}.txt" ) {
+      spacer "Firebird Build Environment" >> $local:varfile
+      Get-Content fb_build_vars_${env:PROCESSOR_ARCHITECTURE}.txt >> $local:varfile
+      spacer "Firebird Build Environment END" >> $local:varfile
+      spacer >> $local:varfile
+    }
+    spacer 'Global Vars' >> $local:varfile
+    Get-Variable -Scope global >> $local:varfile
+    spacer 'Global Vars END' >> $local:varfile
+    spacer >> $local:varfile
+    spacer 'Env Vars' >> $local:varfile
+    env | grep '^FB' >> $local:varfile
+    env | grep '^ISC' >> $local:varfile
+    spacer 'Env Vars END' >> $local:varfile
+    spacer 'Script Vars' >> $local:varfile
+    Get-Variable -Scope script | Format-Table -AutoSize -Wrap >> $local:varfile
+    spacer 'Script Vars END' >> $local:varfile
+    spacer >> $local:varfile
+    spacer 'Local Vars' >> $local:varfile
+    Get-Variable -Scope local >> $local:varfile
+    spacer 'Local Vars END' >> $local:varfile
+    spacer >> $local:varfile
+  }
+  Write-Debug "Leaving $($MyInvocation.MyCommand.Name)"
+
+}
+
+function show-help() {
+  Get-Help $PSCommandPath -ShowWindow
+}
+
+
+
+
+
+<#
+.SYNOPSIS
 Set defaults based on lack of supplied arguments
 #>
 function check_params() {
 
-  if ( $script:config ) { LoadConfig $script:config }
+  if ( $(Test-Path variable:$script:MyInvocation.BoundParameters['Verbose'] ) ) {
+    $script:IsVerbose = $script:MyInvocation.BoundParameters['Verbose'].IsPresent
+  }
+
+  if ( $(Test-Path variable:$script:MyInvocation.BoundParameters['Debug'] ) ){
+    $script:IsDebug = $script:MyInvocation.BoundParameters['Debug'].IsPresent
+  }
+
+  if ( $script:config ) {
+    Write-Output "script:config is $script:config"
+    LoadConfig $script:config
+  } else {
+    Write-Output "$($MyInvocation.MyCommand.Name) Not calling script:config $script:config"
+  }
+
+  if ( $script:IsDebug ) {
+    Get-ChildItem Variable:
+    Pause "In $($MyInvocation.MyCommand.Name) called from line $($MyInvocation.ScriptLineNumber ) After testing script:config $script:config"
+  }
 
   # ### fbit related param checks. These control what gets executed. ### #
   # By default the script is designed to install, check install and uninstall.
@@ -278,8 +439,8 @@ function check_params() {
   # Install Firebird as a service if $apptask not set
   $script:service_task = !($script:apptask)
 
-  # If ISC_PASSWORD is set and password defaults to masterkey then set password 
-  # to ISC_PASSWORD. 
+  # If ISC_PASSWORD is set and password defaults to masterkey then set password
+  # to ISC_PASSWORD.
   # If password != masterkey then we over-ride the value of $env:ISC_PASSWORD
   if ( $env:ISC_PASSWORD -and ($script:password -eq "masterkey" ) ) {
     $script:password = $env:ISC_PASSWORD
@@ -287,6 +448,10 @@ function check_params() {
 
   # ### END of InnoSetup related param checks ### #
 
+  if ( $script:IsDebug ) {
+    Get-ChildItem Variable:
+    Pause "In $($MyInvocation.MyCommand.Name) called from line $($MyInvocation.ScriptLineNumber ) Before leaving function."
+  }
 }
 
 
@@ -326,12 +491,12 @@ function copy_install() { # ( [string]$_sourceFolder, [string]$_targetFolder ) {
   Write-Verbose "Saving Firebird Installation to $_target_folder"
 
   if ( ! ( Test-Path -Path $_target_folder ) ) { mkdir $_target_folder }
-  Copy-Item -Path $_source_folder\* -Destination $_target_folder -Recurse | Out-Null
+  Copy-Item -Path $_source_folder\* -Destination $_target_folder -Recurse -Force | Out-Null
   if ( Test-Path $script:install_log_file -PathType leaf ) {
-    Copy-Item -Path $script:install_log_file -Destination $_target_folder | Out-Null
+    Copy-Item -Path $script:install_log_file -Destination $_target_folder -Force | Out-Null
   }
   if ( Test-Path $script:install_inf_file -PathType leaf ) {
-    Copy-Item -Path $script:install_inf_file -Destination $_target_folder | Out-Null
+    Copy-Item -Path $script:install_inf_file -Destination $_target_folder -Force | Out-Null
   }
 
 }
@@ -356,17 +521,17 @@ function check_server_sec_db() {
 
   # Check that the security db exists
   $local:retval = check_file_exists "$script:FIREBIRD\security${script:fbmajver}.fdb"
-  if ( !$local:retval ) { 
-    $fbcol = ( $global:action | Select-String -Pattern "un" -NotMatch -Quiet ) ?  $global:fbred : $global:fbgreen
-    Write-Host -ForegroundColor $fbcol "${TAB}$script:FIREBIRD\security${script:fbmajver}.fdb not found." 
+  if ( !$local:retval ) {
+    $script:fgcol = ( $script:action | Select-String -Pattern "un" -NotMatch -Quiet ) ?  $script:fgred : $script:fggreen
+    Write-Host -ForegroundColor $script:fgcol "${TAB}$script:FIREBIRD\security${script:fbmajver}.fdb not found."
     return
   }
 
   # Now check that isql is available
   $local:retval = check_file_exists "$script:FIREBIRD/isql.exe"
-  if ( !$local:retval ) { 
-    $fbcol = ( $global:action | Select-String -Pattern "un" -NotMatch -Quiet ) ?  $global:fbred : $global:fbgreen
-    Write-Host -ForegroundColor $fbcol "${TAB}$FIREBIRD\isql.exe does not exist. Cannot check security db" 
+  if ( !$local:retval ) {
+    $script:fgcol = ( $script:action | Select-String -Pattern "un" -NotMatch -Quiet ) ?  $script:fgred : $script:fggreen
+    Write-Host -ForegroundColor $script:fgcol "${TAB}$FIREBIRD\isql.exe does not exist. Cannot check security db"
     return
   }
 
@@ -376,15 +541,15 @@ function check_server_sec_db() {
 
   foreach ( $apw in "$script:password", "masterkey", "masterke" ) {
     Exec_SQL "localhost:employee" "SYSDBA" "$apw"
-    if ( $apw -eq "$script:password") { 
-      $local:found_str_is_fail = $true 
-    } else { 
-      $local:found_str_is_fail = $false 
+    if ( $apw -eq "$script:password") {
+      $local:found_str_is_fail = $true
+    } else {
+      $local:found_str_is_fail = $false
     }
     $local:teststr = "Your user name and password are not defined. Ask your database administrator to set up a Firebird login."
     $local:retval = $(check_file_output "$env:Temp\outfile.txt" "$local:teststr")
 
-    print_output "Password test with $apw " $local:retval $local:found_str_is_fail "PASSED" "FAILED"
+    print_output "${TAB}Password test with $apw " $local:retval $local:found_str_is_fail "PASSED" "FAILED"
 
   }
 
@@ -404,68 +569,112 @@ An example
 General notes
 #>
 function check_firebird_installed() {
-  
-  
-  
+
   $local:retval = check_file_exists $script:FIREBIRD -_isdir
   if ( ! $local:retval ) {
-    $fbcol = ( $script:action -eq "check_install" ) ?  $script:fbred : $script:fbgreen
-    Write-Host -ForegroundColor $fbcol "${TAB}$script:FIREBIRD directory does not exist."
+    $script:fgcol = ( $script:action -eq "check_install" ) ?  $script:fgred : $script:fggreen
+    Write-Host -ForegroundColor $script:fgcol "${TAB}$script:FIREBIRD directory does not exist."
     return
-  }  
+  }
 
   $local:retval = check_file_exists "${script:FIREBIRD}\firebird.exe"
   if ( $local:retval ) {
-    $fbcol = ( $script:action -eq "check_install" ) ?  $script:fbgreen : $script:fbred
-    Write-Host -ForegroundColor $local:fbcol "${TAB}Firebird Server appears to be installed."
+    $script:fgcol = ( $script:action -eq "check_install" ) ?  $script:fggreen : $script:fgred
+    Write-Host -ForegroundColor $script:fgcol "${TAB}Firebird Server appears to be installed."
     $script:server_installed = $true
-    #    return
   } else {
-    $fbcol = ( $script:action -eq "check_install" ) ? $script:fbred : $script:fbgreen 
-    Write-Host -ForegroundColor $local:fbcol "${TAB}Firebird Server does NOT appear to be installed."
+    $script:fgcol = ( $script:action -eq "check_install" ) ? $script:fgred : $script:fggreen
+    Write-Host -ForegroundColor $script:fgcol "${TAB}Firebird Server does NOT appear to be installed."
   }
 
 
   $local:retval = check_file_exists "$script:FIREBIRD/isql.exe"
   if ( $local:retval ) {
-    $fbcol = ( $script:action -eq "check_install" ) ?  $script:fbgreen : $script:fbred
-    Write-Host -ForegroundColor $local:fbcol "${TAB}Firebird Dev Tools appears to be installed."
+    $script:fgcol = ( $script:action -eq "check_install" ) ?  $script:fggreen : $script:fgred
+    Write-Host -ForegroundColor $script:fgcol "${TAB}Firebird Dev Tools appears to be installed."
     $script:devtools_installed = $true
-    #    return
   } else {
-    $fbcol = ( $script:action -eq "check_install" ) ? $script:fbred : $script:fbgreen 
-    Write-Host -ForegroundColor $local:fbcol "${TAB}Firebird Dev Tools do NOT appear to be installed."
+    $script:fgcol = ( $script:action -eq "check_install" ) ? $script:fgred : $script:fggreen
+    Write-Host -ForegroundColor $script:fgcol "${TAB}Firebird Dev Tools do NOT appear to be installed."
   }
   $local:retval = check_file_exists "$script:FIREBIRD/fbclient.dll"
   if ( $local:retval ) {
-    $fbcol = ( $script:action -eq "check_install" ) ?  $script:fbgreen : $script:fbred
-    Write-Host -ForegroundColor $local:fbcol "${TAB}Firebird Client appears to be installed."
+    $script:fgcol = ( $script:action -eq "check_install" ) ?  $script:fggreen : $script:fgred
+    Write-Host -ForegroundColor $script:fgcol "${TAB}Firebird Client appears to be installed."
     $script:client_installed = $true
-    return 
   } else {
-    $fbcol = ( $script:action -eq "check_install" ) ? $script:fbred : $script:fbgreen 
-    Write-Host -ForegroundColor $local:fbcol "${TAB}Firebird Client does NOT appear to be installed."
+    $script:fgcol = ( $script:action -eq "check_install" ) ? $script:fgred : $script:fggreen
+    Write-Host -ForegroundColor $script:fgcol "${TAB}Firebird Client does NOT appear to be installed."
   }
 
 }
 
+
+function check_service_installed( [string]$_servicename ) {
+
+  $local:ExpectedServiceName = "FirebirdServerDefaultInstance"
+
+  $local:ActualServiceName = Get-Service -ErrorAction ignore -Name $local:ExpectedServiceName | Select-Object -ExpandProperty Name
+  if (check_result $local:ExpectedServiceName $local:ActualServiceName $true ) {
+    $script:fgcol = ( $script:action -eq "check_install" ) ?  $script:fggreen : $script:fgred
+    Write-Host  -ForegroundColor $script:fgcol "${TAB}$local:ExpectedServiceName is installed. "
+  } else {
+    $script:fgcol = ( $script:action -eq "check_uninstall" ) ?  $script:fggreen : $script:fgred
+    Write-Host  -ForegroundColor $script:fgcol "${TAB}$local:ExpectedServiceName is NOT installed. "
+  }
+}
+
+
 function load_fb_build_env() {
+  Write-Debug "Entering function $($MyInvocation.MyCommand.Name)"
 
   # Build_All.bat should generate fb_build_vars_${env:PROCESSOR_ARCHITECTURE}.txt
   $local:fbbuild_vars_file = Get-Content "fb_build_vars_${env:PROCESSOR_ARCHITECTURE}.txt"
 
   $script:fbbuild_vars = @{}
-  $local:fbbuild_vars_file | Sort-Object -Property key | ForEach-Object {
+#  $local:fbbuild_vars_file | Sort-Object -Property key | ForEach-Object {
+  $local:fbbuild_vars_file | ForEach-Object {
     $s = $_ -split "="
     $s[1] = $s[1].Trim()
     $script:fbbuild_vars.Add($s[0], $s[1] )
   }
-  $script:fbbuild_vars = [System.Collections.SortedList] $script:fbbuild_vars 
+  if ( $script:IsDebug ) {
+    Get-ChildItem Variable:
+    Pause "In $($MyInvocation.MyCommand.Name) called from line $($MyInvocation.ScriptLineNumber) "
+  }
+
+  # Check that we have fbmajver and fix it if not.
+  # Normally this should not happen if we have just built firebird
+  if ( ! $script:fbbuild_vars.ContainsKey('FB_MAJOR_VER') ) {
+    # Try to locate build_no.h
+    $local:fb_root_path= $script:fbbuild_vars.'FB_ROOT_PATH'
+    if ( Test-Path "${local:fb_root_path}\src\jrd\build_no.h" -PathType Leaf ) {
+
+      foreach ($aline in $(Get-Content Z:\FB30\FB3-dev\src\jrd\build_no.h | grep "#define FB_")) {
+        $s = $aline.split(" ")
+        $s[2] = $s[2].Trim('"')
+        $script:fbbuild_vars.Add($s[1], $s[2] )
+      }
+      $script:fbmajver = $script:fbbuild_vars.'FB_MAJOR_VER'
+      $script:fbpackageNum = $script:fbbuild_vars.ContainsKey('FB_PACKAGE_NUMBER') ? $script:fbbuild_vars.'FB_PACKAGE_NUMBER' : 0
+
+      $script:fbbuild_vars.'FBBUILD_FILE_ID' = $script:fbbuild_vars.'FB_MAJOR_VER' + "." +
+                                               $script:fbbuild_vars.'FB_MINOR_VER' + "." +
+                                               $script:fbbuild_vars.'FB_REV_NO' + "." +
+                                               $script:fbbuild_vars.'FB_BUILD_NO' + "-" +
+                                               $script:fbpackageNum + "-" +
+                                               $script:fbbuild_vars.'FB_TARGET_PLATFORM'
+    }
+  }
+
+  $script:fbbuild_vars = [System.Collections.SortedList] $script:fbbuild_vars
 
   $script:fbbuild_vars.GetEnumerator() | ForEach-Object {
     Write-Verbose "$($_.Key): $($_.Value)"
   }
-  
+
+  Write-Debug "Leaving function $($MyInvocation.MyCommand.Name)"
+
 }
 
 
@@ -474,22 +683,25 @@ function load_fb_build_env() {
 Analyse the installation and environment. Set some variables.
 #>
 function check_environment() {
+  Write-Debug "Entering function $($MyInvocation.MyCommand.Name)"
 
   # If passed via command line
   if ( $script:fbinst_exec -ne "" ) {
+    Write-Debug "Determine build env from $script:fbinst_exec"
+#    Set-PSDebug -Trace 2
     $path_file = @{}
     $path_file = $script:fbinst_exec -split "\\", -2
     $path_file = $path_file[1] -split ".exe" , 2
-    $global:FirebirdInstallVer = $path_file[0]
-    $_astr = $global:FirebirdInstallVer -split "\."
+    $script:FirebirdInstallVer = $path_file[0]
+    $_astr = $script:FirebirdInstallVer -split "\."
     $_astr = $_astr[0] -split "-"
     $script:fbmajver = $_astr[1]
+#    Set-PSDebug -Trace 0
   } else {
-    # detmine dynamically
+    Write-Debug "Determine build env dynamically"
     load_fb_build_env
-    $script:fbmajver = $script:fbbuild_vars.'FB_MAJOR_VER'
     switch ( $script:fbmajver ) {
-      "3" { 
+      "3" {
         $local:fb_file_id = $script:fbbuild_vars.'FBBUILD_FILE_ID' -replace "-", "_"
       }
       Default {
@@ -500,13 +712,17 @@ function check_environment() {
     if ( $local:fb_file_id -eq "" ) {
       Write-Output "Unable to set fbinst_exec."
     } else {
-      $global:FirebirdInstallVer = "Firebird-${local:fb_file_id}"      
-      $script:fbinst_exec = -join ($script:fbbuild_vars.'FB_ROOT_PATH', "\builds\install_images\", $global:FirebirdInstallVer , '.exe' )
+      $script:FirebirdInstallVer = "Firebird-${local:fb_file_id}"
+      $script:fbinst_exec = -join ($script:fbbuild_vars.'FB_ROOT_PATH', "\builds\install_images\", $script:FirebirdInstallVer , '.exe' )
       Write-Verbose "Setting fbinst_exec to $script:fbinst_exec"
     }
 
   }
+  if ( $script:IsDebug ) {
+    Pause "In $($MyInvocation.MyCommand.Name) called from line $($MyInvocation.ScriptLineNumber)"
+  }
 
+#  Set-PSDebug -Trace 2
   $script:fbinstalllogdir = "$env:userprofile\fbit-tests\logs"
   $script:fbinstallcopydir = "$env:userprofile\fbit-tests\install_archive"
 
@@ -520,20 +736,30 @@ function check_environment() {
 
   $script:uninstallexe = "${script:FIREBIRD}\unins000.exe"
 
-  if (!$script:run_timestamp) { $script:run_timestamp = runtimestamp }
+  if ( ! $(Test-Path variable:run_timestamp) ) {
+    $script:run_timestamp = runtimestamp
+  }
 
-  $script:install_inf_file = "${script:fbinstalllogdir}\${script:testname}-install-$global:FirebirdInstallVer-$script:run_timestamp-saved.inf"
-  $script:install_log_file = "$script:fbinstalllogdir\${script:testname}-install-$global:FirebirdInstallVer-$script:run_timestamp.log"
-  $script:uninstall_log_file = "$script:fbinstalllogdir\${script:testname}-uninstall-$global:FirebirdInstallVer-$script:run_timestamp.log"
-  $script:copy_install_target = "$script:fbinstallcopydir\$script:testname-install-$global:FirebirdInstallVer-$script:run_timestamp"
-  
+  $script:install_inf_file = "${script:fbinstalllogdir}\${script:testname}-install-$script:FirebirdInstallVer-$script:run_timestamp-saved.inf"
+  $script:install_log_file = "$script:fbinstalllogdir\${script:testname}-install-$script:FirebirdInstallVer-$script:run_timestamp.log"
+  $script:uninstall_log_file = "$script:fbinstalllogdir\${script:testname}-uninstall-$script:FirebirdInstallVer-$script:run_timestamp.log"
+  $script:copy_install_target = "$script:fbinstallcopydir\$script:testname-install-$script:FirebirdInstallVer-$script:run_timestamp"
+
   $script:boiler_plate_install = " /DIR=`"$script:FIREBIRD`" /LOG=`"$script:install_log_file`" /SAVEINF=`"$script:install_inf_file`" "
   $script:boiler_plate_uninstall = " /LOG=`"$script:uninstall_log_file`" "
+
+  if ( $script:IsDebug ) {
+    # Set-PSDebug -Trace 0
+    Get-ChildItem Variable:
+    Pause "In $($MyInvocation.MyCommand.Name)  called from line $($MyInvocation.ScriptLineNumber)"
+  }
+  Write-Debug "Leaving function $($MyInvocation.MyCommand.Name)"
 
 }
 
 
 function check_innosetup_params() {
+  Write-Debug "Entering function $($MyInvocation.MyCommand.Name)"
 
   if ( ! $script:dryrun ) {
     $local:patharray = "$script:fbinstalllogdir", "$script:fbinstallcopydir"
@@ -576,7 +802,7 @@ function check_innosetup_params() {
       $script:inno_superserver = ""
     }
 
-    # FIXME - CODE REVIEW
+    # FIXME - CODE REVIEW REQUIRED
     if ( $script:server_install ) {
 
       $script:inno_installtype = "ServerInstall"
@@ -604,7 +830,7 @@ function check_innosetup_params() {
 
       $script:inno_sysdbapassword = " /SYSDBAPASSWORD=`"$script:password`" "
 
-    } # end if ( $server_install ) 
+    } # end if ( $server_install )
 
     # Now start building our task list
 
@@ -634,7 +860,7 @@ function check_innosetup_params() {
         $script:inno_installtype = "CustomInstall"
       }
 
-      if ( $script:legacy_auth ) {
+      if ( ! $(Test-Path variable:legacy_auth)          ) {
         $script:task_list += ", EnableLegacyClientAuth"
         $script:inno_installtype = "CustomInstall"
       }
@@ -643,6 +869,7 @@ function check_innosetup_params() {
   } # End check innosetup params for install
 
   spacer
+  Write-Debug "Leaving function $($MyInvocation.MyCommand.Name)"
 }
 
 
@@ -657,6 +884,7 @@ function clean_registry() {
 
 
 function build_inno_cmd() {
+  Write-Debug "Entering function $($MyInvocation.MyCommand.Name)"
 
   # set up the command line variables we will use
 
@@ -689,41 +917,41 @@ function build_inno_cmd() {
     $script:uninst_cmdline += " /CLEAN "
   }
 
-
-  # ### Params used exclusively for install action ###
-
-  # Setting PASSWORD is only relevant for a server install
-  if ( $script:password -ne "masterkey" ) {
-    if ( $script:server_install ) {
-      $script:inno_params_from_cmdline += " $script:inno_sysdbapassword "
-      $script:inno_installtype = "CustomInstall"
-    }
-  }
-
   if ( $script:inno_silent ) { $script:inno_params_from_cmdline += " /SILENT " }
 
   if ( $script:nocancel ) { $script:inno_params_from_cmdline += " /NOCANCEL " }
 
-  if ( $script:inno_installtype -eq "CustomInstall" ) {
+  # ### Params used exclusively for install action ###
 
-    if ( $script:client_install ) { $script:inno_components = "ClientComponent" }
-    if ( $script:dev_install ) { $script:inno_components = "DevAdminComponent,ClientComponent" }
-    if ( $script:server_install ) { $script:inno_components = "ServerComponent,DevAdminComponent,ClientComponent" }
+  if ( $script:install ) {
+    # Setting PASSWORD is only relevant for a server install
+    if ( $script:password -ne "masterkey" ) {
+        $script:inno_params_from_cmdline += " $script:inno_sysdbapassword "
+        $script:inno_installtype = "CustomInstall"
+    }
 
-  } else {
-    $script:inno_components = "ServerComponent,DevAdminComponent,ClientComponent"
-  }
+    if ( $script:inno_installtype -eq "CustomInstall" ) {
 
-  if ( $script:TASK_LIST ) {
-    $script:full_cmdline = " /TYPE=`"$script:inno_installtype`" /TASKS=`"$script:task_list`" /COMPONENTS=`"$script:inno_components`" $script:inno_params_from_cmdline "
-  } else {
-    $script:full_cmdline = "/TYPE=`"$script:inno_installtype`" /COMPONENTS=`"$script:inno_components`" $script:inno_params_from_cmdline "
+      if ( $script:client_install ) { $script:inno_components = "ClientComponent" }
+      if ( $script:dev_install ) { $script:inno_components = "DevAdminComponent,ClientComponent" }
+      if ( $script:server_install ) { $script:inno_components = "ServerComponent,DevAdminComponent,ClientComponent" }
+
+    } else {
+      $script:inno_components = "ServerComponent,DevAdminComponent,ClientComponent"
+    }
+
+    if ( $script:TASK_LIST ) {
+      $script:full_cmdline = " /TYPE=`"$script:inno_installtype`" /TASKS=`"$script:task_list`" /COMPONENTS=`"$script:inno_components`" $script:inno_params_from_cmdline "
+    } else {
+      $script:full_cmdline = "/TYPE=`"$script:inno_installtype`" /COMPONENTS=`"$script:inno_components`" $script:inno_params_from_cmdline "
+    }
   }
 
   # Always add on the boiler plate log and inf output to the command
   $script:full_cmdline += $script:boiler_plate_install
   $script:uninst_cmdline += $script:boiler_plate_uninstall
 
+  Write-Debug "Leaving function $($MyInvocation.MyCommand.Name)"
 
 }
 
@@ -756,19 +984,21 @@ function run_installer() {
   [OutputType([int])]
   [cmdletbinding()]
   Param()
-  BEGIN {
+  begin {
     Write-Debug "Entering function $($MyInvocation.MyCommand.Name)"
+    $local:retval = 0
   }
 
-# We use BEGIN..PROCESS..END here so that we can mask the output of copyinstall and 
+# We use BEGIN..PROCESS..END here so that we can mask the output of copyinstall and
 # allow the function to return an integer instean of an object.
-  PROCESS {
+  process {
     build_inno_cmd
     print_vars "$script:action"
-    
+
     if ( ! ( check_file_exists "$script:fbinst_exec" ) ) {
-      Write-Output "fbinst_exec does not exist. Quitting."
-      return 1
+      Write-Error "fbinst_exec does not exist. Quitting."
+      $local:retval = 1
+      return
     }
 
     Write-Verbose "Cmdline to execute is $script:fbinst_exec $script:full_cmdline"
@@ -780,22 +1010,22 @@ function run_installer() {
       $errorActionPreference = "Stop"
       $env:SEE_MASK_NOZONECHECKS = 1
 
-      $local:retval = Invoke-Command "$script:fbinst_exec" "$script:full_cmdline" "Running Firebird Installer" 
+      $local:retval = Invoke-Command "$script:fbinst_exec" "$script:full_cmdline" "Running Firebird Installer"
 
       if ( $local:retval -ne 0 ) {
         iss_error ( $local:retval )
-      } else { 
+      } else {
         Write-Verbose "Completed Firebird Installation"
 
         if ( ! $script:noarchive  ) {
-          # Assign output to null here or else returned $local:retval below becomes an object, not an int          
-          $null = copy_install 
-          
+          # Assign output to null here or else returned $local:retval below becomes an object, not an int
+          $null = copy_install
+
         }
       }
     }
   }
-  END {
+  end {
     Write-Debug "Leaving function $($MyInvocation.MyCommand.Name)"
     return $local:retval
   }
@@ -818,14 +1048,14 @@ function run_uninstaller() {
     if ( ! $local:retval ) {
       Write-Output "$script:uninstallexe does not exist. Quitting."
       Write-Output ""
-      return $local:retval
+      return #$local:retval
     }
 
     $errorActionPreference = "Stop"
-    $local:retval = Invoke-Command "$script:uninstallexe" "$script:uninst_cmdline" "UnInstalling Firebird" 
+    $local:retval = Invoke-Command "$script:uninstallexe" "$script:uninst_cmdline" "UnInstalling Firebird"
     if ( $local:retval -ne 0 ) {
       iss_error ( $local:retval )
-    } else { 
+    } else {
       Write-Verbose "Firebird should now be uninstalled"
 
       run_check_install
@@ -839,7 +1069,7 @@ function run_uninstaller() {
       }
     }
 
-  } 
+  }
 
  # return $local:retval
 
@@ -847,7 +1077,7 @@ function run_uninstaller() {
 function run_cleanup() {
 
   if ( $script:dryrun ) {
-    Write-Output "Dry run - not executing $($MyInvocation.MyCommand.Name)"
+    Write-Output "Dry run - not executing $($MyInvocation.MyCommand.Name )"
     Write-Output "Not uninstalling Firebird"
     Write-Output "Not deleting the $env:firebirdrootdir\$env:firebird_base_ver dir"
     Write-Output "Not removing the list of firebird shared dll's in the registry."
@@ -857,16 +1087,18 @@ function run_cleanup() {
     run_uninstaller
 
     if ( $script:realclean ) {
-      Write-Verbose "Removing all files in $script:firebirdrootdir\$script:firebird_base_ver dir"
-      Remove-Item "$script:firebirdrootdir\$script:firebird_base_ver" -Recurse -Include "*.*" -Confirm
-
+      $local:retval = check_file_exists $script:firebirdrootdir\$script:firebird_base_ver dir $true
+      if ( $local:retval ) {
+        Write-Verbose "Removing all files in $script:firebirdrootdir\$script:firebird_base_ver dir"
+        Remove-Item "$script:firebirdrootdir\$script:firebird_base_ver" -Recurse -Include "*.*" -Confirm
+      }
       Write-Verbose "Removing fbclient and gds32 from $env:SystemRoot\System32"
-      Remove-Item "$env:SystemRoot\System32" -Recurse -Include "fbclient.dll", "gds32.dll" -Exclude "C:\Windows\System32\LogFiles\WMI" -Confirm
+      Remove-Item "$env:SystemRoot\System32" -Include "fbclient.dll", "gds32.dll" -Confirm
       Write-Verbose "Removing fbclient and gds32 from $env:SystemRoot\SysWOW64"
-      Remove-Item "$env:SystemRoot\SysWOW64" -Recurse -Include "fbclient.dll", "gds32.dll" -Confirm
+      Remove-Item "$env:SystemRoot\SysWOW64" -Include "fbclient.dll", "gds32.dll" -Confirm
 
       Write-Verbose "Clean up listing of Shared DLLs in registry"
-      $RegKey = "SOFTWARE\Microsoft\Windows\CurrentVersion\SharedDLLs"  
+      $RegKey = "SOFTWARE\Microsoft\Windows\CurrentVersion\SharedDLLs"
       Remove-ItemProperty HKLM:$RegKey -Name "C:\Program\*.*" -Confirm
       Remove-ItemProperty HKLM:$RegKey -Name "${script:firebirdrootdir}\${script:firebird_base_ver}\*.*" -Confirm
       Remove-ItemProperty HKLM:$RegKey -Name "*\fbclient.dll" -Confirm
@@ -917,39 +1149,51 @@ function iss_error( [Int32]$_err_code = 0 ) {
 }
 
 function main() {
+  begin{
+#    $script:DebugPreference = 'Continue'
+#    $script:VerbosePreference = 'Continue'
 
-  if ( $script:help ) {
-    show-help
-  } else {
-    prompt
-    spacer
-    check_params
-    check_environment
-    check_innosetup_params
+    Set-StrictMode -Version 3.0
+  }
 
-    switch ($script:action) {
-      "realclean" { run_cleanup }
-      "check_install" { run_check_install }
-      "uninstall" { run_uninstaller }
-      "check_uninstall" { run_check_install }
-      Default {
-        $local:retval = run_installer
-        if ( $local:retval -ne 0 ) {
-          Write-Verbose "run_installer returned $local:retval" 
-          return $local:retval 
+  process {
+    if ( $script:help ) {
+      show-help
+    } else {
+      prompt
+      spacer
+      check_params
+      check_environment
+      check_innosetup_params
+
+      switch ($script:action) {
+        "realclean" { run_cleanup }
+        "check_install" { run_check_install }
+        "uninstall" { run_uninstaller }
+        "check_uninstall" { run_check_install }
+        Default {
+          $local:retval = $( run_installer | Select-Object -Last 1 )
+          if ( $local:retval -ne 0 ) {
+            Write-Error "run_installer returned $local:retval"
+            return
+          }
+          run_check_install
+          if ( ! $script:nouninstall ) {
+            run_uninstaller
+          }
         }
-        run_check_install
-        if ( ! $script:nouninstall ) { run_uninstaller }
       }
     }
   }
 
+  end{
+    spacer " Finished "
+
+    # this attempt to 'reset' the prompt fails :-(
+    #prompt -reset
+
+  }
 }
 
 main $args
-spacer " Finished "
-prompt -reset
 
-<#
-continue with
-#>
