@@ -1687,7 +1687,8 @@ RecordSource* Optimizer::applyBoolean(RecordSource* rsb,
 			compose(getPool(), &boolean, iter);
 			iter |= CONJUNCT_USED;
 
-			selectivity *= getSelectivity(*iter);
+			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
+				selectivity *= getSelectivity(*iter);
 		}
 	}
 
