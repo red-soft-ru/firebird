@@ -137,7 +137,7 @@ if "%FB2_SNAPSHOT%"=="1" (
 ::==========
 
 :: Cut off everything that is not #define to let Inno Setup use it
-@findstr /B /L "#define" "%FB_ROOT_PATH%\src\jrd\build_no.h" >"%FB_ROOT_PATH%\gen\jrd\build_no.h"
+@findstr /B /L "#define" "%FB_ROOT_PATH%\src\jrd\build_no.h" > "%FB_ROOT_PATH%\gen\jrd\build_no.h"
 :: Read version parameters from build_no.h
 @for /F "tokens=2*" %%a in ( %FB_ROOT_PATH%\gen\jrd\build_no.h ) do (
   echo   Setting %%a to %%~b
@@ -241,7 +241,7 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
   if not ERRORLEVEL 1 (
     implib %FB_OUTPUT_DIR%\lib\fbclient_bor.lib %FB_OUTPUT_DIR%\fbclient.dll > nul
   ) else (
-    call :ERROR implib not found & goto :EOF
+    call :WARNING implib not found
   )
 )
 
@@ -314,7 +314,7 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
         echo     ... %%v
         copy /Y %FB_EXTERNAL_DOCS%\%%v %FB_OUTPUT_DIR%\doc\%%v > nul
         if ERRORLEVEL 1 (
-            call :WARNING Copying %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v FAILED. & goto :EOF
+            call :WARNING Copying %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v FAILED.
         )
     )
 
@@ -397,8 +397,8 @@ for %%v in (IPLicense.txt IDPLicense.txt ) do (
 :: grab some missing bits'n'pieces from different parts of the source tree
 ::=========================================================================
 @echo   Copying ib_util etc
-@copy %FB_ROOT_PATH%\src\extlib\ib_util.h %FB_OUTPUT_DIR%\include > nul || (call :WARNING Copying ib_util.h failed. & goto :EOF )
-@copy %FB_ROOT_PATH%\src\misc\pascal\ib_util.pas %FB_OUTPUT_DIR%\include > nul || (call :WARNING Copying ib_util.pas failed. & goto :EOF )
+@copy %FB_ROOT_PATH%\src\extlib\ib_util.h %FB_OUTPUT_DIR%\include > nul || (call :ERROR Copying ib_util.h failed. & goto :EOF )
+@copy %FB_ROOT_PATH%\src\misc\pascal\ib_util.pas %FB_OUTPUT_DIR%\include > nul || (call :ERROR Copying ib_util.pas failed. & goto :EOF )
 
 @echo   Copying other include files required for development...
 @set OUTPATH=%FB_OUTPUT_DIR%\include
