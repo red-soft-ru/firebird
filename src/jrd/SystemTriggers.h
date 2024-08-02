@@ -27,31 +27,17 @@
 
 namespace Jrd
 {
+	class jrd_rel;
 	class thread_db;
 	class Record;
 }	// namespace Jrd
 
 namespace Jrd::SystemTriggers
 {
-	void beforeDeleteCheckConstraint(thread_db* tdbb, Record* record);
-	void afterDeleteCheckConstraint(thread_db* tdbb, Record* record);
-	void beforeUpdateCheckConstraint(thread_db* tdbb, Record* orgRecord, Record* newRecord);
-	void beforeDeleteIndex(thread_db* tdbb, Record* record);
-	void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord);
-	void beforeDeleteIndexSegment(thread_db* tdbb, Record* record);
-	void beforeUpdateIndexSegment(thread_db* tdbb, Record* orgRecord, Record* newRecord);
-	void beforeUpdateField(thread_db* tdbb, Record* orgRecord, Record* newRecord);
-	void beforeInsertRefConstraint(thread_db* tdbb, Record* record);
-	void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record);
-	void afterDeleteRelationConstraint(thread_db* tdbb, Record* record);
-	void beforeInsertRelationConstraint(thread_db* tdbb, Record* record);
-	void beforeDeleteRelationField(thread_db* tdbb, Record* record);
-	void afterDeleteRelationField(thread_db* tdbb, Record* record);
-	void beforeUpdateRelationField(thread_db* tdbb, Record* orgRecord, Record* newRecord);
-	void beforeDeleteTrigger(thread_db* tdbb, Record* record);
-	void beforeUpdateTrigger(thread_db* tdbb, Record* orgRecord, Record* newRecord);
-	void beforeDeleteUserPrivilege(thread_db* tdbb, Record* record);
-	void beforeInsertUserPrivilege(thread_db* tdbb, Record* record);
+	void executeBeforeDeleteTriggers(thread_db* tdbb, jrd_rel* relation, Record* record);
+	void executeAfterDeleteTriggers(thread_db* tdbb, jrd_rel* relation, Record* record);
+	void executeBeforeInsertTriggers(thread_db* tdbb, jrd_rel* relation, Record* record);
+	void executeBeforeUpdateTriggers(thread_db* tdbb, jrd_rel* relation, Record* orgRecord, Record* newRecord);
 }	// namespace Jrd::SystemTriggers
 
 #endif	// JRD_SYSTEM_TRIGGERS_H

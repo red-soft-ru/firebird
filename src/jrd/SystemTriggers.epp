@@ -26,6 +26,7 @@
 #include "../jrd/SystemTriggers.h"
 #include "../jrd/constants.h"
 #include "../jrd/ids.h"
+#include "../jrd/ini.h"
 #include "../jrd/req.h"
 #include "../jrd/dpm_proto.h"
 #include "../jrd/err_proto.h"
@@ -41,7 +42,10 @@ using namespace Firebird;
 using namespace Jrd;
 
 
-void SystemTriggers::beforeDeleteCheckConstraint(thread_db* tdbb, Record* record)
+namespace
+{
+
+void beforeDeleteCheckConstraint(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 
@@ -62,7 +66,7 @@ void SystemTriggers::beforeDeleteCheckConstraint(thread_db* tdbb, Record* record
 	END_FOR
 }
 
-void SystemTriggers::afterDeleteCheckConstraint(thread_db* tdbb, Record* record)
+void afterDeleteCheckConstraint(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
@@ -122,7 +126,7 @@ void SystemTriggers::afterDeleteCheckConstraint(thread_db* tdbb, Record* record)
 	END_FOR
 }
 
-void SystemTriggers::beforeUpdateCheckConstraint(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+void beforeUpdateCheckConstraint(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
 
@@ -144,7 +148,7 @@ void SystemTriggers::beforeUpdateCheckConstraint(thread_db* tdbb, Record* orgRec
 	END_FOR
 }
 
-void SystemTriggers::beforeDeleteIndex(thread_db* tdbb, Record* record)
+void beforeDeleteIndex(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 
@@ -165,7 +169,7 @@ void SystemTriggers::beforeDeleteIndex(thread_db* tdbb, Record* record)
 	END_FOR
 }
 
-void SystemTriggers::beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
 
@@ -267,7 +271,7 @@ void SystemTriggers::beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Recor
 	}
 }
 
-void SystemTriggers::beforeDeleteIndexSegment(thread_db* tdbb, Record* record)
+void beforeDeleteIndexSegment(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 
@@ -288,7 +292,7 @@ void SystemTriggers::beforeDeleteIndexSegment(thread_db* tdbb, Record* record)
 	END_FOR
 }
 
-void SystemTriggers::beforeUpdateIndexSegment(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+void beforeUpdateIndexSegment(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
 
@@ -334,7 +338,7 @@ void SystemTriggers::beforeUpdateIndexSegment(thread_db* tdbb, Record* orgRecord
 	END_FOR
 }
 
-void SystemTriggers::beforeUpdateField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+void beforeUpdateField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
 
@@ -397,7 +401,7 @@ void SystemTriggers::beforeUpdateField(thread_db* tdbb, Record* orgRecord, Recor
 	}
 }
 
-void SystemTriggers::beforeInsertRefConstraint(thread_db* tdbb, Record* record)
+void beforeInsertRefConstraint(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 
@@ -444,7 +448,7 @@ void SystemTriggers::beforeInsertRefConstraint(thread_db* tdbb, Record* record)
 		ERR_post(Arg::Gds(isc_foreign_key_notfound));
 }
 
-void SystemTriggers::beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
+void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
@@ -525,7 +529,7 @@ void SystemTriggers::beforeDeleteRelationConstraint(thread_db* tdbb, Record* rec
 	}
 }
 
-void SystemTriggers::afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
+void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
@@ -649,7 +653,7 @@ void SystemTriggers::afterDeleteRelationConstraint(thread_db* tdbb, Record* reco
 	}
 }
 
-void SystemTriggers::beforeInsertRelationConstraint(thread_db* tdbb, Record* record)
+void beforeInsertRelationConstraint(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
@@ -693,7 +697,7 @@ void SystemTriggers::beforeInsertRelationConstraint(thread_db* tdbb, Record* rec
 	}
 }
 
-void SystemTriggers::beforeDeleteRelationField(thread_db* tdbb, Record* record)
+void beforeDeleteRelationField(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
@@ -772,7 +776,7 @@ void SystemTriggers::beforeDeleteRelationField(thread_db* tdbb, Record* record)
 	END_FOR
 }
 
-void SystemTriggers::afterDeleteRelationField(thread_db* tdbb, Record* record)
+void afterDeleteRelationField(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
@@ -804,7 +808,7 @@ void SystemTriggers::afterDeleteRelationField(thread_db* tdbb, Record* record)
 	END_FOR
 }
 
-void SystemTriggers::beforeUpdateRelationField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+void beforeUpdateRelationField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
 
@@ -860,7 +864,7 @@ void SystemTriggers::beforeUpdateRelationField(thread_db* tdbb, Record* orgRecor
 	}
 }
 
-void SystemTriggers::beforeDeleteTrigger(thread_db* tdbb, Record* record)
+void beforeDeleteTrigger(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
@@ -887,7 +891,7 @@ void SystemTriggers::beforeDeleteTrigger(thread_db* tdbb, Record* record)
 	END_FOR
 }
 
-void SystemTriggers::beforeUpdateTrigger(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+void beforeUpdateTrigger(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
@@ -961,7 +965,7 @@ void SystemTriggers::beforeUpdateTrigger(thread_db* tdbb, Record* orgRecord, Rec
 	END_FOR
 }
 
-void SystemTriggers::beforeDeleteUserPrivilege(thread_db* tdbb, Record* record)
+void beforeDeleteUserPrivilege(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
@@ -998,7 +1002,7 @@ void SystemTriggers::beforeDeleteUserPrivilege(thread_db* tdbb, Record* record)
 	END_FOR
 }
 
-void SystemTriggers::beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
+void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 {
 	const auto attachment = tdbb->getAttachment();
 	const auto transaction = tdbb->getTransaction();
@@ -1271,5 +1275,108 @@ void SystemTriggers::beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 
 			break;
 		}
+	}
+}
+
+}	// anonymous
+
+
+void SystemTriggers::executeBeforeDeleteTriggers(thread_db* tdbb, jrd_rel* relation, Record* record)
+{
+	switch ((RIDS) relation->rel_id)
+	{
+		case rel_ccon:
+			beforeDeleteCheckConstraint(tdbb, record);
+			break;
+
+		case rel_indices:
+			beforeDeleteIndex(tdbb, record);
+			break;
+
+		case rel_priv:
+			beforeDeleteUserPrivilege(tdbb, record);
+			break;
+
+		case rel_rcon:
+			beforeDeleteRelationConstraint(tdbb, record);
+			break;
+
+		case rel_rfr:
+			beforeDeleteRelationField(tdbb, record);
+			break;
+
+		case rel_segments:
+			beforeDeleteIndexSegment(tdbb, record);
+			break;
+
+		case rel_triggers:
+			beforeDeleteTrigger(tdbb, record);
+			break;
+	}
+}
+
+void SystemTriggers::executeAfterDeleteTriggers(thread_db* tdbb, jrd_rel* relation, Record* record)
+{
+	switch ((RIDS) relation->rel_id)
+	{
+		case rel_ccon:
+			afterDeleteCheckConstraint(tdbb, record);
+			break;
+
+		case rel_rcon:
+			afterDeleteRelationConstraint(tdbb, record);
+			break;
+
+		case rel_rfr:
+			afterDeleteRelationField(tdbb, record);
+			break;
+	}
+}
+
+void SystemTriggers::executeBeforeInsertTriggers(thread_db* tdbb, jrd_rel* relation, Record* record)
+{
+	switch ((RIDS) relation->rel_id)
+	{
+		case rel_priv:
+			beforeInsertUserPrivilege(tdbb, record);
+			break;
+
+		case rel_rcon:
+			beforeInsertRelationConstraint(tdbb, record);
+			break;
+
+		case rel_refc:
+			beforeInsertRefConstraint(tdbb, record);
+			break;
+	}
+}
+
+void SystemTriggers::executeBeforeUpdateTriggers(thread_db* tdbb, jrd_rel* relation, Record* orgRecord, Record* newRecord)
+{
+	switch ((RIDS) relation->rel_id)
+	{
+		case rel_ccon:
+			beforeUpdateCheckConstraint(tdbb, orgRecord, newRecord);
+			break;
+
+		case rel_fields:
+			beforeUpdateField(tdbb, orgRecord, newRecord);
+			break;
+
+		case rel_indices:
+			beforeUpdateIndex(tdbb, orgRecord, newRecord);
+			break;
+
+		case rel_rfr:
+			beforeUpdateRelationField(tdbb, orgRecord, newRecord);
+			break;
+
+		case rel_segments:
+			beforeUpdateIndexSegment(tdbb, orgRecord, newRecord);
+			break;
+
+		case rel_triggers:
+			beforeUpdateTrigger(tdbb, orgRecord, newRecord);
+			break;
 	}
 }

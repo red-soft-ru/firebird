@@ -1306,101 +1306,35 @@ void EXE_execute_triggers(thread_db* tdbb,
 		if (const auto relation = old_rpb ? old_rpb->rpb_relation : new_rpb->rpb_relation;
 			relation->rel_flags & REL_system)
 		{
-			if (which_trig == StmtNode::PRE_TRIG && trigger_action == TriggerAction::TRIGGER_DELETE)
+			switch (which_trig)
 			{
-				switch ((RIDS) relation->rel_id)
+				case StmtNode::PRE_TRIG:
 				{
-					case rel_ccon:
-						SystemTriggers::beforeDeleteCheckConstraint(tdbb, old_rec);
-						break;
+					switch (trigger_action)
+					{
+						case TriggerAction::TRIGGER_DELETE:
+							SystemTriggers::executeBeforeDeleteTriggers(tdbb, relation, old_rec);
+							break;
 
-					case rel_indices:
-						SystemTriggers::beforeDeleteIndex(tdbb, old_rec);
-						break;
+						case TriggerAction::TRIGGER_UPDATE:
+							SystemTriggers::executeBeforeUpdateTriggers(tdbb, relation, old_rec, new_rec);
+							break;
 
-					case rel_priv:
-						SystemTriggers::beforeDeleteUserPrivilege(tdbb, old_rec);
-						break;
-
-					case rel_rcon:
-						SystemTriggers::beforeDeleteRelationConstraint(tdbb, old_rec);
-						break;
-
-					case rel_rfr:
-						SystemTriggers::beforeDeleteRelationField(tdbb, old_rec);
-						break;
-
-					case rel_segments:
-						SystemTriggers::beforeDeleteIndexSegment(tdbb, old_rec);
-						break;
-
-					case rel_triggers:
-						SystemTriggers::beforeDeleteTrigger(tdbb, old_rec);
-						break;
+						case TriggerAction::TRIGGER_INSERT:
+							SystemTriggers::executeBeforeInsertTriggers(tdbb, relation, new_rec);
+							break;
+					}
+					break;
 				}
-			}
-			else if (which_trig == StmtNode::PRE_TRIG && trigger_action == TriggerAction::TRIGGER_UPDATE)
-			{
-				switch ((RIDS) relation->rel_id)
-				{
-					case rel_ccon:
-						SystemTriggers::beforeUpdateCheckConstraint(tdbb, old_rec, new_rec);
-						break;
 
-					case rel_fields:
-						SystemTriggers::beforeUpdateField(tdbb, old_rec, new_rec);
-						break;
-
-					case rel_indices:
-						SystemTriggers::beforeUpdateIndex(tdbb, old_rec, new_rec);
-						break;
-
-					case rel_rfr:
-						SystemTriggers::beforeUpdateRelationField(tdbb, old_rec, new_rec);
-						break;
-
-					case rel_segments:
-						SystemTriggers::beforeUpdateIndexSegment(tdbb, old_rec, new_rec);
-						break;
-
-					case rel_triggers:
-						SystemTriggers::beforeUpdateTrigger(tdbb, old_rec, new_rec);
-						break;
-				}
-			}
-			else if (which_trig == StmtNode::PRE_TRIG && trigger_action == TriggerAction::TRIGGER_INSERT)
-			{
-				switch ((RIDS) relation->rel_id)
-				{
-					case rel_priv:
-						SystemTriggers::beforeInsertUserPrivilege(tdbb, new_rec);
-						break;
-
-					case rel_rcon:
-						SystemTriggers::beforeInsertRelationConstraint(tdbb, new_rec);
-						break;
-
-					case rel_refc:
-						SystemTriggers::beforeInsertRefConstraint(tdbb, new_rec);
-						break;
-				}
-			}
-			else if (which_trig == StmtNode::POST_TRIG && trigger_action == TriggerAction::TRIGGER_DELETE)
-			{
-				switch ((RIDS) relation->rel_id)
-				{
-					case rel_ccon:
-						SystemTriggers::afterDeleteCheckConstraint(tdbb, old_rec);
-						break;
-
-					case rel_rcon:
-						SystemTriggers::afterDeleteRelationConstraint(tdbb, old_rec);
-						break;
-
-					case rel_rfr:
-						SystemTriggers::afterDeleteRelationField(tdbb, old_rec);
-						break;
-				}
+				case StmtNode::POST_TRIG:
+					switch (trigger_action)
+					{
+						case TriggerAction::TRIGGER_DELETE:
+							SystemTriggers::executeAfterDeleteTriggers(tdbb, relation, old_rec);
+							break;
+					}
+					break;
 			}
 		}
 	}
