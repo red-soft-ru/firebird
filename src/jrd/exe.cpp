@@ -71,6 +71,7 @@
 #include "../jrd/intl.h"
 #include "../jrd/sbm.h"
 #include "../jrd/blb.h"
+#include "../jrd/SystemTriggers.h"
 #include "firebird/impl/blr.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
@@ -1294,18 +1295,123 @@ void EXE_execute_triggers(thread_db* tdbb,
  *	if any blow up.
  *
  **************************************/
+	SET_TDBB(tdbb);
+
+	const auto dbb = tdbb->getDatabase();
+	const auto old_rec = old_rpb ? old_rpb->rpb_record : nullptr;
+	const auto new_rec = new_rpb ? new_rpb->rpb_record : nullptr;
+
+	if (!(dbb->dbb_flags & DBB_creating) && (old_rpb || new_rpb))
+	{
+		if (const auto relation = old_rpb ? old_rpb->rpb_relation : new_rpb->rpb_relation;
+			relation->rel_flags & REL_system)
+		{
+			if (which_trig == StmtNode::PRE_TRIG && trigger_action == TriggerAction::TRIGGER_DELETE)
+			{
+				switch ((RIDS) relation->rel_id)
+				{
+					case rel_ccon:
+						SystemTriggers::beforeDeleteCheckConstraint(tdbb, old_rec);
+						break;
+
+					case rel_indices:
+						SystemTriggers::beforeDeleteIndex(tdbb, old_rec);
+						break;
+
+					case rel_priv:
+						SystemTriggers::beforeDeleteUserPrivilege(tdbb, old_rec);
+						break;
+
+					case rel_rcon:
+						SystemTriggers::beforeDeleteRelationConstraint(tdbb, old_rec);
+						break;
+
+					case rel_rfr:
+						SystemTriggers::beforeDeleteRelationField(tdbb, old_rec);
+						break;
+
+					case rel_segments:
+						SystemTriggers::beforeDeleteIndexSegment(tdbb, old_rec);
+						break;
+
+					case rel_triggers:
+						SystemTriggers::beforeDeleteTrigger(tdbb, old_rec);
+						break;
+				}
+			}
+			else if (which_trig == StmtNode::PRE_TRIG && trigger_action == TriggerAction::TRIGGER_UPDATE)
+			{
+				switch ((RIDS) relation->rel_id)
+				{
+					case rel_ccon:
+						SystemTriggers::beforeUpdateCheckConstraint(tdbb, old_rec, new_rec);
+						break;
+
+					case rel_fields:
+						SystemTriggers::beforeUpdateField(tdbb, old_rec, new_rec);
+						break;
+
+					case rel_indices:
+						SystemTriggers::beforeUpdateIndex(tdbb, old_rec, new_rec);
+						break;
+
+					case rel_rfr:
+						SystemTriggers::beforeUpdateRelationField(tdbb, old_rec, new_rec);
+						break;
+
+					case rel_segments:
+						SystemTriggers::beforeUpdateIndexSegment(tdbb, old_rec, new_rec);
+						break;
+
+					case rel_triggers:
+						SystemTriggers::beforeUpdateTrigger(tdbb, old_rec, new_rec);
+						break;
+				}
+			}
+			else if (which_trig == StmtNode::PRE_TRIG && trigger_action == TriggerAction::TRIGGER_INSERT)
+			{
+				switch ((RIDS) relation->rel_id)
+				{
+					case rel_priv:
+						SystemTriggers::beforeInsertUserPrivilege(tdbb, new_rec);
+						break;
+
+					case rel_rcon:
+						SystemTriggers::beforeInsertRelationConstraint(tdbb, new_rec);
+						break;
+
+					case rel_refc:
+						SystemTriggers::beforeInsertRefConstraint(tdbb, new_rec);
+						break;
+				}
+			}
+			else if (which_trig == StmtNode::POST_TRIG && trigger_action == TriggerAction::TRIGGER_DELETE)
+			{
+				switch ((RIDS) relation->rel_id)
+				{
+					case rel_ccon:
+						SystemTriggers::afterDeleteCheckConstraint(tdbb, old_rec);
+						break;
+
+					case rel_rcon:
+						SystemTriggers::afterDeleteRelationConstraint(tdbb, old_rec);
+						break;
+
+					case rel_rfr:
+						SystemTriggers::afterDeleteRelationField(tdbb, old_rec);
+						break;
+				}
+			}
+		}
+	}
+
 	if (!*triggers || (*triggers)->isEmpty())
 		return;
-
-	SET_TDBB(tdbb);
 
 	Request* const request = tdbb->getRequest();
 	jrd_tra* const transaction = request ? request->req_transaction : tdbb->getTransaction();
 
 	RefPtr<TrigVector> vector(*triggers);
-	Record* const old_rec = old_rpb ? old_rpb->rpb_record : NULL;
-	Record* const new_rec = new_rpb ? new_rpb->rpb_record : NULL;
-
 	AutoPtr<Record> null_rec;
 
 	const bool is_db_trigger = (!old_rec && !new_rec);
@@ -1868,15 +1974,6 @@ static void trigger_failure(thread_db* tdbb, Request* trigger)
 		MET_trigger_msg(tdbb, msg, trigger->getStatement()->triggerName, trigger->req_label);
 		if (msg.hasData())
 		{
-			if (trigger->getStatement()->flags & Statement::FLAG_SYS_TRIGGER)
-			{
-				ISC_STATUS code = PAR_symbol_to_gdscode(msg);
-				if (code)
-				{
-					ERR_post(Arg::Gds(isc_integ_fail) << Arg::Num(trigger->req_label) <<
-							 Arg::Gds(code));
-				}
-			}
 			ERR_post(Arg::Gds(isc_integ_fail) << Arg::Num(trigger->req_label) <<
 					 Arg::Gds(isc_random) << Arg::Str(msg));
 		}

@@ -944,9 +944,6 @@ void Trigger::compile(thread_db* tdbb)
 	if (ssDefiner.asBool())
 		statement->triggerInvoker = att->getUserId(owner);
 
-	if (sysTrigger)
-		statement->flags |= Statement::FLAG_SYS_TRIGGER | Statement::FLAG_INTERNAL;
-
 	if (flags & TRG_ignore_perm)
 		statement->flags |= Statement::FLAG_IGNORE_PERM;
 }
@@ -955,15 +952,7 @@ void Trigger::release(thread_db* tdbb)
 {
 	extTrigger.reset();
 
-	// dimitr:	We should never release triggers created by MET_parse_sys_trigger().
-	//			System triggers do have BLR, but it's not stored inside the trigger object.
-	//			However, triggers backing RI constraints are also marked as system,
-	//			but they are loaded in a regular way and their BLR is present here.
-	//			This is why we cannot simply check for sysTrigger, sigh.
-
-	const bool sysTableTrigger = (blr.isEmpty() && engine.isEmpty());
-
-	if (sysTableTrigger || !statement || statement->isActive() || releaseInProgress)
+	if (!statement || statement->isActive() || releaseInProgress)
 		return;
 
 	AutoSetRestore<bool> autoProgressFlag(&releaseInProgress, true);
@@ -1903,6 +1892,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			}
 
 			PAG_attachment_id(tdbb);
+
+			INI_init_sys_relations(tdbb);
 
 			bool cleanupTransactions = false;
 
@@ -9230,11 +9221,7 @@ ISC_STATUS thread_db::getCancelState(ISC_STATUS* secondary)
 		if ((attachment->att_flags & ATT_cancel_raise) &&
 			!(attachment->att_flags & ATT_cancel_disable))
 		{
-			if ((!request ||
-					!(request->getStatement()->flags &
-						// temporary change to fix shutdown
-						(/*Statement::FLAG_INTERNAL | */Statement::FLAG_SYS_TRIGGER))) &&
-				(!transaction || !(transaction->tra_flags & TRA_system)))
+			if ((!transaction || !(transaction->tra_flags & TRA_system)))
 			{
 				return isc_cancelled;
 			}

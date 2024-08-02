@@ -1498,8 +1498,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment, ULONG g
 		{
 			request->adjustCallerStats();
 
-			if (!(request->getStatement()->flags &
-					(Statement::FLAG_INTERNAL | Statement::FLAG_SYS_TRIGGER)) &&
+			if (!(request->getStatement()->flags & Statement::FLAG_INTERNAL) &&
 				request->req_caller)
 			{
 				putCall(record, request);
@@ -1513,7 +1512,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment, ULONG g
 
 		for (const auto statement : attachment->att_statements)
 		{
-			if (!(statement->flags & (Statement::FLAG_INTERNAL | Statement::FLAG_SYS_TRIGGER)))
+			if (!(statement->flags & Statement::FLAG_INTERNAL))
 			{
 				const string plan = Optimizer::getPlan(tdbb, statement, true);
 				putStatement(record, statement, plan);
@@ -1527,7 +1526,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment, ULONG g
 	{
 		const auto statement = request->getStatement();
 
-		if (!(statement->flags & (Statement::FLAG_INTERNAL | Statement::FLAG_SYS_TRIGGER)))
+		if (!(statement->flags & Statement::FLAG_INTERNAL))
 		{
 			const string plan = Optimizer::getPlan(tdbb, statement, true);
 			putRequest(record, request, plan);

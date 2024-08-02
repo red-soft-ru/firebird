@@ -115,7 +115,7 @@ static int blocking_ast_relation(void*);
 static int partners_ast_relation(void*);
 static int rescan_ast_relation(void*);
 static ULONG get_rel_flags_from_FLAGS(USHORT);
-static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, TrigVector**, const TEXT*, FB_UINT64, bool,
+static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, TrigVector**, const TEXT*, FB_UINT64,
 	USHORT, const MetaName&, const string&, const bid*, TriState ssDefiner);
 static bool get_type(thread_db*, USHORT*, const UCHAR*, const TEXT*);
 static void lookup_view_contexts(thread_db*, jrd_rel*);
@@ -124,7 +124,7 @@ static ValueExprNode* parse_field_default_blr(thread_db* tdbb, bid* blob_id);
 static BoolExprNode* parse_field_validation_blr(thread_db* tdbb, bid* blob_id, const MetaName name);
 static bool resolve_charset_and_collation(thread_db*, USHORT*, const UCHAR*, const UCHAR*);
 static void save_trigger_data(thread_db*, TrigVector**, jrd_rel*, Statement*, blb*, blb*,
-	const TEXT*, FB_UINT64, bool, USHORT, const MetaName&, const string&,
+	const TEXT*, FB_UINT64, USHORT, const MetaName&, const string&,
 	const bid*, TriState ssDefiner);
 static void scan_partners(thread_db*, jrd_rel*);
 static bool verify_TRG_ignore_perm(thread_db*, const MetaName&);
@@ -1928,9 +1928,6 @@ void MET_load_trigger(thread_db* tdbb,
 
 	if (relation)
 	{
-		if (relation->rel_flags & REL_sys_trigs_being_loaded)
-			return;
-
 		// No need to load table triggers for ReadOnly databases,
 		// since INSERT/DELETE/UPDATE statements are not going to be allowed
 		// hvlad: GTT with ON COMMIT DELETE ROWS clause is writable
@@ -2006,7 +2003,6 @@ void MET_load_trigger(thread_db* tdbb,
 							triggers,
 							TRG.RDB$TRIGGER_NAME,
 							TRG.RDB$TRIGGER_TYPE,
-							(bool) TRG.RDB$SYSTEM_FLAG,
 							trig_flags,
 							engine,
 							entryPoint,
@@ -2027,7 +2023,6 @@ void MET_load_trigger(thread_db* tdbb,
 							triggers + trigger_action,
 							TRG.RDB$TRIGGER_NAME,
 							(UCHAR) trigger_action,
-							(bool) TRG.RDB$SYSTEM_FLAG,
 							trig_flags,
 							engine,
 							entryPoint,
@@ -3213,111 +3208,6 @@ DmlNode* MET_parse_blob(thread_db*	tdbb,
 }
 
 
-void MET_parse_sys_trigger(thread_db* tdbb, jrd_rel* relation)
-{
-/**************************************
- *
- *      M E T _ p a r s e _ s y s _ t r i g g e r
- *
- **************************************
- *
- * Functional description
- *      Parse the blr for a system relation's triggers.
- *
- **************************************/
-	SET_TDBB(tdbb);
-	Attachment* attachment = tdbb->getAttachment();
-	Database* dbb = tdbb->getDatabase();
-
-	relation->rel_flags &= ~REL_sys_triggers;
-
-	// Release any triggers in case of a rescan
-
-	relation->releaseTriggers(tdbb, true);
-
-	// No need to load triggers for ReadOnly databases, since
-	// INSERT/DELETE/UPDATE statements are not going to be allowed
-	// hvlad: GTT with ON COMMIT DELETE ROWS clause is writable
-
-	if (dbb->readOnly() && !(relation->rel_flags & REL_temp_tran))
-		return;
-
-	relation->rel_flags |= REL_sys_trigs_being_loaded;
-
-	AutoCacheRequest request(tdbb, irq_s_triggers2, IRQ_REQUESTS);
-
-	FOR (REQUEST_HANDLE request)
-		TRG IN RDB$TRIGGERS
-		WITH TRG.RDB$RELATION_NAME = relation->rel_name.c_str()
-		AND TRG.RDB$SYSTEM_FLAG = 1
-	{
-		const FB_UINT64 type = TRG.RDB$TRIGGER_TYPE;
-		const USHORT trig_flags = TRG.RDB$FLAGS;
-		const TEXT* name = TRG.RDB$TRIGGER_NAME;
-
-		TrigVector** ptr;
-
-		switch (type)
-		{
-		case TRIGGER_PRE_STORE:
-			ptr = &relation->rel_pre_store;
-			break;
-		case TRIGGER_POST_STORE:
-			ptr = &relation->rel_post_store;
-			break;
-		case TRIGGER_PRE_MODIFY:
-			ptr = &relation->rel_pre_modify;
-			break;
-		case TRIGGER_POST_MODIFY:
-			ptr = &relation->rel_post_modify;
-			break;
-		case TRIGGER_PRE_ERASE:
-			ptr = &relation->rel_pre_erase;
-			break;
-		case TRIGGER_POST_ERASE:
-			ptr = &relation->rel_post_erase;
-			break;
-		default:
-			ptr = NULL;
-			break;
-		}
-
-		if (ptr)
-		{
-			blb* blob = blb::open(tdbb, attachment->getSysTransaction(), &TRG.RDB$TRIGGER_BLR);
-			ULONG length = blob->blb_length + 10;
-			HalfStaticArray<UCHAR, 128> blr;
-			length = blob->BLB_get_data(tdbb, blr.getBuffer(length), length);
-
-			USHORT par_flags = (USHORT) ((trig_flags & TRG_ignore_perm) ? csb_ignore_perm : 0);
-			if (type & 1)
-				par_flags |= csb_pre_trigger;
-			else
-				par_flags |= csb_post_trigger;
-
-			Statement* statement = NULL;
-
-			{
-				Jrd::ContextPoolHolder context(tdbb, attachment->createPool());
-				PAR_blr(tdbb, relation, blr.begin(), length, NULL, NULL, &statement, true, par_flags);
-			}
-
-			statement->triggerName = name;
-
-			statement->flags |= Statement::FLAG_SYS_TRIGGER | Statement::FLAG_INTERNAL;
-			if (trig_flags & TRG_ignore_perm)
-				statement->flags |= Statement::FLAG_IGNORE_PERM;
-
-			save_trigger_data(tdbb, ptr, relation, statement, NULL, NULL, NULL, type, true, 0, "",
-				"", NULL, TriState());
-		}
-	}
-	END_FOR
-
-	relation->rel_flags &= ~REL_sys_trigs_being_loaded;
-}
-
-
 void MET_post_existence(thread_db* tdbb, jrd_rel* relation)
 {
 /**************************************
@@ -3968,7 +3858,6 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 	Database* dbb = tdbb->getDatabase();
 	Jrd::ContextPoolHolder context(tdbb, attachment->att_pool);
 	bool dependencies = false;
-	bool sys_triggers = false;
 
 	blb* blob = NULL;
 
@@ -3985,8 +3874,7 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 	relation->rel_flags |= REL_being_scanned;
 	dependencies = (relation->rel_flags & REL_get_dependencies) ? true : false;
-	sys_triggers = (relation->rel_flags & REL_sys_triggers) ? true : false;
-	relation->rel_flags &= ~(REL_get_dependencies | REL_sys_triggers);
+	relation->rel_flags &= ~REL_get_dependencies;
 
 	for (USHORT itr = 0; itr < TRIGGER_MAX; ++itr)
 		triggers[itr] = NULL;
@@ -4274,17 +4162,7 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 	// We have just loaded the triggers onto the local vector triggers.
 	// It's now time to place them at their rightful place inside the relation block.
-
-	if (!(relation->rel_flags & REL_sys_trigs_being_loaded))
-	{
-		// if we are scanning a system relation during loading the system
-		// triggers, (during parsing its blr actually), we must not release the
-		// existing system triggers; because we have already set the
-		// relation->rel_flag to not have REL_sys_trig, so these
-		// system triggers will not get loaded again. This fixes bug 8149.
-
-		relation->replaceTriggers(tdbb, triggers);
-	}
+	relation->replaceTriggers(tdbb, triggers);
 
 	LCK_lock(tdbb, relation->rel_rescan_lock, LCK_SR, LCK_WAIT);
 	relation->rel_flags &= ~REL_being_scanned;
@@ -4297,9 +4175,6 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 		relation->rel_flags &= ~(REL_being_scanned | REL_scanned);
 		if (dependencies) {
 			relation->rel_flags |= REL_get_dependencies;
-		}
-		if (sys_triggers) {
-			relation->rel_flags |= REL_sys_triggers;
 		}
 		if (blob)
 			blob->BLB_close(tdbb);
@@ -4670,7 +4545,7 @@ ULONG MET_get_rel_flags_from_TYPE(USHORT type)
 static void get_trigger(thread_db* tdbb, jrd_rel* relation,
 						bid* blob_id, bid* debug_blob_id, TrigVector** ptr,
 						const TEXT* name, FB_UINT64 type,
-						bool sys_trigger, USHORT flags,
+						USHORT flags,
 						const MetaName& engine, const string& entryPoint,
 						const bid* body, TriState ssDefiner)
 {
@@ -4700,7 +4575,7 @@ static void get_trigger(thread_db* tdbb, jrd_rel* relation,
 		debugInfoBlob = blb::open(tdbb, attachment->getSysTransaction(), debug_blob_id);
 
 	save_trigger_data(tdbb, ptr, relation, NULL, blrBlob, debugInfoBlob,
-					  name, type, sys_trigger, flags, engine, entryPoint, body, ssDefiner);
+					  name, type, flags, engine, entryPoint, body, ssDefiner);
 }
 
 
@@ -5052,7 +4927,7 @@ static bool resolve_charset_and_collation(thread_db* tdbb,
 static void save_trigger_data(thread_db* tdbb, TrigVector** ptr, jrd_rel* relation,
 							  Statement* statement, blb* blrBlob, blb* debugInfoBlob,
 							  const TEXT* name, FB_UINT64 type,
-							  bool sys_trigger, USHORT flags,
+							  USHORT flags,
 							  const MetaName& engine, const string& entryPoint,
 							  const bid* body, TriState ssDefiner)
 {
@@ -5109,7 +4984,6 @@ static void save_trigger_data(thread_db* tdbb, TrigVector** ptr, jrd_rel* relati
 
 	t.type = type;
 	t.flags = flags;
-	t.sysTrigger = sys_trigger;
 	t.statement = statement;
 	t.relation = relation;
 	t.engine = engine;
@@ -5305,18 +5179,7 @@ void MET_store_dependencies(thread_db* tdbb,
 
 	SET_TDBB(tdbb);
 
-	const Trigger* t = 0;
-	const bool checkTableScope =
-		(dependency_type == obj_computed) ||
-		(dependency_type == obj_trigger) && (dep_rel != 0) &&
-		(
-			(t = findTrigger(dep_rel->rel_pre_erase, object_name)) ||
-			(t = findTrigger(dep_rel->rel_pre_modify, object_name)) ||
-			(t = findTrigger(dep_rel->rel_pre_store, object_name)) ||
-			(t = findTrigger(dep_rel->rel_post_erase, object_name)) ||
-			(t = findTrigger(dep_rel->rel_post_modify, object_name)) ||
-			(t = findTrigger(dep_rel->rel_post_store, object_name))
-		) && t && (t->sysTrigger);
+	const bool checkTableScope = dependency_type == obj_computed;
 
 	while (dependencies.hasData())
 	{
@@ -5537,11 +5400,6 @@ static bool verify_TRG_ignore_perm(thread_db* tdbb, const MetaName& trig_name)
  **************************************/
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
-
-	// See if this is a system trigger, with the flag set as TRG_ignore_perm
-
-	if (INI_get_trig_flags(trig_name) & TRG_ignore_perm)
-		return true;
 
 	// See if this is a RI trigger
 
