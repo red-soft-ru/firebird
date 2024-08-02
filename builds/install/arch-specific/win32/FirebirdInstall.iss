@@ -910,6 +910,8 @@ begin
     Log( 'In function InitSecurityDB FindInFile found an error in ' + OutputStr );
   end;
 
+  DeleteFile( InputStr );
+  DeleteFile( OutputStr );
 end;
 
 
