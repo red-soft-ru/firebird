@@ -1897,8 +1897,15 @@ void AutoCacheRequest::cacheRequest()
 	thread_db* tdbb = JRD_get_thread_data();
 	Attachment* att = tdbb->getAttachment();
 
-	Statement** stmt = which == IRQ_REQUESTS ? &att->att_internal[id] :
-		which == DYN_REQUESTS ? &att->att_dyn_req[id] : nullptr;
+	if (which == CACHED_REQUESTS && id >= att->att_internal_cached_statements.getCount())
+		att->att_internal_cached_statements.grow(id + 1);
+
+	Statement** stmt =
+		which == IRQ_REQUESTS ? &att->att_internal[id] :
+		which == DYN_REQUESTS ? &att->att_dyn_req[id] :
+		which == CACHED_REQUESTS ? &att->att_internal_cached_statements[id] :
+		nullptr;
+
 	if (!stmt)
 	{
 		fb_assert(false);
