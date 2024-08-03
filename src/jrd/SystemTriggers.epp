@@ -519,7 +519,8 @@ void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
 
 			FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 				RCL IN RDB$RELATION_CONSTRAINTS
-				WITH RCL.RDB$INDEX_NAME = IND.RDB$INDEX_NAME
+				WITH RCL.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
+					 RCL.RDB$CONSTRAINT_TYPE = PRIMARY_KEY
 			{
 				ERR_post(Arg::Gds(isc_primary_key_notnull));
 			}
