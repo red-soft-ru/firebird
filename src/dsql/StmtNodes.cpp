@@ -11550,8 +11550,11 @@ static RelationSourceNode* pass1Update(thread_db* tdbb, CompilerScratch* csb, jr
 
 		for (FB_SIZE_T i = 0; i < trigger->getCount(); i++)
 		{
-			userTriggers = true;
-			break;
+			if (!(*trigger)[i].sysTrigger)
+			{
+				userTriggers = true;
+				break;
+			}
 		}
 
 		if (userTriggers)

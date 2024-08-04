@@ -944,6 +944,9 @@ void Trigger::compile(thread_db* tdbb)
 	if (ssDefiner.asBool())
 		statement->triggerInvoker = att->getUserId(owner);
 
+	if (sysTrigger)
+		statement->flags |= Statement::FLAG_SYS_TRIGGER | Statement::FLAG_INTERNAL;
+
 	if (flags & TRG_ignore_perm)
 		statement->flags |= Statement::FLAG_IGNORE_PERM;
 }
@@ -9221,7 +9224,11 @@ ISC_STATUS thread_db::getCancelState(ISC_STATUS* secondary)
 		if ((attachment->att_flags & ATT_cancel_raise) &&
 			!(attachment->att_flags & ATT_cancel_disable))
 		{
-			if ((!transaction || !(transaction->tra_flags & TRA_system)))
+			if ((!request ||
+					!(request->getStatement()->flags &
+						// temporary change to fix shutdown
+						(/*Statement::FLAG_INTERNAL | */Statement::FLAG_SYS_TRIGGER))) &&
+				(!transaction || !(transaction->tra_flags & TRA_system)))
 			{
 				return isc_cancelled;
 			}

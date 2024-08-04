@@ -142,6 +142,7 @@ public:
 	Firebird::HalfStaticArray<UCHAR, 128> debugInfo;	// Debug info
 	Statement* statement = nullptr;						// Compiled statement
 	bool releaseInProgress = false;
+	bool sysTrigger = false;
 	FB_UINT64 type = 0;					// Trigger type
 	USHORT flags = 0;					// Flags as they are in RDB$TRIGGERS table
 	jrd_rel* relation = nullptr;		// Trigger parent relation

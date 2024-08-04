@@ -431,7 +431,8 @@ public:
 		const auto attachment = m_tdbb->getAttachment();
 		const auto trace_mgr = attachment->att_trace_manager;
 
-		m_need_trace = trace_mgr->needs(ITraceFactory::TRACE_EVENT_TRIGGER_COMPILE);
+		m_need_trace = !trigger->sysTrigger &&
+			trace_mgr->needs(ITraceFactory::TRACE_EVENT_TRIGGER_COMPILE);
 
 		if (!m_need_trace)
 			return;
@@ -528,7 +529,8 @@ public:
 		const auto transaction = m_tdbb->getTransaction();
 		const auto trace_mgr = attachment->att_trace_manager;
 
-		m_need_trace = trace_mgr->needs(ITraceFactory::TRACE_EVENT_TRIGGER_EXECUTE);
+		m_need_trace = !(m_request->getStatement()->flags & Statement::FLAG_SYS_TRIGGER) &&
+			trace_mgr->needs(ITraceFactory::TRACE_EVENT_TRIGGER_EXECUTE);
 
 		if (!m_need_trace)
 			return;
