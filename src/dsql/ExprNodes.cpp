@@ -8092,6 +8092,16 @@ dsc* LiteralNode::execute(thread_db* /*tdbb*/, Request* /*request*/) const
 	return const_cast<dsc*>(&litDesc);
 }
 
+bool LiteralNode::getMetaName(thread_db* tdbb, MetaName& name) const
+{
+	if (!DTYPE_IS_TEXT(litDesc.dsc_dtype))
+		return false;
+
+	CVT2_make_metaname(&litDesc, name, tdbb->getAttachment()->att_dec_status);
+
+	return true;
+}
+
 void LiteralNode::fixMinSInt64(MemoryPool& pool)
 {
 	// MIN_SINT64 should be stored as BIGINT, not 128-bit integer
@@ -12304,9 +12314,9 @@ DmlNode* SysFuncCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScrat
 
 		auto literal = nodeAs<LiteralNode>(node->args->items[0]);
 
-		if (literal && literal->litDesc.isText())
+		MetaName relName;
+		if (literal && literal->getMetaName(tdbb, relName))
 		{
-			const MetaName relName = literal->getText();
 			const jrd_rel* const relation = MET_lookup_relation(tdbb, relName);
 
 			if (relation)
