@@ -79,7 +79,7 @@ namespace Jrd
 
 	private:
 		unsigned id;
-		static inline std::atomic<unsigned> generator;
+		static inline std::atomic_uint generator;
 	};
 
 	// ASF: To make this class MT-safe in SS for v3, it should be AutoCacheRequest::release job to
