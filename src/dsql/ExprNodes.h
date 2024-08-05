@@ -965,8 +965,6 @@ public:
 		return *reinterpret_cast<SLONG*>(litDesc.dsc_address);
 	}
 
-	bool getMetaName(thread_db* tdbb, MetaName& name) const;
-
 	void fixMinSInt32(MemoryPool& pool);
 	void fixMinSInt64(MemoryPool& pool);
 	void fixMinSInt128(MemoryPool& pool);
