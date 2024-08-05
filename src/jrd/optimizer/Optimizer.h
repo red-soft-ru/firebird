@@ -257,6 +257,7 @@ public:
 	class ConjunctIterator
 	{
 		friend class Optimizer;
+		friend class CrossJoin;
 
 	public:
 		operator BoolExprNode*() const
