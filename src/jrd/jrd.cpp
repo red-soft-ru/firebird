@@ -955,15 +955,7 @@ void Trigger::release(thread_db* tdbb)
 {
 	extTrigger.reset();
 
-	// dimitr:	We should never release triggers created by MET_parse_sys_trigger().
-	//			System triggers do have BLR, but it's not stored inside the trigger object.
-	//			However, triggers backing RI constraints are also marked as system,
-	//			but they are loaded in a regular way and their BLR is present here.
-	//			This is why we cannot simply check for sysTrigger, sigh.
-
-	const bool sysTableTrigger = (blr.isEmpty() && engine.isEmpty());
-
-	if (sysTableTrigger || !statement || statement->isActive() || releaseInProgress)
+	if (!statement || statement->isActive() || releaseInProgress)
 		return;
 
 	AutoSetRestore<bool> autoProgressFlag(&releaseInProgress, true);
@@ -1903,6 +1895,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			}
 
 			PAG_attachment_id(tdbb);
+
+			INI_init_sys_relations(tdbb);
 
 			bool cleanupTransactions = false;
 
