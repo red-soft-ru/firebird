@@ -81,7 +81,7 @@ if "%FB2_SNAPSHOT%"=="1" (
 @( cmd /c "unix2dos.exe --version 2>&1 | findstr version > nul" ) || ( call :ERROR Could not locate unix2dos & goto :EOF )
 
 @for /f "usebackq tokens=*" %%c in ( `where /f md5sum 2^>nul` ) do set MD5_COMMAND=%%c
-if defined MD5_COMMAND (
+@if defined MD5_COMMAND (
   echo     o POSIX md5sum utility found at %MD5_COMMAND%
 )
 
@@ -202,7 +202,7 @@ if defined MD5_COMMAND (
 @endlocal
 
 :: Dump env vars to file for later testing.
-set > %FB_ROOT_PATH%\builds\install\arch-specific\win32\test_installer\fb_build_vars_%PROCESSOR_ARCHITECTURE%.txt
+@set > %FB_ROOT_PATH%\builds\install\arch-specific\win32\test_installer\fb_build_vars_%PROCESSOR_ARCHITECTURE%.txt
 
 ::End of SET_VERSION
 ::----------------
@@ -229,7 +229,7 @@ set > %FB_ROOT_PATH%\builds\install\arch-specific\win32\test_installer\fb_build_
 @if ERRORLEVEL 1 ( (call :ERROR Copying MSVC runtime library failed with error %ERRORLEVEL% ) & (goto :EOF))
 
 if "%PROCESSOR_ARCHITECTURE%"=="x86" (
-  echo   Generating fbclient_bor.lib
+  echo     Generating fbclient_bor.lib
   where /Q implib.exe
   if not ERRORLEVEL 1 (
     implib %FB_OUTPUT_DIR%\lib\fbclient_bor.lib %FB_OUTPUT_DIR%\fbclient.dll > nul
@@ -241,7 +241,7 @@ if "%PROCESSOR_ARCHITECTURE%"=="x86" (
 @if "%FBBUILD_SHIP_PDB%"=="ship_pdb" (
   echo   Copying pdb files...
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\fbserver\firebird.pdb %FB_OUTPUT_DIR%\ > nul
-  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\burp\burp.pdb %FB_OUTPUT_DIR%\gbak.pdb > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\gbak\gbak.pdb %FB_OUTPUT_DIR%\gbak.pdb > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\gfix\gfix.pdb %FB_OUTPUT_DIR%\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\isql\isql.pdb %FB_OUTPUT_DIR%\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\yvalve\fbclient.pdb %FB_OUTPUT_DIR%\ > nul
