@@ -745,8 +745,7 @@ void beforeDeleteRelationField(thread_db* tdbb, Record* record)
 	AutoCacheRequest request3(tdbb, request3CacheId);
 
 	FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
-		IND IN RDB$INDICES
-		CROSS RCL IN RDB$RELATION_CONSTRAINTS
+		RCL IN RDB$RELATION_CONSTRAINTS
 		CROSS CHK IN RDB$CHECK_CONSTRAINTS
 		CROSS DEP IN RDB$DEPENDENCIES
 		WITH RCL.RDB$RELATION_NAME = relationName.c_str() AND
