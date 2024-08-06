@@ -256,10 +256,17 @@ public:
 
 	class ConjunctIterator
 	{
-		friend class Optimizer;
-		friend class CrossJoin;
-
 	public:
+		ConjunctIterator(Conjunct* _begin, const Conjunct* _end)
+			: begin(_begin), end(_end)
+		{
+			rewind();
+		}
+
+		ConjunctIterator(const ConjunctIterator& other)
+			: begin(other.begin), end(other.end), iter(other.iter)
+		{}
+
 		operator BoolExprNode*() const
 		{
 			return iter->node;
@@ -315,16 +322,6 @@ public:
 		Conjunct* const begin;
 		const Conjunct* const end;
 		Conjunct* iter;
-
-		ConjunctIterator(Conjunct* _begin, const Conjunct* _end)
-			: begin(_begin), end(_end)
-		{
-			rewind();
-		}
-
-		explicit ConjunctIterator(const ConjunctIterator& other)
-			: begin(other.begin), end(other.end), iter(other.iter)
-		{}
 	};
 
 	ConjunctIterator getBaseConjuncts()
