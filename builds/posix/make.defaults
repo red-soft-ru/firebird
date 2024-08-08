@@ -443,3 +443,5 @@ FIREBIRD_MSG    = $(FIREBIRD)/firebird.msg
 PLATFORM_PATH	=	os/posix
 TRACE_OS_Sources	=
 
+# Atomics
+ATOMICLIB=

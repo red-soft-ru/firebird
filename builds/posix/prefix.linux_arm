@@ -20,7 +20,8 @@
 
 #LD=@CXX@
 
-COMMON_FLAGS=-DLINUX -DARM -pipe -MMD -fPIC -fsigned-char -fmessage-length=0 -DFB_SEND_FLAGS=MSG_NOSIGNAL -latomic
+COMMON_FLAGS=-DLINUX -DARM -pipe -MMD -fPIC -fsigned-char -fmessage-length=0 -DFB_SEND_FLAGS=MSG_NOSIGNAL
 
 PROD_FLAGS=$(COMMON_FLAGS) -O3
 DEV_FLAGS=$(COMMON_FLAGS) -p -ggdb -Werror=delete-incomplete -Wall -Wno-non-virtual-dtor
+ATOMICLIB=atomic
