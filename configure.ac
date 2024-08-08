@@ -320,6 +320,7 @@ dnl CPU_TYPE=ppc64
     SHRLIB_EXT=so
     CPU_TYPE=arm32
     STD_EDITLINE=true
+    ATOMICLIB=atomic
     ;;
 
   aarch64*-*-linux*)
