@@ -245,7 +245,7 @@ if "%PROCESSOR_ARCHITECTURE%"=="x86" (
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\gfix\gfix.pdb %FB_OUTPUT_DIR%\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\isql\isql.pdb %FB_OUTPUT_DIR%\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\yvalve\fbclient.pdb %FB_OUTPUT_DIR%\ > nul
-  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\engine\engine*.pdb %FB_OUTPUT_DIR%\plugins\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\engine12\engine12.pdb %FB_OUTPUT_DIR%\plugins\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\fbtrace\fbtrace.pdb %FB_OUTPUT_DIR%\plugins\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\legacy_auth\legacy_auth.pdb %FB_OUTPUT_DIR%\plugins\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\legacy_usermanager\legacy_usermanager.pdb %FB_OUTPUT_DIR%\plugins\ > nul
@@ -538,7 +538,7 @@ endlocal
 )
 
 @if not "%FBBUILD_SHIP_PDB%"=="ship_pdb" (
-  del /q %FBBUILD_ZIP_PACK_ROOT%\*.pdb > nul 2>&1
+  del /q /s %FBBUILD_ZIP_PACK_ROOT%\*.pdb > nul 2>&1
 )
 
 :: Don't grab old install notes for zip pack - document needs a complete re-write.
