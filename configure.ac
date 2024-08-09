@@ -106,6 +106,9 @@ RAW_DEVICES_FLG=Y
 EXPORT_SYMBOLS_STYLE=linux
 INSTALL_PREFIX=""
 
+dnl do not use additional atomic support library by default
+ATOMICLIB=
+
 dnl Use /usr/lib for library links on most platforms except some 64-bit ones
 libdir=/usr/lib
 
@@ -678,6 +681,11 @@ AC_ARG_WITH(system-re2,
   [  --with-system-re2       use system-wide re2 library instead of embedded copy],
   [RE2_BUILD=N])
 AC_SUBST(RE2_BUILD)
+
+dnl set required atomic support library
+AC_ARG_WITH(atomiclib,
+  [  --with-atomiclib        build with explicitly specified atomic support library],
+  [ATOMICLIB=${withval}])
 
 dnl This is currently used for internal and public (API headers) needs
 SYSTEM_BOOST=N
