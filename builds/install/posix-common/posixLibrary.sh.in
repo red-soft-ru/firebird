@@ -596,7 +596,7 @@ createLinksInSystemLib() {
     origDirLinksInSystemLib=`pwd`
 
     cd @FB_LIBDIR@
-	Libraries=`echo libfbclient.@SHRLIB_EXT@* libib_util.@SHRLIB_EXT@`
+	Libraries=`echo libfbclient.@SHRLIB_EXT@* libib_util.@SHRLIB_EXT@ libfb_c_api.a`
 
 	cd /
 	for l in $Libraries
