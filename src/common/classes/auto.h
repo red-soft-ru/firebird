@@ -32,7 +32,6 @@
 #define CLASSES_AUTO_PTR_H
 
 #include <stdio.h>
-#include <functional>
 
 namespace Firebird {
 
@@ -318,11 +317,11 @@ private:
 	T oldValue;
 };
 
-
+template <typename F>
 class Cleanup
 {
 public:
-	Cleanup(std::function<void()> clFunc)
+	Cleanup(F&& clFunc)
 		: clean(clFunc)
 	{ }
 
@@ -332,7 +331,7 @@ public:
 	}
 
 private:
-	std::function<void()> clean;
+	F& clean;
 };
 
 } //namespace Firebird
