@@ -35,6 +35,19 @@ using std::exception;
 using std::string;
 using std::runtime_error;
 
+static string paramError(const char* generator = nullptr, const char* perGenerator = nullptr)
+{
+	string text = "Invalid command line parameters. Required format: inputFile ";
+	text += generator ? generator : "outFormat (one of c-header, c-impl, c++, pascal)";
+	text += " outputFile";
+	if (perGenerator)
+	{
+		text += " ";
+		text += perGenerator;
+	}
+
+	return text;
+}
 
 //--------------------------------------
 
@@ -42,7 +55,7 @@ using std::runtime_error;
 static void run(int argc, const char* argv[])
 {
 	if (argc < 4)
-		throw runtime_error("Invalid command line parameters.");
+		throw runtime_error(paramError());
 
 	string inFilename(argv[1]);
 	string outFormat(argv[2]);
@@ -58,7 +71,7 @@ static void run(int argc, const char* argv[])
 	if (outFormat == "c++")
 	{
 		if (argc < 7)
-			throw runtime_error("Invalid command line parameters for C++ output.");
+			throw runtime_error(paramError("c++", "headerGuard className prefix"));
 
 		string headerGuard(argv[4]);
 		string className(argv[5]);
@@ -69,7 +82,7 @@ static void run(int argc, const char* argv[])
 	else if (outFormat == "c-header")
 	{
 		if (argc < 6)
-			throw runtime_error("Invalid command line parameters for C header output.");
+			throw runtime_error(paramError("c-header", "headerGuard prefix"));
 
 		string headerGuard(argv[4]);
 		string prefix(argv[5]);
@@ -79,7 +92,7 @@ static void run(int argc, const char* argv[])
 	else if (outFormat == "c-impl")
 	{
 		if (argc < 6)
-			throw runtime_error("Invalid command line parameters for C implementation output.");
+			throw runtime_error(paramError("c-impl", "includeFilename prefix"));
 
 		string includeFilename(argv[4]);
 		string prefix(argv[5]);
@@ -89,7 +102,8 @@ static void run(int argc, const char* argv[])
 	else if (outFormat == "pascal")
 	{
 		if (argc < 5)
-			throw runtime_error("Invalid command line parameters for Pascal output.");
+			throw runtime_error(paramError("pascal", "--uses uses --interfaceFile interfaces-file "
+				"--implementationFile implementation-file --exceptionClass class-name --prefix prefix --functionsFile functions-file"));
 
 		string unitName(argv[4]);
 
