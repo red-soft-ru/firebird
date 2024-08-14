@@ -331,7 +331,25 @@ public:
 	}
 
 private:
-	F& clean;
+	F clean;
+};
+
+class CleanupFunction
+{
+	typedef void Func();
+
+public:
+	CleanupFunction(Func* clFunc)
+		: clean(clFunc)
+	{ }
+
+	~CleanupFunction()
+	{
+		clean();
+	}
+
+private:
+	Func* clean;
 };
 
 } //namespace Firebird
