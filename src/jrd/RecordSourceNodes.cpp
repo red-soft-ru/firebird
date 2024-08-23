@@ -3216,7 +3216,7 @@ RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStr
 
 RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 {
-	if (rse_jointype != blr_inner || !rse_boolean)
+	if (rse_jointype != blr_inner || !rse_boolean || rse_plan)
 		return nullptr;
 
 	const auto dbb = tdbb->getDatabase();
@@ -3234,7 +3234,14 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 	fb_assert(rseStack.hasData() && booleanStack.hasData());
 	fb_assert(rseStack.getCount() == booleanStack.getCount());
 
-	// Create joins between the original node and detected joinable nodes
+	// Create joins between the original node and detected joinable nodes.
+	// Preserve FIRST/SKIP nodes at their original position, i.e. outside semi-joins.
+
+	const auto first = rse_first;
+	rse_first = nullptr;
+
+	const auto skip = rse_skip;
+	rse_skip = nullptr;
 
 	auto rse = this;
 	while (rseStack.hasData())
@@ -3247,6 +3254,19 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 
 		newRse->rse_jointype = blr_inner;
 		newRse->rse_boolean = booleanStack.pop();
+
+		rse = newRse;
+	}
+
+	if (first || skip)
+	{
+		const auto newRse = FB_NEW_POOL(*tdbb->getDefaultPool())
+			RseNode(*tdbb->getDefaultPool());
+
+		newRse->rse_relations.add(rse);
+		newRse->rse_jointype = blr_inner;
+		newRse->rse_first = first;
+		newRse->rse_skip = skip;
 
 		rse = newRse;
 	}
