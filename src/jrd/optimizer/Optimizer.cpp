@@ -837,7 +837,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	// Go through the record selection expression generating
 	// record source blocks for all streams
 
-	RiverList rivers, dependentRivers, activateRivers;
+	RiverList rivers, dependentRivers, specialRivers;
 
 	bool semiJoin = false;
 	bool innerSubStream = false;
@@ -894,10 +894,11 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			if (computable)
 			{
 				outerStreams.join(localStreams);
-				rivers.add(river);
 
-				if (!semiJoin)
-					activateRivers.add(river);
+				if (semiJoin)
+					specialRivers.add(river);
+				else
+					rivers.add(river);
 			}
 			else
 			{
@@ -928,7 +929,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		rse->rse_aggregate = aggregate = nullptr;
 
 	// Activate the priorly used rivers
-	for (const auto river : activateRivers)
+	for (const auto river : rivers)
 		river->activate(csb);
 
 	bool sortCanBeUsed = true;
@@ -954,18 +955,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	}
 	else
 	{
-		// Compile the main streams before processing the semi-join itself
-		if (semiJoin && compileStreams.hasData())
-		{
-			generateInnerJoin(compileStreams, rivers, &sort, rse->rse_plan);
-			fb_assert(compileStreams.isEmpty());
-
-			// Ensure the main query river is stored before the semi-joined ones
-			const auto river = rivers.pop();
-			rivers.insert(0, river);
-		}
-
-		const JoinType joinType = semiJoin ? SEMI_JOIN : INNER_JOIN;
+		JoinType joinType = INNER_JOIN;
 
 		// AB: If previous rsb's are already on the stack we can't use
 		// a navigational-retrieval for an ORDER BY because the next
@@ -1034,16 +1024,38 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		// Attempt to form joins in decreasing order of desirability
 		generateInnerJoin(joinStreams, rivers, &sort, rse->rse_plan);
 
-		// Re-activate remaining rivers to be hashable/mergeable
-		for (const auto river : rivers)
-			river->activate(csb);
+		while (rivers.hasData())
+		{
+			// Re-activate remaining rivers to be hashable/mergeable
+			for (const auto river : rivers)
+				river->activate(csb);
 
-		// If there are multiple rivers, try some hashing or sort/merging
-		while (generateEquiJoin(rivers, joinType))
-			;
+			// If there are multiple rivers, try some hashing or sort/merging
+			while (generateEquiJoin(rivers, joinType))
+				;
 
-		rivers.join(dependentRivers);
-		rsb = CrossJoin(this, rivers, joinType).getRecordSource();
+			if (dependentRivers.hasData())
+			{
+				fb_assert(joinType == INNER_JOIN);
+
+				rivers.join(dependentRivers);
+				dependentRivers.clear();
+			}
+
+			const auto finalRiver = FB_NEW_POOL(getPool()) CrossJoin(this, rivers, joinType);
+			fb_assert(rivers.isEmpty());
+			rsb = finalRiver->getRecordSource();
+
+			if (specialRivers.hasData())
+			{
+				fb_assert(joinType == INNER_JOIN);
+				joinType = SEMI_JOIN;
+
+				rivers.add(finalRiver);
+				rivers.join(specialRivers);
+				specialRivers.clear();
+			}
+		}
 
 		// Pick up any residual boolean that may have fallen thru the cracks
 		rsb = generateResidualBoolean(rsb);
