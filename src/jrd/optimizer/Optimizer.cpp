@@ -1024,38 +1024,48 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		// Attempt to form joins in decreasing order of desirability
 		generateInnerJoin(joinStreams, rivers, &sort, rse->rse_plan);
 
-		while (rivers.hasData())
+		if (rivers.isEmpty() && dependentRivers.isEmpty())
 		{
-			// Re-activate remaining rivers to be hashable/mergeable
-			for (const auto river : rivers)
-				river->activate(csb);
-
-			// If there are multiple rivers, try some hashing or sort/merging
-			while (generateEquiJoin(rivers, joinType))
-				;
-
-			if (dependentRivers.hasData())
+			// This case may look weird, but it's possible for recursive unions
+			rsb = FB_NEW_POOL(csb->csb_pool) NestedLoopJoin(csb, 0, nullptr, joinType);
+		}
+		else
+		{
+			while (rivers.hasData() || dependentRivers.hasData())
 			{
-				fb_assert(joinType == INNER_JOIN);
+				// Re-activate remaining rivers to be hashable/mergeable
+				for (const auto river : rivers)
+					river->activate(csb);
 
-				rivers.join(dependentRivers);
-				dependentRivers.clear();
-			}
+				// If there are multiple rivers, try some hashing or sort/merging
+				while (generateEquiJoin(rivers, joinType))
+					;
 
-			const auto finalRiver = FB_NEW_POOL(getPool()) CrossJoin(this, rivers, joinType);
-			fb_assert(rivers.isEmpty());
-			rsb = finalRiver->getRecordSource();
+				if (dependentRivers.hasData())
+				{
+					fb_assert(joinType == INNER_JOIN);
 
-			if (specialRivers.hasData())
-			{
-				fb_assert(joinType == INNER_JOIN);
-				joinType = SEMI_JOIN;
+					rivers.join(dependentRivers);
+					dependentRivers.clear();
+				}
 
-				rivers.add(finalRiver);
-				rivers.join(specialRivers);
-				specialRivers.clear();
+				const auto finalRiver = FB_NEW_POOL(getPool()) CrossJoin(this, rivers, joinType);
+				fb_assert(rivers.isEmpty());
+				rsb = finalRiver->getRecordSource();
+
+				if (specialRivers.hasData())
+				{
+					fb_assert(joinType == INNER_JOIN);
+					joinType = SEMI_JOIN;
+
+					rivers.add(finalRiver);
+					rivers.join(specialRivers);
+					specialRivers.clear();
+				}
 			}
 		}
+
+		fb_assert(rsb);
 
 		// Pick up any residual boolean that may have fallen thru the cracks
 		rsb = generateResidualBoolean(rsb);
