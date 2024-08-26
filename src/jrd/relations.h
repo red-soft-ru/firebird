@@ -99,6 +99,8 @@ RELATION(nam_indices, rel_indices, ODS_8_0, rel_persistent)
 	FIELD(f_idx_exp_blr, nam_exp_blr, fld_value, 1, ODS_8_0)
 	FIELD(f_idx_exp_source, nam_exp_source, fld_source, 1, ODS_8_0)
 	FIELD(f_idx_statistics, nam_statistics, fld_statistics, 1, ODS_8_0)
+	FIELD(f_idx_cond_blr, nam_cond_blr, fld_value, 1, ODS_13_1)
+	FIELD(f_idx_cond_source, nam_cond_source, fld_source, 1, ODS_13_1)
 END_RELATION
 
 // Relation 5 (RDB$RELATION_FIELDS)
@@ -530,6 +532,7 @@ RELATION(nam_mon_attachments, rel_mon_attachments, ODS_11_1, rel_virtual)
 	FIELD(f_mon_att_wire_encrypted, nam_wire_encrypted, fld_bool, 0, ODS_13_0)
 	FIELD(f_mon_att_remote_crypt, nam_wire_crypt_plugin, fld_remote_crypt, 0, ODS_13_0)
 	FIELD(f_mon_att_session_tz, nam_mon_session_tz, fld_tz_name, 0, ODS_13_1)
+	FIELD(f_mon_att_par_workers, nam_par_workers, fld_par_workers, 0, ODS_13_1)
 END_RELATION
 
 // Relation 35 (MON$TRANSACTIONS)

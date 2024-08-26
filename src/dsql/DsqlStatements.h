@@ -135,6 +135,7 @@ public:
 	const dsql_par* getEof() const { return eof; }
 	void setEof(dsql_par* value) { eof = value; }
 
+	Firebird::RefStrPtr getCacheKey() { return cacheKey; }
 	void setCacheKey(Firebird::RefStrPtr& value) { cacheKey = value; }
 	void resetCacheKey() { cacheKey = nullptr; }
 
@@ -183,6 +184,7 @@ protected:
 	dsql_msg* sendMsg = nullptr;				// Message to be sent to start request
 	dsql_msg* receiveMsg = nullptr;				// Per record message to be received
 	dsql_par* eof = nullptr;					// End of file parameter
+	DsqlCompilerScratch* scratch = nullptr;
 
 private:
 	Firebird::AtomicCounter refCounter;
@@ -207,6 +209,11 @@ public:
 	Statement* getStatement() const override
 	{
 		return statement;
+	}
+
+	bool shouldPreserveScratch() const override
+	{
+		return false;
 	}
 
 	unsigned getSize() const override;
@@ -265,7 +272,6 @@ public:
 
 private:
 	NestConst<DdlNode> node;
-	DsqlCompilerScratch* scratch = nullptr;
 };
 
 
@@ -286,7 +292,6 @@ public:
 
 private:
 	NestConst<TransactionNode> node;
-	DsqlCompilerScratch* scratch = nullptr;
 };
 
 
@@ -307,7 +312,6 @@ public:
 
 private:
 	NestConst<SessionManagementNode> node;
-	DsqlCompilerScratch* scratch = nullptr;
 };
 
 

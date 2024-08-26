@@ -448,6 +448,7 @@ void BLB_garbage_collect(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
+	fb_assert(prior_page > 0);
 	RecordBitmap bmGoing;
 	ULONG cntGoing = 0;
 
@@ -728,7 +729,7 @@ USHORT blb::BLB_get_segment(thread_db* tdbb, void* segment, USHORT buffer_length
 		else
 		{
 			blb_space_remaining = blb_length - seek;
-			blb_segment = getBuffer() + seek;
+			blb_segment = ((UCHAR*) ((blob_page*) getBuffer())->blp_page) + seek;
 		}
 	}
 
@@ -1481,7 +1482,7 @@ blb* blb::open2(thread_db* tdbb,
 		// Get first data page in anticipation of reading.
 
 		if (blob->blb_level == 0)
-			blob->blb_segment = blob->getBuffer();
+			blob->blb_segment = (UCHAR*) ((blob_page*) blob->getBuffer())->blp_page;
 	}
 
 	UCharBuffer new_bpb;
@@ -2151,11 +2152,13 @@ blb* blb::copy_blob(thread_db* tdbb, const bid* source, bid* destination,
 	}
 
 	HalfStaticArray<UCHAR, 2048> buffer;
-	UCHAR* buff = buffer.getBuffer(input->blb_max_segment);
+	UCHAR* buff = buffer.getBuffer(input->isSegmented() ?
+		input->blb_max_segment :
+		MIN(input->blb_length, 32768));
 
 	while (true)
 	{
-		const USHORT length = input->BLB_get_segment(tdbb, buff, input->blb_max_segment);
+		const USHORT length = input->BLB_get_segment(tdbb, buff, buffer.getCapacity());
 		if (input->blb_flags & BLB_eof) {
 			break;
 		}
@@ -2601,8 +2604,7 @@ static void move_from_string(thread_db* tdbb, const dsc* from_desc, dsc* to_desc
 	temp_bid.clear();
 	blb* blob = blb::create2(tdbb, transaction, &temp_bid, bpb.getCount(), bpb.begin());
 
-	DSC blob_desc;
-	blob_desc.clear();
+	dsc blob_desc;
 
 	blob_desc.dsc_scale = to_desc->dsc_scale;	// blob charset
 	blob_desc.dsc_flags = (blob_desc.dsc_flags & 0xFF) | (to_desc->dsc_flags & 0xFF00);	// blob collation
@@ -2967,7 +2969,7 @@ void blb::getFromPage(USHORT length, const UCHAR* data)
 {
 	if (blb_level == 0)
 	{
-		blb_space_remaining = length;
+		blb_space_remaining = length - BLH_SIZE;
 		if (length)
 			memcpy(getBuffer(), data, length);
 	}

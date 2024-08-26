@@ -42,6 +42,7 @@
 #include "../common/classes/stack.h"
 #include "../common/classes/timestamp.h"
 #include "../common/classes/TimerImpl.h"
+#include "../common/classes/TriState.h"
 #include "../common/ThreadStart.h"
 #include "../common/TimeZoneUtil.h"
 
@@ -61,6 +62,10 @@ namespace Replication
 	class TableMatcher;
 }
 
+namespace Firebird {
+	class TextType;
+}
+
 class CharSetContainer;
 
 namespace Jrd
@@ -73,6 +78,7 @@ namespace Jrd
 	class jrd_file;
 	class Format;
 	class BufferControl;
+	class PageToBufferMap;
 	class SparseBitmap;
 	class jrd_rel;
 	class ExternalFile;
@@ -82,7 +88,6 @@ namespace Jrd
 	class ArrayField;
 	struct sort_context;
 	class vcl;
-	class TextType;
 	class Parameter;
 	class jrd_fld;
 	class dsql_dbb;
@@ -159,7 +164,7 @@ const ULONG ATT_async_manual_lock	= 0x01000L;	// Async mutex was locked manually
 const ULONG ATT_overwrite_check		= 0x02000L;	// Attachment checks is it possible to overwrite DB
 const ULONG ATT_system				= 0x04000L; // Special system attachment
 const ULONG ATT_creator				= 0x08000L; // This attachment created the DB
-const ULONG ATT_monitor_done		= 0x10000L; // Monitoring data is refreshed
+const ULONG ATT_monitor_disabled	= 0x10000L; // Monitoring lock is downgraded
 const ULONG ATT_security_db			= 0x20000L; // Attachment used for security purposes
 const ULONG ATT_mapping				= 0x40000L; // Attachment used for mapping auth block
 const ULONG ATT_from_thread			= 0x80000L; // Attachment from internal special thread (sweep, crypt)
@@ -277,12 +282,10 @@ public:
 			return totalLocksCounter;
 		}
 
-#ifdef DEV_BUILD
 		bool locked() const
 		{
 			return threadId == getThreadId();
 		}
-#endif
 
 		~Sync()
 		{
@@ -304,13 +307,11 @@ public:
 		int currentLocksCounter;
 	};
 
-	typedef Firebird::RaiiLockGuard<StableAttachmentPart> SyncGuard;
-
 	explicit StableAttachmentPart(Attachment* handle)
 		: att(handle), jAtt(NULL), shutError(0)
 	{ }
 
-	Attachment* getHandle() throw()
+	Attachment* getHandle() noexcept
 	{
 		return att;
 	}
@@ -530,6 +531,26 @@ public:
 		bool dsqlKeepBlr = false;
 	};
 
+	class UseCountHolder
+	{
+	public:
+		explicit UseCountHolder(Attachment* a)
+			: att(a)
+		{
+			if (att)
+				att->att_use_count++;
+		}
+
+		~UseCountHolder()
+		{
+			if (att)
+				att->att_use_count--;
+		}
+
+	private:
+		Attachment* att;
+	};
+
 public:
 	static Attachment* create(Database* dbb, JProvider* provider);
 	static void destroy(Attachment* const attachment);
@@ -559,6 +580,7 @@ public:
 	AttNumber	att_attachment_id;			// Attachment ID
 	Lock*		att_cancel_lock;			// Lock to cancel the active request
 	Lock*		att_monitor_lock;			// Lock for monitoring purposes
+	ULONG		att_monitor_generation;		// Monitoring state generation
 	Lock*		att_profiler_listener_lock;	// Lock for remote profiler listener
 	const ULONG	att_lock_owner_id;			// ID for the lock manager
 	SLONG		att_lock_owner_handle;		// Handle for the lock manager
@@ -571,7 +593,15 @@ public:
 	ULONG		att_flags;					// Flags describing the state of the attachment
 	SSHORT		att_client_charset;			// user's charset specified in dpb
 	SSHORT		att_charset;				// current (client or external) attachment charset
+
+	// ASF: Attention: att_in_system_routine was initially added to support the profiler plugin
+	// writing to system tables. But a modified implementation used non-system tables and
+	// a problem was discovered that when writing to user's table from a "system context"
+	// (csb_internal) FK validations are not enforced becase MET_scan_relation is not called
+	// for the relation.
+	// Currently all "turning on" code for att_in_system_routine are disabled in SystemPackages.h.
 	bool 		att_in_system_routine = false;	// running a system routine
+
 	Lock*		att_long_locks;				// outstanding two phased locks
 #ifdef DEBUG_LCK_LIST
 	UCHAR		att_long_locks_type;		// Lock type of the first lock in list
@@ -613,6 +643,9 @@ public:
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
 	int att_parallel_workers;
+	Firebird::TriState att_opt_first_rows;
+
+	PageToBufferMap* att_bdb_cache;			// managed in CCH, created in att_pool, freed with it
 
 	Firebird::RefPtr<Firebird::IReplicatedSession> att_replicator;
 	Firebird::AutoPtr<Replication::TableMatcher> att_repl_matcher;
@@ -633,6 +666,7 @@ public:
 
 	Firebird::Array<Statement*>	att_internal;			// internal statements
 	Firebird::Array<Statement*>	att_dyn_req;			// internal dyn statements
+	Firebird::Array<Statement*>	att_internal_cached_statements;		// internal cached statements
 	Firebird::ICryptKeyCallback*	att_crypt_callback;		// callback for DB crypt
 	Firebird::DecimalStatus			att_dec_status;			// error handling and rounding
 
@@ -672,6 +706,11 @@ public:
 		return (att_flags & ATT_system);
 	}
 
+	bool isWorker() const
+	{
+		return (att_flags & ATT_worker);
+	}
+
 	bool isGbak() const;
 	bool isRWGbak() const;
 	bool isUtility() const; // gbak, gfix and gstat.
@@ -701,7 +740,7 @@ public:
 	void signalCancel();
 	void signalShutdown(ISC_STATUS code);
 
-	void mergeStats();
+	void mergeStats(bool pageStatsOnly = false);
 	bool hasActiveRequests() const;
 
 	bool backupStateWriteLock(thread_db* tdbb, SSHORT wait);
@@ -709,17 +748,17 @@ public:
 	bool backupStateReadLock(thread_db* tdbb, SSHORT wait);
 	void backupStateReadUnLock(thread_db* tdbb);
 
-	StableAttachmentPart* getStable() throw()
+	StableAttachmentPart* getStable() noexcept
 	{
 		return att_stable;
 	}
 
-	void setStable(StableAttachmentPart *js) throw()
+	void setStable(StableAttachmentPart *js) noexcept
 	{
 		att_stable = js;
 	}
 
-	JAttachment* getInterface() throw();
+	JAttachment* getInterface() noexcept;
 
 	unsigned int getIdleTimeout() const
 	{
@@ -807,8 +846,9 @@ public:
 	void invalidateReplSet(thread_db* tdbb, bool broadcast);
 
 	ProfilerManager* getProfilerManager(thread_db* tdbb);
+	ProfilerManager* getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb);
 	bool isProfilerActive();
-	void releaseProfilerManager();
+	void releaseProfilerManager(thread_db* tdbb);
 
 	JProvider* getProvider()
 	{
@@ -919,9 +959,13 @@ public:
 		: m_attachments(p)
 	{}
 
+	AttachmentsRefHolder()
+		: m_attachments(*MemoryPool::getContextPool())
+	{}
+
 	AttachmentsRefHolder& operator=(const AttachmentsRefHolder& other)
 	{
-		this->~AttachmentsRefHolder();
+		clear();
 
 		for (FB_SIZE_T i = 0; i < other.m_attachments.getCount(); i++)
 			add(other.m_attachments[i]);
@@ -929,12 +973,17 @@ public:
 		return *this;
 	}
 
-	~AttachmentsRefHolder()
+	void clear()
 	{
 		while (m_attachments.hasData())
 		{
 			m_attachments.pop()->release();
 		}
+	}
+
+	~AttachmentsRefHolder()
+	{
+		clear();
 	}
 
 	void add(StableAttachmentPart* jAtt)
@@ -944,11 +993,6 @@ public:
 			jAtt->addRef();
 			m_attachments.add(jAtt);
 		}
-	}
-
-	void remove(Iterator& iter)
-	{
-		iter.remove();
 	}
 
 	bool hasData() const

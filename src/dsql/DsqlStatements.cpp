@@ -65,10 +65,8 @@ int DsqlStatement::release()
 	{
 		if (cacheKey)
 		{
-			refCnt = ++refCounter;
-			auto key = cacheKey;
-			cacheKey = nullptr;
-			dsqlAttachment->dbb_statement_cache->statementGoingInactive(key);
+			dsqlAttachment->dbb_statement_cache->statementGoingInactive(cacheKey);
+			refCnt = refCounter;
 		}
 		else
 		{
@@ -84,6 +82,9 @@ void DsqlStatement::doRelease()
 {
 	setSqlText(nullptr);
 	setOrgText(nullptr, 0);
+
+	if (scratch && shouldPreserveScratch())
+		dsqlAttachment->deletePool(&scratch->getPool());
 }
 
 void DsqlStatement::setOrgText(const char* ptr, ULONG len)

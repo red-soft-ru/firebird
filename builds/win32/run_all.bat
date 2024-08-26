@@ -30,9 +30,10 @@ for %%v in ( %* )  do (
 ( if /I "%%v"=="JUSTBUILD" (set FBBUILD_BUILD_ONLY=1) )
 ( if /I "%%v"=="TESTENV" (set FBBUILD_TEST_ONLY=1) )
 ( if /I "%%v"=="SNAPSHOT" (set FB2_SNAPSHOT=1) )
+( if /I "%%v"=="NO_RN" set FB_EXTERNAL_DOCS=)
 )
 
-call :SETVCENV
+@call setenvvar.bat %FBBUILD_BUILDTYPE% %*
 if "%ERRLEV%"=="1" goto :END
 
 if defined FBBUILD_TEST_ONLY ( goto TEST_ENV & goto :EOF )
@@ -49,8 +50,11 @@ call make_boot %FBBUILD_BUILDTYPE%
 if "%ERRLEV%"=="1" goto :END
 call make_all %FBBUILD_BUILDTYPE%
 if "%ERRLEV%"=="1" goto :END
-call make_examples %FBBUILD_BUILDTYPE%
-if "%ERRLEV%"=="1" goto :END
+
+@if "%FB_CLIENT_ONLY%"=="" (
+	call make_examples %FBBUILD_BUILDTYPE%
+	if "%ERRLEV%"=="1" goto :END
+)
 
 if "%FBBUILD_BUILD_ONLY%"=="1" goto :END
 
@@ -96,26 +100,17 @@ goto :END
 @echo                This is intended to produce a x64 test kit
 @echo                with no dependency on Win32
 @echo.
+@echo    NO_RN     - Do not fail the packaging if release notes unavailable.
+@echo                Default is to fail if FB_EXTERNAL_DOCS is set and release notes not found.
+@echo.
 @goto :EOF
-::---------
-
-
-:SETVCENV
-::===============================
-:: Set up the compiler environment
-
-@call setenvvar.bat %*
-if "%ERRLEV%"=="1" goto :END
-
-
-goto :END
 ::---------
 
 
 :TEST_ENV
 ::===============================
 :: Show variables
-call :SETVCENV
+@call setenvvar.bat %*
 if "%ERRLEV%"=="1" goto :END
 echo.
 set FB

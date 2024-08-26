@@ -25,6 +25,7 @@
 #define JRD_EXE_PROTO_H
 
 #include "../jrd/cmp_proto.h"
+#include <atomic>
 
 namespace Jrd {
 	class Request;
@@ -40,13 +41,15 @@ void EXE_assignment(Jrd::thread_db* tdbb, const Jrd::ValueExprNode* to, dsc* fro
 void EXE_execute_db_triggers(Jrd::thread_db*, Jrd::jrd_tra*, enum TriggerAction);
 void EXE_execute_ddl_triggers(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction,
 	bool preTriggers, int action);
+void EXE_execute_function(Jrd::thread_db* tdbb, Jrd::Request* request, Jrd::jrd_tra* transaction,
+	ULONG inMsgLength, UCHAR* inMsg, ULONG outMsgLength, UCHAR* outMsg);
 bool EXE_get_stack_trace(const Jrd::Request* request, Firebird::string& sTrace);
 
 const Jrd::StmtNode* EXE_looper(Jrd::thread_db* tdbb, Jrd::Request* request,
 	const Jrd::StmtNode* in_node);
 
 void EXE_execute_triggers(Jrd::thread_db*, Jrd::TrigVector**, Jrd::record_param*, Jrd::record_param*,
-	enum TriggerAction, Jrd::StmtNode::WhichTrigger);
+	enum TriggerAction, Jrd::StmtNode::WhichTrigger, int = 0);
 
 void EXE_receive(Jrd::thread_db*, Jrd::Request*, USHORT, ULONG, void*, bool = false);
 void EXE_release(Jrd::thread_db*, Jrd::Request*);
@@ -56,6 +59,29 @@ void EXE_unwind(Jrd::thread_db*, Jrd::Request*);
 
 namespace Jrd
 {
+	class CachedRequestId
+	{
+	public:
+		CachedRequestId()
+			: id(generator++)
+		{
+			fb_assert(id <= MAX_USHORT);
+		}
+
+		CachedRequestId(const CachedRequestId&) = delete;
+		CachedRequestId& operator=(const CachedRequestId&) = delete;
+
+	public:
+		USHORT getId() const
+		{
+			return id;
+		}
+
+	private:
+		unsigned id;
+		static inline std::atomic_uint generator;
+	};
+
 	// ASF: To make this class MT-safe in SS for v3, it should be AutoCacheRequest::release job to
 	// inform CMP that the request is available for subsequent usage.
 	class AutoCacheRequest
@@ -64,6 +90,13 @@ namespace Jrd
 		AutoCacheRequest(thread_db* tdbb, USHORT aId, USHORT aWhich)
 			: id(aId),
 			  which(aWhich),
+			  request(tdbb->getAttachment()->findSystemRequest(tdbb, id, which))
+		{
+		}
+
+		AutoCacheRequest(thread_db* tdbb, const CachedRequestId& cachedRequestId)
+			: id(cachedRequestId.getId()),
+			  which(CACHED_REQUESTS),
 			  request(tdbb->getAttachment()->findSystemRequest(tdbb, id, which))
 		{
 		}
@@ -87,6 +120,15 @@ namespace Jrd
 
 			id = aId;
 			which = aWhich;
+			request = tdbb->getAttachment()->findSystemRequest(tdbb, id, which);
+		}
+
+		void reset(thread_db* tdbb, const CachedRequestId& cachedRequestId)
+		{
+			release();
+
+			id = cachedRequestId.getId();
+			which = CACHED_REQUESTS;
 			request = tdbb->getAttachment()->findSystemRequest(tdbb, id, which);
 		}
 
@@ -124,19 +166,7 @@ namespace Jrd
 			}
 		}
 
-		inline void cacheRequest()
-		{
-			Jrd::Attachment* att = JRD_get_thread_data()->getAttachment();
-
-			if (which == IRQ_REQUESTS)
-				att->att_internal[id] = request->getStatement();
-			else if (which == DYN_REQUESTS)
-				att->att_dyn_req[id] = request->getStatement();
-			else
-			{
-				fb_assert(false);
-			}
-		}
+		void cacheRequest();
 
 	private:
 		USHORT id;

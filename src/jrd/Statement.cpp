@@ -36,6 +36,7 @@
 #include "../jrd/met_proto.h"
 #include "../jrd/scl_proto.h"
 #include "../jrd/Collation.h"
+#include "../jrd/recsrc/Cursor.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -190,6 +191,9 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 			if (tail->csb_flags & csb_unstable)
 				rpb->rpb_stream_flags |= RPB_s_unstable;
 
+			if (tail->csb_flags & csb_skip_locked)
+				rpb->rpb_stream_flags |= RPB_s_skipLocked;
+
 			rpb->rpb_relation = tail->csb_relation;
 
 			delete tail->csb_fields;
@@ -337,6 +341,18 @@ Statement* Statement::makeStatement(thread_db* tdbb, CompilerScratch* csb, bool 
 	attachment->att_statements.add(statement);
 
 	return statement;
+}
+
+Statement* Statement::makeBoolExpression(thread_db* tdbb, BoolExprNode*& node,
+	CompilerScratch* csb, bool internalFlag)
+{
+	fb_assert(csb->csb_node->getKind() == DmlNode::KIND_BOOLEAN);
+
+	return makeStatement(tdbb, csb, internalFlag,
+		[&]
+		{
+			node = static_cast<BoolExprNode*>(csb->csb_node);
+		});
 }
 
 Statement* Statement::makeValueExpression(thread_db* tdbb, ValueExprNode*& node, dsc& desc,
@@ -686,9 +702,12 @@ void Statement::release(thread_db* tdbb)
 
 	for (Request** instance = requests.begin(); instance != requests.end(); ++instance)
 	{
-		EXE_release(tdbb, *instance);
-		MemoryPool::deletePool((*instance)->req_pool);
-		*instance = nullptr;
+		if (*instance)
+		{
+			EXE_release(tdbb, *instance);
+			MemoryPool::deletePool((*instance)->req_pool);
+			*instance = nullptr;
+		}
 	}
 
 	const auto attachment = tdbb->getAttachment();
@@ -708,13 +727,19 @@ string Statement::getPlan(thread_db* tdbb, bool detailed) const
 {
 	string plan;
 
-	for (const auto rsb : fors)
-	{
-		plan += detailed ? "\nSelect Expression" : "\nPLAN ";
-		rsb->print(tdbb, plan, detailed, 0, true);
-	}
+	for (const auto select : fors)
+		select->printPlan(tdbb, plan, detailed);
 
 	return plan;
+}
+
+void Statement::getPlan(thread_db* tdbb, PlanEntry& planEntry) const
+{
+	planEntry.className = "Statement";
+	planEntry.level = 0;
+
+	for (const auto select : fors)
+		select->getPlan(tdbb, planEntry.children.add(), 0, true);
 }
 
 // Check that we have enough rights to access all resources this list of triggers touches.
@@ -766,7 +791,7 @@ void Statement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 				if (view && (view->rel_flags & REL_sql_relation))
 					userName = view->rel_owner_name;
 			}
-			else if (t.ssDefiner.specified && t.ssDefiner.value)
+			else if (t.ssDefiner.asBool())
 				userName = t.owner;
 
 			Attachment* attachment = tdbb->getAttachment();
@@ -795,7 +820,7 @@ inline void Statement::triggersExternalAccess(thread_db* tdbb, ExternalAccessLis
 
 		if (t.statement)
 		{
-			const MetaName& userName = (t.ssDefiner.specified && t.ssDefiner.value) ? t.owner : user;
+			const MetaName& userName = t.ssDefiner.asBool() ? t.owner : user;
 			t.statement->buildExternalAccess(tdbb, list, userName);
 		}
 	}
@@ -861,7 +886,7 @@ void Statement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list, c
 					continue; // should never happen, silence the compiler
 			}
 
-			item->user = relation->rel_ss_definer.orElse(false) ? relation->rel_owner_name : user;
+			item->user = relation->rel_ss_definer.asBool() ? relation->rel_owner_name : user;
 			if (list.find(*item, i))
 				continue;
 			list.insert(i, *item);

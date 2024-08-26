@@ -32,6 +32,7 @@
 
 #include "../yvalve/MasterImplementation.h"
 #include "../common/classes/rwlock.h"
+#include "../common/classes/ClumpletReader.h"
 #include "firebird/impl/inf_pub.h"
 #include "../common/isc_proto.h"
 #include "../jrd/acl.h"
@@ -107,36 +108,26 @@ bool DTransaction::buildPrepareInfo(CheckStatusWrapper* status, TdrBuffer& tdr, 
 	if (status->getState() & IStatus::STATE_ERRORS)
 		return false;
 
-	UCHAR* const end = bigBuffer.end();
-
-	while (buf < end)
+	for (ClumpletReader p(ClumpletReader::InfoResponse, buf, bigBuffer.getCount()); !p.isEof(); p.moveNext())
 	{
-		UCHAR item = buf[0];
-		++buf;
-		const USHORT length = (USHORT) gds__vax_integer(buf, 2);
+		const USHORT length = (USHORT) p.getClumpLength();
 		// Prevent information out of sync.
 		UCHAR lengthByte = length > MAX_UCHAR ? MAX_UCHAR : length;
-		buf += 2;
 
-		switch(item)
+		switch(p.getClumpTag())
 		{
 			case isc_info_tra_id:
 				tdr.add(TDR_TRANSACTION_ID);
 				tdr.add(lengthByte);
-				tdr.add(buf, lengthByte);
+				tdr.add(p.getBytes(), lengthByte);
 				break;
 
 			case fb_info_tra_dbpath:
 				tdr.add(TDR_DATABASE_PATH);
 				tdr.add(lengthByte);
-				tdr.add(buf, lengthByte);
+				tdr.add(p.getBytes(), lengthByte);
 				break;
-
-			case isc_info_end:
-				return true;
 		}
-
-		buf += length;
 	}
 
 	return true;

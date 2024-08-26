@@ -5,19 +5,23 @@
 :: (This is used by gpre and preprocess.bat)
 :: VS_VER VisualStudio version (msvc15)
 :: FB_OBJ_DIR
-:: FB_BOOT_BIN_DIR
 :: FB_BIN_DIR
 
 @echo off
 
-set FB_DBG=
-set FB_CONFIG=release
 set FB_CLEAN=
 
 for %%v in ( %* )  do (
   ( if /I "%%v"=="DEBUG" ( (set FB_DBG=TRUE) && (set FB_CONFIG=debug) ) )
   ( if /I "%%v"=="CLEAN" (set FB_CLEAN=:rebuild) )
   ( if /I "%%v"=="RELEASE" ( (set FB_DBG=) && (set FB_CONFIG=release) ) )
+  ( if /I "%%v"=="CLIENT_ONLY" (set FB_CLIENT_ONLY=TRUE) )
+  ( if /I "%%v"=="CLIENT_ONLY=FALSE" (set FB_CLIENT_ONLY=) )
+)
+
+@if not defined FB_CONFIG (
+  set FB_DBG=
+  set FB_CONFIG=release
 )
 
 :: Default target CPU architecture is the native environment
@@ -139,8 +143,7 @@ for %%v in ( %* )  do (
 @set FIREBIRD_BOOT_BUILD=1
 
 @set FB_OBJ_DIR=%FB_TARGET_PLATFORM%\%FB_CONFIG%
-@set FB_BOOT_BIN_DIR=%FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird
-@set FB_BIN_DIR=%FB_OUTPUT_DIR%
+@set FB_BIN_DIR=%FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird
 
 
 goto :END

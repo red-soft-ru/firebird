@@ -174,6 +174,7 @@ namespace
 			// Save states of the underlying streams and restore them afterwards
 
 			StreamStateHolder stateHolder(csb, m_streams);
+			stateHolder.deactivate();
 
 			// Generate record source objects
 
@@ -410,7 +411,8 @@ namespace
 		// If there were none indices, this is a sequential retrieval.
 
 		const auto relation = tail->csb_relation;
-		fb_assert(relation);
+		if (!relation)
+			return;
 
 		if (!tail->csb_idx)
 			return;
@@ -561,16 +563,34 @@ namespace
 // Constructor
 //
 
-Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse)
+Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, bool parentFirstRows)
 	: PermanentStorage(*aTdbb->getDefaultPool()),
 	  tdbb(aTdbb), csb(aCsb), rse(aRse),
+	  firstRows(rse->firstRows.valueOr(parentFirstRows)),
 	  compileStreams(getPool()),
 	  bedStreams(getPool()),
 	  keyStreams(getPool()),
-	  subStreams(getPool()),
 	  outerStreams(getPool()),
 	  conjuncts(getPool())
 {
+    // Ignore optimization for first rows in impossible cases
+	if (firstRows)
+	{
+		// Projection is currently always performed using an external sort,
+		// so all underlying records will be fetched anyway
+		if (rse->rse_projection)
+			firstRows = false;
+		// Aggregation without GROUP BY will also cause all records to be fetched.
+		// Exception is when MIN/MAX functions could be mapped to an index,
+		// but this is handled separately inside AggregateSourceNode::compile().
+		else if (rse->rse_relations.getCount() == 1)
+		{
+			const auto subRse = rse->rse_relations[0];
+			const auto aggregate = nodeAs<AggregateSourceNode>(subRse);
+			if (aggregate && !aggregate->group)
+				firstRows = false;
+		}
+	}
 }
 
 
@@ -598,7 +618,7 @@ Optimizer::~Optimizer()
 
 RecordSource* Optimizer::compile(RseNode* subRse, BoolExprNodeStack* parentStack)
 {
-	Optimizer subOpt(tdbb, csb, subRse);
+	Optimizer subOpt(tdbb, csb, subRse, firstRows);
 	const auto rsb = subOpt.compile(parentStack);
 
 	if (parentStack && subOpt.isInnerJoin())
@@ -613,7 +633,7 @@ RecordSource* Optimizer::compile(RseNode* subRse, BoolExprNodeStack* parentStack
 			{
 				if (*selfIter == *subIter)
 				{
-					selfIter |= (subIter & (CONJUNCT_USED | CONJUNCT_MATCHED));
+					selfIter |= subIter.getFlags();
 					break;
 				}
 			}
@@ -645,7 +665,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	// can generate additional booleans by associativity--this will help
 	// to utilize indices that we might not have noticed
 	if (rse->rse_boolean)
-		conjunctCount = decompose(rse->rse_boolean, conjunctStack);
+		conjunctCount = decomposeBoolean(rse->rse_boolean, conjunctStack);
 
 	conjunctCount += distributeEqualities(conjunctStack, conjunctCount);
 
@@ -681,7 +701,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		for (BoolExprNodeStack::iterator iter(*parentStack);
 			iter.hasData() && conjunctCount < MAX_CONJUNCTS; ++iter)
 		{
-			BoolExprNode* const node = iter.object();
+			const auto node = iter.object();
 
 			if (!isInnerJoin() && node->possiblyUnknown())
 			{
@@ -765,13 +785,34 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	StreamList rseStreams;
 	rse->computeRseStreams(rseStreams);
 
-	for (StreamList::iterator i = rseStreams.begin(); i != rseStreams.end(); ++i)
-		csb->csb_rpt[*i].deactivate();
+	for (const auto rseStream : rseStreams)
+		csb->csb_rpt[rseStream].deactivate();
+
+	// Find and collect booleans that are invariant in this context
+	// (i.e. independent from streams in the RseNode). We can do that
+	// easily because these streams are inactive at this point and
+	// any node that references them will be not computable.
+	// Note that we cannot do that for outer joins, as in this case boolean
+	// represents a join condition which does not filter out the rows.
+
+	BoolExprNode* invariantBoolean = nullptr;
+	if (isInnerJoin())
+	{
+		for (auto iter = getBaseConjuncts(); iter.hasData(); ++iter)
+		{
+			if (!(iter & CONJUNCT_USED) &&
+				iter->computable(csb, INVALID_STREAM, false))
+			{
+				compose(getPool(), &invariantBoolean, iter);
+				iter |= CONJUNCT_USED;
+			}
+		}
+	}
 
 	// Go through the record selection expression generating
 	// record source blocks for all streams
 
-	RiverList rivers;
+	RiverList rivers, dependentRivers;
 
 	bool innerSubStream = false;
 	for (auto node : rse->rse_relations)
@@ -797,11 +838,13 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			StreamList localStreams;
 			rsb->findUsedStreams(localStreams);
 
+			bool computable = false;
+
 			// AB: Save all outer-part streams
 			if (isInnerJoin() || (isLeftJoin() && !innerSubStream))
 			{
-				subStreams.join(localStreams);
-				outerStreams.join(localStreams);
+				if (node->computable(csb, INVALID_STREAM, false))
+					computable = true;
 
 				// Apply local booleans, if any. Note that it's done
 				// only for inner joins and outer streams of left joins.
@@ -811,7 +854,16 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 
 			const auto river = FB_NEW_POOL(getPool()) River(csb, rsb, node, localStreams);
 			river->deactivate(csb);
-			rivers.add(river);
+
+			if (computable)
+			{
+				outerStreams.join(localStreams);
+				rivers.add(river);
+			}
+			else
+			{
+				dependentRivers.add(river);
+			}
 		}
 		else
 		{
@@ -840,9 +892,9 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	else
 		rse->rse_aggregate = aggregate = nullptr;
 
-	// AB: Mark the previous used streams (sub-RseNode's) as active
-	for (const auto subStream : subStreams)
-		csb->csb_rpt[subStream].activate();
+	// Activate the priorly used rivers
+	for (const auto river : rivers)
+		river->activate(csb);
 
 	bool sortCanBeUsed = true;
 	SortNode* const orgSortNode = sort;
@@ -861,7 +913,10 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 
 	// Outer joins are processed their own way
 	if (!isInnerJoin())
-		rsb = generateOuterJoin(rivers, &sort);
+	{
+		rivers.join(dependentRivers);
+		rsb = OuterJoin(tdbb, this, rse, rivers, &sort).generate();
+	}
 	else
 	{
 		// AB: If previous rsb's are already on the stack we can't use
@@ -928,17 +983,22 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			}
 		}
 
-		// attempt to form joins in decreasing order of desirability
+		// Attempt to form joins in decreasing order of desirability
 		generateInnerJoin(joinStreams, rivers, &sort, rse->rse_plan);
+
+		// Re-activate remaining rivers to be hashable/mergeable
+		for (const auto river : rivers)
+			river->activate(csb);
 
 		// If there are multiple rivers, try some hashing or sort/merging
 		while (generateEquiJoin(rivers))
 			;
 
+		rivers.join(dependentRivers);
 		rsb = CrossJoin(csb, rivers).getRecordSource();
 
 		// Pick up any residual boolean that may have fallen thru the cracks
-		rsb = generateResidualBoolean(rsb);
+		rsb = applyResidualBoolean(rsb);
 	}
 
 	// Assign the sort node back if it wasn't used by the index navigation
@@ -977,21 +1037,27 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			rsb = generateSort(bedStreams, &keyStreams, rsb, sort, favorFirstRows(), false);
 	}
 
+	// Add invariant booleans, if any. They should be evaluated before
+	// actual data retrieval happens, thus avoiding unnecessary work.
+
+	if (invariantBoolean)
+		rsb = FB_NEW_POOL(getPool()) PreFilteredStream(csb, rsb, invariantBoolean);
+
     // Handle first and/or skip.  The skip MUST (if present)
     // appear in the rsb list AFTER the first.  Since the gen_first and gen_skip
     // functions add their nodes at the beginning of the rsb list we MUST call
     // gen_skip before gen_first.
 
-    if (rse->rse_skip)
+	if (rse->rse_skip)
 		rsb = FB_NEW_POOL(getPool()) SkipRowsStream(csb, rsb, rse->rse_skip);
 
 	if (rse->rse_first)
 		rsb = FB_NEW_POOL(getPool()) FirstRowsStream(csb, rsb, rse->rse_first);
 
-	if (rse->flags & RseNode::FLAG_SINGULAR)
+	if (rse->isSingular())
 		rsb = FB_NEW_POOL(getPool()) SingularStream(csb, rsb);
 
-	if (rse->flags & RseNode::FLAG_WRITELOCK)
+	if (rse->hasWriteLock())
 	{
 		for (const auto compileStream : compileStreams)
 		{
@@ -1008,7 +1074,15 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		rsb = FB_NEW_POOL(getPool()) LockedStream(csb, rsb);
 	}
 
-	if (rse->flags & RseNode::FLAG_SCROLLABLE)
+	if (rse->hasSkipLocked())
+	{
+		for (const auto compileStream : compileStreams)
+		{
+			csb->csb_rpt[compileStream].csb_flags |= csb_skip_locked;
+		}
+	}
+
+	if (rse->isScrollable())
 		rsb = FB_NEW_POOL(getPool()) BufferedStream(csb, rsb);
 
 	return rsb;
@@ -1037,6 +1111,9 @@ void Optimizer::compileRelation(StreamType stream)
 	const auto relation = tail->csb_relation;
 	fb_assert(relation);
 
+	const auto format = CMP_format(tdbb, csb, stream);
+	tail->csb_cardinality = getCardinality(tdbb, relation, format);
+
 	tail->csb_idx = nullptr;
 
 	if (needIndices && !relation->rel_file && !relation->isVirtual())
@@ -1045,15 +1122,137 @@ void Optimizer::compileRelation(StreamType stream)
 		IndexDescList idxList;
 		BTR_all(tdbb, relation, idxList, relPages);
 
+		// if index stats is empty, update it for non-empty and not too big system relations
+
+		const bool updateStats = (relation->isSystem() && idxList.hasData() &&
+			!tdbb->getDatabase()->readOnly() &&
+			(relPages->rel_data_pages > 0) && (relPages->rel_data_pages < 100));
+
+		if (updateStats)
+		{
+			bool updated = false;
+			for (const index_desc& idx : idxList)
+			{
+				if (idx.idx_selectivity <= 0.0f)
+				{
+					SelectivityList	selectivity;
+					BTR_selectivity(tdbb, relation, idx.idx_id, selectivity);
+					if (selectivity[0] > 0.0f)
+						updated = true;
+				}
+			}
+
+			if (updated)
+			{
+				idxList.clear();
+				BTR_all(tdbb, relation, idxList, relPages);
+			}
+		}
+
 		if (idxList.hasData())
 			tail->csb_idx = FB_NEW_POOL(getPool()) IndexDescList(getPool(), idxList);
 
 		if (tail->csb_plan)
 			markIndices(tail, relation->rel_id);
 	}
+}
 
-	const auto format = CMP_format(tdbb, csb, stream);
-	tail->csb_cardinality = getCardinality(tdbb, relation, format);
+
+//
+// Decompose a boolean into a stack of conjuctions.
+//
+
+unsigned Optimizer::decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& stack)
+{
+	if (const auto binaryNode = nodeAs<BinaryBoolNode>(boolNode))
+	{
+		if (binaryNode->blrOp == blr_and)
+		{
+			auto count = decomposeBoolean(binaryNode->arg1, stack);
+			count += decomposeBoolean(binaryNode->arg2, stack);
+			return count;
+		}
+		else if (binaryNode->blrOp == blr_or)
+		{
+			BoolExprNodeStack or_stack;
+
+			if (decomposeBoolean(binaryNode->arg1, or_stack) >= 2)
+			{
+				binaryNode->arg1 = or_stack.pop();
+
+				while (or_stack.hasData())
+				{
+					const auto newBoolNode =
+						FB_NEW_POOL(getPool()) BinaryBoolNode(getPool(), blr_and);
+					newBoolNode->arg1 = or_stack.pop();
+					newBoolNode->arg2 = binaryNode->arg1;
+
+					binaryNode->arg1 = newBoolNode;
+				}
+			}
+
+			or_stack.clear();
+
+			if (decomposeBoolean(binaryNode->arg2, or_stack) >= 2)
+			{
+				binaryNode->arg2 = or_stack.pop();
+
+				while (or_stack.hasData())
+				{
+					const auto newBoolNode =
+						FB_NEW_POOL(getPool()) BinaryBoolNode(getPool(), blr_and);
+					newBoolNode->arg1 = or_stack.pop();
+					newBoolNode->arg2 = binaryNode->arg2;
+
+					binaryNode->arg2 = newBoolNode;
+				}
+			}
+		}
+	}
+	else if (const auto cmpNode = nodeAs<ComparativeBoolNode>(boolNode))
+	{
+		// turn a between into (a greater than or equal) AND (a less than  or equal)
+
+		if (cmpNode->blrOp == blr_between)
+		{
+			auto newCmpNode = FB_NEW_POOL(getPool()) ComparativeBoolNode(getPool(), blr_geq);
+			newCmpNode->arg1 = cmpNode->arg1;
+			newCmpNode->arg2 = cmpNode->arg2;
+
+			stack.push(newCmpNode);
+
+			newCmpNode = FB_NEW_POOL(getPool()) ComparativeBoolNode(getPool(), blr_leq);
+			newCmpNode->arg1 = CMP_clone_node_opt(tdbb, csb, cmpNode->arg1);
+			newCmpNode->arg2 = cmpNode->arg3;
+
+			stack.push(newCmpNode);
+
+			return 2;
+		}
+
+		// turn a LIKE/SIMILAR into a LIKE/SIMILAR and a STARTING WITH, if it starts
+		// with anything other than a pattern-matching character
+
+		ValueExprNode* arg;
+
+		if ((cmpNode->blrOp == blr_like || cmpNode->blrOp == blr_similar) &&
+			(arg = optimizeLikeSimilar(cmpNode)))
+		{
+			const auto newCmpNode =
+				FB_NEW_POOL(getPool()) ComparativeBoolNode(getPool(), blr_starting);
+			newCmpNode->arg1 = cmpNode->arg1;
+			newCmpNode->arg2 = arg;
+
+			stack.push(newCmpNode);
+			stack.push(boolNode);
+
+			return 2;
+		}
+	}
+
+	stack.push(boolNode);
+
+	return 1;
 }
 
 
@@ -1449,41 +1648,6 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 
 
 //
-// Find conjuncts local to the given river and compose an appropriate filter
-//
-
-RecordSource* Optimizer::applyLocalBoolean(RecordSource* rsb,
-										   const StreamList& streams,
-										   ConjunctIterator& iter)
-{
-	StreamStateHolder globalHolder(csb);
-	globalHolder.deactivate();
-
-	StreamStateHolder localHolder(csb, streams);
-	localHolder.activate(csb);
-
-	BoolExprNode* boolean = nullptr;
-	double selectivity = MAXIMUM_SELECTIVITY;
-
-	for (iter.rewind(); iter.hasData(); ++iter)
-	{
-		if (!(iter & CONJUNCT_USED) &&
-			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
-			iter->computable(csb, INVALID_STREAM, false))
-		{
-			compose(getPool(), &boolean, iter);
-			iter |= CONJUNCT_USED;
-
-			if (!(iter & CONJUNCT_MATCHED))
-				selectivity *= getSelectivity(*iter);
-		}
-	}
-
-	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity) : rsb;
-}
-
-
-//
 // Check to make sure that the user-specified indices were actually utilized by the optimizer
 //
 
@@ -1501,14 +1665,21 @@ void Optimizer::checkIndices()
 			continue;
 
 		const auto relation = tail->csb_relation;
+		if (!relation)
+			return;
 
 		// If there were no indices fetched at all but the user specified some,
 		// error out using the first index specified
 
-		if (!tail->csb_idx && plan->accessType && !tdbb->getAttachment()->isGbak())
+		const bool isGbak = tdbb->getAttachment()->isGbak();
+
+		if (!tail->csb_idx && plan->accessType)
 		{
 			// index %s cannot be used in the specified plan
-			ERR_post(Arg::Gds(isc_index_unused) << plan->accessType->items[0].indexName);
+			if (isGbak)
+				ERR_post_warning(Arg::Warning(isc_index_unused) << plan->accessType->items[0].indexName);
+			else
+				ERR_post(Arg::Gds(isc_index_unused) << plan->accessType->items[0].indexName);
 		}
 
 		if (!tail->csb_idx)
@@ -1529,7 +1700,10 @@ void Optimizer::checkIndices()
 					index_name = "";
 
 				// index %s cannot be used in the specified plan
-				ERR_post(Arg::Gds(isc_index_unused) << Arg::Str(index_name));
+				if (isGbak)
+					ERR_post_warning(Arg::Warning(isc_index_unused) << Arg::Str(index_name));
+				else
+					ERR_post(Arg::Gds(isc_index_unused) << Arg::Str(index_name));
 			}
 		}
 	}
@@ -1788,104 +1962,6 @@ void Optimizer::checkSorts()
 
 
 //
-// Decompose a boolean into a stack of conjuctions.
-//
-
-unsigned Optimizer::decompose(BoolExprNode* boolNode, BoolExprNodeStack& stack)
-{
-	if (const auto binaryNode = nodeAs<BinaryBoolNode>(boolNode))
-	{
-		if (binaryNode->blrOp == blr_and)
-		{
-			auto count = decompose(binaryNode->arg1, stack);
-			count += decompose(binaryNode->arg2, stack);
-			return count;
-		}
-		else if (binaryNode->blrOp == blr_or)
-		{
-			BoolExprNodeStack or_stack;
-
-			if (decompose(binaryNode->arg1, or_stack) >= 2)
-			{
-				binaryNode->arg1 = or_stack.pop();
-
-				while (or_stack.hasData())
-				{
-					const auto newBoolNode =
-						FB_NEW_POOL(getPool()) BinaryBoolNode(getPool(), blr_and);
-					newBoolNode->arg1 = or_stack.pop();
-					newBoolNode->arg2 = binaryNode->arg1;
-
-					binaryNode->arg1 = newBoolNode;
-				}
-			}
-
-			or_stack.clear();
-
-			if (decompose(binaryNode->arg2, or_stack) >= 2)
-			{
-				binaryNode->arg2 = or_stack.pop();
-
-				while (or_stack.hasData())
-				{
-					const auto newBoolNode =
-						FB_NEW_POOL(getPool()) BinaryBoolNode(getPool(), blr_and);
-					newBoolNode->arg1 = or_stack.pop();
-					newBoolNode->arg2 = binaryNode->arg2;
-
-					binaryNode->arg2 = newBoolNode;
-				}
-			}
-		}
-	}
-	else if (const auto cmpNode = nodeAs<ComparativeBoolNode>(boolNode))
-	{
-		// turn a between into (a greater than or equal) AND (a less than  or equal)
-
-		if (cmpNode->blrOp == blr_between)
-		{
-			auto newCmpNode = FB_NEW_POOL(getPool()) ComparativeBoolNode(getPool(), blr_geq);
-			newCmpNode->arg1 = cmpNode->arg1;
-			newCmpNode->arg2 = cmpNode->arg2;
-
-			stack.push(newCmpNode);
-
-			newCmpNode = FB_NEW_POOL(getPool()) ComparativeBoolNode(getPool(), blr_leq);
-			newCmpNode->arg1 = CMP_clone_node_opt(tdbb, csb, cmpNode->arg1);
-			newCmpNode->arg2 = cmpNode->arg3;
-
-			stack.push(newCmpNode);
-
-			return 2;
-		}
-
-		// turn a LIKE/SIMILAR into a LIKE/SIMILAR and a STARTING WITH, if it starts
-		// with anything other than a pattern-matching character
-
-		ValueExprNode* arg;
-
-		if ((cmpNode->blrOp == blr_like || cmpNode->blrOp == blr_similar) &&
-			(arg = optimizeLikeSimilar(cmpNode)))
-		{
-			const auto newCmpNode =
-				FB_NEW_POOL(getPool()) ComparativeBoolNode(getPool(), blr_starting);
-			newCmpNode->arg1 = cmpNode->arg1;
-			newCmpNode->arg2 = arg;
-
-			stack.push(newCmpNode);
-			stack.push(boolNode);
-
-			return 2;
-		}
-	}
-
-	stack.push(boolNode);
-
-	return 1;
-}
-
-
-//
 // Given a stack of conjunctions, generate some simple inferences.
 // In general, find classes of equalities, then find operations based on members of those classes.
 // If we find any, generate additional conjunctions. In short:
@@ -1949,7 +2025,7 @@ unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned b
 			ValueExprNodeStack& s = classes.add();
 			s.push(node1);
 			s.push(node2);
-			eq_class = classes.back();
+			eq_class = --classes.end();
 		}
 	}
 
@@ -2160,7 +2236,10 @@ void Optimizer::formRivers(const StreamList& streams,
 		// the stream into the river
 		fb_assert(planNode->type == PlanNode::TYPE_RETRIEVE);
 
-		const StreamType stream = planNode->relationNode->getStream();
+		if (!nodeIs<RelationSourceNode>(planNode->recordSourceNode))
+			continue;
+
+		const auto stream = planNode->recordSourceNode->getStream();
 
 		// dimitr:	the plan may contain more retrievals than the "streams"
 		//			array (some streams could already be joined to the active
@@ -2228,10 +2307,13 @@ bool Optimizer::generateEquiJoin(RiverList& orgRivers)
 		if (iter & CONJUNCT_USED)
 			continue;
 
+		if (!iter->computable(csb, INVALID_STREAM, false))
+			continue;
+
 		NestConst<ValueExprNode> node1;
 		NestConst<ValueExprNode> node2;
 
-		if (!getEquiJoinKeys(*iter, &node1, &node2, true))
+		if (!getEquiJoinKeys(*iter, &node1, &node2))
 			continue;
 
 		for (unsigned i = 0; i < orgRivers.getCount(); i++)
@@ -2243,9 +2325,7 @@ bool Optimizer::generateEquiJoin(RiverList& orgRivers)
 				if (!river1->isReferenced(node2))
 					continue;
 
-				ValueExprNode* const temp = node1;
-				node1 = node2;
-				node2 = temp;
+				std::swap(node1, node2);
 			}
 
 			for (unsigned j = i + 1; j < orgRivers.getCount(); j++)
@@ -2268,6 +2348,8 @@ bool Optimizer::generateEquiJoin(RiverList& orgRivers)
 
 					if (eq_class == last_class)
 						last_class += orgCount;
+
+					iter |= Optimizer::CONJUNCT_JOINED;
 				}
 			}
 		}
@@ -2467,169 +2549,6 @@ void Optimizer::generateInnerJoin(StreamList& streams,
 
 
 //
-// Generate a top level outer join. The "outer" and "inner" sub-streams must be
-// handled differently from each other. The inner is like other streams.
-// The outer one isn't because conjuncts may not eliminate records from the stream.
-// They only determine if a join with an inner stream record is to be attempted.
-//
-
-RecordSource* Optimizer::generateOuterJoin(RiverList& rivers,
-										   SortNode** sortClause)
-{
-	struct {
-		RecordSource* stream_rsb;
-		StreamType stream_num;
-	} stream_o, stream_i, *stream_ptr[2];
-
-	// Determine which stream should be outer and which is inner.
-	// In the case of a left join, the syntactically left stream is the
-	// outer, and the right stream is the inner.  For all others, swap
-	// the sense of inner and outer, though for a full join it doesn't
-	// matter and we should probably try both orders to see which is
-	// more efficient.
-	if (rse->rse_jointype != blr_left)
-	{
-		stream_ptr[1] = &stream_o;
-		stream_ptr[0] = &stream_i;
-	}
-	else
-	{
-		stream_ptr[0] = &stream_o;
-		stream_ptr[1] = &stream_i;
-	}
-
-	// Loop through the outer join sub-streams in
-	// reverse order because rivers may have been PUSHed
-	for (int i = 1; i >= 0; i--)
-	{
-		const auto node = rse->rse_relations[i];
-
-		if (nodeIs<RelationSourceNode>(node) || nodeIs<LocalTableSourceNode>(node))
-		{
-			stream_ptr[i]->stream_rsb = nullptr;
-			stream_ptr[i]->stream_num = node->getStream();
-		}
-		else
-		{
-			River* const river = rivers.pop();
-			stream_ptr[i]->stream_rsb = river->getRecordSource();
-		}
-	}
-
-	if (!isFullJoin())
-	{
-		// Generate rsbs for the sub-streams.
-		// For the left sub-stream we also will get a boolean back.
-		BoolExprNode* boolean = nullptr;
-
-		if (!stream_o.stream_rsb)
-		{
-			stream_o.stream_rsb =
-				generateRetrieval(stream_o.stream_num, sortClause, true, false, &boolean);
-		}
-
-		if (!stream_i.stream_rsb)
-		{
-			// AB: the sort clause for the inner stream of an OUTER JOIN
-			//	   should never be used for the index retrieval
-			stream_i.stream_rsb =
-				generateRetrieval(stream_i.stream_num, nullptr, false, true);
-		}
-
-		// generate a parent boolean rsb for any remaining booleans that
-		// were not satisfied via an index lookup
-		stream_i.stream_rsb = generateResidualBoolean(stream_i.stream_rsb);
-
-		// Allocate and fill in the rsb
-		return FB_NEW_POOL(getPool())
-			NestedLoopJoin(csb, stream_o.stream_rsb, stream_i.stream_rsb,
-						   boolean, OUTER_JOIN);
-	}
-
-	bool hasOuterRsb = true, hasInnerRsb = true;
-	BoolExprNode* boolean = nullptr;
-
-	if (!stream_o.stream_rsb)
-	{
-		hasOuterRsb = false;
-		stream_o.stream_rsb =
-			generateRetrieval(stream_o.stream_num, nullptr, true, false, &boolean);
-	}
-
-	if (!stream_i.stream_rsb)
-	{
-		hasInnerRsb = false;
-		stream_i.stream_rsb =
-			generateRetrieval(stream_i.stream_num, nullptr, false, true);
-	}
-
-	const auto innerRsb = generateResidualBoolean(stream_i.stream_rsb);
-
-	const auto rsb1 = FB_NEW_POOL(getPool())
-		NestedLoopJoin(csb, stream_o.stream_rsb, innerRsb, boolean, OUTER_JOIN);
-
-	for (auto iter = getConjuncts(); iter.hasData(); ++iter)
-	{
-		if (iter & CONJUNCT_USED)
-			iter.reset(CMP_clone_node_opt(tdbb, csb, iter));
-	}
-
-	if (!hasInnerRsb)
-		csb->csb_rpt[stream_i.stream_num].deactivate();
-
-	if (!hasOuterRsb)
-		csb->csb_rpt[stream_o.stream_num].deactivate();
-
-	boolean = nullptr;
-
-	if (!hasInnerRsb)
-	{
-		stream_i.stream_rsb =
-			generateRetrieval(stream_i.stream_num, nullptr, true, false, &boolean);
-	}
-
-	if (!hasOuterRsb)
-	{
-		stream_o.stream_rsb =
-			generateRetrieval(stream_o.stream_num, nullptr, false, false);
-	}
-
-	const auto outerRsb = generateResidualBoolean(stream_o.stream_rsb);
-
-	const auto rsb2 = FB_NEW_POOL(getPool())
-		NestedLoopJoin(csb, stream_i.stream_rsb, outerRsb, boolean, ANTI_JOIN);
-
-	return FB_NEW_POOL(getPool()) FullOuterJoin(csb, rsb1, rsb2);
-}
-
-
-//
-// Pick up any residual boolean remaining, meaning those that have not been used
-// as part of some join. These booleans must still be applied to the result stream.
-//
-
-RecordSource* Optimizer::generateResidualBoolean(RecordSource* rsb)
-{
-	BoolExprNode* boolean = nullptr;
-	double selectivity = MAXIMUM_SELECTIVITY;
-
-	for (auto iter = getBaseConjuncts(); iter.hasData(); ++iter)
-	{
-		if (!(iter & CONJUNCT_USED))
-		{
-			compose(getPool(), &boolean, iter);
-			iter |= CONJUNCT_USED;
-
-			if (!(iter & CONJUNCT_MATCHED))
-				selectivity *= getSelectivity(*iter);
-		}
-	}
-
-	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity) : rsb;
-}
-
-
-//
 // Compile a record retrieval source
 //
 
@@ -2741,22 +2660,11 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 
 	if (outerFlag)
 	{
-		fb_assert(returnBoolean);
-		*returnBoolean = nullptr;
-
 		// Now make another pass thru the outer conjuncts only, finding unused,
 		// computable booleans. When one is found, roll it into a final
 		// boolean and mark it used.
-		for (auto iter = getBaseConjuncts(); iter.hasData(); ++iter)
-		{
-			if (!(iter & CONJUNCT_USED) &&
-				!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
-				iter->computable(csb, INVALID_STREAM, false))
-			{
-				compose(getPool(), returnBoolean, iter);
-				iter |= CONJUNCT_USED;
-			}
-		}
+		fb_assert(returnBoolean);
+		*returnBoolean = composeBoolean();
 	}
 
 	// Now make another pass thru the conjuncts finding unused, computable
@@ -2787,9 +2695,10 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 				{
 					if (!outerFlag)
 						tail->csb_flags |= csb_unmatched;
-
-					filterSelectivity *= getSelectivity(*iter);
 				}
+
+				if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
+					filterSelectivity *= getSelectivity(*iter);
 			}
 		}
 	}
@@ -2825,13 +2734,91 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 
 
 //
+// Find conjuncts local to the given river and compose an appropriate filter
+//
+
+RecordSource* Optimizer::applyLocalBoolean(RecordSource* rsb,
+										   const StreamList& streams,
+										   ConjunctIterator& iter)
+{
+	StreamStateHolder globalHolder(csb);
+	globalHolder.deactivate();
+
+	StreamStateHolder localHolder(csb, streams);
+	localHolder.activate(csb);
+
+	double selectivity = MAXIMUM_SELECTIVITY;
+	if (const auto boolean = composeBoolean(iter, &selectivity))
+		rsb = FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity);
+
+	return rsb;
+}
+
+
+//
+// Pick up any residual boolean remaining, meaning those that have not been used
+// as part of some join. These booleans must still be applied to the result stream.
+//
+
+RecordSource* Optimizer::applyResidualBoolean(RecordSource* rsb)
+{
+	BoolExprNode* boolean = nullptr;
+	double selectivity = MAXIMUM_SELECTIVITY;
+
+	for (auto iter = getBaseConjuncts(); iter.hasData(); ++iter)
+	{
+		if (!(iter & CONJUNCT_USED))
+		{
+			compose(getPool(), &boolean, iter);
+			iter |= CONJUNCT_USED;
+
+			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
+				selectivity *= getSelectivity(*iter);
+		}
+	}
+
+	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, selectivity) : rsb;
+}
+
+
+BoolExprNode* Optimizer::composeBoolean(ConjunctIterator& iter, double* selectivity)
+{
+	BoolExprNode* boolean = nullptr;
+
+	for (iter.rewind(); iter.hasData(); ++iter)
+	{
+		if (!(iter & CONJUNCT_USED) &&
+			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
+			iter->computable(csb, INVALID_STREAM, false))
+		{
+			compose(getPool(), &boolean, iter);
+			iter |= CONJUNCT_USED;
+
+			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)) && selectivity)
+				*selectivity *= getSelectivity(*iter);
+		}
+	}
+
+	return boolean;
+}
+
+
+//
 // Check whether the given boolean can be involved in a equi-join relationship
 //
 
+bool Optimizer::checkEquiJoin(BoolExprNode* boolean)
+{
+	auto cmpNode = nodeAs<ComparativeBoolNode>(boolean);
+	if (!cmpNode || (cmpNode->blrOp != blr_eql && cmpNode->blrOp != blr_equiv))
+		return false;
+
+	return getEquiJoinKeys(cmpNode->arg1, cmpNode->arg2, false);
+}
+
 bool Optimizer::getEquiJoinKeys(BoolExprNode* boolean,
 								NestConst<ValueExprNode>* node1,
-								NestConst<ValueExprNode>* node2,
-								bool needCast)
+								NestConst<ValueExprNode>* node2)
 {
 	auto cmpNode = nodeAs<ComparativeBoolNode>(boolean);
 	if (!cmpNode || (cmpNode->blrOp != blr_eql && cmpNode->blrOp != blr_equiv))
@@ -2840,7 +2827,7 @@ bool Optimizer::getEquiJoinKeys(BoolExprNode* boolean,
 	auto arg1 = cmpNode->arg1;
 	auto arg2 = cmpNode->arg2;
 
-	if (!getEquiJoinKeys(arg1, arg2, needCast))
+	if (!getEquiJoinKeys(arg1, arg2, true))
 		return false;
 
 	*node1 = arg1;
@@ -3000,10 +2987,12 @@ BoolExprNode* Optimizer::makeInferenceNode(BoolExprNode* boolean,
 
 	// Share impure area for cached invariant value used to hold pre-compiled
 	// pattern for new LIKE and CONTAINING algorithms.
+	// Cached pattern matcher also should be shared by both nodes, else new node
+	// could overwrite impure area at offset zero. See bug GH-7276.
 	// Proper cloning of impure area for this node would require careful accounting
 	// of new invariant dependencies - we avoid such hassles via using single
 	// cached pattern value for all node clones. This is faster too.
-	if (newCmpNode->nodFlags & ExprNode::FLAG_INVARIANT)
+	if (newCmpNode->nodFlags & (ExprNode::FLAG_INVARIANT | ExprNode::FLAG_PATTERN_MATCHER_CACHE))
 		newCmpNode->impureOffset = cmpNode->impureOffset;
 
 	// But substitute new values for some of the predicate arguments
@@ -3169,6 +3158,8 @@ ValueExprNode* Optimizer::optimizeLikeSimilar(ComparativeBoolNode* cmpNode)
 
 		MoveBuffer prefixBuffer;
 		ULONG charLen = 0;
+		bool specialCharFound = false;
+		FB_SIZE_T prevPrefixSize = 0;
 
 		while (IntlUtil::readOneChar(matchCharset, &patternPtr, patternEnd, &charLen))
 		{
@@ -3183,9 +3174,36 @@ ValueExprNode* Optimizer::optimizeLikeSimilar(ComparativeBoolNode* cmpNode)
 				}
 			}
 			else if (charLen == 1 && SimilarToRegex::isSpecialChar(*patternPtr))
-				break;
+			{
+				const auto patternChar = *patternPtr;
 
-			prefixBuffer.push(patternPtr, charLen);
+				// If there are any branches, we assume there is no commom prefix.
+				if (patternChar == '|')
+					return nullptr;
+
+				if (!specialCharFound)
+				{
+					switch (patternChar)
+					{
+						// These patterns may make the previous char optional.
+						case '*':
+						case '?':
+						case '{':
+							prefixBuffer.resize(prevPrefixSize);
+							break;
+					}
+
+					specialCharFound = true;
+				}
+
+				break;
+			}
+
+			if (!specialCharFound)
+			{
+				prevPrefixSize = prefixBuffer.getCount();
+				prefixBuffer.push(patternPtr, charLen);
+			}
 		}
 
 		if (prefixBuffer.isEmpty())

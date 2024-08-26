@@ -189,9 +189,9 @@ Service::Validate::Validate(Service* svc)
 {
 	sharedGuard.enter();
 
-	if (!svc->locateInAllServices())
+	if (! (svc && svc->locateInAllServices()))
 	{
-		// Service is so old that it's even missing in allServices array
+		// Service is null or so old that it's even missing in allServices array
 		Arg::Gds(isc_bad_svc_handle).raise();
 	}
 
@@ -522,6 +522,7 @@ void Service::setServiceStatus(const ISC_STATUS* status_vector)
 	}
 
 	Arg::StatusVector passed(status_vector);
+	MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 	ERR_post_nothrow(passed, &svc_status);
 }
 
@@ -546,6 +547,7 @@ void Service::setServiceStatus(const USHORT facility, const USHORT errcode,
 		put_status_arg(status, args.getCell(loop));
 	}
 
+	MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 	ERR_post_nothrow(status, &svc_status);
 }
 
@@ -581,14 +583,9 @@ void Service::hidePasswd(ArgvType&, int)
 	// no action
 }
 
-const FbStatusVector* Service::getStatus()
+Service::StatusAccessor Service::getStatusAccessor()
 {
-	return &svc_status;
-}
-
-void Service::initStatus()
-{
-	svc_status->init();
+	return StatusAccessor(svc_status_mutex, &svc_status, this);
 }
 
 void Service::checkService()
@@ -701,7 +698,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	svc_username(getPool()), svc_sql_role(getPool()), svc_auth_block(getPool()),
 	svc_expected_db(getPool()), svc_trusted_role(false), svc_utf8(false),
 	svc_switches(getPool()), svc_perm_sw(getPool()), svc_address_path(getPool()),
-	svc_command_line(getPool()),
+	svc_command_line(getPool()), svc_parallel_workers(0),
 	svc_network_protocol(getPool()), svc_remote_address(getPool()), svc_remote_process(getPool()),
 	svc_remote_pid(0), svc_trace_manager(NULL), svc_crypt_callback(crypt_callback),
 	svc_existence(FB_NEW_POOL(*getDefaultMemoryPool()) SvcMutex(this)),
@@ -711,7 +708,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	, svc_debug(false)
 #endif
 {
-	initStatus();
+	svc_status->init();
 
 	{	// scope
 		// Account service block in global array
@@ -731,6 +728,8 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 		if (svcname == "@@@")
 			svc_debug = true;
 #endif
+		// Could be overrided in SPB
+		svc_parallel_workers = Config::getParallelWorkers();
 
 		// Process the service parameter block.
 		ClumpletReader spb(ClumpletReader::spbList, spb_data, spb_length, spbVersionError);
@@ -1533,6 +1532,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 		throw;
 	}
 
+	// no need locking svc_status_mutex - check single element of status vector
 	return svc_status[1];
 }
 
@@ -2091,7 +2091,10 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 	parseSwitches();
 
 	// The service block can be reused hence init a status vector.
-	initStatus();
+	{
+		MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
+		svc_status->init();
+	}
 
 	if (serv->serv_thd)
 	{
@@ -2147,7 +2150,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 		throw;
 	}
 
-	if (this->svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_START))
+	if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_START))
 	{
 		TraceServiceImpl service(this);
 		this->svc_trace_manager->event_service_start(&service,
@@ -2176,7 +2179,10 @@ void Service::readFbLog()
 	{
 		if (file != NULL)
 		{
-			initStatus();
+			{
+				MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
+				svc_status->init();
+			}
 			started();
 			svc_started = true;
 			TEXT buffer[100];
@@ -2195,6 +2201,7 @@ void Service::readFbLog()
 
 		if (!file || (file && ferror(file)))
 		{
+			MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 			(Arg::Gds(isc_sys_request) << Arg::Str(file ? "fgets" : "fopen") <<
 										  SYS_ERR(errno)).copyTo(&svc_status);
 			if (!svc_started)
@@ -2206,6 +2213,8 @@ void Service::readFbLog()
 	catch (const Firebird::Exception& e)
 	{
 		setDataMode(false);
+
+		MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 		e.stuffException(&svc_status);
 	}
 
@@ -2606,6 +2615,8 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 	string nbk_database, nbk_file, nbk_guid;
 	int nbk_level = -1;
 
+	bool cleanHistory = false, keepHistory = false;
+
 	bool val_database = false;
 	bool found = false;
 	string::size_type userPos = string::npos;
@@ -2674,6 +2685,30 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 					return false;
 				}
 				get_action_svc_string(spb, switches);
+				break;
+
+			case isc_spb_nbk_clean_history:
+				if (cleanHistory)
+				{
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_nbk_clean_history")).raise();
+				}
+				if (!get_action_svc_parameter(spb.getClumpTag(), nbackup_action_in_sw_table, switches))
+				{
+					return false;
+				}
+				cleanHistory = true;
+				break;
+
+			case isc_spb_nbk_keep_days:
+			case isc_spb_nbk_keep_rows:
+				if (keepHistory)
+				{
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_nbk_keep_days or isc_spb_nbk_keep_rows")).raise();
+				}
+				switches += "-KEEP ";
+				get_action_svc_data(spb, switches, false);
+				switches += spb.getClumpTag() == isc_spb_nbk_keep_days ? "DAYS " : "ROWS ";
+				keepHistory = true;
 				break;
 
 			default:
@@ -3175,6 +3210,16 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			}
 			else
 				switches += nbk_guid;
+
+			if (!cleanHistory && keepHistory)
+			{
+				(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_nbk_clean_history")).raise();
+			}
+
+			if (cleanHistory && !keepHistory)
+			{
+				(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_nbk_keep_days or isc_spb_nbk_keep_rows")).raise();
+			}
 		}
 		switches += nbk_database;
 		switches += nbk_file;

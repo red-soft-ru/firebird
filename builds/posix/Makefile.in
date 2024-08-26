@@ -83,12 +83,19 @@ LTC_LDFLAGS='-L$(LIB) $(subst $,$$$$,$(call LIB_LINK_RPATH,lib))'
 endif
 endif
 
+# correct build type for cmake builds
+FB_CMAKE_BUILD_TYPE=$(TARGET)
+ifeq ($(FB_CMAKE_BUILD_TYPE),Native)
+  FB_CMAKE_BUILD_TYPE=Release
+endif
+
+
 .PHONY:	master_process cross_process firebird Debug Release external
 
 all:	firebird
 
 firebird:
-	$(MAKE) TARGET=$(DefaultTarget) $(Process)
+	$(MAKE) TARGET?=$(DefaultTarget) $(Process)
 
 Release:
 	$(MAKE) TARGET=Release $(Process)
@@ -105,16 +112,24 @@ Debug:
 #
 
 .PHONY: updateCloopInterfaces updateBuildNum
-
-IDL_ROOT=$(SRC_ROOT)/include/firebird
+INCLD_ROOT=$(SRC_ROOT)/include
+IDL_ROOT=$(INCLD_ROOT)/firebird
 IDL_FILE=$(IDL_ROOT)/FirebirdInterface.idl
 API_H_FILE=$(IDL_ROOT)/IdlFbInterfaces.h
-API_PAS_FILE=$(SRC_ROOT)/include/gen/Firebird.pas
+API_PAS_FILE=$(INCLD_ROOT)/gen/Firebird.pas
+API_C_HEADER=fb_c_api.h
+API_C_H_FILE=$(FIREBIRD)/include/firebird/$(API_C_HEADER)
+API_C_TMP_FILE=$(TMP_ROOT)/fb_c_api.tmp
+API_C_IMPL_FILE=$(INCLD_ROOT)/gen/fb_c_api.c
+API_C_TEMPLATE=$(IDL_ROOT)/fb_c_api.hdr
+API_C_LIBRARY=$(LIB)/libfb_c_api.a
+API_C_TMP_OBJ=$(TMP_ROOT)/fb_c_api.obj
 MISC=$(SRC_ROOT)/misc
 PAS_ROOT=$(MISC)/pascal
 PASCAL_SOURCES=$(wildcard $(PAS_ROOT)/*)
 TMP_FUNCS_PAS=$(TMP_ROOT)/func.pas
-XPB_CONSTS=$(SRC_ROOT)/include/firebird/impl/consts_pub.h
+XPB_CONSTS=$(INCLD_ROOT)/firebird/impl/consts_pub.h
+INF_CONSTS=$(INCLD_ROOT)/firebird/impl/inf_pub.h
 ERR_CONSTS_PAS=$(SRC_ROOT)/misc/pascal/gds_codes.pas
 RPL_AWK=$(GEN_ROOT)/def_awk
 RPL_AWK_SRC=$(MISC)/def_awk.c
@@ -125,6 +140,15 @@ updateCloopInterfaces : $(API_H_FILE) $(API_PAS_FILE)
 
 $(API_H_FILE): $(IDL_FILE)
 	$(CLOOP) $< c++ $@ IDL_FB_INTERFACES_H Firebird I
+
+$(API_C_TMP_FILE): $(IDL_FILE)
+	$(CLOOP) $< c-header $@ FB_C_API_H I
+
+$(API_C_H_FILE): $(API_C_TEMPLATE) $(API_C_TMP_FILE)
+	cat $(API_C_TEMPLATE) $(API_C_TMP_FILE) >$(API_C_H_FILE)
+
+$(API_C_IMPL_FILE): $(IDL_FILE)
+	$(CLOOP) $< c-impl $@ $(API_C_HEADER) I
 
 #
 # This way firebird.pas can be created not using own mini-utilities.
@@ -142,14 +166,15 @@ $(RPL_AWK):	$(RPL_AWK_SRC)
 $(RPL_GREP): $(RPL_GREP_SRC)
 	$(CC) -o $@ $^
 
-$(TMP_ROOT)/iberror.pas: $(BUILD_FILE) $(ERR_CONSTS_PAS) $(SRC_ROOT)/include/firebird/impl/msg/*.h
+$(TMP_ROOT)/iberror.pas: $(BUILD_FILE) $(ERR_CONSTS_PAS) $(INCLD_ROOT)/firebird/impl/msg/*.h
 	$(BUILD_FILE) -p $(TMP_ROOT)/iberror_codes.pas
 	cp $(ERR_CONSTS_PAS) $(TMP_ROOT)/iberror.pas
 	cat $(TMP_ROOT)/iberror_codes.pas >> $(TMP_ROOT)/iberror.pas
 
-$(TMP_FUNCS_PAS): $(PASCAL_SOURCES) $(XPB_CONSTS) $(TMP_ROOT)/iberror.pas $(RPL_AWK) $(RPL_GREP)
+$(TMP_FUNCS_PAS): $(PASCAL_SOURCES) $(XPB_CONSTS) $(INF_CONSTS) $(TMP_ROOT)/iberror.pas $(RPL_AWK) $(RPL_GREP)
 	cp $(PAS_ROOT)/fb_get_master_interface.pas $(TMP_FUNCS_PAS)
 	$(RPL_AWK) <$(XPB_CONSTS) >>$(TMP_FUNCS_PAS)
+	$(RPL_AWK) <$(INF_CONSTS) >>$(TMP_FUNCS_PAS)
 	$(RPL_GREP) <$(TMP_ROOT)/iberror.pas >>$(TMP_FUNCS_PAS)
 
 $(API_PAS_FILE): $(IDL_FILE) $(PASCAL_SOURCES) $(TMP_FUNCS_PAS)
@@ -174,24 +199,31 @@ $(GEN_ROOT)/Make.Version : $(SRC_ROOT)/misc/writeBuildNum.sh
 #
 
 external:
-	CC="$(CC)" CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/btyacc
-	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop
+ifeq ($(CLIENT_ONLY_FLG),N)
+	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/btyacc
+endif
 
-	CC="$(CC)" CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/decNumber
-	ln -sf $(ROOT)/extern/decNumber/libdecFloat.a $(LIB)
+	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" LD_FLAGS="$(WLDFLAGS)" $(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop core
+
+	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/decNumber
+	ln -sf $(ROOT)/extern/decNumber/libdecFloat.a $(STATIC_LIB)
 
 ifeq ($(ABSEIL_BUILD_FLG),Y)
 	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(ROOT)/extern/int128/absl/numeric
-	ln -sf $(ROOT)/extern/int128/absl/numeric/libi128.a $(LIB)
+	ln -sf $(ROOT)/extern/int128/absl/numeric/libi128.a $(STATIC_LIB)
 endif
 
+ifeq ($(CLIENT_ONLY_FLG),N)
 ifeq ($(RE2_BUILD_FLG),Y)
-	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS) -O3 -g -fPIC" $(MAKE) -C $(ROOT)/extern/re2
-	ln -sf $(ROOT)/extern/re2/obj/libre2.a $(LIB)
+	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS) -O3 -g -fPIC" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/re2
+	ln -sf $(ROOT)/extern/re2/obj/libre2.a $(STATIC_LIB)
+endif
+
+	$(MAKE) libcds
 endif
 
 ifeq ($(TOMMATH_BUILD_FLG),Y)
-	CC="$(CC)" CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/libtommath -f makefile.shared GCC=$(GCC)
+	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/libtommath -f makefile.shared GCC="$(CC)"
 
 ifeq ($(PLATFORM),DARWIN)
 	install_name_tool -id "@rpath/lib/libtommath.dylib" $(TOMMATH)/.libs/libtommath.0.dylib
@@ -203,7 +235,7 @@ endif
 endif
 
 ifeq ($(TOMCRYPT_BUILD_FLG),Y)
-	CC="$(CC)" CFLAGS="$(CFLAGS) $(TOM2TOM_CFLAGS)" $(MAKE) -C $(ROOT)/extern/libtomcrypt -f makefile.shared GCC=$(GCC) LTC_LDFLAGS=$(LTC_LDFLAGS)
+	CC="$(CC)" CFLAGS="$(CFLAGS) $(TOM2TOM_CFLAGS)" $(MAKE) -C $(ROOT)/extern/libtomcrypt -f makefile.shared GCC="$(CC)" LTC_LDFLAGS=$(LTC_LDFLAGS)
 
 ifeq ($(PLATFORM),DARWIN)
 	install_name_tool -id "@rpath/lib/libtomcrypt.dylib" $(TOMCRYPT)/.libs/libtomcrypt.1.dylib
@@ -214,9 +246,11 @@ else
 endif
 endif
 
+ifeq ($(CLIENT_ONLY_FLG),N)
 ifeq ($(STD_EDITLINE),false)
 ifeq ($(EDITLINE_FLG),Y)
-	CC="$(CC)" CFLAGS="$(CFLAGS)" $(MAKE) -f $(GEN_ROOT)/Makefile.extern.editline
+	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -f $(GEN_ROOT)/Makefile.extern.editline
+endif
 endif
 endif
 
@@ -235,7 +269,7 @@ export_lists: $(ALLVERS)
 #
 
 .PHONY:	tommath
-TOMMATH_LIB=$(LIB)/libtommath.a
+TOMMATH_LIB=$(STATIC_LIB)/libtommath.a
 TOM_Objs=$(addprefix ../extern/libtommath/,$(call doObjects,$(call dirFiles,../extern/libtommath)))
 
 tommath:	$(TOMMATH_LIB)
@@ -249,7 +283,7 @@ $(TOMMATH_LIB):	$(TOM_Objs)
 #
 
 .PHONY:	tomcrypt
-TOMCRYPT_LIB=$(LIB)/libtomcrypt.a
+TOMCRYPT_LIB=$(STATIC_LIB)/libtomcrypt.a
 
 TOM_Src:=$(shell find ../extern/libtomcrypt/src -name '*.c' -print)
 TOM_Objs=$(call doObjects,$(TOM_Src))
@@ -265,7 +299,7 @@ $(TOMCRYPT_LIB):	$(TOM_Objs)
 #
 
 .PHONY:	re2
-RE2_LIB:=$(LIB)/libre2.a
+RE2_LIB:=$(STATIC_LIB)/libre2.a
 RE2_DIR:=../extern/re2/
 
 RE2_Util:=rune.cc strutil.cc
@@ -280,6 +314,23 @@ $(RE2_LIB):	$(RE2_Objs)
 	$(STATICLIB_LINK) $@ $^
 
 #___________________________________________________________________________
+# libcds
+#
+
+.PHONY:	libcds
+libcds:
+	mkdir -p $(LIBCDS)/lib/$(TARGET)
+	cd $(LIBCDS)/lib/$(TARGET); \
+	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCMAKE_CXX_FLAGS=-fPIC $(LIBCDS)
+	AR="$(AR)" $(MAKE) -C $(LIBCDS)/lib/$(TARGET)
+
+ifeq ($(TARGET),Debug)
+	ln -sf $(LIBCDS)/lib/$(TARGET)/bin/libcds-s_d.a $(STATIC_LIB)/libcds.a
+else
+	ln -sf $(LIBCDS)/lib/$(TARGET)/bin/libcds-s.a $(STATIC_LIB)/libcds.a
+endif
+
+#___________________________________________________________________________
 # main build target for both debug and release builds
 #
 
@@ -291,8 +342,16 @@ master_process:
 	$(MAKE) export_lists
 	$(MAKE) external
 	$(MAKE) updateCloopInterfaces
-	$(MAKE) boot
+	$(MAKE) rest
 	$(MAKE) yvalve
+ifeq ($(CLIENT_ONLY_FLG),Y)
+ifeq ($(WITH_TOMCRYPT),Y)
+	$(MAKE) chacha
+endif
+	$(MAKE) include_generic
+endif
+ifeq ($(CLIENT_ONLY_FLG),N)
+	$(MAKE) boot
 	$(MAKE) engine
 	$(MAKE) fbintl
 	$(MAKE) utilities
@@ -305,7 +364,7 @@ master_process:
 	(cd $(BIN); $(LN) $(notdir $(GPRE)) $(notdir $(GPRE_CURRENT)))
 	$(MAKE) plugins
 	$(MAKE) examples
-	$(MAKE) rest
+endif
 
 
 cross_process:
@@ -318,6 +377,7 @@ cross1:
 	$(MAKE) export_lists
 	$(MAKE) external
 	$(MAKE) updateCloopInterfaces
+ifeq ($(CLIENT_ONLY_FLG),N)
 	$(MAKE) boot
 	$(MAKE) yvalve
 	$(MAKE) engine
@@ -332,25 +392,39 @@ cross1:
 	(cd $(BIN); $(LN) $(notdir $(RUN_GPRE)) $(notdir $(GPRE_CURRENT)))
 	$(MAKE) include_generic
 	$(MAKE) -f Makefile.examples -C $(GEN_ROOT)/examples/
+endif
 
 cross2:
 	ln -sf $(SRC_ROOT)/include/cross/$(CROSS_CONFIG) $(SRC_ROOT)/include/gen/autoconfig.h
 	$(MAKE) prerequisites
 	$(MAKE) tommath
+ifeq ($(WITH_TOMCRYPT),Y)
 	$(MAKE) LTCSOURCE=-DLTC_SOURCE tomcrypt
+endif
+ifeq ($(CLIENT_ONLY_FLG),N)
 	$(MAKE) re2
-	CC="$(CC)" CFLAGS="$(CFLAGS)" $(MAKE) -C $(ROOT)/extern/decNumber
-	ln -sf $(ROOT)/extern/decNumber/libdecFloat$(CROSS).a $(LIB)
+	$(MAKE) libcds
+endif
+	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/decNumber
+	ln -sf $(ROOT)/extern/decNumber/libdecFloat$(CROSS).a $(STATIC_LIB)
 	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(ROOT)/extern/int128/absl/numeric
-	ln -sf $(ROOT)/extern/int128/absl/numeric/libi128$(CROSS).a $(LIB)
+	ln -sf $(ROOT)/extern/int128/absl/numeric/libi128$(CROSS).a $(STATIC_LIB)
+	$(MAKE) cross_rest
 	$(MAKE) yvalve
+ifeq ($(CLIENT_ONLY_FLG),Y)
+ifeq ($(WITH_TOMCRYPT),Y)
+	$(MAKE) chacha
+endif
+	$(MAKE) include_generic
+endif
+ifeq ($(CLIENT_ONLY_FLG),N)
 	$(MAKE) engine
 	$(MAKE) fbintl
 	$(MAKE) utilities
 	$(MAKE) $(GPRE)
 	$(MAKE) plugins
 	$(MAKE) -f Makefile.plugins_examples
-	$(MAKE) cross_rest
+endif
 
 
 #___________________________________________________________________________
@@ -362,7 +436,7 @@ $(COMMON_LIB):	$(Common_Objects)
 	$(STATICLIB_LINK) $@ $^
 
 $(COMMON_TEST): $(Common_Test_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ -L$(LIB) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ -L$(LIB) -L$(STATIC_LIB) $(LINK_LIBS)
 
 #___________________________________________________________________________
 # gpre_boot
@@ -371,7 +445,7 @@ $(COMMON_TEST): $(Common_Test_Objects) $(COMMON_LIB)
 boot: $(GPRE_BOOT)
 
 $(GPRE_BOOT):	$(GPRE_Boot_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ -L$(LIB) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ -L$(LIB) -L$(STATIC_LIB) $(LINK_LIBS)
 	-$(RM) $(GPRE_CURRENT)
 	(cd $(@D); $(LN) $(@F) $(notdir $(GPRE_CURRENT)))
 
@@ -432,7 +506,7 @@ gpre: $(GPRE) databases
 $(GPRE):	$(GPRE_Objects) $(COMMON_LIB)
 	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
 
-SECURITY_FDB = $(FIREBIRD)/security5.fdb
+SECURITY_FDB = $(FIREBIRD)/security6.fdb
 SECURITY_TMP = security.tmp
 
 databases:		yachts.lnk $(SECURITY_FDB)
@@ -511,7 +585,7 @@ $(FBTRACEMGR):	$(FBTRACEMGR_Objects) $(COMMON_LIB)
 gbak:			$(GBAK)
 
 $(GBAK):		$(GBAK_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(RE2LIB)
 
 gsplit:			$(GSPLIT)
 
@@ -538,6 +612,9 @@ isql:			$(ISQL)
 $(ISQL):		$(ISQL_Objects) $(COMMON_LIB)
 	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LIBEDITLINE) $(TERMLIB) $(LINK_LIBS)
 
+$(ISQL_TEST): $(filter-out $(call makeObjects,isql,main.cpp), $(ISQL_Objects)) $(ISQL_Test_Objects) $(COMMON_LIB)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LIBEDITLINE) $(TERMLIB) $(LINK_LIBS)
+
 nbackup:		$(NBACKUP)
 
 $(NBACKUP):		$(NBACKUP_Objects) $(COMMON_LIB)
@@ -556,7 +633,7 @@ SRP_USER_MANAGER = $(call makePluginName,Srp)
 FBTRACE = $(call makePluginName,fbtrace)
 AUTH_DEBUGGER = $(call makePluginName,Auth_Debug)
 UDF_BACKWARD_COMPATIBILITY_BASENAME = $(LIB_PREFIX)udf_compat.$(SHRLIB_EXT)
-UDF_BACKWARD_COMPATIBILITY = $(PLUGINS)/udr/$(UDF_BACKWARD_COMPATIBILITY_BASENAME)
+UDF_BACKWARD_COMPATIBILITY ?= $(call buildSubDirectory,plugins/udr)/$(UDF_BACKWARD_COMPATIBILITY_BASENAME)
 CHACHA = $(call makePluginName,ChaCha)
 PROFILER = $(call makePluginName,Default_Profiler)
 
@@ -579,7 +656,7 @@ $(UDR_PLUGIN):	$(UDRENG_Objects) $(COMMON_LIB)
 legacy_user_management:	$(LEGACY_USER_MANAGER)
 
 $(LEGACY_USER_MANAGER):	$(LEGACY_USERS_MANAGE_Objects) $(COMMON_LIB)
-	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
+	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(RE2LIB) $(FIREBIRD_LIBRARY_LINK)\
  $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libLegacy_UserManager.$(SHRLIB_EXT))
 
 chacha:	$(CHACHA)
@@ -603,7 +680,7 @@ $(PROFILER):	$(Profiler_Objects) $(COMMON_LIB)
 trace:	$(FBTRACE)
 
 $(FBTRACE):	$(FBTRACE_UTIL_Objects) $(COMMON_LIB)
-	$(LINK_TRACE) -o $@ $^ $(FIREBIRD_LIBRARY_LINK) $(LINK_TRACE_LIBS) $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libfbtrace.$(SHRLIB_EXT))
+	$(LINK_TRACE) -o $@ $^ $(RE2LIB) $(FIREBIRD_LIBRARY_LINK) $(LINK_TRACE_LIBS) $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libfbtrace.$(SHRLIB_EXT))
 
 auth_debug:	$(AUTH_DEBUGGER)
 
@@ -630,15 +707,15 @@ $(COMPAT_SQL):	$(SRC_COMPAT_SQL)
 # all the rest we need to build
 #
 
-.PHONY:	message_file tzdata gbak_files
+.PHONY:	message_file tzdata gbak_files api_c_library
 
 FDB_FILES := $(SECURITY_FDB) $(FIREBIRD)/examples/empbuild/employee.fdb
 GBAK_FILES := $(FDB_FILES:.fdb=.gbak)
 GBAK_FILES := $(subst Native,$(TARGET),$(GBAK_FILES))
 
-rest:	message_file tzdata
+rest:	tzdata api_c_library
 
-cross_rest:
+cross_rest: tzdata
 	$(MAKE) $(BUILD_FILE)
 
 examples: include_generic
@@ -651,16 +728,24 @@ $(FIREBIRD_MSG) $(FIREBIRD)/include/firebird/impl/iberror_c.h:	$(BUILD_FILE)
 	$(BUILD_FILE) -f $(FIREBIRD_MSG) -c $(FIREBIRD)/include/firebird/impl/iberror_c.h
 	$(CHMOD_6) $(FIREBIRD_MSG)
 
-tzdata: $(FIREBIRD)/tzdata
+tzdata: $(TZDATA)/ids.dat
 
-$(FIREBIRD)/tzdata: $(ROOT)/extern/icu/tzdata/$(TZDATA_ZIP)
-	mkdir -p $(FIREBIRD)/tzdata
-	unzip -o $(ROOT)/extern/icu/tzdata/$(TZDATA_ZIP) -d $(FIREBIRD)/tzdata
+$(TZDATA)/ids.dat: $(ROOT)/extern/icu/tzdata/$(TZDATA_ZIP)
+	unzip -o $(ROOT)/extern/icu/tzdata/$(TZDATA_ZIP) -d $(TZDATA)
+	touch $(TZDATA)/ids.dat
 
 $(BUILD_FILE):	$(BUILD_Objects)
 	$(EXE_LINK) $(EXE_LINK_OPTIONS) $(LSB_UNDEF) $^ -o $@
 
 gbak_files: $(GBAK_FILES)
+
+api_c_library: $(API_C_LIBRARY)
+
+$(API_C_LIBRARY): $(API_C_IMPL_FILE) $(API_C_H_FILE) $(FIREBIRD_MSG)	# use $(FIREBIRD_MSG) as timemark for iberror_c.h
+	$(CC) $(WCFLAGS) -I$(FIREBIRD)/include -c $(API_C_IMPL_FILE) -o $(API_C_TMP_OBJ)
+	-$(RM) $@
+	$(STATICLIB_LINK) $@ $(API_C_TMP_OBJ)
+
 
 #---------------------------------------------------------------------------
 
@@ -729,29 +814,34 @@ install install-embedded silent_install package packages dist:
 
 .PHONY:	tests tests_process run_tests run_tests_process
 
-tests:
-	$(MAKE) TARGET=$(DefaultTarget) tests_process
+log_level ?= all
 
-tests_process: $(COMMON_TEST) $(ENGINE_TEST)
+tests:
+	$(MAKE) TARGET?=$(DefaultTarget) tests_process
+
+tests_process: $(COMMON_TEST) $(ENGINE_TEST) $(ISQL_TEST)
 
 run_tests:
-	$(MAKE) TARGET=$(DefaultTarget) run_tests_process
+	$(MAKE) TARGET?=$(DefaultTarget) LOG_LEVEL?=$(log_level) run_tests_process
 
 run_tests_process: tests_process
-	$(COMMON_TEST) --log_level=all
-	$(ENGINE_TEST) --log_level=all
+	$(COMMON_TEST) --log_level=$(LOG_LEVEL)
+	$(ENGINE_TEST) --log_level=$(LOG_LEVEL)
+	$(ISQL_TEST) --log_level=$(LOG_LEVEL)
 
 
 #___________________________________________________________________________
 # various cleaning
 #
-.PHONY: clean clean_objects clean_dependancies clean_extern_objects clean_build \
+.PHONY: clean clean_process clean_objects clean_dependancies clean_extern_objects clean_build \
 		clean_gpre_gen clean_icu clean_dbs clean_examples clean_makefiles \
 		clean_editline clean_all clean_decfloat clean_int128 clean_vers clean_misc
 
+clean:
+	$(MAKE) TARGET?=$(DefaultTarget) clean_process
 
-clean: clean_objects clean_dependancies clean_extern_objects clean_build \
-		clean_yacc_gen clean_gpre_gen clean_dbs clean_examples clean_tommath \
+clean_process: clean_objects clean_dependancies clean_extern_objects clean_build \
+		clean_yacc_gen clean_gpre_gen clean_dbs clean_examples clean_cds clean_tommath \
 		clean_tomcrypt clean_decfloat clean_int128 clean_vers clean_misc
 
 clean_vers:
@@ -760,6 +850,7 @@ clean_vers:
 clean_misc:
 	$(RM) security.tmp test.header.txt
 	$(RM) $(TMP_FUNCS_PAS) $(RPL_AWK) $(RPL_GREP)
+	$(TOUCH) -c -t 200001010000 $(API_H_FILE) $(API_PAS_FILE)
 
 
 ifeq ($(EDITLINE_FLG),Y)
@@ -796,6 +887,9 @@ clean_editline:
 
 #clean_icu:
 #	-$(MAKE) -C $(ROOT)/extern/icu/source clean
+
+clean_cds:
+	-$(RM_R) $(LIBCDS)/lib/$(TARGET)
 
 clean_tommath:
 	-$(MAKE) -C $(ROOT)/extern/libtommath clean
@@ -846,7 +940,7 @@ clean_gpre_gen:
 	-$(RM) -f `find $(TMP_ROOT)/ -type f -name '*.cpp' -print`
 
 clean_yacc_gen:
-	$(RM) $(ROOT)/src/dsql/parse.cpp $(ROOT)/src/dsql/dsql.tab.h types.y y.*
+	$(RM) $(ROOT)/src/dsql/parse.cpp $(ROOT)/src/dsql/dsql.tab.h types.y y.* $(OBJ)/.parse-gen-sentinel
 
 #___________________________________________________________________________
 # Extra platform specific targets

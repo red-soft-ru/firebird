@@ -406,7 +406,7 @@ namespace Firebird {
 				return !(*this == s);
 			}
 
-			iterator& operator= (iterator& i)
+			iterator& operator= (const iterator& i)
 			{
 				stk = i.stk;
 				elem = i.elem;
@@ -655,7 +655,7 @@ namespace Firebird {
 			}
 		}
 
-		FB_SIZE_T getCount() const throw()
+		FB_SIZE_T getCount() const noexcept
 		{
 			FB_SIZE_T rc = 0;
 			for (Entry* entry = stk; entry; entry = entry->next)

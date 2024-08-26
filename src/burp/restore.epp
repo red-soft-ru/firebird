@@ -27,6 +27,7 @@
  */
 
 #include "firebird.h"
+#include <optional>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -62,6 +63,7 @@
 #include "../auth/trusted/AuthSspi.h"
 #include "../common/dsc_proto.h"
 #include "../common/ThreadStart.h"
+#include "../common/msg_encode.h"
 
 using MsgFormat::SafeArg;
 using namespace Firebird;
@@ -98,8 +100,6 @@ const int DEFERRED_ACTIVE		= 3;	// RDB$INDEX_INACTIVE setting for Foreign Keys
 										// "inactive" state of ALL indices (gbak -i)
 										// -bsriram, 11-May-1999      BUG: 10016
 
-
-const int burp_msg_fac				= 12;
 
 enum scan_attr_t
 {
@@ -198,7 +198,7 @@ static inline UCHAR get(BurpGlobals* tdgbl)
 	return tdgbl->get();
 }
 
-static inline FB_BOOLEAN get_boolean(BurpGlobals* tdgbl, bool deprecated)
+static inline FB_BOOLEAN get_boolean(BurpGlobals* tdgbl, bool deprecated = false)
 {
 	if (!deprecated)
 	{
@@ -531,6 +531,40 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 		MISC_release_request_silent(req_handle1);
 	}
 
+	// If the default publication was backed up with non-default values,
+	// update the table accordingly.
+	// NOTE: This change should be performed in the last transaction
+	// of the restore process, to avoid generating a replication stream
+	// before the database is restored successfully.
+
+	if ((tdgbl->gbl_default_pub_active || tdgbl->gbl_default_pub_auto_enable) &&
+		tdgbl->runtimeODS >= DB_VERSION_DDL12)
+	{
+		FOR (REQUEST_HANDLE req_handle1)
+			PUB IN RDB$PUBLICATIONS
+			WITH PUB.RDB$PUBLICATION_NAME EQ DEFAULT_PUBLICATION
+		{
+			fb_assert(PUB.RDB$SYSTEM_FLAG != 0);
+
+			MODIFY PUB USING
+				PUB.RDB$ACTIVE_FLAG.NULL = FALSE;
+				PUB.RDB$ACTIVE_FLAG = tdgbl->gbl_default_pub_active ? 1 : 0;
+
+				PUB.RDB$AUTO_ENABLE.NULL = FALSE;
+				PUB.RDB$AUTO_ENABLE = tdgbl->gbl_default_pub_auto_enable ? 1 : 0;
+			END_MODIFY;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
+		}
+		END_FOR;
+		ON_ERROR
+			general_on_error();
+		END_ERROR;
+
+		MISC_release_request_silent(req_handle1);
+	}
+
 	// Add missing privileges
 	fix_missing_privileges(tdgbl);
 
@@ -578,8 +612,8 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 	dpb.insertByte(isc_dpb_force_write, tdgbl->hdr_forced_writes ? 1 : 0);
 
 	// set up the replica mode, if needed
-	if (tdgbl->gbl_sw_replica.isAssigned())
-		dpb.insertByte(isc_dpb_set_db_replica, tdgbl->gbl_sw_replica.value);
+	if (tdgbl->gbl_sw_replica.has_value())
+		dpb.insertByte(isc_dpb_set_db_replica, tdgbl->gbl_sw_replica.value());
 
 	Firebird::IAttachment* db_handle = provider->attachDatabase(&tdgbl->status_vector, database_name,
 		dpb.getBufferLength(), dpb.getBuffer());
@@ -591,10 +625,12 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 
 	if (!tdgbl->flag_on_line)
 	{
-		BURP_print(false, 246);
-		// msg 246 Database is not online due to failure to activate one or more indices.
-		BURP_print(false, 247);
-		// msg 247 Run gfix -online to bring database online without active indices.
+		FbLocalStatus st;
+		(Arg::Gds(ENCODE_ISC_MSG(246, burp_msg_fac)) << Arg::Gds(ENCODE_ISC_MSG(247, burp_msg_fac))).copyTo(&st);
+			// msg 246 Database is not online due to failure to activate one or more indices.
+			// msg 247 Run gfix -online to bring database online without active indices.
+		BURP_print_status(true, &st);
+
 		return FINI_DB_NOT_ONLINE;
 	}
 
@@ -859,7 +895,7 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 	bool forced_writes = true; // turned on by default
 	ULONG page_buffers = 0;
 	USHORT SQL_dialect = 0;
-	Nullable<ReplicaMode> replica_mode;
+	std::optional<ReplicaMode> replica_mode;
 
 	tdgbl->gbl_database_file_name = file_name;
 
@@ -948,7 +984,7 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 		tdgbl->gbl_sw_mode_val = db_read_only;
 	}
 
-	if (!tdgbl->gbl_sw_replica.isAssigned())
+	if (!tdgbl->gbl_sw_replica.has_value())
 		tdgbl->gbl_sw_replica = replica_mode;
 
 	if (tdgbl->gbl_sw_page_buffers)
@@ -1018,7 +1054,8 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 	}
 	else
 	{
-		dpb.insertInt(isc_dpb_parallel_workers, tdgbl->gbl_sw_par_workers);
+		if (tdgbl->gbl_sw_par_workers > 0)
+			dpb.insertInt(isc_dpb_parallel_workers, tdgbl->gbl_sw_par_workers);
 		dpb.insertByte(isc_dpb_shutdown, isc_dpb_shut_multi);
 	}
 	dpb.insertInt(isc_dpb_shutdown_delay, 0);
@@ -1051,6 +1088,11 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 	{
 		BURP_error_redirect(&status_vector, 33, SafeArg() << file_name);
 		// msg 33 failed to create database %s
+	}
+
+	if (status_vector->getState() & Firebird::IStatus::STATE_WARNINGS)
+	{
+		BURP_print_warning(&status_vector);
 	}
 
 	// get remote protocol version
@@ -1475,9 +1517,7 @@ void general_on_error()
 		newVector.append(oldVector);
 		newVector.copyTo(isc_status);
 	}
-	BURP_print_status (true, isc_status);
-
-	BURP_abort ();
+	BURP_abort (isc_status);
 }
 
 bool get_acl(BurpGlobals* tdgbl, const TEXT* owner_nm, ISC_QUAD* blob_id, ISC_QUAD* new_blob_id)
@@ -1850,6 +1890,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 			case blr_long:
 			case blr_quad:
 			case blr_int64:
+			case blr_int128:
 				add_byte(blr, field->fld_type);
 				add_byte(blr, field->fld_scale);
 				break;
@@ -2084,6 +2125,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 		case blr_long:
 		case blr_quad:
 		case blr_int64:
+		case blr_int128:
 			add_byte(blr, field->fld_type);
 			add_byte(blr, field->fld_scale);
 			break;
@@ -3043,8 +3085,7 @@ static void check_data_error(BurpGlobals* tdgbl, IStatus* status_vector, const b
 			// msg 114 restore failed for record in relation %s
 			BURP_print(false, 114, relation->rel_name);
 
-			BURP_print_status(false, status_vector);
-			BURP_print(false, 342);	// isc_gbak_invalid_data
+			BURP_print_status(false, status_vector, 342);	// isc_gbak_invalid_data
 		}
 		else
 			BURP_error_redirect(status_vector, 342);	// isc_gbak_invalid_data
@@ -3202,7 +3243,7 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 
 	FbLocalStatus status_vector;
 
-	ULONG length = req->getDataLength();
+	RCRD_LENGTH length = req->getDataLength();
 	UCHAR* buffer = req->getData();
 
 	//	BURP_verbose (124, relation->rel_name); // msg 124  restoring data for relation %s
@@ -3216,9 +3257,9 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 			BURP_free(data.lstr_address);
 	} );
 
-	ULONG old_length = 0;
+	RCRD_LENGTH old_length = 0;
 	IBatch* batch = req->getBatch();
-	UCHAR* sql = batch ? sql = req->getBatchMsgData() : nullptr;
+	UCHAR* sql = batch ? req->getBatchMsgData() : nullptr;
 	tdgbl->batchInlineBlobLimit = batch ? req->getBatchInlineBlobLimit() : 0;
 
 	FB_UINT64 records = 0;
@@ -3228,125 +3269,128 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 
 	try
 	{
-		while (!task->isStopped())
+		try
 		{
-			if (get(tdgbl) != att_data_length)
-				BURP_error_redirect(NULL, 39); // msg 39 expected record length
-
-			RCRD_LENGTH len = get_int32(tdgbl);
-
-			if (!tdgbl->gbl_sw_transportable && len != length)
+			while (!task->isStopped())
 			{
+				if (get(tdgbl) != att_data_length)
+					BURP_error_redirect(NULL, 39); // msg 39 expected record length
+
+				RCRD_LENGTH len = get_int32(tdgbl);
+
+				if (!tdgbl->gbl_sw_transportable && len != length)
+				{
 #ifdef sparc
-				if (!old_length)
-					old_length = recompute_length(tdgbl, relation);
+					if (!old_length)
+						old_length = recompute_length(tdgbl, relation);
 #endif
-				if (len != old_length)
-				{
-					BURP_error(40, true, SafeArg() << length << len);
-					// msg 40 wrong length record, expected %ld encountered %ld
-				}
-			}
-
-			UCHAR* p;
-			if (tdgbl->gbl_sw_transportable)
-			{
-				if (get(tdgbl) != att_xdr_length)
-				{
-					BURP_error_redirect(NULL, 55);
-					// msg 55 Expected XDR record length
-				}
-				else
-				{
-					data.lstr_length = len = get_int32(tdgbl);
-					if (len > data.lstr_allocated)
+					if (len != old_length)
 					{
-						data.lstr_allocated = len;
-						if (data.lstr_address)
-							BURP_free (data.lstr_address);
-						data.lstr_address = BURP_alloc(data.lstr_allocated);
-					}
-					p = data.lstr_address;
-				}
-			}
-			else
-				p = buffer;
-
-			if (get(tdgbl) != att_data_data)
-				BURP_error_redirect(NULL, 41); // msg 41 expected data attribute
-
-			if (tdgbl->gbl_sw_compress)
-				decompress(tdgbl, p, len);
-			else
-				get_block(tdgbl, p, len);
-
-			if (old_length)
-				realign(tdgbl, buffer, relation);
-
-			if (tdgbl->gbl_sw_transportable)
-			{
-				if (batch)
-				{
-					buffer = sql;
-					CAN_encode_decode(relation, &data, buffer, false, true);
-				}
-				else
-					CAN_encode_decode(relation, &data, buffer, false);
-			}
-
-			burp_fld* field;
-			for (field = relation->rel_fields; field; field = field->fld_next)
-			{
-				if (!(field->fld_flags & FLD_computed))
-				{
-					if (field->fld_type == blr_blob || (field->fld_flags & FLD_array))
-					{
-						ISC_QUAD* blob_id = (ISC_QUAD*)(buffer + field->fld_offset);
-						blob_id->gds_quad_high = 0;
-						blob_id->gds_quad_low = 0;
+						BURP_error(40, true, SafeArg() << length << len);
+						// msg 40 wrong length record, expected %ld encountered %ld
 					}
 				}
-			}
 
-			get_record(&record, tdgbl);
-			while (record == rec_blob || record == rec_array)
-			{
-				if (record == rec_blob)
-					get_blob(tdgbl, batch, relation->rel_fields, buffer);
-				else if (record == rec_array)
-					get_array(tdgbl, relation, buffer);
-				get_record(&record, tdgbl);
-			}
+				UCHAR* p;
+				if (tdgbl->gbl_sw_transportable)
+				{
+					if (get(tdgbl) != att_xdr_length)
+					{
+						BURP_error_redirect(NULL, 55);
+						// msg 55 Expected XDR record length
+					}
+					else
+					{
+						data.lstr_length = len = get_int32(tdgbl);
+						if (len > data.lstr_allocated)
+						{
+							data.lstr_allocated = len;
+							if (data.lstr_address)
+								BURP_free(data.lstr_address);
+							data.lstr_address = BURP_alloc(data.lstr_allocated);
+						}
+						p = data.lstr_address;
+					}
+				}
+				else
+					p = buffer;
 
-			if (batch && !tdgbl->gbl_sw_transportable)
-			{
+				if (get(tdgbl) != att_data_data)
+					BURP_error_redirect(NULL, 41); // msg 41 expected data attribute
+
+				if (tdgbl->gbl_sw_compress)
+					decompress(tdgbl, p, len);
+				else
+					get_block(tdgbl, p, len);
+
+				if (old_length)
+					realign(tdgbl, buffer, relation);
+
+				if (tdgbl->gbl_sw_transportable)
+				{
+					if (batch)
+					{
+						buffer = sql;
+						CAN_encode_decode(relation, &data, buffer, false, true);
+					}
+					else
+						CAN_encode_decode(relation, &data, buffer, false);
+				}
+
+				burp_fld* field;
 				for (field = relation->rel_fields; field; field = field->fld_next)
 				{
-					if (field->fld_flags & FLD_computed)
-						continue;
-
-					// convert record to SQL format
-
-					memcpy(&sql[field->fld_sql], &buffer[field->fld_offset], field->fld_total_len);
-					memcpy(&sql[field->fld_null], &buffer[field->fld_missing_offset], sizeof(SSHORT));
+					if (!(field->fld_flags & FLD_computed))
+					{
+						if (field->fld_type == blr_blob || (field->fld_flags & FLD_array))
+						{
+							ISC_QUAD* blob_id = (ISC_QUAD*) (buffer + field->fld_offset);
+							blob_id->gds_quad_high = 0;
+							blob_id->gds_quad_low = 0;
+						}
+					}
 				}
-			}
 
-			req->send(tdgbl, gds_trans, record != rec_data);
+				get_record(&record, tdgbl);
+				while (record == rec_blob || record == rec_array)
+				{
+					if (record == rec_blob)
+						get_blob(tdgbl, batch, relation->rel_fields, buffer);
+					else if (record == rec_array)
+						get_array(tdgbl, relation, buffer);
+					get_record(&record, tdgbl);
+				}
 
-			task->verbRecs(records, false);
-			if (record != rec_data)
-				break;
-		} // while (!task->isStopped())
-	}
-	catch (RestoreRelationTask::ExcReadDone&)
-	{
-		// its OK to ignore ExcReadDone exception
+				if (batch && !tdgbl->gbl_sw_transportable)
+				{
+					for (field = relation->rel_fields; field; field = field->fld_next)
+					{
+						if (field->fld_flags & FLD_computed)
+							continue;
+
+						// convert record to SQL format
+
+						memcpy(&sql[field->fld_sql], &buffer[field->fld_offset], field->fld_total_len);
+						memcpy(&sql[field->fld_null], &buffer[field->fld_missing_offset], sizeof(SSHORT));
+					}
+				}
+
+				req->send(tdgbl, gds_trans, record != rec_data);
+
+				task->verbRecs(records, false);
+				if (record != rec_data)
+					break;
+			} // while (!task->isStopped())
+		}
+		catch (RestoreRelationTask::ExcReadDone&)
+		{
+			if (batch)
+				req->execBatch(tdgbl);
+		}
 	}
 	catch (const FbException& ex)
 	{
-		BURP_print_status(true, ex.getStatus());
-		BURP_abort();
+		BURP_abort(ex.getStatus());
 	}
 
 	if (tdgbl->gbl_sw_incremental)
@@ -4340,6 +4384,7 @@ bool get_function(BurpGlobals* tdgbl)
 			X.RDB$OWNER_NAME.NULL = TRUE;
 			X.RDB$MODULE_NAME.NULL = TRUE;
 			X.RDB$ENTRYPOINT.NULL = TRUE;
+			X.RDB$RETURN_ARGUMENT.NULL = TRUE;
 
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 			X.RDB$SYSTEM_FLAG = 0;
@@ -4396,6 +4441,7 @@ bool get_function(BurpGlobals* tdgbl)
 					break;
 
 				case att_function_return_arg:
+					X.RDB$RETURN_ARGUMENT.NULL = FALSE;
 					X.RDB$RETURN_ARGUMENT = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -4555,6 +4601,7 @@ bool get_function(BurpGlobals* tdgbl)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_req_handle1)
 			X IN RDB$FUNCTIONS
+			X.RDB$RETURN_ARGUMENT.NULL = TRUE;
 			X.RDB$SYSTEM_FLAG = 0;
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 			X.RDB$DESCRIPTION.NULL = TRUE;
@@ -4590,6 +4637,7 @@ bool get_function(BurpGlobals* tdgbl)
 					break;
 
 				case att_function_return_arg:
+					X.RDB$RETURN_ARGUMENT.NULL = FALSE;
 					X.RDB$RETURN_ARGUMENT = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -4742,7 +4790,10 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 				break;
 
 			case att_functionarg_field_precision:
-				get_int32(tdgbl);
+				if (tdgbl->RESTORE_format >= 6)
+					get_int32(tdgbl);
+				else
+					bad_attribute(scan_next_attr, attribute, 90);
 				break;
 
 			case att_functionarg_package_name:
@@ -4804,6 +4855,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_arg_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
+			X.RDB$ARGUMENT_POSITION.NULL = TRUE;
 			X.RDB$FIELD_SUB_TYPE.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
 			X.RDB$FIELD_PRECISION.NULL = TRUE;
@@ -4847,6 +4899,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					break;
 
 				case att_functionarg_position:
+					X.RDB$ARGUMENT_POSITION.NULL = FALSE;
 					X.RDB$ARGUMENT_POSITION = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -5014,6 +5067,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_arg_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
+			X.RDB$ARGUMENT_POSITION.NULL = TRUE;
 			X.RDB$FIELD_SUB_TYPE.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
 			X.RDB$FIELD_PRECISION.NULL  = TRUE;
@@ -5031,6 +5085,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					break;
 
 				case att_functionarg_position:
+					X.RDB$ARGUMENT_POSITION.NULL = FALSE;
 					X.RDB$ARGUMENT_POSITION = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -5128,6 +5183,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_arg_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
+			X.RDB$ARGUMENT_POSITION.NULL = TRUE;
 			X.RDB$FIELD_SUB_TYPE.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
 
@@ -5144,6 +5200,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					break;
 
 				case att_functionarg_position:
+					X.RDB$ARGUMENT_POSITION.NULL = FALSE;
 					X.RDB$ARGUMENT_POSITION = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -6485,6 +6542,8 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 		X.RDB$FOREIGN_KEY.NULL = TRUE;
 		X.RDB$EXPRESSION_SOURCE.NULL = TRUE;
 		X.RDB$EXPRESSION_BLR.NULL = TRUE;
+		X.RDB$CONDITION_SOURCE.NULL = TRUE;
+		X.RDB$CONDITION_BLR.NULL = TRUE;
 		X.RDB$SYSTEM_FLAG = 0;
 		X.RDB$SYSTEM_FLAG.NULL = FALSE;
 
@@ -6566,6 +6625,26 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 					X.RDB$INDEX_INACTIVE = TRUE;
 				X.RDB$EXPRESSION_BLR.NULL = FALSE;
 				get_blr_blob (tdgbl, X.RDB$EXPRESSION_BLR, false);
+				break;
+
+			case att_index_condition_source:
+				if (tdgbl->RESTORE_format >= 11)
+				{
+					X.RDB$CONDITION_SOURCE.NULL = FALSE;
+					get_source_blob(tdgbl, X.RDB$CONDITION_SOURCE, false);
+				}
+				else
+					bad_attribute(scan_next_attr, attribute, 93);
+				break;
+
+			case att_index_condition_blr:
+				if (tdgbl->RESTORE_format >= 11)
+				{
+					X.RDB$CONDITION_BLR.NULL = FALSE;
+					get_blr_blob(tdgbl, X.RDB$CONDITION_BLR, false);
+				}
+				else
+					bad_attribute(scan_next_attr, attribute, 93);
 				break;
 
 			case att_index_foreign_key:
@@ -7436,8 +7515,6 @@ bool get_publication(BurpGlobals* tdgbl)
  *
  **************************************/
 	att_type attribute;
-	TEXT temp[GDS_NAME_LEN];
-	SSHORT len;
 	scan_attr_t scan_next_attr;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
@@ -7535,8 +7612,6 @@ bool get_pub_table(BurpGlobals* tdgbl)
  *
  **************************************/
 	att_type attribute;
-	TEXT temp[GDS_NAME_LEN];
-	SSHORT len;
 	scan_attr_t scan_next_attr;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
@@ -8196,8 +8271,8 @@ bool get_sql_roles(BurpGlobals* tdgbl)
 			X.RDB$ROLE_NAME.NULL = TRUE;
 			X.RDB$OWNER_NAME.NULL = TRUE;
 			X.RDB$DESCRIPTION.NULL = TRUE;
+			memset(X.RDB$SYSTEM_PRIVILEGES, 0, sizeof(X.RDB$SYSTEM_PRIVILEGES));
 			X.RDB$SYSTEM_FLAG = 0;
-			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 
 			skip_init(&scan_next_attr);
 			while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
@@ -10299,6 +10374,12 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
  *
  **************************************/
 
+	if (tdgbl->gbl_sw_par_workers)
+	{
+		BURP_verbose(410, SafeArg() << tdgbl->gbl_sw_par_workers);
+		// msg 410 use up to @1 parallel workers
+	}
+
 	// Read burp record first
 
 	MVOL_init_read (file_name, &tdgbl->RESTORE_format);
@@ -10348,6 +10429,28 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 	Firebird::IRequest* req_handle3 = nullptr;
 	Firebird::IRequest* req_handle4 = nullptr;
 	Firebird::IRequest* req_handle5 = nullptr;
+
+	// Collect system fields
+	{
+		Firebird::IRequest* req_handle = nullptr;
+		tdgbl->systemFields.setSortMode(Firebird::FB_ARRAY_SORT_MANUAL);
+
+		FOR(REQUEST_HANDLE req_handle)
+			X IN RDB$FIELDS WITH
+			X.RDB$SYSTEM_FLAG EQ 1
+
+			const auto len = MISC_symbol_length(X.RDB$FIELD_NAME, sizeof(X.RDB$FIELD_NAME));
+			MetaString name(X.RDB$FIELD_NAME, len);
+			tdgbl->systemFields.add(name);
+
+		END_FOR;
+		ON_ERROR
+			general_on_error();
+		END_ERROR;
+
+		MISC_release_request_silent(req_handle);
+		tdgbl->systemFields.sort();
+	}
 
 	while (get_attribute(&attribute, tdgbl) != att_end)
 	{
@@ -10446,6 +10549,28 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 				else
 					get_boolean(tdgbl, attribute == att_database_sql_security_deprecated);
 			}
+			else
+			{
+				// Functions that use scan_next_attr initialize it to NO_SKIP using skip_init().
+				// Here we don't use that logic, hence the first param to bad_attribute is hardcoded.
+				bad_attribute(NO_SKIP, attribute, 352);
+			}
+			break;
+
+		case att_default_pub_active:
+			if (tdgbl->RESTORE_format >= 11)
+				tdgbl->gbl_default_pub_active = get_boolean(tdgbl);
+			else
+			{
+				// Functions that use scan_next_attr initialize it to NO_SKIP using skip_init().
+				// Here we don't use that logic, hence the first param to bad_attribute is hardcoded.
+				bad_attribute(NO_SKIP, attribute, 352);
+			}
+			break;
+
+		case att_default_pub_auto_enable:
+			if (tdgbl->RESTORE_format >= 11)
+				tdgbl->gbl_default_pub_auto_enable = get_boolean(tdgbl);
 			else
 			{
 				// Functions that use scan_next_attr initialize it to NO_SKIP using skip_init().
@@ -11543,6 +11668,12 @@ void WriteRelationMeta::setRelation(BurpGlobals* tdgbl, const burp_rel* relation
 
 	if (tdgbl->gbl_network_protocol == 0)
 	{
+		// If user relation uses system field there is a chance that definition of such
+		// system field was changed in target database. Old, BLR-based code, didn't
+		// coerce data types thus error could happen. To avoid it, let use SQL-based
+		// approach, while it is a bit slower in embedded mode.
+		// Here we are mostly interested in legacy UNICODE_FSS fields - see #7611.
+
 		bool sysDomFlag = false;
 		burp_fld* field;
 
@@ -11551,21 +11682,10 @@ void WriteRelationMeta::setRelation(BurpGlobals* tdgbl, const burp_rel* relation
 			if (field->fld_flags & FLD_computed)
 				continue;
 
-			const char* dom = field->fld_source;
-			if (strncmp(dom, "RDB$", 4) != 0)
-				continue;
-
-			for (dom += 4; *dom; ++dom)
+			if (tdgbl->systemFields.exist(field->fld_source))
 			{
-#ifdef HAVE_CTYPE_H
-				if (!isdigit(*dom))
-#else
-				if (*dom < '0' || *dom > '9')
-#endif
-				{
-					sysDomFlag = true;
-					break;
-				}
+				sysDomFlag = true;
+				break;
 			}
 		}
 
@@ -11636,8 +11756,6 @@ IBatch* WriteRelationMeta::createBatch(BurpGlobals* tdgbl, IAttachment* att)
 			ClumpletReader rdr(ClumpletReader::InfoResponse, infoBuf, sizeof infoBuf);
 			for (rdr.rewind(); !rdr.isEof(); rdr.moveNext())
 			{
-				if (rdr.getClumpTag() == isc_info_end)
-					break;
 				switch (rdr.getClumpTag())
 				{
 				case IBatch::INF_BUFFER_BYTES_SIZE:
@@ -11818,8 +11936,7 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 	}
 	catch (const FbException& ex)
 	{
-		BURP_print_status(true, ex.getStatus());
-		BURP_abort();
+		BURP_abort(ex.getStatus());
 	}
 
 	return true;
@@ -12061,6 +12178,7 @@ void WriteRelationReq::reset(WriteRelationMeta* meta)
 		m_relation = NULL;
 		m_request = 0;
 		m_recs = 0;
+		m_batchRecs = 0;
 		m_resync = true;
 	}
 }
@@ -12070,6 +12188,7 @@ void WriteRelationReq::clear()
 	m_relation = NULL;
 	m_meta = NULL;
 	m_recs = 0;
+	m_batchRecs = 0;
 	m_resync = true;
 
 	if (m_batch)
@@ -12110,22 +12229,11 @@ void WriteRelationReq::send(BurpGlobals* tdgbl, ITransaction* tran, bool lastRec
 	if (m_batch)
 	{
 		m_batch->add(&tdgbl->throwStatus, 1, m_batchMsg.begin());
+		m_batchRecs++;
 		if ((m_recs % m_meta->m_batchStep != 0) && !lastRec)
 			return;
 
-		AutoDispose<IBatchCompletionState> cs(m_batch->execute(&tdgbl->throwStatus, gds_trans));
-		if (tdgbl->throwStatus->getState() & IStatus::STATE_WARNINGS)
-			BURP_print_warning(&tdgbl->throwStatus);
-
-		for (unsigned pos = 0;
-			 pos = cs->findError(&tdgbl->throwStatus, pos),
-			 pos != IBatchCompletionState::NO_MORE_ERRORS;
-			 ++pos)
-		{
-			LocalStatus status_vector;
-			cs->getStatus(&tdgbl->throwStatus, &status_vector, pos);
-			check_data_error(tdgbl, &status_vector, m_relation);
-		}
+		execBatch(tdgbl);
 	}
 	else
 	{
@@ -12142,6 +12250,27 @@ void WriteRelationReq::send(BurpGlobals* tdgbl, ITransaction* tran, bool lastRec
 
 		if (m_resync)
 			check_data_error(tdgbl, &status, m_relation);
+	}
+}
+
+void WriteRelationReq::execBatch(BurpGlobals * tdgbl)
+{
+	if (!m_batch || m_batchRecs == 0)
+		return;
+
+	AutoDispose<IBatchCompletionState> cs(m_batch->execute(&tdgbl->throwStatus, gds_trans));
+	m_batchRecs = 0;
+	if (tdgbl->throwStatus->getState() & IStatus::STATE_WARNINGS)
+		BURP_print_warning(&tdgbl->throwStatus);
+
+	for (unsigned pos = 0;
+		pos = cs->findError(&tdgbl->throwStatus, pos),
+		pos != IBatchCompletionState::NO_MORE_ERRORS;
+		++pos)
+	{
+		LocalStatus status_vector;
+		cs->getStatus(&tdgbl->throwStatus, &status_vector, pos);
+		check_data_error(tdgbl, &status_vector, m_relation);
 	}
 }
 
@@ -12173,9 +12302,9 @@ bool RestoreRelationTask::fileReader(Item& item)
 
 	BURP_verbose(124, m_relation->rel_name); // msg 124  restoring data for relation %s
 
-	const ULONG length = m_metadata.m_inMsgLen;	// full record length
+	const RCRD_LENGTH length = m_metadata.m_inMsgLen;	// full record length
 
-	IOBuffer* ioBuf = NULL;
+	IOBuffer*& ioBuf = item.m_buffer = NULL;
 	FB_SSIZE_T space = 0;	// space left in current buffer
 	UCHAR* buf = NULL;		// pointer at the current buffer
 
@@ -12191,7 +12320,7 @@ bool RestoreRelationTask::fileReader(Item& item)
 		if (get(tdgbl) != att_data_length)
 			BURP_error_redirect(NULL, 39); // msg 39 expected record length
 
-		USHORT len = (USHORT) get_int32(tdgbl);
+		RCRD_LENGTH len = get_int32(tdgbl);
 
 		if (!tdgbl->gbl_sw_transportable && len != length)
 		{
@@ -12205,16 +12334,20 @@ bool RestoreRelationTask::fileReader(Item& item)
 				BURP_error_redirect(NULL, 55);
 				// msg 55 Expected XDR record length
 			else
-				len = (USHORT) get_int32(tdgbl);
+				len = get_int32(tdgbl);
 		}
 
 		if (get(tdgbl) != att_data_data)
 			BURP_error_redirect(NULL, 41); // msg 41 expected data attribute
 
 		// check if record fits into current buffer and get a new one if needed
+		// note, non-compressible record takes 1 additional byte per every 127 bytes
+		// due to compression overhead
 
 		const FB_SSIZE_T attLen = 1 + (tdgbl->gbl_sw_transportable ? 12 : 6);
-		if (len + attLen > space)
+		const FB_SSIZE_T overhead = tdgbl->gbl_sw_compress ? (len / 127 + 1) : 0;
+
+		if (len + attLen + overhead > space)
 		{
 			if (ioBuf)
 			{

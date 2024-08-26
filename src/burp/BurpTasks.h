@@ -63,9 +63,9 @@ public:
 	SSHORT m_inMgsNum;
 	SSHORT m_outMgsNum;
 	Firebird::HalfStaticArray<UCHAR, 256> m_blr;
-	ULONG m_outMsgLen;
-	ULONG m_outRecLen;
-	ULONG m_outEofOffset;
+	RCRD_LENGTH m_outMsgLen;
+	RCRD_LENGTH m_outRecLen;
+	RCRD_OFFSET m_outEofOffset;
 };
 
 class ReadRelationReq
@@ -173,6 +173,7 @@ public:
 		m_batch = nullptr;
 		m_request = nullptr;
 		m_recs = 0;
+		m_batchRecs = 0;
 		m_resync = true;
 	}
 
@@ -186,6 +187,7 @@ public:
 
 	void compile(BurpGlobals* tdgbl, Firebird::IAttachment* att);
 	void send(BurpGlobals* tdgbl, Firebird::ITransaction* tran, bool lastRec);
+	void execBatch(BurpGlobals * tdgbl);
 	void release();
 
 	ULONG getDataLength() const
@@ -225,7 +227,8 @@ private:
 	Firebird::Array<UCHAR> m_batchMsg;
 	Firebird::IBatch* m_batch;
 	Firebird::IRequest* m_request;
-	int m_recs;
+	int m_recs;							// total records sent
+	int m_batchRecs;					// records in current batch
 	bool m_resync;
 };
 
@@ -397,9 +400,9 @@ public:
 	class ExcReadDone : public Firebird::Exception
 	{
 	public:
-		ExcReadDone() throw() : Firebird::Exception() { }
-		virtual void stuffByException(Firebird::StaticStatusVector& status_vector) const throw();
-		virtual const char* what() const throw();
+		ExcReadDone() noexcept : Firebird::Exception() { }
+		virtual void stuffByException(Firebird::StaticStatusVector& status_vector) const noexcept;
+		virtual const char* what() const noexcept;
 		static void raise();
 	};
 

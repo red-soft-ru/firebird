@@ -156,6 +156,9 @@
     <ClCompile Include="..\..\..\src\dsql\gen.cpp">
       <Filter>DSQL</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\dsql\Keywords.cpp">
+      <Filter>DSQL</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\dsql\make.cpp">
       <Filter>DSQL</Filter>
     </ClCompile>
@@ -214,6 +217,9 @@
       <Filter>JRD files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\blob_filter.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\BlobUtil.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\btn.cpp">
@@ -372,6 +378,9 @@
     <ClCompile Include="..\..\..\src\jrd\svc.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\sys-packages\SqlPackage.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\SysFunction.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
@@ -412,6 +421,9 @@
       <Filter>Services</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\gen\jrd\scl.cpp">
+      <Filter>JRD files\GPRE cpp</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\gen\jrd\SystemTriggers.cpp">
       <Filter>JRD files\GPRE cpp</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\gen\jrd\dfw.cpp">
@@ -513,7 +525,13 @@
     <ClCompile Include="..\..\..\src\jrd\MetaName.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\InitCDSLib.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\optimizer\InnerJoin.cpp">
+      <Filter>Optimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\optimizer\OuterJoin.cpp">
       <Filter>Optimizer</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\optimizer\Optimizer.cpp">
@@ -579,6 +597,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\dsql\gen_proto.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\dsql\Keywords.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\dsql\make_proto.h">
@@ -675,6 +696,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\blob_filter.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\BlobUtil.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\blp.h">
@@ -1058,7 +1082,13 @@
     <ClInclude Include="..\..\..\src\dsql\DsqlBatch.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\sys-packages\SqlPackage.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\SystemPackages.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\SystemTriggers.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\Coercion.h">
@@ -1070,9 +1100,13 @@
     <ClInclude Include="..\..\..\src\jrd\QualifiedName.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\InitCDSLib.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\WorkerAttachment.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\PageToBufferMap.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\src\dsql\DdlNodes.epp">
@@ -1109,6 +1143,9 @@
       <Filter>JRD files\GPRE files</Filter>
     </None>
     <None Include="..\..\..\src\jrd\scl.epp">
+      <Filter>JRD files\GPRE files</Filter>
+    </None>
+    <None Include="..\..\..\src\jrd\SystemTriggers.epp">
       <Filter>JRD files\GPRE files</Filter>
     </None>
     <None Include="..\..\..\src\utilities\gstat\dba.epp">

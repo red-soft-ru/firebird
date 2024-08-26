@@ -61,8 +61,6 @@ const int TEMP_STR_LENGTH = 128;
 
 // Metadata constants
 
-// When changing these constants, change MaxIdentifierByteLength and MaxIdentifierCharLength in
-// firebird.conf too.
 const unsigned METADATA_IDENTIFIER_CHAR_LEN	= 63;
 const unsigned METADATA_BYTES_PER_CHAR		= 4;
 
@@ -466,7 +464,7 @@ const TraNumber MAX_TRA_NUMBER = 0x0000FFFFFFFFFFFF;	// ~2.8 * 10^14
 const unsigned OPT_STATIC_ITEMS = 16;
 const unsigned OPT_STATIC_STREAMS = 64;
 
-#define CURRENT_ENGINE "Engine13"
+#define CURRENT_ENGINE "Engine14"
 #define EMBEDDED_PROVIDERS "Providers=" CURRENT_ENGINE
 
 // Features set for current version of engine provider

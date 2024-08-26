@@ -28,6 +28,8 @@
 
 namespace Jrd {
 
+class PlanEntry;
+
 // Compiled statement.
 class Statement : public pool_alloc<type_req>
 {
@@ -48,6 +50,9 @@ private:
 public:
 	static Statement* makeStatement(thread_db* tdbb, CompilerScratch* csb, bool internalFlag,
 		std::function<void ()> beforeCsbRelease = nullptr);
+
+	static Statement* makeBoolExpression(thread_db* tdbb, BoolExprNode*& node,
+		CompilerScratch* csb, bool internalFlag);
 
 	static Statement* makeValueExpression(thread_db* tdbb, ValueExprNode*& node, dsc& desc,
 		CompilerScratch* csb, bool internalFlag);
@@ -75,6 +80,7 @@ public:
 	void release(thread_db* tdbb);
 
 	Firebird::string getPlan(thread_db* tdbb, bool detailed) const;
+	void getPlan(thread_db* tdbb, PlanEntry& planEntry) const;
 
 private:
 	static void verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation, TrigVector* triggers,
@@ -102,7 +108,7 @@ public:
 	Statement* parentStatement;		// Sub routine's parent statement
 	Firebird::Array<Statement*> subStatements;	// Array of subroutines' statements
 	const StmtNode* topNode;			// top of execution tree
-	Firebird::Array<const RecordSource*> fors;	// record sources
+	Firebird::Array<const Select*> fors;	// select expressions
 	Firebird::Array<const DeclareLocalTableNode*> localTables;	// local tables
 	Firebird::Array<ULONG*> invariants;	// pointer to nodes invariant offsets
 	Firebird::RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)

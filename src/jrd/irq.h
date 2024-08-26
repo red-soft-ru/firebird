@@ -54,7 +54,6 @@ enum irq_type_t
 	irq_l_funct_blr,		// lookup function BLR and debug info
 	irq_l_args,				// lookup function arguments
 	irq_s_triggers,			// scan triggers
-	irq_s_triggers2,		// scan triggers
 	irq_s_msgs,				// search for message
 	irq_grant1,				// process grant option
 	irq_grant2,				// process grant option
@@ -85,6 +84,7 @@ enum irq_type_t
 	irq_c_exp_index,		// create expression index
 	irq_l_exp_index,		// lookup expression index
 	irq_l_exp_index_blr,	// lookup expression index BLR
+	irq_l_cond_index,		// lookup condition index
 
 	irq_l_rel_id,			// lookup relation id
 	irq_l_procedure,		// lookup procedure name
@@ -181,7 +181,8 @@ enum irq_type_t
 	irq_c_relation3,		// lookup relation in phase 0 to cleanup
 	irq_linger,				// get database linger value
 	irq_dbb_ss_definer,		// get database sql security value
-	irq_out_proc_param_dep,	// check output procedure parameter dependency
+	irq_proc_param_dep,		// check procedure parameter dependency
+	irq_func_param_dep,		// check function parameter dependency
 	irq_l_pub_tab_state,	// lookup publication state for a table
 
 	irq_MAX

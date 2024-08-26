@@ -209,7 +209,7 @@ bool Mapping::DbHandle::attach(const char* aliasDb, ICryptKeyCallback* cryptCb)
 		if (!(missing || down))
 			check("IProvider::attachDatabase", &st);
 
-		// down/missing security DB is not a reason to fail mapping
+		// down/missing DB is not a reason to fail mapping
 	}
 	else
 		assignRefNoIncr(att);
@@ -676,18 +676,14 @@ public:
 			sharedMemory->eventFini(&sMem->process[process].notifyEvent);
 			sharedMemory->eventFini(&sMem->process[process].callbackEvent);
 
-			bool found = false;
-
-			for (unsigned n = 0; n < sMem->processes; ++n)
+			while (sMem->processes)
 			{
-				if (sMem->process[n].flags & MappingHeader::FLAG_ACTIVE)
-				{
-					found = true;
+				if (sMem->process[sMem->processes - 1].flags & MappingHeader::FLAG_ACTIVE)
 					break;
-				}
+				sMem->processes--;
 			}
 
-			if (!found)
+			if (!sMem->processes)
 				sharedMemory->removeMapFile();
 		}
 
@@ -753,15 +749,21 @@ public:
 				(Arg::Gds(isc_map_event) << "POST").raise();
 			}
 
+			int tout = 0;
 			while (sharedMemory->eventWait(&current->callbackEvent, value, 10000) != FB_SUCCESS)
 			{
 				if (!ISC_check_process_existence(p->id))
 				{
+					MAP_DEBUG(fprintf(stderr, "clearMapping: dead process found %d", p->id));
+
 					p->flags &= ~MappingHeader::FLAG_ACTIVE;
 					sharedMemory->eventFini(&p->notifyEvent);
 					sharedMemory->eventFini(&p->callbackEvent);
 					break;
 				}
+
+				if (++tout >= 1000) // 10 sec
+					(Arg::Gds(isc_random) << "Timeout when waiting callback from other process.").raise();
 			}
 
 			MAP_DEBUG(fprintf(stderr, "Notified pid %d about reset map %s\n", p->id, sMem->databaseForReset));
@@ -793,17 +795,34 @@ public:
 
 		Guard gShared(tempSharedMemory);
 
-		for (process = 0; process < sMem->processes; ++process)
+		process = sMem->processes;
+		for (unsigned idx = 0; idx < sMem->processes; ++idx)
 		{
-			if (!(sMem->process[process].flags & MappingHeader::FLAG_ACTIVE))
-				break;
+			MappingHeader::Process& p = sMem->process[idx];
 
-			if (!ISC_check_process_existence(sMem->process[process].id))
+			if (p.id == processId)
 			{
-				tempSharedMemory->eventFini(&sMem->process[process].notifyEvent);
-				tempSharedMemory->eventFini(&sMem->process[process].callbackEvent);
+				if (p.flags & MappingHeader::FLAG_ACTIVE) {
+					MAP_DEBUG(fprintf(stderr, "MappingIpc::setup: found existing entry for pid %d", processId));
+				}
 
-				break;
+				process = idx;
+				continue;
+			}
+
+			if ((p.flags & MappingHeader::FLAG_ACTIVE) && !ISC_check_process_existence(p.id))
+			{
+				MAP_DEBUG(fprintf(stderr, "MappingIpc::setup: dead process found %d", p.id));
+
+				p.flags = 0;
+				tempSharedMemory->eventFini(&p.notifyEvent);
+				tempSharedMemory->eventFini(&p.callbackEvent);
+			}
+
+			if (!(p.flags & MappingHeader::FLAG_ACTIVE))
+			{
+				if (process == sMem->processes)
+					process = idx;
 			}
 		}
 
@@ -1104,7 +1123,7 @@ private:
 			bool getPrivileges(const string& key, UserId::Privileges& system_privileges)
 			{
 				if (!key.hasData())
-					return false;
+					return true;
 
 				UserId::Privileges p;
         		if (!get(key, p))
@@ -1143,7 +1162,11 @@ private:
 					g |= l;
 				}
 
-				ULONG gg = 0; g.store(&gg);
+				FB_UINT64 gg = 0;
+				static_assert(sizeof(gg) >= g.BYTES_COUNT,
+					"The value for storing system privileges is too small");
+
+				g.store(&gg);
 				MAP_DEBUG(fprintf(stderr, "poprole %s 0x%x\n", key.c_str(), gg));
 				put(key, g);
 			}

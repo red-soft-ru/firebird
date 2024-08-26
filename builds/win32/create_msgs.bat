@@ -8,7 +8,7 @@
 @if errorlevel 1 (goto :END)
 
 @echo Building message file...
-@%FB_BOOT_BIN_DIR%\build_msg -f %FB_GEN_DB_DIR%\firebird.msg -c %FB_OUTPUT_DIR%\include\firebird\impl\iberror_c.h
+@%FB_BIN_DIR%\build_msg -f %FB_GEN_DB_DIR%\firebird.msg -c %FB_GEN_DIR%\iberror_c.h
 @copy %FB_GEN_DIR%\firebird.msg %FB_BIN_DIR% > nul
 
 :END

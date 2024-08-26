@@ -25,6 +25,7 @@
 #ifndef COMMON_REF_COUNTED_H
 #define COMMON_REF_COUNTED_H
 
+#include "fb_exception.h"
 #include "../common/classes/fb_atomic.h"
 #include "../common/gdsassert.h"
 
@@ -45,6 +46,11 @@ namespace Firebird
 			if (!refCnt)
 				delete this;
 			return refCnt;
+		}
+
+		void assertNonZero()
+		{
+			fb_assert(m_refCnt.value() > 0);
 		}
 
 	protected:
@@ -115,13 +121,13 @@ namespace Firebird
 			}
 		}
 
-		RefPtr(RefPtr&& r)
+		RefPtr(RefPtr&& r) noexcept
 			: ptr(r.ptr)
 		{
 			r.ptr = nullptr;
 		}
 
-		RefPtr(MemoryPool&, RefPtr&& r)
+		RefPtr(MemoryPool&, RefPtr&& r) noexcept
 			: ptr(r.ptr)
 		{
 			r.ptr = nullptr;
@@ -175,22 +181,12 @@ namespace Firebird
 			return ptr;
 		}
 
-		operator T*()
+		operator T*() const
 		{
 			return ptr;
 		}
 
-		T* operator->()
-		{
-			return ptr;
-		}
-
-		operator const T*() const
-		{
-			return ptr;
-		}
-
-		const T* operator->() const
+		T* operator->() const
 		{
 			return ptr;
 		}

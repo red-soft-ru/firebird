@@ -73,7 +73,7 @@ struct mtx
 struct event_t
 {
 	SLONG event_count;
-	int pid;
+	int event_pid;
 	pthread_mutex_t event_mutex[1];
 	pthread_cond_t event_cond[1];
 };
@@ -180,16 +180,18 @@ public:
 #define USE_FCNTL
 #endif
 
-class CountedFd;
+class SharedFileInfo;
 
 class FileLock
 {
+	friend class CountedRWLock;
+
 public:
-	enum LockMode {FLM_EXCLUSIVE, FLM_TRY_EXCLUSIVE, FLM_SHARED, FLM_TRY_SHARED};
+	enum LockMode {FLM_EXCLUSIVE, FLM_TRY_EXCLUSIVE, FLM_SHARED};
 
 	typedef void InitFunction(int fd);
-	explicit FileLock(const char* fileName, InitFunction* init = NULL);		// main ctor
-	FileLock(const FileLock* main, int s);	// creates additional lock for existing file
+
+	explicit FileLock(const char* fileName, InitFunction* init = NULL);
 	~FileLock();
 
 	// Main function to lock file
@@ -198,24 +200,18 @@ public:
 	// Alternative locker is using status vector to report errors
 	bool setlock(Firebird::CheckStatusWrapper* status, const LockMode mode);
 
-	// unlocking can only put error into log file - we can't throw in dtors
+	// Unlocking can only put error into log file - we can't throw in dtors
 	void unlock();
 
+	// Obvious access to file descriptor
 	int getFd();
 
-private:
 	enum LockLevel {LCK_NONE, LCK_SHARED, LCK_EXCL};
 
+private:
+	Firebird::RefPtr<SharedFileInfo> file;
+	InitFunction* initFunction;
 	LockLevel level;
-	CountedFd* oFile;
-#ifdef USE_FCNTL
-	int lStart;
-#endif
-	class CountedRWLock* rwcl;		// Due to order of init in ctor rwcl must go after fd & start
-
-	Firebird::string getLockId();
-	class CountedRWLock* getRw();
-	void rwUnlock();
 };
 
 #endif // UNIX
@@ -268,6 +264,8 @@ public:
 #endif
 	bool remapFile(Firebird::CheckStatusWrapper* status, ULONG newSize, bool truncateFlag);
 	void removeMapFile();
+	static void unlinkFile(const TEXT* expanded_filename) noexcept;
+	Firebird::PathName getMapFileName();
 
 	void mutexLock();
 	bool mutexLockCond();

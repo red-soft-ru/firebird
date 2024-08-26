@@ -300,6 +300,12 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 			stmt->free(fbStatus);
 	}
 
+	if (tdgbl->gbl_sw_par_workers)
+	{
+		BURP_verbose(410, SafeArg() << tdgbl->gbl_sw_par_workers);
+		// msg 410 use up to @1 parallel workers
+	}
+
 	// decide what type of database we've got
 
 	detectRuntimeODS();
@@ -613,8 +619,7 @@ void general_on_error()
  **************************************/
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
-	BURP_print_status(true, isc_status);
-	BURP_abort();
+	BURP_abort(isc_status);
 }
 
 
@@ -1025,6 +1030,7 @@ void put_array( burp_fld* field, burp_rel* relation, ISC_QUAD* blob_id)
 	case blr_long:
 	case blr_quad:
 	case blr_int64:
+	case blr_int128:
 		add_byte(blr, field->fld_scale);
 		break;
 	case blr_text:
@@ -1527,8 +1533,8 @@ void put_data(burp_rel* relation, ReadRelationReq* request)
 	else
 		xdr_buffer.lstr_address = NULL;
 
-	RCRD_OFFSET record_length = reqMeta->m_outRecLen;
-	FB_UINT64 records = 0;
+	RCRD_LENGTH record_length = reqMeta->m_outRecLen;
+
 	while (true)
 	{
 		if (task->isStopped())
@@ -1542,8 +1548,6 @@ void put_data(burp_rel* relation, ReadRelationReq* request)
 		}
 		if (!request->eof())
 			break;
-
-		records++;
 
 		put(tdgbl, (UCHAR) rec_data);
 		put_int32(att_data_length, record_length);
@@ -1617,68 +1621,152 @@ void put_index( burp_rel* relation)
 	// requests--this requires more code but it is well worth it
 	// for the performance benefits, especially remotely--deej
 
-	FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle1)
-		X IN RDB$INDICES WITH
-		X.RDB$RELATION_NAME EQ relation->rel_name
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL13_1)
+	{
+		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle1)
+			X IN RDB$INDICES WITH
+			X.RDB$RELATION_NAME EQ relation->rel_name
 
-		count = 0;
-		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle2)
-			I_S IN RDB$INDEX_SEGMENTS CROSS
-			RFR IN RDB$RELATION_FIELDS WITH
-			I_S.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
-			I_S.RDB$INDEX_NAME = X.RDB$INDEX_NAME AND
-			RFR.RDB$RELATION_NAME = relation->rel_name
+			count = 0;
+			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle2)
+				I_S IN RDB$INDEX_SEGMENTS CROSS
+				RFR IN RDB$RELATION_FIELDS WITH
+				I_S.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
+				I_S.RDB$INDEX_NAME = X.RDB$INDEX_NAME AND
+				RFR.RDB$RELATION_NAME = relation->rel_name
 
-			count++;
+				count++;
+
+			END_FOR;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
+
+			if (count != (ULONG) X.RDB$SEGMENT_COUNT)
+			{
+				BURP_print(true, 180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
+				continue;
+			}
+
+			put(tdgbl, rec_index);
+			const ULONG l = PUT_TEXT (att_index_name, X.RDB$INDEX_NAME);
+			MISC_terminate (X.RDB$INDEX_NAME, temp, l, sizeof(temp));
+			BURP_verbose (151, temp);
+			// msg 151 writing index %s
+			put_int32 (att_segment_count, X.RDB$SEGMENT_COUNT);
+			put_int32 (att_index_inactive, X.RDB$INDEX_INACTIVE);
+			put_int32 (att_index_unique_flag, X.RDB$UNIQUE_FLAG);
+
+			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle5)
+				Y IN RDB$INDEX_SEGMENTS WITH
+				Y.RDB$INDEX_NAME EQ X.RDB$INDEX_NAME
+				SORTED BY Y.RDB$FIELD_POSITION
+
+				PUT_TEXT (att_index_field_name, Y.RDB$FIELD_NAME);
+
+			END_FOR;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
+
+			put_source_blob (att_index_description2, att_index_description, X.RDB$DESCRIPTION);
+			put_int32 (att_index_type, X.RDB$INDEX_TYPE);
+
+			if (!X.RDB$EXPRESSION_SOURCE.NULL)
+			{
+				put_source_blob(att_index_expression_source, att_index_expression_source,
+								X.RDB$EXPRESSION_SOURCE);
+			}
+			if (!X.RDB$EXPRESSION_BLR.NULL)
+				put_blr_blob(att_index_expression_blr, X.RDB$EXPRESSION_BLR);
+
+			if (!X.RDB$FOREIGN_KEY.NULL)
+				PUT_TEXT (att_index_foreign_key, X.RDB$FOREIGN_KEY);
+
+			if (!X.RDB$CONDITION_SOURCE.NULL)
+			{
+				put_source_blob(att_index_condition_source, att_index_condition_source,
+								X.RDB$CONDITION_SOURCE);
+			}
+			if (!X.RDB$CONDITION_BLR.NULL)
+				put_blr_blob(att_index_condition_blr, X.RDB$CONDITION_BLR);
+
+			put(tdgbl, att_end);
 
 		END_FOR;
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
+	}
+	else
+	{
+		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle1)
+			X IN RDB$INDICES WITH
+			X.RDB$RELATION_NAME EQ relation->rel_name
 
-		if (count != (ULONG) X.RDB$SEGMENT_COUNT)
-		{
-			BURP_print(true, 180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
-			continue;
-		}
+			count = 0;
+			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle2)
+				I_S IN RDB$INDEX_SEGMENTS CROSS
+				RFR IN RDB$RELATION_FIELDS WITH
+				I_S.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
+				I_S.RDB$INDEX_NAME = X.RDB$INDEX_NAME AND
+				RFR.RDB$RELATION_NAME = relation->rel_name
 
-		put(tdgbl, rec_index);
-		const ULONG l = PUT_TEXT (att_index_name, X.RDB$INDEX_NAME);
-		MISC_terminate (X.RDB$INDEX_NAME, temp, l, sizeof(temp));
-		BURP_verbose (151, temp);
-		// msg 151 writing index %s
-		put_int32 (att_segment_count, X.RDB$SEGMENT_COUNT);
-		put_int32 (att_index_inactive, X.RDB$INDEX_INACTIVE);
-		put_int32 (att_index_unique_flag, X.RDB$UNIQUE_FLAG);
+				count++;
 
-		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle5)
-			Y IN RDB$INDEX_SEGMENTS WITH
-			Y.RDB$INDEX_NAME EQ X.RDB$INDEX_NAME
-			SORTED BY Y.RDB$FIELD_POSITION
+			END_FOR;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
 
-			PUT_TEXT (att_index_field_name, Y.RDB$FIELD_NAME);
+			if (count != (ULONG) X.RDB$SEGMENT_COUNT)
+			{
+				BURP_print(true, 180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
+				continue;
+			}
+
+			put(tdgbl, rec_index);
+			const ULONG l = PUT_TEXT (att_index_name, X.RDB$INDEX_NAME);
+			MISC_terminate (X.RDB$INDEX_NAME, temp, l, sizeof(temp));
+			BURP_verbose (151, temp);
+			// msg 151 writing index %s
+			put_int32 (att_segment_count, X.RDB$SEGMENT_COUNT);
+			put_int32 (att_index_inactive, X.RDB$INDEX_INACTIVE);
+			put_int32 (att_index_unique_flag, X.RDB$UNIQUE_FLAG);
+
+			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle5)
+				Y IN RDB$INDEX_SEGMENTS WITH
+				Y.RDB$INDEX_NAME EQ X.RDB$INDEX_NAME
+				SORTED BY Y.RDB$FIELD_POSITION
+
+				PUT_TEXT (att_index_field_name, Y.RDB$FIELD_NAME);
+
+			END_FOR;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
+
+			put_source_blob (att_index_description2, att_index_description, X.RDB$DESCRIPTION);
+			put_int32 (att_index_type, X.RDB$INDEX_TYPE);
+
+			if (!X.RDB$EXPRESSION_SOURCE.NULL)
+			{
+				put_source_blob(att_index_expression_source, att_index_expression_source,
+								X.RDB$EXPRESSION_SOURCE);
+			}
+			if (!X.RDB$EXPRESSION_BLR.NULL)
+				put_blr_blob(att_index_expression_blr, X.RDB$EXPRESSION_BLR);
+
+			if (!X.RDB$FOREIGN_KEY.NULL)
+				PUT_TEXT (att_index_foreign_key, X.RDB$FOREIGN_KEY);
+
+			put(tdgbl, att_end);
 
 		END_FOR;
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
-
-		put_source_blob (att_index_description2, att_index_description, X.RDB$DESCRIPTION);
-		put_int32 (att_index_type, X.RDB$INDEX_TYPE);
-
-		if (!X.RDB$EXPRESSION_SOURCE.NULL)
-			put_source_blob (att_index_expression_source, att_index_expression_source,
-							 X.RDB$EXPRESSION_SOURCE);
-		if (!X.RDB$EXPRESSION_BLR.NULL)
-			put_blr_blob (att_index_expression_blr, X.RDB$EXPRESSION_BLR);
-		if (!X.RDB$FOREIGN_KEY.NULL)
-			PUT_TEXT (att_index_foreign_key, X.RDB$FOREIGN_KEY);
-		put(tdgbl, att_end);
-
-	END_FOR;
-	ON_ERROR
-		general_on_error();
-	END_ERROR;
+	}
 }
 
 
@@ -2429,6 +2517,7 @@ void write_database( const TEXT* dbb_file)
 	FbLocalStatus status_vector;
 	UCHAR buffer[256];
 	Firebird::IRequest* req_handle1 = nullptr;
+	Firebird::IRequest* req_handle2 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -2531,6 +2620,26 @@ void write_database( const TEXT* dbb_file)
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
+
+		if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
+		{
+			FOR (REQUEST_HANDLE req_handle2)
+				PUB IN RDB$PUBLICATIONS
+				WITH PUB.RDB$PUBLICATION_NAME EQ DEFAULT_PUBLICATION
+			{
+				fb_assert(PUB.RDB$SYSTEM_FLAG != 0);
+
+				if (!PUB.RDB$ACTIVE_FLAG.NULL)
+					put_boolean(att_default_pub_active, PUB.RDB$ACTIVE_FLAG);
+
+				if (!PUB.RDB$AUTO_ENABLE.NULL)
+					put_boolean(att_default_pub_auto_enable, PUB.RDB$AUTO_ENABLE);
+			}
+			END_FOR
+			ON_ERROR
+				general_on_error();
+			END_ERROR
+		}
 	}
 	else
 	{
@@ -2548,6 +2657,7 @@ void write_database( const TEXT* dbb_file)
 	}
 
 	MISC_release_request_silent(req_handle1);
+	MISC_release_request_silent(req_handle2);
 
 	put(tdgbl, att_end);
 }
@@ -2732,7 +2842,10 @@ void write_functions()
 			BURP_verbose (147, temp);
 			// msg 147 writing function %.*s
 			put_source_blob (att_function_description2, att_function_description, X.RDB$DESCRIPTION);
-			put_int32 (att_function_return_arg, X.RDB$RETURN_ARGUMENT);
+
+			if (!X.RDB$RETURN_ARGUMENT.NULL)
+				put_int32 (att_function_return_arg, X.RDB$RETURN_ARGUMENT);
+
 			put_int32 (att_function_type, X.RDB$FUNCTION_TYPE);
 			PUT_TEXT (att_function_query_name, X.RDB$QUERY_NAME);
 
@@ -2786,7 +2899,10 @@ void write_functions()
 			put_source_blob (att_function_description2, att_function_description, X.RDB$DESCRIPTION);
 			PUT_TEXT (att_function_module_name, X.RDB$MODULE_NAME);
 			PUT_TEXT (att_function_entrypoint, X.RDB$ENTRYPOINT);
-			put_int32 (att_function_return_arg, X.RDB$RETURN_ARGUMENT);
+
+			if (!X.RDB$RETURN_ARGUMENT.NULL)
+				put_int32 (att_function_return_arg, X.RDB$RETURN_ARGUMENT);
+
 			put_int32 (att_function_type, X.RDB$FUNCTION_TYPE);
 			PUT_TEXT (att_function_query_name, X.RDB$QUERY_NAME);
 			put(tdgbl, att_end);
@@ -2848,7 +2964,9 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 			BURP_verbose (141, temp);
 			// msg 141 writing argument for function %s
 
-			put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+			if (!X.RDB$ARGUMENT_POSITION.NULL)
+				put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
 			put_int32 (att_functionarg_passing_mechanism, X.RDB$MECHANISM);
 			put_int32 (att_functionarg_field_type, X.RDB$FIELD_TYPE);
 			put_int32 (att_functionarg_field_scale, X.RDB$FIELD_SCALE);
@@ -2899,7 +3017,10 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 			MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
 			BURP_verbose (141, temp);
 			// msg 141 writing argument for function %s
-			put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
+			if (!X.RDB$ARGUMENT_POSITION.NULL)
+				put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
 			put_int32 (att_functionarg_passing_mechanism, X.RDB$MECHANISM);
 			put_int32 (att_functionarg_field_type, X.RDB$FIELD_TYPE);
 			put_int32 (att_functionarg_field_scale, X.RDB$FIELD_SCALE);
@@ -2927,7 +3048,10 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 			MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
 			BURP_verbose (141, temp);
 			// msg 141 writing argument for function %s
-			put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
+			if (!X.RDB$ARGUMENT_POSITION.NULL)
+				put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
 			put_int32 (att_functionarg_passing_mechanism, X.RDB$MECHANISM);
 			put_int32 (att_functionarg_field_type, X.RDB$FIELD_TYPE);
 			put_int32 (att_functionarg_field_scale, X.RDB$FIELD_SCALE);
@@ -4585,7 +4709,7 @@ void ReadRelationMeta::setRelation(const burp_rel* relation, bool partition)
 	m_outRecLen = offset;
 	m_outEofOffset = FB_ALIGN(offset, sizeof(SSHORT));
 	// To be used later for the buffer size to receive data
-	m_outMsgLen = (USHORT) (m_outEofOffset + sizeof(SSHORT));
+	m_outMsgLen = m_outEofOffset + sizeof(SSHORT);
 
 	if (partition)
 	{

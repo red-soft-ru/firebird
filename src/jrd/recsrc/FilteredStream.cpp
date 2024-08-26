@@ -36,7 +36,8 @@ using namespace Jrd;
 // Data access: predicate driven filter
 // ------------------------------------
 
-FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next, BoolExprNode* boolean, double selectivity)
+FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next,
+							   BoolExprNode* boolean, double selectivity)
 	: RecordSource(csb),
 	  m_next(next),
 	  m_boolean(boolean),
@@ -59,9 +60,12 @@ void FilteredStream::internalOpen(thread_db* tdbb) const
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
-	impure->irsb_flags = irsb_open;
+	if (!m_invariant || m_boolean->execute(tdbb, request))
+	{
+		impure->irsb_flags = irsb_open;
 
-	m_next->open(tdbb);
+		m_next->open(tdbb);
+	}
 }
 
 void FilteredStream::close(thread_db* tdbb) const
@@ -107,26 +111,29 @@ bool FilteredStream::refetchRecord(thread_db* tdbb) const
 		m_boolean->execute(tdbb, request);
 }
 
-bool FilteredStream::lockRecord(thread_db* tdbb) const
+WriteLockResult FilteredStream::lockRecord(thread_db* tdbb) const
 {
 	return m_next->lockRecord(tdbb);
 }
 
-void FilteredStream::getChildren(Array<const RecordSource*>& children) const
+void FilteredStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_next);
+	m_next->getLegacyPlan(tdbb, plan, level);
 }
 
-void FilteredStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void FilteredStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Filter";
-		printOptInfo(plan);
-	}
+	planEntry.className = "FilteredStream";
+
+	planEntry.lines.add().text = "Filter";
+
+	if (m_invariant)
+		planEntry.lines.back().text += " (preliminary)";
+
+	printOptInfo(planEntry.lines);
 
 	if (recurse)
-		m_next->print(tdbb, plan, detailed, level, recurse);
+		m_next->getPlan(tdbb, planEntry.children.add(), ++level, recurse);
 }
 
 void FilteredStream::markRecursive()

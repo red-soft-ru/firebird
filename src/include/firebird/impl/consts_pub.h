@@ -129,8 +129,10 @@
 #define isc_dpb_decfloat_round            94
 #define isc_dpb_decfloat_traps            95
 #define isc_dpb_clear_map				  96
+#define isc_dpb_upgrade_db				  97
 #define isc_dpb_parallel_workers		 100
 #define isc_dpb_worker_attach			 101
+#define isc_dpb_owner					 102
 
 
 /**************************************************/
@@ -382,7 +384,6 @@
 #define isc_info_svc_limbo_trans		66	/* Retrieve the limbo transactions */
 #define isc_info_svc_running			67	/* Checks to see if a service is running on an attachment */
 #define isc_info_svc_get_users			68	/* Returns the user information from isc_action_svc_display_users */
-#define isc_info_svc_auth_block			69	/* Sets authentication block for service query() call */
 #define isc_info_svc_stdin				78	/* Returns maximum size of data, needed as stdin for service */
 
 
@@ -536,6 +537,7 @@
 #define isc_spb_rpr_kill_shadows		0x40
 #define isc_spb_rpr_full				0x80
 #define isc_spb_rpr_icu				  0x0800
+#define isc_spb_rpr_upgrade_db		  0x1000
 
 /*****************************************
  * Parameters for isc_action_svc_restore *
@@ -627,6 +629,9 @@
 #define isc_spb_nbk_file			6
 #define isc_spb_nbk_direct			7
 #define isc_spb_nbk_guid			8
+#define isc_spb_nbk_clean_history	9
+#define isc_spb_nbk_keep_days		10
+#define isc_spb_nbk_keep_rows		11
 #define isc_spb_nbk_no_triggers		0x01
 #define isc_spb_nbk_inplace			0x02
 #define isc_spb_nbk_sequence		0x04
@@ -775,7 +780,8 @@
 #define fb_dbg_map_argument			4
 #define fb_dbg_subproc				5
 #define fb_dbg_subfunc				6
-#define fb_dbg_map_curname			7
+#define fb_dbg_map_curname			7 /* declared cursor */
+#define fb_dbg_map_for_curname		8 /* FOR cursor */
 //// TODO: LocalTable name.
 
 // sub code for fb_dbg_map_argument

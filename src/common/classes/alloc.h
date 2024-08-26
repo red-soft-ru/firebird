@@ -72,7 +72,6 @@
 namespace Firebird {
 
 // Alignment for all memory blocks
-//#define ALLOC_ALIGNMENT 8
 #define ALLOC_ALIGNMENT 16
 
 static inline size_t MEM_ALIGN(size_t value)
@@ -232,6 +231,16 @@ public:
 	void print_contents(FILE*, unsigned flags = 0, const char* filter_path = 0) noexcept;
 	// The same routine, but more easily callable from the debugger
 	void print_contents(const char* filename, unsigned flags = 0, const char* filter_path = 0) noexcept;
+
+	inline bool operator==(const MemoryPool& rhs) const
+	{
+		return pool == rhs.pool;
+	}
+
+	inline bool operator!=(const MemoryPool& rhs) const
+	{
+		return !operator==(rhs);
+	}
 
 public:
 	struct Finalizer
@@ -515,7 +524,6 @@ namespace Firebird
 			return size_t(-1) / sizeof(T);
 		}
 
-		/* C++17
 		template <typename U, typename... Args>
 		constexpr void construct(U* ptr, Args&&... args)
 		{
@@ -523,27 +531,6 @@ namespace Firebird
 				new ((void*) ptr) U(pool, std::forward<Args>(args)...);
 			else
 				new ((void*) ptr) U(std::forward<Args>(args)...);
-		}
-		*/
-
-		template <
-			typename U,
-			typename... Args,
-			std::enable_if_t<std::is_constructible<U, MemoryPool&, Args...>::value, bool> = true
-		>
-		constexpr void construct(U* ptr, Args&&... args)
-		{
-			new ((void*) ptr) U(pool, std::forward<Args>(args)...);
-		}
-
-		template <
-			typename U,
-			typename... Args,
-			std::enable_if_t<!std::is_constructible<U, MemoryPool&, Args...>::value, bool> = true
-		>
-		constexpr void construct(U* ptr, Args&&... args)
-		{
-			new ((void*) ptr) U(std::forward<Args>(args)...);
 		}
 
 		template <typename U>
