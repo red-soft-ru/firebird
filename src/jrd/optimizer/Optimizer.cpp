@@ -248,11 +248,15 @@ namespace
 					for (const auto subRiver : rivers)
 					{
 						auto subRsb = subRiver->getRecordSource();
+
 						subRiver->activate(csb);
 						if (subRiver != rivers.front())
 							subRsb = opt->applyBoolean(subRsb, iter);
+
 						rsbs.add(subRsb);
 					}
+
+					rivers.clear();
 				}
 
 				m_rsb = FB_NEW_POOL(csb->csb_pool)
