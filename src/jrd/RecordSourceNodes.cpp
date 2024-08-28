@@ -3243,6 +3243,9 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 	const auto skip = rse_skip;
 	rse_skip = nullptr;
 
+	const auto orgFlags = flags;
+	flags = 0;
+
 	auto rse = this;
 	while (rseStack.hasData())
 	{
@@ -3270,6 +3273,8 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 
 		rse = newRse;
 	}
+
+	rse->flags = orgFlags;
 
 	return rse;
 }
