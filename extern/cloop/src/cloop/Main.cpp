@@ -82,12 +82,15 @@ static void run(int argc, const char* argv[])
 	else if (outFormat == "c-header")
 	{
 		if (argc < 6)
-			throw runtime_error(paramError("c-header", "headerGuard prefix"));
+			throw runtime_error(paramError("c-header", "headerGuard prefix [macro]"));
 
 		string headerGuard(argv[4]);
 		string prefix(argv[5]);
+		string macro;
+		if (argc == 7)
+			macro = argv[6];
 
-		generator.reset(new CHeaderGenerator(outFilename, prefix, &parser, headerGuard));
+		generator.reset(new CHeaderGenerator(outFilename, prefix, &parser, headerGuard, macro));
 	}
 	else if (outFormat == "c-impl")
 	{

@@ -248,7 +248,6 @@ copyFiles() {
 
 	#include (.h .pas files)
 	cp $BuiltFBDir/include/*.h ${TargetDir}@FB_INCDIR@
-#	cp $BuiltFBDir/include/firebird/impl/iberror_c.h ${TargetDir}@FB_INCDIR@/firebird/impl
 	cp $BuiltFBDir/include/firebird/*.h ${TargetDir}@FB_INCDIR@/firebird
 	tar -C $BuiltFBDir/include/firebird -cf - impl | tar -C ${TargetDir}@FB_INCDIR@/firebird -x
 	if [ "$CLIENT_ONLY_FLG" = "N" ]; then
@@ -262,7 +261,6 @@ copyFiles() {
 	if [ "$CLIENT_ONLY_FLG" = "N" ]; then
 		cp -f $BuiltFBDir/lib/libib_util.so ${TargetDir}@FB_LIBDIR@/libib_util.so
 	fi
-	copyIfExists $BuiltFBDir/lib/libfb_c_api.a ${TargetDir}@FB_LIBDIR@
 
 	if [ "$TomMathBuild" = "Y" ]; then
 		makeDirs @FB_LIBDIR@/.tm

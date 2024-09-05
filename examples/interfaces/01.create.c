@@ -3,7 +3,7 @@
  *	MODULE:		01.create.c
  *	DESCRIPTION:	Minimal sample of using interfaces from plain C.
  *
- *					Run something like this to build: cc 01.create.c -lfb_c_api -lfbclient
+ *					Run something like this to build: cc 01.create.c -lfbclient
  *
  *  The contents of this file are subject to the Initial
  *  Developer's Public License Version 1.0 (the "License");
