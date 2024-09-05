@@ -641,7 +641,7 @@ static void signal_handler(int)
 	++INET_SERVER_start;
 }
 
-static void shutdown_handler(int)
+static void shutdown_handler(int shutdown_signal_code)
 {
 /**************************************
  *
@@ -650,11 +650,13 @@ static void shutdown_handler(int)
  **************************************
  *
  * Functional description
- *	Forward sigterm signal to all child processes.
+ *	Forward shutdown signal to all child processes.
  *
  **************************************/
 
-	kill(-1 * getpid(), SIGTERM);
+	signal(shutdown_signal_code, SIG_IGN);
+
+	kill(-1 * getpid(), shutdown_signal_code);
 
 	exit(FINI_OK);
 }
