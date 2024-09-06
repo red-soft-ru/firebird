@@ -9110,7 +9110,7 @@ static processing_state process_statement(const std::string& str)
 			(statement_type == isc_info_sql_stmt_ddl ||
 			 statement_type == isc_info_sql_stmt_set_generator))
 		{
-			DB->execute(fbStatus, D__trans, 0, str.c_str(), isqlGlob.SQL_dialect, NULL, NULL, NULL, NULL);
+			global_Stmt->execute(fbStatus, D__trans, nullptr, nullptr, nullptr, nullptr);
 			setValues.StmtTimeout = 0;
 			if (ISQL_errmsg(fbStatus))
 			{
