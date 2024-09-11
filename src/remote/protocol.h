@@ -329,7 +329,7 @@ enum P_OP
 
 // Count String Structure
 
-class RemoteXdr;
+struct RemoteXdr;
 
 typedef struct cstring
 {
