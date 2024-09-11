@@ -1268,28 +1268,15 @@ AC_CHECK_MEMBER([struct dirent.d_type],
 
 dnl EKU: try to determine the alignment of long and double
 dnl      replaces FB_ALIGNMENT and FB_DOUBLE_ALIGN in src/jrd/common.h
-AC_MSG_CHECKING(alignment of long)
-AC_RUN_IFELSE([AC_LANG_SOURCE([[#include <semaphore.h>
-int main () {
-  struct s {
-    char a;
-    union { long long x; sem_t y; } b;
-  };
-  return (int)&((struct s*)0)->b;
-}]])],[ac_cv_c_alignment=$ac_status],[ac_cv_c_alignment=$ac_status],[])
-AC_MSG_RESULT($ac_cv_c_alignment)
-AC_DEFINE_UNQUOTED(FB_ALIGNMENT, $ac_cv_c_alignment, [Alignment of long])
+AC_CHECK_ALIGNOF([union { long long x; void* y; }])
+if test "$ac_cv_alignof_union___long_long_x__voidp_y___" = "0"; then
+	AC_MSG_ERROR(Failed to detect FB_ALIGNMENT)
+fi
+AC_DEFINE_UNQUOTED(FB_ALIGNMENT, $ac_cv_alignof_union___long_long_x__voidp_y___, [Alignment of long])
 
-AC_MSG_CHECKING(alignment of double)
-AC_RUN_IFELSE([AC_LANG_SOURCE([[int main () {
-  struct s {
-    char a;
-    double b;
-  };
-  return (int)&((struct s*)0)->b;
-}]])],[ac_cv_c_double_align=$ac_status],[ac_cv_c_double_align=$ac_status],[])
-AC_MSG_RESULT($ac_cv_c_double_align)
-AC_DEFINE_UNQUOTED(FB_DOUBLE_ALIGN, $ac_cv_c_double_align, [Alignment of double])
+dnl AC_MSG_CHECKING(alignment of double)
+AC_CHECK_ALIGNOF(double)
+AC_DEFINE_UNQUOTED(FB_DOUBLE_ALIGN, $ac_cv_alignof_double, [Alignment of double])
 
 AC_MSG_CHECKING(correctness of comparing 64-bit integers)
 ac_cv_compare_failed=1
