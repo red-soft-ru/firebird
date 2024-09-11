@@ -1260,18 +1260,6 @@ AC_CHECK_TYPES([socklen_t],,,[#include <sys/socket.h>])
 AH_BOTTOM([#ifndef HAVE_SOCKLEN_T
 typedef int socklen_t;
 #endif])
-AC_CHECK_TYPES([semun])
-if test "$ac_cv_type_semun" = "no"; then
-  AC_MSG_CHECKING(if sem.h defines semun)
-  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <sys/types.h>
-      #include <sys/ipc.h>
-      #include <sys/sem.h>]], [[union semun s;]])],[ac_cv_type_semun=yes; AC_DEFINE(HAVE_SEMUN) AC_MSG_RESULT(yes)],[AC_MSG_RESULT(no)])
-fi
-
-AC_CHECK_TYPES([struct XDR::xdr_ops],,,[#include <rpc/rpc.h>
-#include <rpc/xdr.h>])
-AC_CHECK_TYPES([struct xdr_ops],,,[#include <rpc/rpc.h>
-#include <rpc/xdr.h>])
 
 dnl AC_STRUCT_DIRENT_D_TYPE
 AC_CHECK_MEMBER([struct dirent.d_type],
