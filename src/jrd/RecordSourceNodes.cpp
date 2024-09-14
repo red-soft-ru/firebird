@@ -143,14 +143,16 @@ namespace
 			if (rse->rse_boolean && rse->rse_jointype == blr_inner &&
 				!rse->rse_first && !rse->rse_skip && !rse->rse_plan)
 			{
-				StreamList streams;
-				rse->computeRseStreams(streams);
+				StreamList rseStreams;
+				rse->computeRseStreams(rseStreams);
 
 				BoolExprNodeStack booleans;
-				if (findDependentBooleans(csb, streams,
+				if (findDependentBooleans(csb, rseStreams,
 										  rse->rse_boolean.getAddress(),
 										  booleans))
 				{
+					// Compose the conjunct boolean
+
 					fb_assert(booleans.hasData());
 					auto boolean = booleans.pop();
 					while (booleans.hasData())
@@ -162,11 +164,44 @@ namespace
 						boolean = andNode;
 					}
 
-					rse->flags |= RseNode::FLAG_SEMI_JOINED;
-					rseStack.push(rse);
-					booleanStack.push(boolean);
-					*parentBoolean = nullptr;
-					return true;
+					// Ensure that no external references are left inside the subquery.
+					// If so, mark the RSE as joined and add it to the stack.
+
+					SortedStreamList streams;
+					rse->collectStreams(streams);
+
+					bool dependent = false;
+					for (const auto stream : streams)
+					{
+						if (!rseStreams.exist(stream))
+						{
+							dependent = true;
+							break;
+						}
+					}
+
+					if (!dependent)
+					{
+						rse->flags |= RseNode::FLAG_SEMI_JOINED;
+						rseStack.push(rse);
+						booleanStack.push(boolean);
+						*parentBoolean = nullptr;
+						return true;
+					}
+
+					// Otherwise, restore the original sub-query by adding
+					// the collected booleans back to the RSE.
+
+					if (rse->rse_boolean)
+					{
+						const auto andNode = FB_NEW_POOL(csb->csb_pool)
+							BinaryBoolNode(csb->csb_pool, blr_and);
+						andNode->arg1 = boolean;
+						andNode->arg2 = rse->rse_boolean;
+						boolean = andNode;
+					}
+
+					rse->rse_boolean = boolean;
 				}
 			}
 		}
