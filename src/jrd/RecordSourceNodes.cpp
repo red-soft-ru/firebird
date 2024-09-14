@@ -138,7 +138,7 @@ namespace
 		if (rseNode && (rseNode->blrOp == blr_any || rseNode->blrOp == blr_ansi_any))
 		{
 			auto rse = rseNode->rse;
-			fb_assert(rse);
+			fb_assert(rse && (rse->flags & RseNode::FLAG_SUB_QUERY));
 
 			if (rse->rse_boolean && rse->rse_jointype == blr_inner &&
 				!rse->rse_first && !rse->rse_skip && !rse->rse_plan)
@@ -182,6 +182,7 @@ namespace
 
 					if (!dependent)
 					{
+						rse->flags &= ~RseNode::FLAG_SUB_QUERY;
 						rse->flags |= RseNode::FLAG_SEMI_JOINED;
 						rseStack.push(rse);
 						booleanStack.push(boolean);
