@@ -843,7 +843,6 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 
 	RiverList rivers, dependentRivers, specialRivers;
 
-	bool semiJoin = false;
 	bool innerSubStream = false;
 
 	for (auto node : rse->rse_relations)
@@ -852,13 +851,9 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		fb_assert(aggregate == rse->rse_aggregate);
 
 		const auto subRse = nodeAs<RseNode>(node);
-		if (subRse && subRse->isSemiJoined())
-		{
-			fb_assert(rse->rse_jointype == blr_inner);
-			semiJoin = true;
-		}
-		else
-			fb_assert(!semiJoin);
+
+		const bool semiJoin = (subRse && subRse->isSemiJoined());
+		fb_assert(!semiJoin || rse->rse_jointype == blr_inner);
 
 		// Find the stream number and place it at the end of the bedStreams array
 		// (if this is really a stream and not another RseNode)
