@@ -446,12 +446,12 @@ static DsqlRequest* safePrepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_
 	ULONG textLength, const TEXT* text, USHORT clientDialect, bool isInternalRequest)
 {
 	if (isInternalRequest)
-		return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, isInternalRequest);
+		return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, true);
 
 #ifdef WIN_NT
 	START_CHECK_FOR_EXCEPTIONS(NULL);
 #endif
-	return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, isInternalRequest);
+	return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, false);
 
 #ifdef WIN_NT
 	END_CHECK_FOR_EXCEPTIONS(NULL);
