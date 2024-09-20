@@ -86,7 +86,7 @@ using namespace Firebird;
 static ULONG	get_request_info(thread_db*, DsqlRequest*, ULONG, UCHAR*);
 static dsql_dbb*	init(Jrd::thread_db*, Jrd::Attachment*);
 static DsqlRequest* prepareRequest(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT, unsigned, bool);
-static DsqlRequest* safePrepareRequest(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT, bool);
+static DsqlRequest* safePrepareRequest(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT, unsigned, bool);
 static RefPtr<DsqlStatement> prepareStatement(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT,
 	unsigned, bool, ntrace_result_t* traceResult);
 static UCHAR*	put_item(UCHAR, const USHORT, const UCHAR*, UCHAR*, const UCHAR* const);
@@ -443,15 +443,15 @@ static dsql_dbb* init(thread_db* tdbb, Jrd::Attachment* attachment)
 
 // Use SEH frame when preparing user requests to catch possible stack overflows
 static DsqlRequest* safePrepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_tra* transaction,
-	ULONG textLength, const TEXT* text, USHORT clientDialect, bool isInternalRequest)
+	ULONG textLength, const TEXT* text, USHORT clientDialect, unsigned prepareFlags, bool isInternalRequest)
 {
 	if (isInternalRequest)
-		return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, true);
+		return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, prepareFlags, true);
 
 #ifdef WIN_NT
 	START_CHECK_FOR_EXCEPTIONS(NULL);
 #endif
-	return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, false);
+	return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, prepareFlags, false);
 
 #ifdef WIN_NT
 	END_CHECK_FOR_EXCEPTIONS(NULL);
