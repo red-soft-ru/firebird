@@ -109,7 +109,7 @@ AuthSspi::AuthSspi()
 	  groupNames(*getDefaultMemoryPool()), sessionKey(*getDefaultMemoryPool())
 {
 	TimeStamp timeOut;
-	hasCredentials = initEntries() && (fAcquireCredentialsHandle(0, "NTLM",
+	hasCredentials = initEntries() && (fAcquireCredentialsHandle(0, NEGOSSP_NAME_A,
 					SECPKG_CRED_BOTH, 0, 0, 0, 0,
 					&secHndl, &timeOut) == SEC_E_OK);
 }
