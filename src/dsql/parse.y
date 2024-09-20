@@ -7310,7 +7310,7 @@ map_from_symbol_name
 %type <intlStringPtr> map_logoninfo
 map_logoninfo
 	: sql_string
-	| valid_symbol_name		{ $$ = newNode<IntlString>($1->c_str()); }
+	| valid_symbol_name		{ $$ = newIntlString($1->c_str(), metadataCharSet->getName()); }
 	;
 
 %type map_using(<mappingNode>)
