@@ -43,6 +43,7 @@
 #include "../common/intlobj_new.h"
 #include "../jrd/jrd.h"
 #include "../jrd/status.h"
+#include "../jrd/ibsetjmp.h"
 #include "../common/CharSet.h"
 #include "../dsql/Parser.h"
 #include "../dsql/ddl_proto.h"
@@ -1490,10 +1491,22 @@ static void checkD(IStatus* st)
 
 // Prepare a request for execution. Return SQL status code.
 // Note: caller is responsible for pool handling.
+// Use SEH frame when preparing user requests to catch possible stack overflows
 static dsql_req* prepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_tra* transaction,
 	ULONG textLength, const TEXT* text, USHORT clientDialect, bool isInternalRequest)
 {
-	return prepareStatement(tdbb, database, transaction, textLength, text, clientDialect, isInternalRequest);
+	if (isInternalRequest)
+		return prepareStatement(tdbb, database, transaction, textLength, text, clientDialect, true);
+
+#ifdef WIN_NT
+	START_CHECK_FOR_EXCEPTIONS(NULL);
+#endif
+
+	return prepareStatement(tdbb, database, transaction, textLength, text, clientDialect, false);
+
+#ifdef WIN_NT
+	END_CHECK_FOR_EXCEPTIONS(NULL);
+#endif
 }
 
 
