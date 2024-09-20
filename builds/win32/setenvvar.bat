@@ -118,7 +118,7 @@ rem version using the available env vars so we test to see if the runtime dir
 rem exists and if not we fall back to 3.
 rem NOTE 2 This code is likely to break again in the future !!!!
   set MSVC_RUNTIME_MINOR_VERSION=%VCToolsVersion:~3,1%
-  if not exist %VCToolsRedistDir%%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION%.CRT (
+  if not exist "%VCToolsRedistDir%%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION%.CRT" (
     set MSVC_RUNTIME_MINOR_VERSION=3
   )
   set MSVC_RUNTIME_LIBRARY_VERSION=%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION%
