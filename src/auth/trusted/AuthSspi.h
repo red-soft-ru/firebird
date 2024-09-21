@@ -124,6 +124,7 @@ public:
 private:
 	AuthSspi::DataHolder sspiData;
 	AuthSspi sspi;
+	bool done;
 };
 
 class WinSspiClient :
