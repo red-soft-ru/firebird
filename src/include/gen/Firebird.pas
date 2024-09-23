@@ -1927,6 +1927,7 @@ type
 		const AUTH_SUCCESS = Integer(0);
 		const AUTH_MORE_DATA = Integer(1);
 		const AUTH_CONTINUE = Integer(2);
+		const AUTH_SUCCESS_WITH_DATA = Integer(3);
 
 	end;
 

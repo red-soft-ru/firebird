@@ -2956,6 +2956,7 @@ namespace Firebird
 		static const int AUTH_SUCCESS = 0;
 		static const int AUTH_MORE_DATA = 1;
 		static const int AUTH_CONTINUE = 2;
+		static const int AUTH_SUCCESS_WITH_DATA = 3;
 	};
 
 	class IWriter : public IVersioned
