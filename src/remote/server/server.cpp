@@ -657,7 +657,10 @@ public:
 			}
 
 			// if we asked for more data but received nothing switch to next plugin
-			const bool forceNext = (flags & AUTH_CONTINUE) && (!authPort->port_srv_auth_block->hasDataForPlugin());
+			const bool forceNext = (flags & AUTH_CONTINUE) &&
+				(!authPort->port_srv_auth_block->hasDataForPlugin()) &&
+				(!authPort->port_srv_auth_block->authCompleted());
+
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: ServerAuth calls plug %s\n",
 				forceNext ? "forced-NEXT" : authItr->name()));
 			int authResult = forceNext ? IAuth::AUTH_CONTINUE :
@@ -685,6 +688,11 @@ public:
 				authItr->next();
 				authServer = NULL;
 				continue;
+
+			case IAuth::AUTH_SUCCESS_WITH_DATA:
+				HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: success with data\n"));
+				fb_assert(!authPort->port_srv_auth_block->authCompleted());
+				// fall thru
 
 			case IAuth::AUTH_MORE_DATA:
 				HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: plugin wants more data\n"));
@@ -739,6 +747,13 @@ public:
 				if (send->p_acpt.p_acpt_type & pflag_compress)
 					authPort->port_flags |= PORT_compressed;
 				memset(&send->p_auth_cont, 0, sizeof send->p_auth_cont);
+
+				if (authResult == IAuth::AUTH_SUCCESS_WITH_DATA)
+				{
+					authPort->port_srv_auth_block->authCompleted(true);
+					HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: success with data, completed\n"));
+				}
+
 				return false;
 
 			case IAuth::AUTH_FAILED:
