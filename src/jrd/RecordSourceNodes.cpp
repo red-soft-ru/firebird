@@ -3259,6 +3259,23 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 	if (!dbb->dbb_config->getSubQueryConversion())
 		return nullptr;
 
+	// If the sub-query is nested inside the other sub-query which wasn't converted into semi-join,
+	// it makes no sense to apply a semi-join at the deeper levels, as a sub-query is expected
+	// to be executed repeatedly.
+	// This is a temporary fix until nested loop semi-joins are allowed by the optimizer.
+
+	if (flags & FLAG_SUB_QUERY)
+		return nullptr;
+
+	for (const auto node : csb->csb_current_nodes)
+	{
+		if (const auto rse = nodeAs<RseNode>(node))
+		{
+			if (rse->flags & FLAG_SUB_QUERY)
+				return nullptr;
+		}
+	}
+
 	RecordSourceNodeStack rseStack;
 	BoolExprNodeStack booleanStack;
 
