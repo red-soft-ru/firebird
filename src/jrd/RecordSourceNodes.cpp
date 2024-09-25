@@ -55,7 +55,7 @@ static ValueExprNode* resolveUsingField(DsqlCompilerScratch* dsqlScratch, const 
 namespace
 {
 	// Search through the list of ANDed booleans to find comparisons
-	// referring streams of other select expressions.
+	// referring streams of the parent select expression.
 	// Extract those booleans and return them to the caller.
 
 	bool findDependentBooleans(CompilerScratch* csb,
@@ -92,7 +92,7 @@ namespace
 
 				for (const auto stream : streams)
 				{
-					if (!rseStreams.exist(stream))
+					if (rseStreams.exist(stream))
 					{
 						booleanStack.push(boolean);
 						*parentBoolean = nullptr;
@@ -109,6 +109,7 @@ namespace
 	// They are candidates to be converted into semi- or anti-joins.
 
 	bool findPossibleJoins(CompilerScratch* csb,
+						   const StreamList& rseStreams,
 						   BoolExprNode** parentBoolean,
 						   RecordSourceNodeStack& rseStack,
 						   BoolExprNodeStack& booleanStack)
@@ -118,10 +119,10 @@ namespace
 		const auto binaryNode = nodeAs<BinaryBoolNode>(boolNode);
 		if (binaryNode && binaryNode->blrOp == blr_and)
 		{
-			const bool found1 = findPossibleJoins(csb, binaryNode->arg1.getAddress(),
-				rseStack, booleanStack);
-			const bool found2 = findPossibleJoins(csb, binaryNode->arg2.getAddress(),
-				rseStack, booleanStack);
+			const bool found1 = findPossibleJoins(csb, rseStreams,
+				binaryNode->arg1.getAddress(), rseStack, booleanStack);
+			const bool found2 = findPossibleJoins(csb, rseStreams,
+				binaryNode->arg2.getAddress(), rseStack, booleanStack);
 
 			if (!binaryNode->arg1 && !binaryNode->arg2)
 				*parentBoolean = nullptr;
@@ -143,8 +144,7 @@ namespace
 			if (rse->rse_boolean && rse->rse_jointype == blr_inner &&
 				!rse->rse_first && !rse->rse_skip && !rse->rse_plan)
 			{
-				StreamList rseStreams;
-				rse->computeRseStreams(rseStreams);
+				// Find booleans convertable into semi-joins
 
 				BoolExprNodeStack booleans;
 				if (findDependentBooleans(csb, rseStreams,
@@ -173,7 +173,7 @@ namespace
 					bool dependent = false;
 					for (const auto stream : streams)
 					{
-						if (!rseStreams.exist(stream))
+						if (rseStreams.exist(stream))
 						{
 							dependent = true;
 							break;
@@ -3264,7 +3264,10 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 
 	// Find possibly joinable sub-queries
 
-	if (!findPossibleJoins(csb, rse_boolean.getAddress(), rseStack, booleanStack))
+	StreamList rseStreams;
+	computeRseStreams(rseStreams);
+
+	if (!findPossibleJoins(csb, rseStreams, rse_boolean.getAddress(), rseStack, booleanStack))
 		return nullptr;
 
 	fb_assert(rseStack.hasData() && booleanStack.hasData());
