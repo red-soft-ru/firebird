@@ -7408,8 +7408,11 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 
 	bool needFile = !(flags & ANALYZE_EMP_NAME);
 	const PathName save_attach_name(attach_name);
+
+#ifdef TRUSTED_AUTH
 	bool legacySSP = false;
 	Auth::setLegacySSP(legacySSP);
+#endif
 
 	while (true)
 	{
@@ -7505,6 +7508,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 		}
 		catch (const Exception&)
 		{
+#ifdef TRUSTED_AUTH
 			const char* const pluginName = cBlock.plugins.name();
 			if (legacySSP || fb_utils::stricmp(pluginName, "WIN_SSPI") != 0)
 				throw;
@@ -7515,6 +7519,9 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 			attach_name = save_attach_name;
 
 			cBlock.plugins.set(pluginName);
+#else
+			throw;
+#endif
 		}
 	}
 
