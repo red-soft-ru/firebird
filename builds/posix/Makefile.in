@@ -743,19 +743,13 @@ gbak_files: $(GBAK_FILES)
 
 INCLUDE_DEST=   $(FB_BUILD)/include
 
-NEW_INCLUDES_SRC = $(shell find $(SRC_ROOT)/include/firebird -type f)
-NEW_INCLUDES_DEST = $(patsubst $(SRC_ROOT)/include/firebird/%, $(INCLUDE_DEST)/firebird/%, $(NEW_INCLUDES_SRC))
-
-include_generic: $(INCLUDE_DEST)/ib_util.h  \
-                 $(NEW_INCLUDES_DEST)
-
 # ib_util.h actually is a marker for a number of headers
 
 # Copy all the other headers to the distribution directory. We use
 # ib_util.h as the marker for all the files.
 
-OtherDistribHeaders = extlib/ib_util.h \
-                      include/iberror.h \
+OtherDistribHeaders = include/ib_util.h \
+					  include/iberror.h \
 					  include/ibase.h
 
 SRC_OtherDistribHeaders = $(addprefix $(SRC_ROOT)/, $(OtherDistribHeaders))
@@ -763,6 +757,11 @@ SRC_OtherDistribHeaders = $(addprefix $(SRC_ROOT)/, $(OtherDistribHeaders))
 $(INCLUDE_DEST)/ib_util.h : $(SRC_OtherDistribHeaders)
 	mkdir -p $(INCLUDE_DEST)
 	$(CP) $^ $(INCLUDE_DEST)/
+
+NEW_INCLUDES_SRC = $(shell find $(SRC_ROOT)/include/firebird -type f)
+NEW_INCLUDES_DEST = $(patsubst $(SRC_ROOT)/include/firebird/%, $(INCLUDE_DEST)/firebird/%, $(NEW_INCLUDES_SRC))
+
+include_generic: $(NEW_INCLUDES_DEST) $(INCLUDE_DEST)/ib_util.h
 
 ifeq ($(SYSTEM_BOOST_FLG),Y)
 $(INCLUDE_DEST)/firebird/Message.h : $(SRC_ROOT)/include/firebird/Message.h
