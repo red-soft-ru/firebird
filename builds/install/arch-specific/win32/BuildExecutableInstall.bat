@@ -402,7 +402,6 @@ for %%v in (IPLicense.txt IDPLicense.txt ) do (
 
 @echo   Copying other include files required for development...
 @set OUTPATH=%FB_OUTPUT_DIR%\include
-@copy %FB_ROOT_PATH%\src\yvalve\perf.h %OUTPATH%\ > nul
 @copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\ > nul || (@call :ERROR Failure executing copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\  )
 @if ERRORLEVEL 1 goto :END
 
