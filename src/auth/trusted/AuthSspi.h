@@ -145,6 +145,10 @@ private:
 void registerTrustedClient(Firebird::IPluginManager* iPlugin);
 void registerTrustedServer(Firebird::IPluginManager* iPlugin);
 
+// Set per-thread flag that specify which security package should be used by
+// newly created plugin instances: true - use NTLM, false - use Negotiate.
+void setLegacySSP(bool value);
+
 } // namespace Auth
 
 #endif // TRUSTED_AUTH
