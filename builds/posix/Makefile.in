@@ -755,7 +755,6 @@ include_generic: $(INCLUDE_DEST)/ib_util.h  \
 # ib_util.h as the marker for all the files.
 
 OtherDistribHeaders = extlib/ib_util.h \
-                      yvalve/perf.h  \
                       include/iberror.h \
 					  include/ibase.h
 

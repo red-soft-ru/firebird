@@ -28,8 +28,8 @@
  *
  */
 
-#ifndef FIREBIRD_PERF_H
-#define FIREBIRD_PERF_H
+#ifndef JRD_PERF_H
+#define JRD_PERF_H
 
 #include <stdio.h>
 
@@ -116,5 +116,5 @@ typedef struct perf64
 
 #include "../yvalve/perf_proto.h"
 
-#endif /* FIREBIRD_PERF_H */
+#endif /* JRD_PERF_H */
 
