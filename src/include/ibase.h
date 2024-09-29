@@ -41,4 +41,9 @@
  *
  */
 
+/*
+ * Including this file is not recommended and it will be removed in the future.
+ * Please include directly the file present in the "firebird" directory.
+ */
+
 #include "firebird/ibase.h"
