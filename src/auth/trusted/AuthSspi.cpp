@@ -67,6 +67,15 @@ namespace
 
 namespace Auth {
 
+
+static thread_local bool legacySSP = false;
+
+void setLegacySSP(bool value)
+{
+	legacySSP = value;
+}
+
+
 HINSTANCE AuthSspi::library = 0;
 
 bool AuthSspi::initEntries()
@@ -109,7 +118,8 @@ AuthSspi::AuthSspi()
 	  groupNames(*getDefaultMemoryPool()), sessionKey(*getDefaultMemoryPool())
 {
 	TimeStamp timeOut;
-	hasCredentials = initEntries() && (fAcquireCredentialsHandle(0, NEGOSSP_NAME_A,
+	hasCredentials = initEntries() && (fAcquireCredentialsHandle(0,
+					legacySSP ? NTLMSP_NAME_A : NEGOSSP_NAME_A,
 					SECPKG_CRED_BOTH, 0, 0, 0, 0,
 					&secHndl, &timeOut) == SEC_E_OK);
 }
