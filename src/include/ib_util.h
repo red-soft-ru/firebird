@@ -21,17 +21,9 @@
  * Contributor(s): ______________________________________.
  */
 
-#ifndef _IB_UTIL_H
-#define _IB_UTIL_H
+/*
+ * Including this file is not recommended and it will be removed in the future.
+ * Please include directly the file present in the "firebird" directory.
+ */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-extern void *ib_util_malloc(long);
-
-#ifdef __cplusplus
-}	/* extern "C" */
-#endif
-
-#endif /* _IB_UTIL_H */
+#include "firebird/ib_util.h"
