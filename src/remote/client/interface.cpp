@@ -7416,6 +7416,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 	while (true)
 	{
 		authenticateStep0(cBlock);
+		const NoCaseString savePluginName(cBlock.plugins.name());
 
 		try
 		{
@@ -7502,6 +7503,38 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 					}
 				}
 			}
+
+#ifdef TRUSTED_AUTH
+			if (port && !legacySSP)
+			{
+				const PACKET& const packet = port->port_context->rdb_packet;
+				if (port->port_protocol < PROTOCOL_VERSION13 && packet.p_operation == op_accept)
+				{
+					// old server supports legacy SSP only
+					legacySSP = true;
+				}
+				else if (port->port_protocol >= PROTOCOL_VERSION13 && packet.p_operation == op_accept_data)
+				{
+					// more recent server reports if it supports non-legacy SSP
+					legacySSP = !(packet.p_acpd.p_acpt_type & pflag_win_sspi_nego);
+				}
+				else
+					break;
+
+				Auth::setLegacySSP(legacySSP);
+
+				if (legacySSP && savePluginName == "WIN_SSPI")
+				{
+					// reinitialize Win_SSPI plugin and send new data
+					attach_name = save_attach_name;
+
+					cBlock.plugins.set(savePluginName.c_str());
+
+					disconnect(port, false);
+					continue;
+				}
+			}
+#endif
 
 			break;
 		}
