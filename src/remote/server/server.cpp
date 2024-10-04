@@ -1985,6 +1985,9 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	send->p_acpd.p_acpt_version = port->port_protocol = version;
 	send->p_acpd.p_acpt_architecture = architecture;
 	send->p_acpd.p_acpt_type = type | (compress ? pflag_compress : 0);
+#ifdef TRUSTED_AUTH
+	send->p_acpd.p_acpt_type |= pflag_win_sspi_nego;
+#endif
 	send->p_acpd.p_acpt_authenticated = 0;
 
 	send->p_acpt.p_acpt_version = port->port_protocol = version;
