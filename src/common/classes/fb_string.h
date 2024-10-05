@@ -662,7 +662,8 @@ namespace Firebird
 		StringBase() : AbstractString(Comparator::getMaxLength()) {}
 		StringBase(const StringType& v) : AbstractString(Comparator::getMaxLength(), v) {}
 		StringBase(const void* s, size_type n) : AbstractString(Comparator::getMaxLength(), n, s) {}
-		StringBase(const_pointer s) : AbstractString(Comparator::getMaxLength(), static_cast<size_type>(strlen(s)), s) {}
+		StringBase(const_pointer s) :
+			AbstractString(Comparator::getMaxLength(), static_cast<size_type>(s ? strlen(s) : 0), s) {}
 		explicit StringBase(const unsigned char* s) :
 			AbstractString(Comparator::getMaxLength(), static_cast<size_type>(strlen((char*)s)), (char*)s) {}
 		StringBase(const MetaString& v) : AbstractString(Comparator::getMaxLength(), v) {}
