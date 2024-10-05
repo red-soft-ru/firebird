@@ -142,6 +142,8 @@ Usage:
                                 |
    DECFLOAT_TRAPS               | Exceptional conditions in operations with DECFLOAT
                                 | values that cause a trap.
+                                |
+   PARALLEL_WORKERS             | Number of parallel workes that could be used by attachment.
 
 Notes:
    To prevent DoS attacks against Firebird Server you are not allowed to have
