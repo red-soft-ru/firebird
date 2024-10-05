@@ -7507,7 +7507,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 #ifdef TRUSTED_AUTH
 			if (port && !legacySSP)
 			{
-				const PACKET& const packet = port->port_context->rdb_packet;
+				const PACKET& packet = port->port_context->rdb_packet;
 				if (port->port_protocol < PROTOCOL_VERSION13 && packet.p_operation == op_accept)
 				{
 					// old server supports legacy SSP only
