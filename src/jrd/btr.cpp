@@ -367,6 +367,10 @@ USHORT BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescAlloc** csb_idx, Rel
 	if (!root)
 		return 0;
 
+	Cleanup release_root([&] {
+		CCH_RELEASE(tdbb, &window);
+	});
+
 	delete *csb_idx;
 	*csb_idx = FB_NEW_RPT(*tdbb->getDefaultPool(), root->irt_count) IndexDescAlloc();
 
@@ -377,8 +381,6 @@ USHORT BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescAlloc** csb_idx, Rel
 		if (BTR_description(tdbb, relation, root, &buffer[count], i))
 			count++;
 	}
-
-	CCH_RELEASE(tdbb, &window);
 	return count;
 }
 
