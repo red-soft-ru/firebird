@@ -93,8 +93,6 @@ if test "x$VCPKG_TRIPLET" != "x" ; then
   fi
 
   ./vcpkg/vcpkg install --triplet=$VCPKG_TRIPLET
-  cat /Users/runner/work/firebird/firebird/vcpkg/buildtrees/libcxx/build-fb-x64-osx-rel-out.log
-  cat /Users/runner/work/firebird/firebird/vcpkg/buildtrees/libcxx/build-fb-x64-osx-rel-err.log
 
   VCPKG_INSTALLED=`pwd`/vcpkg_installed/$VCPKG_TRIPLET
   AC_SUBST(VCPKG_INSTALLED)
