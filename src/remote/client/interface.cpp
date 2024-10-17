@@ -7162,9 +7162,6 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
  *
  **************************************/
 
-	rem_port* port = NULL;
-	int inet_af = AF_UNSPEC;
-
 	cBlock.loadClnt(pb, &parSet);
 	pb.deleteWithTag(parSet.auth_block);
 
@@ -7176,8 +7173,12 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 	Auth::setLegacySSP(legacySSP);
 #endif
 
+	rem_port* port;
 	while (true)
 	{
+		port = NULL;
+		int inet_af = AF_UNSPEC;
+
 		authenticateStep0(cBlock);
 		const NoCaseString savePluginName(cBlock.plugins.name());
 
