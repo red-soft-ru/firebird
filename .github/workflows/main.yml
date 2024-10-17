@@ -289,7 +289,7 @@ jobs:
 
   build-macos:
     name: build-macos-${{ matrix.arch }}
-    runs-on: ${{ (matrix.arch == 'arm64' && 'macos-14') || 'macos-12' }}
+    runs-on: ${{ (matrix.arch == 'arm64' && 'macos-14') || 'macos-13' }}
 
     strategy:
       fail-fast: false
