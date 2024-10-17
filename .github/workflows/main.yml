@@ -315,7 +315,7 @@ jobs:
       - name: Cache - vcpkg
         uses: actions/cache@v4
         with:
-          key: ${{ runner.os }}-vcpkg-0
+          key: ${{ runner.os }}-vcpkg-fb6-0
           path: |
             $HOME/.cache/vcpkg/archives
 
