@@ -326,8 +326,8 @@ jobs:
           export PATH="$(brew --prefix python3)/bin:$PATH"
 
           ./autogen.sh --with-builtin-tommath --with-builtin-tomcrypt
-          cat /Users/runner/work/firebird/firebird/vcpkg/buildtrees/libcxx/build-fb-x64-osx-rel-out.log
-          cat /Users/runner/work/firebird/firebird/vcpkg/buildtrees/libcxx/build-fb-x64-osx-rel-err.log
+          cat ./vcpkg/buildtrees/libcxx/build-fb-*-osx-rel-out.log 2>/dev/null
+          cat ./vcpkg/buildtrees/libcxx/build-fb-*-osx-rel-err.log 2>/dev/null
 
           make -j4
           make tests -j4
