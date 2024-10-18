@@ -323,7 +323,6 @@ jobs:
         run: |
           export LIBTOOLIZE=glibtoolize
           export LIBTOOL=glibtool
-          export PATH="$(brew --prefix python3)/bin:$PATH"
 
           ./autogen.sh --with-builtin-tommath --with-builtin-tomcrypt
           make -j4
