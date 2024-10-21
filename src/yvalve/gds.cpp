@@ -2971,7 +2971,7 @@ static SCHAR blr_print_char(gds_ctl* control)
 	else if (control->ctl_language)
 		blr_format(control, "chr(%d),", (int) v);
 	else
-		blr_format(control, "%d,", (int) c);
+		blr_format(control, "%d,", (int) v);
 
 	return c;
 }
