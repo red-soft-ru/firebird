@@ -13,4 +13,7 @@
 	},
 
 	"files.insertFinalNewline": true,
+	"files.associations": {
+		"*.epp": "cpp"
+	}
 }
