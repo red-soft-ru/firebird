@@ -15,5 +15,9 @@
 	"files.insertFinalNewline": true,
 	"files.associations": {
 		"*.epp": "cpp"
+	},
+	"search.exclude":{
+		"temp/**": true,
+		"gen/**": true
 	}
 }
