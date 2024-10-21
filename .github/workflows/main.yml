@@ -290,6 +290,8 @@ jobs:
   build-macos:
     name: build-macos-${{ matrix.arch }}
     runs-on: ${{ (matrix.arch == 'arm64' && 'macos-14') || 'macos-13' }}
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
     strategy:
       fail-fast: false
@@ -321,12 +323,12 @@ jobs:
           brew install python@3.11
           ln -s "$(brew --prefix python@3.11)/bin/python3" "$(brew --prefix python@3.11)/bin/python"
 
-      - name: Cache - vcpkg
-        uses: actions/cache@v4
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v7
         with:
-          key: ${{ runner.os }}-vcpkg-0
-          path: |
-            $HOME/.cache/vcpkg/archives
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - name: Build
         run: |
