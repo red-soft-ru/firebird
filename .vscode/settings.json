@@ -9,7 +9,7 @@
 		"files.trimTrailingWhitespace": false
 	},
 	"files.readonlyInclude": {
-		"temp/**":true
+		"temp/**": true
 	},
 
 	"files.insertFinalNewline": true,
