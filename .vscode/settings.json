@@ -8,11 +8,9 @@
 	"[markdown]": {
 		"files.trimTrailingWhitespace": false
 	},
+	"files.readonlyInclude": {
+		"temp/**":true
+	},
 
 	"files.insertFinalNewline": true,
-
-	"files.exclude": {
-		"temp": true,
-		"gen": true
-	}
 }
