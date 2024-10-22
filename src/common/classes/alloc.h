@@ -330,7 +330,7 @@ template <typename SubsystemThreadData, typename SubsystemPool>
 class SubsystemContextPoolHolder : public ContextPoolHolder
 {
 public:
-	SubsystemContextPoolHolder <SubsystemThreadData, SubsystemPool>
+	SubsystemContextPoolHolder
 	(
 		SubsystemThreadData* subThreadData,
 		SubsystemPool* newPool
@@ -341,10 +341,12 @@ public:
 	{
 		savedThreadData->setDefaultPool(newPool);
 	}
+
 	~SubsystemContextPoolHolder()
 	{
 		savedThreadData->setDefaultPool(savedPool);
 	}
+
 private:
 	SubsystemThreadData* savedThreadData;
 	SubsystemPool* savedPool;
