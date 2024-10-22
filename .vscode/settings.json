@@ -16,7 +16,7 @@
 	"files.associations": {
 		"*.epp": "cpp"
 	},
-	"search.exclude":{
+	"search.exclude": {
 		"temp/**": true,
 		"gen/**": true
 	}
