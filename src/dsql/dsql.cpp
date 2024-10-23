@@ -640,8 +640,8 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 			dsqlStatement->setOrgText(text, textLength);
 
 		const bool basedOnCursor =
-			(dsqlStatement->getType() & (DsqlStatement::TYPE_UPDATE_CURSOR |
-										 DsqlStatement::TYPE_DELETE_CURSOR));
+				(dsqlStatement->getType() == DsqlStatement::TYPE_UPDATE_CURSOR ||
+				 dsqlStatement->getType() == DsqlStatement::TYPE_DELETE_CURSOR);
 
 		if (isStatementCacheActive && dsqlStatement->isDml() && !basedOnCursor)
 		{
