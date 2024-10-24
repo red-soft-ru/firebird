@@ -1211,9 +1211,15 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 		// This index is never used for IS NULL, thus we can ignore NULLs
 		// already at index scan. But this rule doesn't apply to nod_equiv
 		// which requires NULLs to be found in the index.
-		// A second exception is when this index is used for navigation.
-		if (ignoreNullsOnScan && !(idx->idx_runtime_flags & idx_navigate))
+		//
+		// dimitr:	make sure the check below is never moved outside the IF scope,
+		// 			as this flag must not be set for a full index scan,
+		//			see also the assertion below
+		if (ignoreNullsOnScan)
+		{
+			fb_assert(indexScratch->lowerCount || indexScratch->upperCount);
 			retrieval->irb_generic |= irb_ignore_null_value_key;
+		}
 
 		const auto& lastSegment = segments[count - 1];
 
