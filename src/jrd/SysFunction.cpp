@@ -379,6 +379,9 @@ const char
 	DATABASE_GUID[] = "DB_GUID",
 	DATABASE_FILE_ID[] = "DB_FILE_ID",
 	REPLICA_MODE[] = "REPLICA_MODE",
+	PAGES_ALLOCATED[] = "PAGES_ALLOCATED",
+	PAGES_USED[] = "PAGES_USED",
+	PAGES_FREE[] = "PAGES_FREE",
 	// SYSTEM namespace: connection wise items
 	SESSION_ID_NAME[] = "SESSION_ID",
 	NETWORK_PROTOCOL_NAME[] = "NETWORK_PROTOCOL",
@@ -430,12 +433,6 @@ const char
 static const char
 	FALSE_VALUE[] = "FALSE",
 	TRUE_VALUE[] = "TRUE";
-
-// Get pages
-const char
-    PAGES_ALLOCATED[] = "PAGES_ALLOCATED",
-    PAGES_USED[] = "PAGES_USED",
-    PAGES_FREE[] = "PAGES_FREE";
 
 
 double fbcot(double value) noexcept
