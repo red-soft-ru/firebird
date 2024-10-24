@@ -150,6 +150,7 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 					plan += "Bitmap" + printIndent(++level);
 
 				const index_desc& idx = retrieval->irb_desc;
+				const bool primaryIdx = (idx.idx_flags & idx_primary);
 				const bool uniqueIdx = (idx.idx_flags & idx_unique);
 				const USHORT segCount = idx.idx_count;
 
@@ -161,7 +162,13 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 
 				const bool fullscan = (maxSegs == 0);
 				const bool list = (retrieval->irb_list != nullptr);
-				const bool unique = !list && uniqueIdx && equality && (minSegs == segCount);
+
+				bool unique = false;
+				if (!list && equality && minSegs == segCount)
+				{
+					unique = (retrieval->irb_generic & irb_ignore_null_value_key) ?
+						uniqueIdx : primaryIdx;
+				}
 
 				string bounds;
 				if (!unique && !fullscan)
