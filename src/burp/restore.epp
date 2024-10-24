@@ -275,15 +275,18 @@ static inline void collect_missing_privs(BurpGlobals* tdgbl, USHORT type, const 
 
 } // namespace
 
-bool activateIndex(BurpGlobals* tdgbl, const char* index_name, FbLocalStatus& local_status_vector)
+void activateIndex(BurpGlobals* tdgbl, const char* index_name)
 {
-	bool fError = false;
+	BURP_verbose(285, index_name);
+	// activating and creating deferred index %s
 
-	Firebird::IRequest* req_handle = nullptr;
-	Firebird::ITransaction* activateIndexTran = nullptr;
+	bool fError = false;
+	FbLocalStatus local_status_vector;
+
+	ITransaction* activateIndexTran = nullptr;
 	START_TRANSACTION activateIndexTran;
 
-	FOR (TRANSACTION_HANDLE activateIndexTran REQUEST_HANDLE req_handle)
+	FOR (TRANSACTION_HANDLE activateIndexTran REQUEST_HANDLE tdgbl->handles_activateIndex_req_handle1)
 		IND1 IN RDB$INDICES WITH IND1.RDB$INDEX_NAME EQ index_name
 		MODIFY IND1 USING
 			IND1.RDB$INDEX_INACTIVE = FALSE;
@@ -294,8 +297,6 @@ bool activateIndex(BurpGlobals* tdgbl, const char* index_name, FbLocalStatus& lo
 		fError = true;
 		fb_utils::copyStatus(&local_status_vector, isc_status);
 	END_ERROR;
-
-	MISC_release_request_silent(req_handle);
 
 	if (!fError)
 	{
@@ -308,14 +309,15 @@ bool activateIndex(BurpGlobals* tdgbl, const char* index_name, FbLocalStatus& lo
 
 	if (fError)
 	{
+		BURP_print(false, 173, index_name);
+		BURP_print_status(false, &local_status_vector);
+		tdgbl->flag_on_line = false;
+
 		ROLLBACK activateIndexTran;
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
-		return false;
 	}
-
-	return true;
 }
 
 int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
@@ -431,17 +433,8 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 			MISC_terminate(IDS.RDB$INDEX_NAME, index_name,
 				(ULONG)MISC_symbol_length(IDS.RDB$INDEX_NAME, sizeof(IDS.RDB$INDEX_NAME)),
 				sizeof(index_name));
-			BURP_verbose(285, index_name);
-			// activating and creating deferred index %s
 
-			FbLocalStatus local_status_vector;
-
-			if (!activateIndex(tdgbl, index_name, local_status_vector))
-			{
-				BURP_print(false, 173, index_name);
-				BURP_print_status(false, &local_status_vector);
-				tdgbl->flag_on_line = false;
-			}
+			activateIndex(tdgbl, index_name);
 		END_FOR;
 		ON_ERROR
 			general_on_error ();
@@ -475,16 +468,8 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 			MISC_terminate(IDS.RDB$INDEX_NAME, index_name,
 				(ULONG) MISC_symbol_length(IDS.RDB$INDEX_NAME, sizeof(IDS.RDB$INDEX_NAME)),
 				sizeof(index_name));
-			BURP_verbose(285, index_name);
-			// activating and creating deferred index %s
-			FbLocalStatus local_status_vector;
 
-			if (!activateIndex(tdgbl, index_name, local_status_vector))
-			{
-				BURP_print(false, 173, index_name);
-				BURP_print_status(false, &local_status_vector);
-				tdgbl->flag_on_line = false;
-			}
+			activateIndex(tdgbl, index_name);
 		END_FOR;
 		ON_ERROR
 			general_on_error ();
