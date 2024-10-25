@@ -1761,13 +1761,7 @@ public:
 public:
 	CreateIndexNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
-		  name(p, aName),
-		  unique(false),
-		  descending(false),
-		  relation(nullptr),
-		  columns(nullptr),
-		  computed(nullptr),
-		  partial(nullptr)
+		  name(p, aName)
 	{
 	}
 
@@ -1788,8 +1782,8 @@ protected:
 
 public:
 	MetaName name;
-	bool unique;
-	bool descending;
+	bool unique = false;
+	bool descending = false;
 	bool active = true;
 	NestConst<RelationSourceNode> relation;
 	NestConst<ValueListNode> columns;
