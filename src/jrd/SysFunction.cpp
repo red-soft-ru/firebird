@@ -396,6 +396,7 @@ const char
 	CLIENT_VERSION_NAME[] = "CLIENT_VERSION",
 	CURRENT_USER_NAME[] = "CURRENT_USER",
 	CURRENT_ROLE_NAME[] = "CURRENT_ROLE",
+	SERVER_PID_NAME[] = "SERVER_PID",
 	SESSION_IDLE_TIMEOUT[] = "SESSION_IDLE_TIMEOUT",
 	STATEMENT_TIMEOUT[] = "STATEMENT_TIMEOUT",
 	EFFECTIVE_USER_NAME[] = "EFFECTIVE_USER",
@@ -4709,6 +4710,8 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 
 			resultStr = role.c_str();
 		}
+		else if (nameStr == SERVER_PID_NAME)
+			resultStr.printf("%d", getpid());
 		else if (nameStr == SESSION_IDLE_TIMEOUT)
 			resultStr.printf("%" ULONGFORMAT, attachment->getIdleTimeout());
 		else if (nameStr == STATEMENT_TIMEOUT)
