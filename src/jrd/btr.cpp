@@ -766,7 +766,10 @@ void IndexScanListIterator::makeKeys(thread_db* tdbb, temporary_key* lower, temp
 	m_upperValues[m_segno] = *m_iterator;
 
 	const auto keyType =
-		(m_retrieval->irb_desc.idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT;
+		(m_retrieval->irb_generic & irb_multi_starting) ? INTL_KEY_MULTI_STARTING :
+		(m_retrieval->irb_generic & irb_starting) ? INTL_KEY_PARTIAL :
+		(m_retrieval->irb_desc.idx_flags & idx_unique) ? INTL_KEY_UNIQUE :
+		INTL_KEY_SORT;
 
 	// Make the lower bound key
 

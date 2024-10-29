@@ -877,10 +877,6 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 							// We can't use the next segments, and we'll need to use
 							// INTL_KEY_PARTIAL to construct the last segment's key.
 							scratch.usePartialKey = true;
-
-							// It's currently impossible to use a list scan with INTL_KEY_PARTIAL
-							if (scanType == segmentScanList)
-								scanType = segmentScanNone;
 						}
 					}
 
@@ -931,16 +927,14 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 
 					// An equality scan for any unique index cannot retrieve more
 					// than one row. The same is true for an equivalence scan for
-					// any primary index.
-					const bool single_match =
+					// any primary index. A missing scan for any primary index is
+					// known to return no rows, but let's treat it the same way.
+					const bool uniqueMatch =
 						(scanType == segmentScanEqual && (idx->idx_flags & idx_unique)) ||
-						(scanType == segmentScanEquivalent && (idx->idx_flags & idx_primary));
+						(scanType == segmentScanEquivalent && (idx->idx_flags & idx_primary)) ||
+						(scanType == segmentScanMissing && (idx->idx_flags & idx_primary));
 
-					// dimitr: IS NULL scan against primary key is guaranteed
-					//		   to return zero rows. Do we need yet another
-					//		   special case here?
-
-					if (single_match && ((j + 1) == idx->idx_count))
+					if (uniqueMatch && ((j + 1) == idx->idx_count))
 					{
 						// We have found a full equal matching index and it's unique,
 						// so we can stop looking further, because this is the best
