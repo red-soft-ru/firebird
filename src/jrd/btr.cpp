@@ -6769,7 +6769,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 	const bool partUpper = (retrieval->irb_upper_count < idx->idx_count);
 
 	// Reset flags this routine does not check in the loop below
-	flag &= ~(irb_equality | irb_ignore_null_value_key | irb_root_list_scan);
+	flag &= ~(irb_equality | irb_unique | irb_ignore_null_value_key | irb_root_list_scan);
 	flag &= ~(irb_exclude_lower | irb_exclude_upper);
 
 	IndexNode node;
