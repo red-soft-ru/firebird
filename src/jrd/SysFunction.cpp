@@ -5454,19 +5454,22 @@ dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestV
 
 
 dsc* evlMaxMinValue(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
-	impure_value*)
+	impure_value* impure)
 {
 	fb_assert(args.getCount() >= 1);
 	fb_assert(function->misc != NULL);
 
-	Request* request = tdbb->getRequest();
-	dsc* result = NULL;
+	const auto request = tdbb->getRequest();
+	HalfStaticArray<const dsc*, 2> argTypes(args.getCount());
+	dsc* result = nullptr;
 
 	for (FB_SIZE_T i = 0; i < args.getCount(); ++i)
 	{
-		dsc* value = EVL_expr(tdbb, request, args[i]);
+		const auto value = EVL_expr(tdbb, request, args[i]);
 		if (request->req_flags & req_null)	// return NULL if value is NULL
-			return NULL;
+			return nullptr;
+
+		argTypes.add(value);
 
 		if (i == 0)
 			result = value;
@@ -5490,7 +5493,12 @@ dsc* evlMaxMinValue(thread_db* tdbb, const SysFunction* function, const NestValu
 		}
 	}
 
-	return result;
+	DataTypeUtil(tdbb).makeFromList(&impure->vlu_desc, function->name, argTypes.getCount(), argTypes.begin());
+	impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
+
+	MOV_move(tdbb, result, &impure->vlu_desc);
+
+	return &impure->vlu_desc;
 }
 
 
