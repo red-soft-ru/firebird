@@ -31,10 +31,13 @@
 
 #include <cctype>
 #include <string.h>
+#include <type_traits>
+
 #include "../common/classes/fb_string.h"
 #include "../common/classes/array.h"
 #include "iberror.h"
 #include "firebird/Interface.h"
+#include "memory_routines.h"
 
 #ifdef SFIO
 #include <stdio.h>
@@ -270,6 +273,47 @@ namespace fb_utils
 
 	// Frequently used actions with clumplets
 	bool isBpbSegmented(unsigned parLength, const unsigned char* par);
+
+
+	// Put integer value into info buffer
+	template<typename T>
+	inline unsigned char* putInfoItemInt(const unsigned char item, T value,
+		unsigned char* ptr, const unsigned char* end)
+	{
+		static_assert(std::is_integral_v<T>, "Integral type expected");
+
+		constexpr auto len = sizeof(T);
+
+		if (ptr + len + 1 + 2 > end)
+		{
+			if (ptr < end)
+			{
+				*ptr++ = isc_info_truncated;
+				if (ptr < end)
+					*ptr++ = isc_info_end;
+			}
+			return nullptr;
+		}
+
+		*ptr++ = item;
+		*ptr++ = len;
+		*ptr++ = 0;
+
+		if constexpr (len == sizeof(SINT64))
+			put_vax_int64(ptr, value);
+		else if constexpr (len == sizeof(SLONG))
+			put_vax_long(ptr, value);
+		else if constexpr (len == sizeof(SSHORT))
+			put_vax_short(ptr, value);
+		else if constexpr (len == sizeof(char))
+			*ptr = value;
+		else
+			static_assert(always_false<T>::value, "unknown data type");
+
+		ptr += len;
+		return ptr;
+	}
+
 
 	// RAII to call fb_shutdown() in utilities
 	class FbShutdown
