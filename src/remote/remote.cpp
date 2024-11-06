@@ -40,8 +40,10 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../common/utils_proto.h"
 
+using namespace Firebird;
+
 #ifdef DEV_BUILD
-Firebird::AtomicCounter rem_port::portCounter;
+AtomicCounter rem_port::portCounter;
 #endif
 
 #ifdef REMOTE_DEBUG
@@ -351,7 +353,7 @@ void REMOTE_free_packet( rem_port* port, PACKET * packet, bool partial)
 }
 
 
-void REMOTE_get_timeout_params(rem_port* port, Firebird::ClumpletReader* pb)
+void REMOTE_get_timeout_params(rem_port* port, ClumpletReader* pb)
 {
 /**************************************
  *
@@ -601,14 +603,14 @@ void rem_port::linkParent(rem_port* const parent)
 	parent->port_clients = parent->port_next = this;
 }
 
-const Firebird::RefPtr<const Firebird::Config>& rem_port::getPortConfig() const
+const RefPtr<const Config>& rem_port::getPortConfig() const
 {
-	return port_config.hasData() ? port_config : Firebird::Config::getDefaultConfig();
+	return port_config.hasData() ? port_config : Config::getDefaultConfig();
 }
 
-Firebird::RefPtr<const Firebird::Config> rem_port::getPortConfig()
+RefPtr<const Config> rem_port::getPortConfig()
 {
-	return port_config.hasData() ? port_config : Firebird::Config::getDefaultConfig();
+	return port_config.hasData() ? port_config : Config::getDefaultConfig();
 }
 
 void rem_port::unlinkParent()
@@ -741,7 +743,7 @@ bool_t REMOTE_getbytes (RemoteXdr* xdrs, SCHAR* buff, unsigned bytecount)
 		}
 
 		rem_port* port = xdrs->x_public;
-		Firebird::RefMutexEnsureUnlock queGuard(*port->port_que_sync, FB_FUNCTION);
+		RefMutexEnsureUnlock queGuard(*port->port_que_sync, FB_FUNCTION);
 		queGuard.enter();
 		if (port->port_qoffset >= port->port_queue.getCount())
 		{
@@ -763,14 +765,14 @@ bool_t REMOTE_getbytes (RemoteXdr* xdrs, SCHAR* buff, unsigned bytecount)
 
 void PortsCleanup::registerPort(rem_port* port)
 {
-	Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
+	MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 	if (closing)
 		return;
 
 	if (!m_ports)
 	{
-		Firebird::MemoryPool& pool = *getDefaultMemoryPool();
+		MemoryPool& pool = *getDefaultMemoryPool();
 		m_ports = FB_NEW_POOL (pool) PortsArray(pool);
 	}
 
@@ -779,7 +781,7 @@ void PortsCleanup::registerPort(rem_port* port)
 
 void PortsCleanup::unRegisterPort(rem_port* port)
 {
-	Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
+	MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 	if (closing)
 		return;
@@ -799,11 +801,11 @@ void PortsCleanup::closePorts()
 	if (m_ports)
 		delay();
 
-	Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
-	Firebird::AutoSetRestore cl(&closing, true);
+	MutexLockGuard guard(m_mutex, FB_FUNCTION);
+	AutoSetRestore cl(&closing, true);
 
 	{ // scope
-		Firebird::MutexUnlockGuard g2(m_mutex, FB_FUNCTION);
+		MutexUnlockGuard g2(m_mutex, FB_FUNCTION);
 		Thread::yield();
 	}
 
@@ -906,7 +908,7 @@ void RBlobInfo::parseInfo(unsigned int bufferLength, const unsigned char* buffer
 	int c = 0;
 	valid = false;
 
-	Firebird::ClumpletReader p(Firebird::ClumpletReader::InfoResponse, buffer, bufferLength);
+	ClumpletReader p(ClumpletReader::InfoResponse, buffer, bufferLength);
 	for (; !p.isEof(); p.moveNext())
 	{
 		switch (p.getClumpTag())
@@ -937,18 +939,18 @@ void RBlobInfo::parseInfo(unsigned int bufferLength, const unsigned char* buffer
 	valid = (c == 4);
 }
 
-void Rrq::saveStatus(const Firebird::Exception& ex) throw()
+void Rrq::saveStatus(const Exception& ex) throw()
 {
 	if (rrqStatus.isSuccess())
 	{
-		Firebird::LocalStatus ls;
-		Firebird::CheckStatusWrapper tmp(&ls);
+		LocalStatus ls;
+		CheckStatusWrapper tmp(&ls);
 		ex.stuffException(&tmp);
 		rrqStatus.save(&tmp);
 	}
 }
 
-void Rrq::saveStatus(Firebird::IStatus* v) throw()
+void Rrq::saveStatus(IStatus* v) throw()
 {
 	if (rrqStatus.isSuccess())
 	{
@@ -956,28 +958,28 @@ void Rrq::saveStatus(Firebird::IStatus* v) throw()
 	}
 }
 
-void Rsr::saveException(const Firebird::Exception& ex, bool overwrite)
+void Rsr::saveException(const Exception& ex, bool overwrite)
 {
 	if (!rsr_status) {
-		rsr_status = FB_NEW Firebird::StatusHolder();
+		rsr_status = FB_NEW StatusHolder();
 	}
 
 	if (overwrite || !rsr_status->getError())
 	{
-		Firebird::LocalStatus ls;
-		Firebird::CheckStatusWrapper temp(&ls);
+		LocalStatus ls;
+		CheckStatusWrapper temp(&ls);
 		ex.stuffException(&temp);
 		rsr_status->save(&temp);
 	}
 }
 
-Firebird::string rem_port::getRemoteId() const
+string rem_port::getRemoteId() const
 {
 	fb_assert(port_protocol_id.hasData());
-	Firebird::string id = port_protocol_id;
+	string id = port_protocol_id;
 
 	if (port_address.hasData())
-		id += Firebird::string("/") + port_address;
+		id += string("/") + port_address;
 
 	return id;
 }
@@ -1000,14 +1002,14 @@ LegacyPlugin REMOTE_legacy_auth(const char* nm, int p)
 	return PLUGIN_NEW;
 }
 
-Firebird::PathName ClntAuthBlock::getPluginName()
+PathName ClntAuthBlock::getPluginName()
 {
 	return plugins.hasData() ? plugins.name() : "";
 }
 
 template <typename T>
 static void addMultiPartConnectParameter(const T& dataToAdd,
-	Firebird::ClumpletWriter& user_id, UCHAR param)
+	ClumpletWriter& user_id, UCHAR param)
 {
 	FB_SIZE_T remaining = dataToAdd.getCount();
 	fb_assert(remaining <= 254u * 256u); // paranoid check => 65024
@@ -1033,7 +1035,7 @@ static void addMultiPartConnectParameter(const T& dataToAdd,
 	}
 }
 
-void ClntAuthBlock::extractDataFromPluginTo(Firebird::ClumpletWriter& user_id)
+void ClntAuthBlock::extractDataFromPluginTo(ClumpletWriter& user_id)
 {
 	// Add user login name
 	if (cliOrigUserName.hasData())
@@ -1044,7 +1046,7 @@ void ClntAuthBlock::extractDataFromPluginTo(Firebird::ClumpletWriter& user_id)
 	}
 
 	// Add plugin name
-	Firebird::PathName pluginName = getPluginName();
+	PathName pluginName = getPluginName();
 	if (pluginName.hasData())
 	{
 		HANDSHAKE_DEBUG(fprintf(stderr, "Cli: extractDataFromPluginTo: pluginName=%s\n", pluginName.c_str()));
@@ -1064,7 +1066,7 @@ void ClntAuthBlock::extractDataFromPluginTo(Firebird::ClumpletWriter& user_id)
 	addMultiPartConnectParameter(dataFromPlugin, user_id, CNCT_specific_data);
 
 	// Client's wirecrypt requested level
-	user_id.insertInt(CNCT_client_crypt, clntConfig->getWireCrypt(Firebird::WC_CLIENT));
+	user_id.insertInt(CNCT_client_crypt, clntConfig->getWireCrypt(WC_CLIENT));
 }
 
 void ClntAuthBlock::resetClnt(const CSTRING* listStr)
@@ -1077,7 +1079,7 @@ void ClntAuthBlock::resetClnt(const CSTRING* listStr)
 			return;
 		}
 
-		Firebird::ClumpletReader srvList(Firebird::ClumpletReader::UnTagged,
+		ClumpletReader srvList(ClumpletReader::UnTagged,
 										 listStr->cstr_address, listStr->cstr_length);
 
 		if (srvList.find(TAG_KNOWN_PLUGINS))
@@ -1091,18 +1093,18 @@ void ClntAuthBlock::resetClnt(const CSTRING* listStr)
 	firstTime = true;
 
 	pluginList = dpbPlugins.hasData() ? dpbPlugins :
-		clntConfig->getPlugins(Firebird::IPluginManager::TYPE_AUTH_CLIENT);
+		clntConfig->getPlugins(IPluginManager::TYPE_AUTH_CLIENT);
 
-	Firebird::PathName final;
+	PathName final;
 	if (serverPluginList.hasData())
 	{
-		Firebird::ParsedList::mergeLists(final, serverPluginList, pluginList);
+		ParsedList::mergeLists(final, serverPluginList, pluginList);
 		if (final.length() == 0)
 		{
 			HANDSHAKE_DEBUG(fprintf(stderr, "Cli: No matching plugins on client\n"));
-			(Firebird::Arg::Gds(isc_login)
+			(Arg::Gds(isc_login)
 #ifdef DEV_BUILD
-								<< Firebird::Arg::Gds(isc_random) << "No matching plugins on client"
+								<< Arg::Gds(isc_random) << "No matching plugins on client"
 #endif
 								).raise();
 		}
@@ -1115,7 +1117,7 @@ void ClntAuthBlock::resetClnt(const CSTRING* listStr)
 	plugins.set(final.c_str());
 }
 
-Firebird::RefPtr<const Firebird::Config>* ClntAuthBlock::getConfig()
+RefPtr<const Config>* ClntAuthBlock::getConfig()
 {
 	return clntConfig.hasData() ? &clntConfig : NULL;
 }
@@ -1126,25 +1128,25 @@ void ClntAuthBlock::storeDataForPlugin(unsigned int length, const unsigned char*
 	HANDSHAKE_DEBUG(fprintf(stderr, "Cli: accepted data for plugin length=%d\n", length));
 }
 
-Firebird::RefPtr<const Firebird::Config> REMOTE_get_config(const Firebird::PathName* dbName,
-	const Firebird::string* dpb_config)
+RefPtr<const Config> REMOTE_get_config(const PathName* dbName,
+	const string* dpb_config)
 {
-	Firebird::RefPtr<const Firebird::Config> config;
+	RefPtr<const Config> config;
 
 	if (dbName && dbName->hasData())
 	{
-		Firebird::PathName dummy;
+		PathName dummy;
 		expandDatabaseName(*dbName, dummy, &config);
 	}
 	else
-		config = Firebird::Config::getDefaultConfig();
+		config = Config::getDefaultConfig();
 
-	Firebird::Config::merge(config, dpb_config);
+	Config::merge(config, dpb_config);
 
 	return config;
 }
 
-void REMOTE_check_response(Firebird::IStatus* warning, Rdb* rdb, PACKET* packet, bool checkKeys)
+void REMOTE_check_response(IStatus* warning, Rdb* rdb, PACKET* packet, bool checkKeys)
 {
 /**************************************
  *
@@ -1160,7 +1162,7 @@ void REMOTE_check_response(Firebird::IStatus* warning, Rdb* rdb, PACKET* packet,
 	rdb->rdb_port->checkResponse(warning, packet, checkKeys);
 }
 
-void rem_port::checkResponse(Firebird::IStatus* warning, PACKET* packet, bool checkKeys)
+void rem_port::checkResponse(IStatus* warning, PACKET* packet, bool checkKeys)
 {
 /**************************************
  *
@@ -1184,7 +1186,7 @@ void rem_port::checkResponse(Firebird::IStatus* warning, PACKET* packet, bool ch
 
 	// Translate any gds codes into local operating specific codes
 
-	Firebird::StaticStatusVector newVector;
+	StaticStatusVector newVector;
 
 	while (*vector != isc_arg_end)
 	{
@@ -1224,7 +1226,7 @@ void rem_port::checkResponse(Firebird::IStatus* warning, PACKET* packet, bool ch
 	if ((packet->p_operation == op_response || packet->p_operation == op_response_piggyback) &&
 		!vector[1])
 	{
-		Firebird::Arg::StatusVector s(vector);
+		Arg::StatusVector s(vector);
 		s.copyTo(warning);
 		return;
 	}
@@ -1233,10 +1235,10 @@ void rem_port::checkResponse(Firebird::IStatus* warning, PACKET* packet, bool ch
 
 	if (!vector[1])
 	{
-		Firebird::Arg::Gds(isc_net_read_err).raise();
+		Arg::Gds(isc_net_read_err).raise();
 	}
 
-	Firebird::status_exception::raise(vector);
+	status_exception::raise(vector);
 }
 
 static void setCStr(CSTRING& to, const char* from)
@@ -1248,10 +1250,10 @@ static void setCStr(CSTRING& to, const char* from)
 
 void rem_port::addServerKeys(const CSTRING* passedStr)
 {
-	Firebird::ClumpletReader newKeys(Firebird::ClumpletReader::UnTagged,
+	ClumpletReader newKeys(ClumpletReader::UnTagged,
 									 passedStr->cstr_address, passedStr->cstr_length);
 
-	Firebird::PathName type, plugins, plugin;
+	PathName type, plugins, plugin;
 	unsigned len;
 	KnownServerKey* currentKey = nullptr;
 	for (newKeys.rewind(); !newKeys.isEof(); newKeys.moveNext())
@@ -1310,7 +1312,7 @@ bool rem_port::tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptK
 		return false;
 	}
 
-	if (getPortConfig()->getWireCrypt(Firebird::WC_CLIENT) == Firebird::WIRE_CRYPT_DISABLED)
+	if (getPortConfig()->getWireCrypt(WC_CLIENT) == WIRE_CRYPT_DISABLED)
 	{
 		port_crypt_complete = true;
 		return true;
@@ -1318,24 +1320,24 @@ bool rem_port::tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptK
 
 	// we got correct key's type pair
 	// check what about crypt plugin for it
-	Firebird::ParsedList clientPlugins(getPortConfig()->getPlugins(Firebird::IPluginManager::TYPE_WIRE_CRYPT));
+	ParsedList clientPlugins(getPortConfig()->getPlugins(IPluginManager::TYPE_WIRE_CRYPT));
 	for (unsigned n = 0; n < clientPlugins.getCount(); ++n)
 	{
-		Firebird::PathName p(clientPlugins[n]);
+		PathName p(clientPlugins[n]);
 		WIRECRYPT_DEBUG(fprintf(stderr, "tryKeyType, client plugin %s\n", p.c_str()));
-		if (srvKey.plugins.find(" " + p + " ") != Firebird::PathName::npos)
+		if (srvKey.plugins.find(" " + p + " ") != PathName::npos)
 		{
 			WIRECRYPT_DEBUG(fprintf(stderr, "tryKeyType, server listed plugin %s\n", p.c_str()));
-			Firebird::GetPlugins<Firebird::IWireCryptPlugin>
-				cp(Firebird::IPluginManager::TYPE_WIRE_CRYPT, p.c_str());
+			GetPlugins<IWireCryptPlugin>
+				cp(IPluginManager::TYPE_WIRE_CRYPT, p.c_str());
 			if (cp.hasData())
 			{
 				WIRECRYPT_DEBUG(fprintf(stderr, "tryKeyType, client loaded plugin %s\n", p.c_str()));
-				Firebird::LocalStatus st;
-				Firebird::CheckStatusWrapper statusWrapper(&st);
+				LocalStatus st;
+				CheckStatusWrapper statusWrapper(&st);
 
 				// Pass IV to plugin
-				//const Firebird::UCharBuffer* specificData = srvKey.findSpecificData(p);
+				//const UCharBuffer* specificData = srvKey.findSpecificData(p);
 				auto* specificData = srvKey.findSpecificData(p);
 				if (specificData)
 				{
@@ -1346,9 +1348,9 @@ bool rem_port::tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptK
 
 				// Pass key to plugin
 				cp.plugin()->setKey(&statusWrapper, cryptKey);
-				if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+				if (st.getState() & IStatus::STATE_ERRORS)
 				{
-					Firebird::status_exception::raise(&st);
+					status_exception::raise(&st);
 				}
 
 				// Looks like we've found correct crypt plugin and key for it
@@ -1397,20 +1399,20 @@ const unsigned char* SrvAuthBlock::getData(unsigned int* length)
 	return *length ? dataForPlugin.begin() : NULL;
 }
 
-void SrvAuthBlock::putData(Firebird::CheckStatusWrapper* status, unsigned int length, const void* data)
+void SrvAuthBlock::putData(CheckStatusWrapper* status, unsigned int length, const void* data)
 {
 	status->init();
 	try
 	{
 		memcpy(dataFromPlugin.getBuffer(length), data, length);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status);
 	}
 }
 
-Firebird::ICryptKey* SrvAuthBlock::newKey(Firebird::CheckStatusWrapper* status)
+ICryptKey* SrvAuthBlock::newKey(CheckStatusWrapper* status)
 {
 	status->init();
 	try
@@ -1424,14 +1426,14 @@ Firebird::ICryptKey* SrvAuthBlock::newKey(Firebird::CheckStatusWrapper* status)
 
 		return k;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status);
 	}
 	return NULL;
 }
 
-void rem_port::versionInfo(Firebird::string& version) const
+void rem_port::versionInfo(string& version) const
 {
 	version.printf("%s/%s", FB_VERSION, port_version->str_data);
 #ifndef WIRE_COMPRESS_SUPPORT
@@ -1449,7 +1451,7 @@ void rem_port::versionInfo(Firebird::string& version) const
 
 
 #ifdef WIRE_COMPRESS_SUPPORT
-static Firebird::InitInstance<Firebird::ZLib> zlib;
+static InitInstance<ZLib> zlib;
 #endif // WIRE_COMPRESS_SUPPORT
 
 rem_port::~rem_port()
@@ -1471,7 +1473,7 @@ rem_port::~rem_port()
 	}
 
 	if (port_crypt_plugin)
-		Firebird::PluginManagerInterfacePtr()->releasePlugin(port_crypt_plugin);
+		PluginManagerInterfacePtr()->releasePlugin(port_crypt_plugin);
 
 #ifdef DEV_BUILD
 	--portCounter;
@@ -1657,16 +1659,16 @@ void rem_port::initCompression()
 #ifdef WIRE_COMPRESS_SUPPORT
 	if (port_protocol >= PROTOCOL_VERSION13 && !port_compressed && zlib())
 	{
-		port_send_stream.zalloc = Firebird::ZLib::allocFunc;
-		port_send_stream.zfree = Firebird::ZLib::freeFunc;
+		port_send_stream.zalloc = ZLib::allocFunc;
+		port_send_stream.zfree = ZLib::freeFunc;
 		port_send_stream.opaque = Z_NULL;
 		int ret = zlib().deflateInit(&port_send_stream, Z_DEFAULT_COMPRESSION);
 		if (ret != Z_OK)
-			(Firebird::Arg::Gds(isc_deflate_init) << Firebird::Arg::Num(ret)).raise();
+			(Arg::Gds(isc_deflate_init) << Arg::Num(ret)).raise();
 		port_send_stream.next_out = NULL;
 
-		port_recv_stream.zalloc = Firebird::ZLib::allocFunc;
-		port_recv_stream.zfree = Firebird::ZLib::freeFunc;
+		port_recv_stream.zalloc = ZLib::allocFunc;
+		port_recv_stream.zfree = ZLib::freeFunc;
 		port_recv_stream.opaque = Z_NULL;
 		port_recv_stream.avail_in = 0;
 		port_recv_stream.next_in = Z_NULL;
@@ -1674,14 +1676,14 @@ void rem_port::initCompression()
 		if (ret != Z_OK)
 		{
 			zlib().deflateEnd(&port_send_stream);
-			(Firebird::Arg::Gds(isc_inflate_init) << Firebird::Arg::Num(ret)).raise();
+			(Arg::Gds(isc_inflate_init) << Arg::Num(ret)).raise();
 		}
 
 		try
 		{
 			port_compressed.reset(FB_NEW_POOL(getPool()) UCHAR[port_buff_size * 2]);
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			zlib().deflateEnd(&port_send_stream);
 			zlib().inflateEnd(&port_recv_stream);
@@ -1699,7 +1701,7 @@ void rem_port::initCompression()
 }
 
 
-void InternalCryptKey::setSymmetric(Firebird::CheckStatusWrapper* status, const char* type,
+void InternalCryptKey::setSymmetric(CheckStatusWrapper* status, const char* type,
 	unsigned keyLength, const void* key)
 {
 	try
@@ -1709,13 +1711,13 @@ void InternalCryptKey::setSymmetric(Firebird::CheckStatusWrapper* status, const 
 		encrypt.set(keyLength, key);
 		decrypt.clear();
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status);
 	}
 }
 
-void InternalCryptKey::setAsymmetric(Firebird::CheckStatusWrapper* status, const char* type,
+void InternalCryptKey::setAsymmetric(CheckStatusWrapper* status, const char* type,
 	unsigned encryptKeyLength, const void* encryptKey, unsigned decryptKeyLength,
 	const void* decryptKey)
 {
@@ -1726,7 +1728,7 @@ void InternalCryptKey::setAsymmetric(Firebird::CheckStatusWrapper* status, const
 		encrypt.set(encryptKeyLength, encryptKey);
 		decrypt.set(decryptKeyLength, decryptKey);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status);
 	}
