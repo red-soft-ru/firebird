@@ -267,6 +267,10 @@ namespace fb_utils
 	bool isBpbSegmented(unsigned parLength, const unsigned char* par);
 
 
+	// Workaround, to be removed with C++ 23
+	template <typename... T>
+	constexpr bool fb_always_false_v = false;
+
 	// Put integer value into info buffer
 	template<typename T>
 	inline unsigned char* putInfoItemInt(const unsigned char item, T value,
@@ -300,7 +304,7 @@ namespace fb_utils
 		else if constexpr (len == sizeof(char))
 			*ptr = value;
 		else
-			static_assert(len == 0, "unknown data type");
+			static_assert(fb_always_false_v<T>, "unknown data type");
 
 		ptr += len;
 		return ptr;
