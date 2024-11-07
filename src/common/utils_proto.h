@@ -300,7 +300,7 @@ namespace fb_utils
 		else if constexpr (len == sizeof(char))
 			*ptr = value;
 		else
-			static_assert(false, "unknown data type");
+			static_assert(len == 0, "unknown data type");
 
 		ptr += len;
 		return ptr;
