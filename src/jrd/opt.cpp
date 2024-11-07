@@ -1498,14 +1498,15 @@ static USHORT distribute_equalities(BoolExprNodeStack& org_stack, CompilerScratc
  *
  **************************************/
 
-	// dimitr:	Dumb protection against too many injected conjuncts (see CORE-5381).
-	//			Don't produce more additional conjuncts than we originally had
-	//			(i.e. this routine should never more than double the number of conjuncts).
-	//			Ideally, we need two separate limits here:
-	//				1) number of injected conjuncts (affects required impure size)
-	//				2) number of input conjuncts (affects search time inside this routine)
+	// dimitr:	Simplified protection against too many injected conjuncts (see CORE-5381).
+	//			Two separate limits are applied here:
+	//				1) number of input conjuncts (affects search time inside this routine)
+	//				2) number of injected conjuncts (affects required impure size)
 
-	if (base_count * 2 > MAX_CONJUNCTS)
+	constexpr unsigned MAX_CONJUNCTS_TO_PROCESS = 1024;
+	const unsigned MAX_CONJUNCTS_TO_INJECT = MAX(base_count, 256);
+
+	if (base_count > MAX_CONJUNCTS_TO_PROCESS)
 		return 0;
 
 	ObjectsArray<ValueExprNodeStack> classes;
@@ -1592,7 +1593,7 @@ static USHORT distribute_equalities(BoolExprNodeStack& org_stack, CompilerScratc
 			{
 				for (ValueExprNodeStack::iterator inner(outer); (++inner).hasData(); )
 				{
-					if (count < base_count)
+					if (count < MAX_CONJUNCTS_TO_INJECT)
 					{
 						AutoPtr<ComparativeBoolNode> cmpNode(FB_NEW_POOL(csb->csb_pool)
 							ComparativeBoolNode(csb->csb_pool, blr_eql));
@@ -1653,7 +1654,7 @@ static USHORT distribute_equalities(BoolExprNodeStack& org_stack, CompilerScratc
 			{
 				for (ValueExprNodeStack::iterator temp(*eq_class); temp.hasData(); ++temp)
 				{
-					if (!node_equality(node1, temp.object()) && count < base_count)
+					if (!node_equality(node1, temp.object()) && count < MAX_CONJUNCTS_TO_INJECT)
 					{
 						ValueExprNode* arg1;
 						ValueExprNode* arg2;
