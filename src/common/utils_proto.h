@@ -275,7 +275,6 @@ namespace fb_utils
 		static_assert(std::is_integral_v<T>, "Integral type expected");
 
 		constexpr auto len = sizeof(T);
-		static_assert(len == 1 || len == 2 || len == 4 || len == 8, "unknown data type");
 
 		if (ptr + len + 1 + 2 > end)
 		{
@@ -292,14 +291,16 @@ namespace fb_utils
 		*ptr++ = len;
 		*ptr++ = 0;
 
-		if (len == 8)
+		if constexpr (len == sizeof(SINT64))
 			put_vax_int64(ptr, value);
-		else if (len == 4)
+		else if constexpr (len == sizeof(SLONG))
 			put_vax_long(ptr, value);
-		else if (len == 2)
+		else if constexpr (len == sizeof(SSHORT))
 			put_vax_short(ptr, value);
-		else if (len == 1)
+		else if constexpr (len == sizeof(char))
 			*ptr = value;
+		else
+			static_assert(false, "unknown data type");
 
 		ptr += len;
 		return ptr;
