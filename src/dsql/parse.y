@@ -863,7 +863,6 @@ using namespace Firebird;
 	Jrd::SetDecFloatTrapsNode* setDecFloatTrapsNode;
 	Jrd::SetBindNode* setBindNode;
 	Jrd::SessionResetNode* sessionResetNode;
-	Jrd::RecreatePackageBodyNode* recreatePackageBodyNode;
 }
 
 %include types.y
@@ -3230,7 +3229,7 @@ package_body_item
 	;
 
 
-%type <recreatePackageBodyNode> replace_package_body_clause
+%type <ddlNode> replace_package_body_clause
 replace_package_body_clause
 	: package_body_clause
 		{ $$ = newNode<RecreatePackageBodyNode>($1); }
