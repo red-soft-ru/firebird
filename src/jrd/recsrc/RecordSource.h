@@ -546,7 +546,7 @@ namespace Jrd
 	{
 	public:
 		FilteredStream(CompilerScratch* csb, RecordSource* next,
-					   BoolExprNode* boolean, double selectivity);
+					   BoolExprNode* boolean, double selectivity = 0);
 
 		void close(thread_db* tdbb) const override;
 
@@ -596,7 +596,7 @@ namespace Jrd
 	public:
 		PreFilteredStream(CompilerScratch* csb, RecordSource* next,
 						  BoolExprNode* boolean)
-			: FilteredStream(csb, next, boolean, next->getCardinality())
+			: FilteredStream(csb, next, boolean)
 		{
 			m_invariant = true;
 		}
