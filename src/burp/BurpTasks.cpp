@@ -565,9 +565,9 @@ bool BackupRelationTask::fileWriter(Item& item)
 	// msg 142  writing data for relation %s
 
 	IOBuffer*& buf = item.m_buffer = NULL;
-	FB_SIZE_T records = 0;
-	FB_SIZE_T verbRecs = -1;
-	FB_SIZE_T verb = 0;
+	FB_UINT64 records = 0;
+	FB_UINT64 verbRecs = -1;
+	FB_UINT64 verb = 0;
 	while (!m_stop)
 	{
 		if (!buf)
