@@ -798,7 +798,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	BoolExprNode* invariantBoolean = nullptr;
 	if (isInnerJoin())
 	{
-		for (auto iter = getBaseConjuncts(); iter.hasData(); ++iter)
+		for (auto iter = getConjuncts(); iter.hasData(); ++iter)
 		{
 			if (!(iter & CONJUNCT_USED) &&
 				iter->computable(csb, INVALID_STREAM, false))
