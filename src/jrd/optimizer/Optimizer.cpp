@@ -2152,7 +2152,7 @@ unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned b
 			{
 				for (ValueExprNodeStack::iterator inner(outer); (++inner).hasData(); )
 				{
-					if (count < baseCount)
+					if (count < MAX_CONJUNCTS_TO_INJECT)
 					{
 						AutoPtr<ComparativeBoolNode> cmpNode(FB_NEW_POOL(getPool())
 							ComparativeBoolNode(getPool(), blr_eql));
@@ -2214,7 +2214,7 @@ unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned b
 			{
 				for (ValueExprNodeStack::iterator temp(*eq_class); temp.hasData(); ++temp)
 				{
-					if (!fieldEqual(node1, temp.object()) && count < baseCount)
+					if (!fieldEqual(node1, temp.object()) && count < MAX_CONJUNCTS_TO_INJECT)
 					{
 						ValueExprNode* arg1;
 						ValueExprNode* arg2;
