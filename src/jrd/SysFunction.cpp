@@ -6969,7 +6969,7 @@ const SysFunction SysFunction::functions[] =
 		{"UNICODE_CHAR", 1, 1, true, setParamsInteger, makeUnicodeChar, evlUnicodeChar, NULL},
 		{"UNICODE_VAL", 1, 1, true, setParamsUnicodeVal, makeLongResult, evlUnicodeVal, NULL},
 		{"UUID_TO_CHAR", 1, 1, true, setParamsUuidToChar, makeUuidToChar, evlUuidToChar, NULL},
-		{"", 0, 0, NULL, NULL, NULL, NULL}
+		{"", 0, 0, false, NULL, NULL, NULL, NULL}
 	};
 
 
