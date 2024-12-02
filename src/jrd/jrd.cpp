@@ -1128,7 +1128,7 @@ namespace Jrd
 			memset(this, 0, reinterpret_cast<char*>(&this->dpb_user_name) - reinterpret_cast<char*>(this));
 		}
 
-		void get(const UCHAR*, USHORT, bool&);
+		void get(const UCHAR*, FB_SIZE_T, bool&);
 
 		void setBuffers(RefPtr<const Config> config)
 		{
@@ -6855,7 +6855,7 @@ namespace
 	}
 } // anonymous
 
-void DatabaseOptions::get(const UCHAR* dpb, USHORT dpb_length, bool& invalid_client_SQL_dialect)
+void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_client_SQL_dialect)
 {
 /**************************************
  *
