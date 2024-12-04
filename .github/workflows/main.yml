@@ -312,16 +312,7 @@ jobs:
 
       - name: Prepare - Install tools
         run: |
-          brew install automake autoconf-archive cmake libtool ninja
-
-      # libcxx build is not working with python >= 3.12
-      - name: Do not use preinstalled python >= 3.12
-        run: |
-          brew uninstall --ignore-dependencies python@3.12
-          [ -e /Library/Frameworks/Python.framework ] && \
-            sudo mv /Library/Frameworks/Python.framework /Library/Frameworks/Python.framework.dont-look-at-this
-          brew install python@3.11
-          ln -s "$(brew --prefix python@3.11)/bin/python3" "$(brew --prefix python@3.11)/bin/python"
+          brew install automake autoconf-archive cmake libtool ninja python-setuptools
 
       - name: Export GitHub Actions cache environment variables
         uses: actions/github-script@v7
