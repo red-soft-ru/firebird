@@ -6039,7 +6039,6 @@ JBatch* JStatement::createBatch(Firebird::CheckStatusWrapper* status, Firebird::
 			batch = FB_NEW JBatch(dsqlBatch, this, inMetadata);
 			batch->addRef();
 			dsqlBatch->setInterfacePtr(batch);
-			tdbb->getAttachment()->registerBatch(batch);
 		}
 		catch (const Exception& ex)
 		{
@@ -6115,9 +6114,6 @@ void JBatch::freeEngineData(Firebird::CheckStatusWrapper* user_status)
 
 		try
 		{
-			Attachment* att = getAttachment()->getHandle();
-			if (att)
-				att->deregisterBatch(this);
 			delete batch;
 			batch = nullptr;
 		}
@@ -7690,6 +7686,8 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 
 	if (attachment->att_event_session)
 		dbb->eventManager()->deleteSession(attachment->att_event_session);
+
+	attachment->releaseBatches();
 
     // CMP_release() changes att_requests.
 	while (attachment->att_requests.hasData())
