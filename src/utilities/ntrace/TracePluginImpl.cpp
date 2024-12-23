@@ -1538,7 +1538,7 @@ void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
 		stmt_data.description = FB_NEW_POOL(*getDefaultMemoryPool()) string(*getDefaultMemoryPool());
 
 		if (stmt_data.id) {
-			stmt_data.description->printf(NEWLINE "Statement %d:", stmt_data.id);
+			stmt_data.description->printf(NEWLINE "Statement %" SQUADFORMAT":", stmt_data.id);
 		}
 
 		string temp(*getDefaultMemoryPool());
