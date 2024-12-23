@@ -123,7 +123,7 @@ jobs:
   build-alpine-x64:
     if: github.ref_type != 'tag'
     runs-on: ubuntu-22.04
-    container: alpine:3.21
+    container: alpine:3.14
 
     steps:
       - name: Checkout
@@ -394,9 +394,9 @@ jobs:
         run: |
           mkdir downloads
           pushd downloads
-          curl -OL https://dl.google.com/android/repository/android-ndk-r27c-linux.zip
+          curl -OL https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
           mkdir -p $NDK
-          unzip android-ndk-r27c-linux.zip -d $NDK && f=("$NDK"/*) && mv "$NDK"/*/* "$NDK" && rmdir "${f[@]}"
+          unzip android-ndk-r25b-linux.zip -d $NDK && f=("$NDK"/*) && mv "$NDK"/*/* "$NDK" && rmdir "${f[@]}"
 
       - name: Build
         run: |
