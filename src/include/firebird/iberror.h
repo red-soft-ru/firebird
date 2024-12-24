@@ -18,7 +18,7 @@
 #ifdef __cplusplus /* c++ definitions */
 
 #if __cplusplus >= 201703L // C++17 or later
-#define STATUS_EXPR STATUS_EXPR
+#define STATUS_EXPR inline constexpr ISC_STATUS
 #else
 #define STATUS_EXPR const ISC_STATUS
 #endif
