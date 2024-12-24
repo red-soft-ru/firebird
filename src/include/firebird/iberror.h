@@ -17,32 +17,32 @@
 
 #ifdef __cplusplus /* c++ definitions */
 
-const ISC_STATUS isc_facility = 20;
-const ISC_STATUS isc_base = isc_facility << 24;
-const ISC_STATUS isc_factor = 1;
+inline constexpr ISC_STATUS isc_facility = 20;
+inline constexpr ISC_STATUS isc_base = isc_facility << 24;
+inline constexpr ISC_STATUS isc_factor = 1;
 
-const ISC_STATUS isc_arg_end			= 0;	// end of argument list
-const ISC_STATUS isc_arg_gds			= 1;	// generic DSRI status value
-const ISC_STATUS isc_arg_string			= 2;	// string argument
-const ISC_STATUS isc_arg_cstring		= 3;	// count & string argument
-const ISC_STATUS isc_arg_number			= 4;	// numeric argument (long)
-const ISC_STATUS isc_arg_interpreted	= 5;	// interpreted status code (string)
-const ISC_STATUS isc_arg_vms			= 6;	// VAX/VMS status code (long)
-const ISC_STATUS isc_arg_unix			= 7;	// UNIX error code
-const ISC_STATUS isc_arg_domain			= 8;	// Apollo/Domain error code
-const ISC_STATUS isc_arg_dos			= 9;	// MSDOS/OS2 error code
-const ISC_STATUS isc_arg_mpexl			= 10;	// HP MPE/XL error code
-const ISC_STATUS isc_arg_mpexl_ipc		= 11;	// HP MPE/XL IPC error code
-const ISC_STATUS isc_arg_next_mach		= 15;	// NeXT/Mach error code
-const ISC_STATUS isc_arg_netware		= 16;	// NetWare error code
-const ISC_STATUS isc_arg_win32			= 17;	// Win32 error code
-const ISC_STATUS isc_arg_warning		= 18;	// warning argument
-const ISC_STATUS isc_arg_sql_state		= 19;	// SQLSTATE
+inline constexpr ISC_STATUS isc_arg_end			= 0;	// end of argument list
+inline constexpr ISC_STATUS isc_arg_gds			= 1;	// generic DSRI status value
+inline constexpr ISC_STATUS isc_arg_string			= 2;	// string argument
+inline constexpr ISC_STATUS isc_arg_cstring		= 3;	// count & string argument
+inline constexpr ISC_STATUS isc_arg_number			= 4;	// numeric argument (long)
+inline constexpr ISC_STATUS isc_arg_interpreted	= 5;	// interpreted status code (string)
+inline constexpr ISC_STATUS isc_arg_vms			= 6;	// VAX/VMS status code (long)
+inline constexpr ISC_STATUS isc_arg_unix			= 7;	// UNIX error code
+inline constexpr ISC_STATUS isc_arg_domain			= 8;	// Apollo/Domain error code
+inline constexpr ISC_STATUS isc_arg_dos			= 9;	// MSDOS/OS2 error code
+inline constexpr ISC_STATUS isc_arg_mpexl			= 10;	// HP MPE/XL error code
+inline constexpr ISC_STATUS isc_arg_mpexl_ipc		= 11;	// HP MPE/XL IPC error code
+inline constexpr ISC_STATUS isc_arg_next_mach		= 15;	// NeXT/Mach error code
+inline constexpr ISC_STATUS isc_arg_netware		= 16;	// NetWare error code
+inline constexpr ISC_STATUS isc_arg_win32			= 17;	// Win32 error code
+inline constexpr ISC_STATUS isc_arg_warning		= 18;	// warning argument
+inline constexpr ISC_STATUS isc_arg_sql_state		= 19;	// SQLSTATE
 
 #define FB_IMPL_MSG_NO_SYMBOL(facility, number, text)
 
 #define FB_IMPL_MSG_SYMBOL(facility, number, symbol, text) \
-	const ISC_STATUS isc_##symbol = FB_IMPL_MSG_ENCODE(number, FB_IMPL_MSG_FACILITY_##facility);
+	inline constexpr ISC_STATUS isc_##symbol = FB_IMPL_MSG_ENCODE(number, FB_IMPL_MSG_FACILITY_##facility);
 
 #define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text)	\
 	FB_IMPL_MSG_SYMBOL(facility, number, symbol, text)
@@ -53,7 +53,7 @@ const ISC_STATUS isc_arg_sql_state		= 19;	// SQLSTATE
 #undef FB_IMPL_MSG_SYMBOL
 #undef FB_IMPL_MSG
 
-const ISC_STATUS isc_err_max = 0
+inline constexpr ISC_STATUS isc_err_max = 0
 	#define FB_IMPL_MSG_NO_SYMBOL(facility, number, text)
 	#define FB_IMPL_MSG_SYMBOL(facility, number, symbol, text)
 	#define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) + 1
