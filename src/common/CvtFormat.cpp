@@ -70,12 +70,12 @@ namespace
 			}
 		}
 
-		bool contains(const char* value, USHORT& outTimezoneId, int& outParsedTimezoneLength)
+		bool contains(const char* value, USHORT& outTimezoneId, FB_SIZE_T& outParsedTimezoneLength)
 		{
 			const TrieNode* currentNode = m_root;
 			FB_SIZE_T valueLength = fb_strlen(value);
 
-			for (outParsedTimezoneLength = 0; static_cast<FB_SIZE_T>(outParsedTimezoneLength) < valueLength; outParsedTimezoneLength++)
+			for (outParsedTimezoneLength = 0; outParsedTimezoneLength < valueLength; outParsedTimezoneLength++)
 			{
 				int index = calculateIndex(value[outParsedTimezoneLength]);
 
@@ -1541,7 +1541,7 @@ namespace
 				}
 				case Format::TZR:
 				{
-					int parsedTimezoneNameLength = 0;
+					FB_SIZE_T parsedTimezoneNameLength = 0;
 					const bool timezoneNameIsCorrect = timeZoneTrie().contains(str + strOffset, outTimezoneId, parsedTimezoneNameLength);
 					if (!timezoneNameIsCorrect)
 						status_exception::raise(Arg::Gds(isc_invalid_timezone_region) << string(str + strOffset, parsedTimezoneNameLength));
