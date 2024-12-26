@@ -2626,7 +2626,7 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 										Arg::Str(function->name));
 	}
 
-	for (int i = 0; i < Uuid::STR_LEN; ++i)
+	for (unsigned int i = 0; i < Uuid::STR_LEN; ++i)
 	{
 		if (i == 8 || i == 13 || i == 18 || i == 23)
 		{

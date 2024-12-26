@@ -70,7 +70,7 @@ namespace
 			}
 		}
 
-		bool contains(const char* value, USHORT& outTimezoneId, int& outParsedTimezoneLength)
+		bool contains(const char* value, USHORT& outTimezoneId, unsigned int& outParsedTimezoneLength)
 		{
 			const TrieNode* currentNode = m_root;
 			FB_SIZE_T valueLength = fb_strlen(value);
@@ -97,7 +97,7 @@ namespace
 			TrieNode* currentNode = m_root;
 			FB_SIZE_T valueLength = fb_strlen(value);
 
-			for (int i = 0; i < valueLength; i++)
+			for (unsigned int i = 0; i < valueLength; i++)
 			{
 				int index = calculateIndex(value[i]);
 
@@ -460,7 +460,7 @@ namespace
 			patternStr = std::string_view(format + formatStart, offset - formatStart + 1);
 			bool isFound = false;
 
-			for (int j = 0; j < PatternsSize; j++)
+			for (unsigned int j = 0; j < PatternsSize; j++)
 			{
 				if (!strncmp(patterns[j], patternStr.data(), patternStr.length()))
 				{
@@ -1542,7 +1542,7 @@ namespace
 				}
 				case Format::TZR:
 				{
-					int parsedTimezoneNameLength = 0;
+					unsigned int parsedTimezoneNameLength = 0;
 					const bool timezoneNameIsCorrect = timeZoneTrie().contains(str + strOffset, outTimezoneId, parsedTimezoneNameLength);
 					if (!timezoneNameIsCorrect)
 						status_exception::raise(Arg::Gds(isc_invalid_timezone_region) << string(str + strOffset, parsedTimezoneNameLength));
@@ -1669,7 +1669,7 @@ ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::
 		stringUpper[i] = toupper(sourceString[i]);
 
 	string formatUpper(format.length(), '\0');
-	for (int i = 0; i < format.length(); i++)
+	for (unsigned int i = 0; i < format.length(); i++)
 		formatUpper[i] = toupper(format[i]);
 
 	StringToDateTimeData cvtData;
