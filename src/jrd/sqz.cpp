@@ -558,7 +558,7 @@ ULONG Difference::apply(ULONG diffLength, ULONG outLength, UCHAR* const output)
 			BUGCHECK(177);	// msg 177 applied differences will not fit in record
 	}
 
-	const auto length = p - output;
+	const FB_UINT64 length = p - output;
 
 	if (length > outLength)
 		BUGCHECK(177);	// msg 177 applied differences will not fit in record
