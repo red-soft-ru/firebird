@@ -975,7 +975,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 				}
 
 				if (!found) {
-					sprintf(s, "unknown ISC error %ld", (SLONG) code);	// TXNN
+					sprintf(s, "unknown ISC error %" SLONGFORMAT, (SLONG) code);	// TXNN
 				}
 			}
 		}
@@ -1000,11 +1000,11 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 		break;
 
 	case isc_arg_dos:
-		sprintf(s, "unknown dos error %ld", (SLONG) code);	// TXNN
+		sprintf(s, "unknown dos error %" SLONGFORMAT, (SLONG) code);	// TXNN
 		break;
 
 	case isc_arg_next_mach:
-		sprintf(s, "next/mach error %ld", (SLONG) code);	// AP
+		sprintf(s, "next/mach error %" SLONGFORMAT, (SLONG) code);	// AP
 		break;
 
 	case isc_arg_win32:
@@ -1016,7 +1016,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 						   s, bufsize, NULL))
 #endif
 		{
-			sprintf(s, "unknown Win32 error %ld", (SLONG) code);	// TXNN
+			sprintf(s, "unknown Win32 error %" SLONGFORMAT, (SLONG) code);	// TXNN
 		}
 		break;
 
@@ -4025,7 +4025,7 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 					case blr_invoke_function_type:
 						n = control->ctl_blr_reader.getByte();
 
-						if (n == 0 || n >= FB_NELEM(typeSubCodes))
+						if (n == 0 || n >= static_cast<FB_SSIZE_T>(FB_NELEM(typeSubCodes)))
 							blr_error(control, "*** invalid blr_invoke_function_type sub code ***");
 
 						blr_format(control, "blr_invoke_function_type_%s,", typeSubCodes[n]);
@@ -4123,7 +4123,7 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 					case blr_invsel_procedure_type:
 						n = control->ctl_blr_reader.getByte();
 
-						if (n == 0 || n >= FB_NELEM(typeSubCodes))
+						if (n == 0 || n >= static_cast<FB_SSIZE_T>(FB_NELEM(typeSubCodes)))
 							blr_error(control, "*** invalid blr_invsel_procedure_type sub code ***");
 
 						blr_format(control, "blr_invsel_procedure_type_%s,", typeSubCodes[n]);

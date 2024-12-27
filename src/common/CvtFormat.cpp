@@ -70,7 +70,7 @@ namespace
 			}
 		}
 
-		bool contains(const char* value, USHORT& outTimezoneId, FB_SIZE_T& outParsedTimezoneLength)
+		bool contains(const char* value, USHORT& outTimezoneId, unsigned int& outParsedTimezoneLength)
 		{
 			const TrieNode* currentNode = m_root;
 			FB_SIZE_T valueLength = fb_strlen(value);
@@ -97,7 +97,7 @@ namespace
 			TrieNode* currentNode = m_root;
 			FB_SIZE_T valueLength = fb_strlen(value);
 
-			for (FB_SIZE_T i = 0; i < valueLength; i++)
+			for (unsigned int i = 0; i < valueLength; i++)
 			{
 				int index = calculateIndex(value[i]);
 
@@ -460,7 +460,7 @@ namespace
 			patternStr = std::string_view(format + formatStart, offset - formatStart + 1);
 			bool isFound = false;
 
-			for (int j = 0; j < PatternsSize; j++)
+			for (unsigned int j = 0; j < PatternsSize; j++)
 			{
 				if (!strncmp(patterns[j], patternStr.data(), patternStr.length()))
 				{
@@ -1124,6 +1124,7 @@ namespace
 			return twelveHours == 12 ? twelveHours : 12 + twelveHours;
 
 		cb->err(Arg::Gds(isc_incorrect_hours_period) << string(period.data(), period.length()));
+		return 0; // suppress compiler warning/error
 	}
 
 	constexpr int roundYearPatternImplementation(int parsedRRValue, int currentYear)
@@ -1331,7 +1332,7 @@ namespace
 					bool isFound = false;
 
 					std::string_view monthShortName = getSubstringFromString(str, strLength, strOffset, 3);
-					for (int i = 0; i < FB_NELEM(FB_SHORT_MONTHS) - 1; i++)
+					for (FB_SIZE_T i = 0; i < FB_NELEM(FB_SHORT_MONTHS) - 1; i++)
 					{
 						if (std::equal(monthShortName.begin(), monthShortName.end(),
 								FB_SHORT_MONTHS[i], FB_SHORT_MONTHS[i] + strlen(FB_SHORT_MONTHS[i]),
@@ -1352,7 +1353,7 @@ namespace
 					bool isFound = false;
 
 					std::string_view monthFullName = getSubstringFromString(str, strLength, strOffset);
-					for (int i = 0; i < FB_NELEM(FB_LONG_MONTHS_UPPER) - 1; i++)
+					for (FB_SIZE_T i = 0; i < FB_NELEM(FB_LONG_MONTHS_UPPER) - 1; i++)
 					{
 						if (std::equal(monthFullName.begin(), monthFullName.end(),
 								FB_LONG_MONTHS_UPPER[i], FB_LONG_MONTHS_UPPER[i] + strlen(FB_LONG_MONTHS_UPPER[i]),
@@ -1541,7 +1542,7 @@ namespace
 				}
 				case Format::TZR:
 				{
-					FB_SIZE_T parsedTimezoneNameLength = 0;
+					unsigned int parsedTimezoneNameLength = 0;
 					const bool timezoneNameIsCorrect = timeZoneTrie().contains(str + strOffset, outTimezoneId, parsedTimezoneNameLength);
 					if (!timezoneNameIsCorrect)
 						status_exception::raise(Arg::Gds(isc_invalid_timezone_region) << string(str + strOffset, parsedTimezoneNameLength));
@@ -1668,7 +1669,7 @@ ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::
 		stringUpper[i] = toupper(sourceString[i]);
 
 	string formatUpper(format.length(), '\0');
-	for (auto i = 0; i < format.length(); i++)
+	for (unsigned int i = 0; i < format.length(); i++)
 		formatUpper[i] = toupper(format[i]);
 
 	StringToDateTimeData cvtData;
