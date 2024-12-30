@@ -529,7 +529,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 
 				if (node.name)
 				{
-					if (const auto token = lexer.getNameToken();
+					if (const auto token = lexer.getToken();
 						token.type == Token::TYPE_OTHER && token.rawText == ".")
 					{
 						node.package = node.name;
@@ -565,7 +565,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 
 				if (node.name)
 				{
-					if (const auto token = lexer.getNameToken();
+					if (const auto token = lexer.getToken();
 						token.type == Token::TYPE_OTHER && token.rawText == ".")
 					{
 						node.package = node.name;

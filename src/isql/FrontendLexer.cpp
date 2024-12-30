@@ -187,22 +187,8 @@ FrontendLexer::Token FrontendLexer::getToken()
 
 	switch (toupper(*pos))
 	{
-		case '(':
-			token.type = Token::TYPE_OPEN_PAREN;
-			token.processedText = *pos++;
-			break;
-
-		case ')':
-			token.type = Token::TYPE_CLOSE_PAREN;
-			token.processedText = *pos++;
-			break;
-
-		case ',':
-			token.type = Token::TYPE_COMMA;
-			token.processedText = *pos++;
-			break;
-
 		case ';':
+		case '.':
 			token.type = Token::TYPE_OTHER;
 			token.processedText = *pos++;
 			break;
@@ -237,6 +223,7 @@ FrontendLexer::Token FrontendLexer::getNameToken()
 	if (const auto optStringToken = getStringToken(); optStringToken.has_value())
 		return optStringToken.value();
 
+	/*** Revert to strict parsing with schemas support branch.
 	const auto start = pos;
 	bool first = true;
 
@@ -264,6 +251,30 @@ FrontendLexer::Token FrontendLexer::getNameToken()
 	token.processedText = token.rawText = std::string(start, pos);
 	std::transform(token.processedText.begin(), token.processedText.end(),
 		token.processedText.begin(), toupper);
+
+	return token;
+	***/
+
+	const auto start = pos;
+
+	switch (toupper(*pos))
+	{
+		case ';':
+			token.type = Token::TYPE_OTHER;
+			token.processedText = *pos++;
+			break;
+
+		default:
+			while (pos != end && !fb_utils::isspace(*pos) && *pos != '.')
+				++pos;
+
+			token.processedText = std::string(start, pos);
+			std::transform(token.processedText.begin(), token.processedText.end(),
+				token.processedText.begin(), toupper);
+			break;
+	}
+
+	token.rawText = std::string(start, pos);
 
 	return token;
 }
