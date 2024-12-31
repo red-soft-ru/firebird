@@ -4969,7 +4969,7 @@ static processing_state frontend(const std::string& statement)
 				}
 				else if (clause == "ROLE")
 				{
-					sql_role_nm = node.args[i + 1].processedText.c_str();
+					sql_role_nm = node.args[i + 1].rawText.c_str();
 					i += 2;
 				}
 				else if (!clause.empty())
